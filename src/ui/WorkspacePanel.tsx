@@ -205,6 +205,12 @@ function WorkspacePanelInner({
     if (aside && !aside.contains(opener)) aside.focus();
     return () => {
       if (opener && opener.isConnected && opener !== document.body) opener.focus();
+      // The usual opener — the editor's "Open workspace panel" button — only
+      // exists while the panel is CLOSED, so it was unmounted when the drawer
+      // opened. Its replacement mounts in the same commit that unmounts the
+      // drawer, which this passive cleanup runs after: land there instead of
+      // on <body>.
+      else document.querySelector<HTMLElement>('[aria-label="Open workspace panel"]')?.focus();
     };
   }, [isDrawer]);
   const onAsideKeyDown = useCallback((e: React.KeyboardEvent) => {
