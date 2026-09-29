@@ -100,6 +100,20 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { action: "Justify", keys: "⌘⇧J" },
     ],
   },
+  {
+    group: "Keyboard navigation",
+    note: "The Markdown editor keeps Tab for indenting, so press Esc first to move focus out of it. Lists and the toolbar are one Tab stop each; arrow keys move within them.",
+    rows: [
+      { action: "Skip to the editor", keys: "Tab (first stop on the page)" },
+      { action: "Leave the Markdown editor", keys: "Esc, then Tab" },
+      { action: "Move between toolbar buttons", keys: "← / →" },
+      { action: "Move through the document library", keys: "↑ / ↓, Home / End" },
+      { action: "Open or close a folder", keys: "→ / ←" },
+      { action: "Open the selected document", keys: "Enter" },
+      { action: "Rename the selected item", keys: "F2" },
+      { action: "Actions for the selected item", keys: "⇧F10" },
+    ],
+  },
 ];
 
 /** Curated everyday subset for compact surfaces (embedder fallback dialog). */
