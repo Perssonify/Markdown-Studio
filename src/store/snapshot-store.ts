@@ -46,6 +46,9 @@ export interface SnapshotMeta {
   words: number;
   /** Content hash — used for dedup and to skip no-op restores. */
   hash: number;
+  /** Insertion order within the session that wrote it, shared by the memory
+   *  ring and the database (see `byRecentDesc`). Absent on older records. */
+  seq?: number;
 }
 
 interface SnapshotRecord extends SnapshotMeta {
@@ -80,9 +83,20 @@ function serialize(canonical: unknown): string {
   try { return JSON.stringify(canonical) ?? ""; } catch { return ""; }
 }
 
-/** Newest-first ordering: by timestamp, then by monotonic id to break same-ms
- *  ties deterministically (higher id = inserted later = newer). */
-const byRecentDesc = (a: SnapshotMeta, b: SnapshotMeta) => b.ts - a.ts || b.id - a.id;
+/**
+ * Insertion order, for breaking same-millisecond ties. `seq` when the record
+ * carries one (both stores stamp it from ONE session counter, so it also orders
+ * a memory fallback against a database write in the same ms). Otherwise the
+ * id's MAGNITUDE: IndexedDB's autoIncrement counts up from 1, the memory ring
+ * counts DOWN from -1 — so for the ring "later" is "more negative", and
+ * comparing raw ids ranked the oldest same-ms version as the newest (listed
+ * first, restored as "latest", and the per-document cap evicted the newest).
+ */
+const insertionOrder = (m: SnapshotMeta): number => m.seq ?? Math.abs(m.id);
+
+/** Newest-first ordering: by timestamp, then by insertion order. */
+const byRecentDesc = (a: SnapshotMeta, b: SnapshotMeta) =>
+  b.ts - a.ts || insertionOrder(b) - insertionOrder(a);
 
 // ─── Store ─────────────────────────────────────────────────────────────────
 
@@ -112,6 +126,8 @@ class SnapshotStore {
    * the one code path whose entire job is recovering content.
    */
   private memSeq = -1;
+  /** Session-wide insertion counter stamped on every record (`seq`). */
+  private insertSeq = 0;
   /** Last autosave-reason snapshot time per doc (throttle; session-only). */
   private lastAutoAt = new Map<string, number>();
   private listeners = new Set<() => void>();
@@ -200,6 +216,7 @@ class SnapshotStore {
       bytes: serialized.length * 2,
       words: computeCounts(canonical as PMNode).words || 0,
       hash,
+      seq: ++this.insertSeq,
       canonical,
     };
 
@@ -403,6 +420,7 @@ class SnapshotStore {
   _resetForTests(opts: { useIndexedDB?: boolean } = {}): void {
     this.mem = [];
     this.memSeq = -1;
+    this.insertSeq = 0;
     this.lastAutoAt.clear();
     if (opts.useIndexedDB) {
       this.usable = true;
