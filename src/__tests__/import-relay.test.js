@@ -1,5 +1,14 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import handler, { isBlockedIp, assertPublicUrl } from "../../api/import.js";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import handler, { isBlockedIp, isGlobalUnicast, assertPublicUrl, MAX_BYTES, TOO_LARGE_MESSAGE } from "../../api/import.js";
+
+// The handler writes one JSON log line per request; keep the test output clean.
+// Cases that assert on the line install their own spy.
+beforeEach(() => {
+  vi.spyOn(console, "log").mockImplementation(() => {});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("import relay — SSRF address blocklist (isBlockedIp)", () => {
   it("blocks IPv4 loopback / private / CGNAT / link-local / metadata", () => {
@@ -282,5 +291,253 @@ describe("import relay — port allowlist", () => {
     }
     // …and does not reject the standard web ports on that same path.
     await expect(assertPublicUrl(new URL("https://93.184.216.34:443/x"))).resolves.toBeTruthy();
+  });
+});
+
+// ── The allowlist (A074) ────────────────────────────────────────────────────
+// Every address below got past the old blocklist or sits in space it never
+// named. An allowlist refuses them all by construction; these cases pin that it
+// actually does, and that genuine public addresses — including ones that LOOK
+// close to a refused block — still pass.
+
+describe("import relay — global-unicast allowlist", () => {
+  it("refuses the IPv4-in-IPv6 wrappers the blocklist missed", () => {
+    for (const ip of [
+      "::127.0.0.1", // IPv4-compatible (deprecated) — was allowed
+      "::ffff:0:127.0.0.1", // IPv4-translated (SIIT) — was allowed
+      "::ffff:0:8.8.8.8", // …refused even around a public address: not a destination form
+      "64:ff9b::808:808", // NAT64 of a public address
+      "64:ff9b::7f00:1", // NAT64 of loopback
+      "2002:0808:0808::1", // 6to4 — a tunnel, not a destination
+      "2002:7f00:0001::",
+    ]) {
+      expect(isBlockedIp(ip), ip).toBe(true);
+    }
+  });
+
+  it("refuses Teredo and the rest of 2001::/23, documentation and discard space", () => {
+    for (const ip of [
+      "2001:0:4136:e378:8000:63bf:3fff:fdd2", // Teredo 2001::/32
+      "2001::1",
+      "2001:2::1", // benchmarking
+      "2001:10::1", // ORCHID
+      "2001:db8::1", // documentation
+      "3fff::1", // documentation (RFC 9637)
+      "100::1", // discard-only
+      "fec0::1", // deprecated site-local
+    ]) {
+      expect(isBlockedIp(ip), ip).toBe(true);
+    }
+  });
+
+  it("refuses multicast, reserved and broadcast in both families", () => {
+    for (const ip of ["224.0.0.1", "239.255.255.250", "240.0.0.1", "255.255.255.255", "ff02::1", "ff0e::1"]) {
+      expect(isBlockedIp(ip), ip).toBe(true);
+    }
+  });
+
+  it("refuses the IPv4 special-purpose blocks", () => {
+    for (const ip of [
+      "192.0.0.8", // IETF protocol assignments
+      "192.0.2.1", // TEST-NET-1
+      "192.88.99.1", // 6to4 relay anycast
+      "198.18.0.1", // benchmarking
+      "198.19.255.255",
+      "198.51.100.7", // TEST-NET-2
+      "203.0.113.9", // TEST-NET-3
+      "100.127.255.255", // top of CGNAT
+    ]) {
+      expect(isBlockedIp(ip), ip).toBe(true);
+    }
+  });
+
+  it("allows public addresses, including ones right next to a refused block", () => {
+    for (const ip of [
+      "93.184.216.34",
+      "100.63.255.255", // just below CGNAT
+      "100.128.0.0", // just above it
+      "172.15.255.255",
+      "172.32.0.0",
+      "198.17.255.255",
+      "198.20.0.0",
+      "223.255.255.255", // last unicast /8 before multicast
+      "2001:4860:4860::8888", // Google DNS — a 2001: address OUTSIDE 2001::/23
+      "2620:fe::fe", // Quad9
+      "2a00:1450:4001:82a::200e",
+    ]) {
+      expect(isGlobalUnicast(ip), ip).toBe(true);
+      expect(isBlockedIp(ip), ip).toBe(false);
+    }
+  });
+
+  it("refuses decimal / octal / hex / short IPv4 spellings of loopback, which the URL parser normalises", async () => {
+    for (const u of [
+      "http://2130706433/",
+      "http://0177.0.0.1/",
+      "http://0x7f.0.0.1/",
+      "http://0x7f000001/",
+      "http://017700000001/",
+      "http://127.1/",
+      "http://[::127.0.0.1]/",
+      "http://[::ffff:0:127.0.0.1]/",
+      "http://[2001::1]/",
+    ]) {
+      // A literal after normalisation — refused without a DNS lookup.
+      await expect(assertPublicUrl(new URL(u)), u).rejects.toMatchObject({ status: 403, reason: "blocked_address" });
+    }
+  });
+});
+
+// ── One structured log line per request (A010) ─────────────────────────────
+
+function captureLog() {
+  vi.restoreAllMocks(); // replace the file-wide silencer with a spy we can read
+  const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+  return {
+    lines: () => spy.mock.calls.map((c) => String(c[0])),
+    records: () => spy.mock.calls.map((c) => JSON.parse(String(c[0]))),
+  };
+}
+
+describe("import relay — structured request log", () => {
+  it("logs a success with host, status, bytes and duration — never the path or query", async () => {
+    const log = captureLog();
+    stubFetch(() => upstreamResponse({ headers: { "content-type": "text/markdown" }, body: "# twelve bytes" }));
+    const res = makeRes();
+    await handler(makeReq({ url: "https://93.184.216.34/private/Quarterly%20Plan.md?token=SECRET-TOKEN&x=1" }), res);
+
+    expect(res.statusCode).toBe(200);
+    const lines = log.lines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toMatch(/SECRET-TOKEN|private|Quarterly|token=/);
+    const [rec] = log.records();
+    expect(rec).toMatchObject({ evt: "import_relay", status: 200, host: "93.184.216.34", bytes: 14, reason: null, sfs: "same-origin" });
+    expect(typeof rec.ms).toBe("number");
+  });
+
+  it("logs every refusal with a machine-readable reason", async () => {
+    const cases = [
+      [{ headers: { "sec-fetch-site": undefined } }, 403, "sec_fetch_site"],
+      [{ url: "not a url" }, 400, "bad_url"],
+      [{ url: "http://93.184.216.34:6379/" }, 400, "bad_port"],
+      [{ url: "http://169.254.169.254/latest/meta-data/" }, 403, "blocked_address"],
+      [{ method: "POST" }, 405, "method"],
+    ];
+    for (const [reqOpts, status, reason] of cases) {
+      const log = captureLog();
+      stubFetch();
+      const res = makeRes();
+      await handler(makeReq(reqOpts), res);
+      expect(res.statusCode, reason).toBe(status);
+      const recs = log.records();
+      expect(recs, reason).toHaveLength(1);
+      expect(recs[0], reason).toMatchObject({ evt: "import_relay", status, reason });
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("names the upstream status when the upstream fails", async () => {
+    const log = captureLog();
+    stubFetch(() => upstreamResponse({ status: 404 }));
+    await handler(makeReq(), makeRes());
+    expect(log.records()[0]).toMatchObject({ status: 502, reason: "upstream_404" });
+  });
+});
+
+// ── Response size cap (A013) ────────────────────────────────────────────────
+// Vercel cannot return a function body much over 4.5 MB. The relay used to
+// accept 25 MB, fetch it all, and then fail at the platform with no useful
+// message; it now refuses anything over MAX_BYTES itself, and says why.
+
+/** An upstream whose body arrives as a real stream, in chunks. */
+function streamedUpstream(totalBytes, { declareLength = false } = {}) {
+  const chunk = new Uint8Array(256 * 1024);
+  let sent = 0;
+  const body = new ReadableStream({
+    pull(ctrl) {
+      if (sent >= totalBytes) return ctrl.close();
+      const n = Math.min(chunk.length, totalBytes - sent);
+      sent += n;
+      ctrl.enqueue(chunk.slice(0, n));
+    },
+  });
+  const headers = new Map(declareLength ? [["content-length", String(totalBytes)]] : []);
+  return { ok: true, status: 200, headers: { get: (k) => headers.get(k.toLowerCase()) ?? null }, body };
+}
+
+describe("import relay — ~4 MB response cap", () => {
+  it("stays under the platform's response limit", () => {
+    expect(MAX_BYTES).toBeLessThanOrEqual(4_000_000);
+    expect(MAX_BYTES).toBeGreaterThanOrEqual(3_500_000);
+  });
+
+  it("refuses a body over the cap with a message that says what to do", async () => {
+    stubFetch(() => upstreamResponse({ body: new Uint8Array(MAX_BYTES + 1) }));
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(413);
+    expect(res.body).toEqual({ error: TOO_LARGE_MESSAGE });
+    expect(TOO_LARGE_MESSAGE).toMatch(/4 MB/);
+    expect(TOO_LARGE_MESSAGE).toMatch(/drag it into the editor/);
+  });
+
+  it("refuses a 4.4 MB file — under the old 25 MB ceiling, over what Vercel can return", async () => {
+    stubFetch(() => streamedUpstream(4_400_000));
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(413);
+  });
+
+  it("refuses on a declared Content-Length without reading the body", async () => {
+    stubFetch(() => streamedUpstream(MAX_BYTES * 3, { declareLength: true }));
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(413);
+  });
+
+  it("refuses a STREAMED body that crosses the cap mid-read", async () => {
+    stubFetch(() => streamedUpstream(MAX_BYTES + 10));
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(413);
+    expect(res.body).toEqual({ error: TOO_LARGE_MESSAGE });
+  });
+
+  it("relays a body exactly at the cap", async () => {
+    stubFetch(() => streamedUpstream(MAX_BYTES));
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.length).toBe(MAX_BYTES);
+  });
+});
+
+// ── CORS: exact origins only (A074) ─────────────────────────────────────────
+
+describe("import relay — CORS is pinned to the two production origins", () => {
+  it("grants exactly https://markdownstudio.com and its www host", async () => {
+    for (const origin of ["https://markdownstudio.com", "https://www.markdownstudio.com"]) {
+      stubFetch();
+      const res = makeRes();
+      await handler(makeReq({ headers: { origin } }), res);
+      expect(res.getHeader("Access-Control-Allow-Origin"), origin).toBe(origin);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("grants nothing to lookalikes, plain http, or any vercel.app host", async () => {
+    for (const origin of [
+      "https://markdown-studio.vercel.app", // belongs to a different product
+      "https://markdown-studio-git-main-team.vercel.app",
+      "https://evilmarkdownstudio.com",
+      "https://markdownstudio.com.evil.example",
+      "http://markdownstudio.com",
+    ]) {
+      stubFetch();
+      const res = makeRes();
+      await handler(makeReq({ headers: { origin } }), res);
+      expect(res.hasHeader("Access-Control-Allow-Origin"), origin).toBe(false);
+      vi.unstubAllGlobals();
+    }
   });
 });

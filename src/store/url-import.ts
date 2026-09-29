@@ -245,12 +245,20 @@ async function fetchDirectOrProxy(
     // Direct cross-origin fetch blocked (CORS) or a network error. Retry through
     // the app's own same-origin relay (reliable + first-party). A 404 (relay not
     // deployed) or any non-2xx just falls through to the guidance below.
+    let relayTooLarge: string | null = null;
     try {
       const res = await attempt(IMPORT_RELAY + encodeURIComponent(url.href), timeoutMs);
       if (res.ok) return { res, viaProxy: true };
+      // 413: the file is over what a serverless response can carry (~4 MB). The
+      // relay says so; "the relay is unavailable" below would be untrue.
+      if (res.status === 413) {
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        relayTooLarge = typeof body?.error === "string" ? body.error : "That file is too large for the import relay.";
+      }
     } catch {
       /* relay unavailable — fall through */
     }
+    if (relayTooLarge) throw new UrlImportError(relayTooLarge);
     throw new UrlImportError(
       "Couldn't fetch that URL. The host blocks direct browser access and the import " +
         'relay is unavailable. Download the file and drag it in (or use "Import file"), ' +
