@@ -34,6 +34,7 @@ import { useIsMobile } from "../hooks/use-mobile";
 import { COMMON_SHORTCUTS, displayKeys } from "../data/shortcuts";
 import { getStoredPalette, PALETTES, setPalette } from "../theme/palette";
 import { useUIStore } from "../store/uiStore";
+import { adsAvailable } from "../utils/build-gates";
 import { useDialog } from "./DialogProvider";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { TableGridPicker } from "./TableGridPicker";
@@ -346,9 +347,12 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
           <DropdownMenuCheckboxItem checked={focusMode} onCheckedChange={(v) => setFocusMode(!!v)}>
             Focus mode
           </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem checked={showAds} onCheckedChange={(v) => setShowAds(!!v)}>
-            Show ads
-          </DropdownMenuCheckboxItem>
+          {/* Placeholder ad slots are a development-only surface (A078). */}
+          {adsAvailable() && (
+            <DropdownMenuCheckboxItem checked={showAds} onCheckedChange={(v) => setShowAds(!!v)}>
+              Show ads
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Appearance</DropdownMenuSubTrigger>

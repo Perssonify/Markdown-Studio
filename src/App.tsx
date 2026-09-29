@@ -8,6 +8,7 @@ import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
+import { sessionAdsFromParam } from "./utils/build-gates";
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
 const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
@@ -36,14 +37,16 @@ export function App() {
     // SESSION only — via setState, which bypasses the persisting setters — so
     // opening a shared read-only/ads link doesn't overwrite the visitor's own
     // saved settings on later normal visits. The standalone app's counterpart to
-    // embed.tsx's param block.
+    // embed.tsx's param block. `ads` is honoured in DEVELOPMENT builds only
+    // (sessionAdsFromParam) — a crafted `?ads=1` link must not dress a
+    // production build in placeholder ad slots — but it is stripped either way.
     useEffect(() => {
         let params: URLSearchParams;
         try { params = new URLSearchParams(window.location.search); } catch { return; }
         if (![...params.keys()].some((k) => k === "ads" || k === "readonly" || k === "view_mode" || k === "import_url")) return;
         const store = useUIStore.getState();
-        const ads = params.get("ads");
-        if (ads !== null) useUIStore.setState({ showAds: ads === "true" || ads === "1" });
+        const ads = sessionAdsFromParam(params.get("ads"));
+        if (ads !== null) useUIStore.setState({ showAds: ads });
         const ro = params.get("readonly");
         if (ro !== null) useUIStore.setState({ readOnly: ro === "true" || ro === "1" });
         const vm = params.get("view_mode");
