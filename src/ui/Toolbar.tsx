@@ -149,6 +149,16 @@ const fontOptions = [
   { value: "Courier New", label: "Mono" },
 ];
 
+/**
+ * The generated `default_soft` variant colours its glyph `text-primary` — the
+ * bright fill, 1.7:1 on its own 10% tint in amber, so an ACTIVE format button's
+ * icon (the only thing saying "bold is on") failed WCAG 1.4.11's 3:1 (A092).
+ * The primitive is generated and not hand-edited; `cn` (tailwind-merge) lets a
+ * className override the variant's colour classes, including the dark/hover
+ * ones, so this is applied wherever the variant is.
+ */
+const SOFT_ACTIVE_INK = "text-primary-strong dark:text-primary-strong hover:dark:text-primary-strong";
+
 function TbBtn({ icon: Icon, title, hint, active, onClick, className = "size-8" }: TbBtnProps) {
   return (
     <Button
@@ -169,7 +179,7 @@ function TbBtn({ icon: Icon, title, hint, active, onClick, className = "size-8" 
       aria-label={title}
       aria-pressed={active}
       title={hint ? `${title} — ${hint}` : title}
-      className={className}
+      className={cn(className, active && SOFT_ACTIVE_INK)}
     >
       <Icon />
     </Button>
@@ -317,7 +327,7 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
                 type="button"
                 onClick={() => { onClear(); setOpen(false); }}
                 disabled={!hasColor}
-                className="flex items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:bg-destructive hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                className="flex items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:bg-destructive hover:text-destructive-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                 title={`Clear ${isHighlight ? "highlight" : "text color"}`}
               >
                 <X className="h-3.5 w-3.5" />
@@ -429,7 +439,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           size="icon"
           variant={showExpanded ? "default_soft" : "outline"}
           title={pinned ? "Unpin to collapse" : (showExpanded ? "Collapse Toolbar" : "Expand Toolbar")}
-          className="h-8 w-8"
+          className={cn("h-8 w-8", showExpanded && SOFT_ACTIVE_INK)}
         >
           {showExpanded ? <ChevronUp className={pinned ? "opacity-50" : ""} /> : <ChevronDown />}
         </Button>
@@ -442,7 +452,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           title={pinned ? "Unpin Toolbar" : "Pin Toolbar"}
           size="icon"
           variant={pinned ? "default_soft" : "outline"}
-          className="size-8"
+          className={cn("size-8", pinned && SOFT_ACTIVE_INK)}
         >
           {pinned ? <Pin /> : <PinOff />}
         </Button>

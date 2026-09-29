@@ -167,7 +167,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
                   if (b.tip)
                     return (
                       <p key={i} className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm leading-relaxed text-foreground">
-                        <span className="font-semibold text-primary">Tip · </span>
+                        <span className="font-semibold text-primary-strong">Tip · </span>
                         {b.tip}
                       </p>
                     );
