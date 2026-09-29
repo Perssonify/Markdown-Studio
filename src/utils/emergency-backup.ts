@@ -15,7 +15,7 @@ import { buildZip } from "../store/archive";
 import { resolveDocTitle, type DocumentRecord } from "../store/document";
 import { isBlankCanonical, useDocumentStore } from "../store/documentStore";
 import { useFolderStore } from "../store/folders";
-import { downloadBlob, exportTimestamp } from "../store/import-export";
+import { downloadBlob, exportTimestamp, toExportEnvelope } from "../store/import-export";
 
 export interface BackupSources {
   storage: {
@@ -74,24 +74,15 @@ export async function buildBackupFiles(src: BackupSources): Promise<Record<strin
     let path = `${base}.json`;
     for (let i = 1; used.has(path); i++) path = `${base} (${i}).json`;
     used.add(path);
-    files[path] = JSON.stringify(
-      {
-        _format: "perssonify-document",
-        _version: "1.1.0",
-        id: rec.id,
-        title,
-        canonical,
-        origin: rec.origin,
-        residuals: rec.residuals,
-        ingestReport: rec.ingestReport,
-        metadata: rec.metadata,
-        tags: rec.tags,
-        created: rec.created,
-        updated: useDraft ? new Date().toISOString() : rec.updated,
-      },
-      null,
-      2,
+    // The ONE envelope every export uses. Without it this escape hatch kept the
+    // imported originals (origin.raw, clipboard copies: text the user may have
+    // deleted since, A079) and carried no schemaVersion, so content from a
+    // newer build restored into an older one could open blank (A021).
+    const envelope = toExportEnvelope(
+      { ...rec, canonical, updated: useDraft ? new Date().toISOString() : rec.updated },
+      title,
     );
+    files[path] = JSON.stringify(envelope, null, 2);
   }
   return files;
 }

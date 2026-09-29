@@ -280,6 +280,13 @@ ${body}
  * DELETED since, travelling inside a file they share. Nothing reads either on
  * import; the provenance (format, source, time) stays.
  */
+/** The ingest report without `preIngestHtml` — up to 50 KB of the HTML exactly
+ *  as first imported, the same kind of payload as `origin.raw`. */
+function withoutIngestPayload(report: unknown): unknown {
+  if (!report || typeof report !== "object" || !("preIngestHtml" in report)) return report;
+  return { ...(report as Record<string, unknown>), preIngestHtml: null };
+}
+
 export function toExportEnvelope(doc: DocumentRecord, title: string = doc.title) {
   return {
     _format: "perssonify-document",
@@ -292,7 +299,7 @@ export function toExportEnvelope(doc: DocumentRecord, title: string = doc.title)
     canonical: doc.canonical,
     origin: doc.origin ? { ...doc.origin, raw: null, alternates: null } : doc.origin,
     residuals: doc.residuals,
-    ingestReport: doc.ingestReport,
+    ingestReport: withoutIngestPayload(doc.ingestReport),
     metadata: doc.metadata,
     tags: doc.tags,
     created: doc.created,
