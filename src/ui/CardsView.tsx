@@ -9,15 +9,18 @@ import {
   cardColorValue,
   cardPreview,
   cardPreviewHtml,
+  cardSyncSignature,
   composeNoteMarkdown,
-  filterCards,
   getCardColor,
   isCardPinned,
   isEmptyCapture,
   partitionPinned,
+  planCardReload,
   sortCards,
   type CardColorId,
 } from "@/store/cards";
+import { safeStorage } from "../utils/safe-storage";
+import { overlayShouldHandleEscape } from "./overlay-escape";
 import {
   ArrowLeft,
   Check,
@@ -88,6 +91,30 @@ export interface CardsViewProps {
   folderNameFor?: (id: string) => string | null;
 }
 
+/** The quick-capture draft, kept across Escape, closing the board and reloads.
+ *  Escape used to DISCARD it (the ladder called the Cancel path); Cancel is now
+ *  the only thing that throws a draft away. */
+const CARD_DRAFT_KEY = "pf:card-draft";
+interface CardDraft { title: string; body: string; list: boolean }
+function readDraft(): CardDraft {
+  try {
+    const raw = safeStorage.get(CARD_DRAFT_KEY);
+    const d = raw ? (JSON.parse(raw) as Partial<CardDraft>) : null;
+    if (d && typeof d === "object") {
+      return { title: String(d.title ?? ""), body: String(d.body ?? ""), list: d.list === true };
+    }
+  } catch { /* unreadable draft: start empty */ }
+  return { title: "", body: "", list: false };
+}
+function writeDraft(d: CardDraft): void {
+  if (isEmptyCapture(d.title, d.body)) safeStorage.remove(CARD_DRAFT_KEY);
+  else safeStorage.set(CARD_DRAFT_KEY, JSON.stringify(d));
+}
+
+/** Cards rendered per step: the rest are added as the board scrolls near them,
+ *  so opening a 2,000-note library does not build 2,000 card faces up front. */
+const RENDER_STEP = 60;
+
 /** Compact relative time ("just now", "5m", "3h", "2d", else a date). */
 function relTime(iso: string): string {
   const t = Date.parse(iso);
@@ -126,6 +153,47 @@ function useColumnCount(ref: React.RefObject<HTMLElement | null>): number {
     return () => ro.disconnect();
   }, [ref]);
   return cols;
+}
+
+interface CardModel {
+  id: string;
+  title: string;
+  updated: string;
+  created: string;
+  metadata: Record<string, unknown>;
+  canonical: unknown;
+  preview: string;
+  previewHtml: string;
+  haystack: string;
+  /** `title + haystack`, lower-cased ONCE — what the search box matches. */
+  searchKey: string;
+  checklist: ReturnType<typeof cardChecklist>;
+}
+
+function buildCardModel(d: CardDocSummary, rec: LoadedDoc): CardModel {
+  const title = rec.title || d.title || "Untitled";
+  // Search must still match text the preview trimmed or truncated.
+  const haystack = cardPreview(rec.canonical, title, 2000);
+  return {
+    id: d.id,
+    title,
+    updated: rec.updated || d.updated,
+    created: rec.created || d.created,
+    metadata: rec.metadata || {},
+    canonical: rec.canonical,
+    // Always computed: a doc with a checklist usually has prose too.
+    // Display copy: the checklist below renders the task items as real
+    // tick-boxes, so repeating them here printed them twice.
+    preview: cardPreview(rec.canonical, title, 220, { skipTasks: true }),
+    // The RENDERED face: real headings, lists and emphasis instead of one
+    // flat grey run. Pure and bounded (no marked/generateHTML) so it is
+    // cheap enough to compute for the whole library. `cardPreview` above
+    // stays for the empty-check and the accessible label.
+    previewHtml: cardPreviewHtml(rec.canonical, title, { skipTasks: true }),
+    haystack,
+    searchKey: `${title} ${haystack}`.toLowerCase(),
+    checklist: cardChecklist(rec.canonical, 6),
+  };
 }
 
 /**
@@ -177,8 +245,14 @@ export function CardsView({
 }: CardsViewProps) {
   const isDark = useIsDarkTheme();
   const [loaded, setLoaded] = useState<Map<string, LoadedDoc>>(new Map());
+  // Skeletons are for the FIRST load only. Afterwards the board is updated in
+  // place, so an edit elsewhere no longer blanks it and loses the scroll.
   const [hydrating, setHydrating] = useState(true);
+  const hydratedRef = useRef(false);
+  /** The signature (cardSyncSignature) each loaded card was read at. */
+  const loadedSigRef = useRef<Map<string, string>>(new Map());
   const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   /** The open card editor's commit function. Escape is handled by the board's
    *  ladder below (a capture-phase window listener that registers before the
@@ -188,44 +262,67 @@ export function CardsView({
   const cardCommitRef = useRef<(() => void) | null>(null);
   const [colorMenuFor, setColorMenuFor] = useState<string | null>(null);
 
-  // Composer
+  // Composer — seeded from (and mirrored to) the persisted draft.
   const [composerOpen, setComposerOpen] = useState(false);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftBody, setDraftBody] = useState("");
-  const [draftList, setDraftList] = useState(false);
+  const [initialDraft] = useState(readDraft);
+  const [draftTitle, setDraftTitle] = useState(initialDraft.title);
+  const [draftBody, setDraftBody] = useState(initialDraft.body);
+  const [draftList, setDraftList] = useState(initialDraft.list);
+  useEffect(() => {
+    writeDraft({ title: draftTitle, body: draftBody, list: draftList });
+  }, [draftTitle, draftBody, draftList]);
+  const hasDraft = !isEmptyCapture(draftTitle, draftBody);
 
-  // A single signature of the library: hydrate again only when a doc is added,
-  // removed, or actually edited — NOT on every parent re-render.
+  // A single signature of the library: sync again only when a doc is added,
+  // removed, edited, or re-pinned / re-coloured (cardSyncSignature) — NOT on
+  // every parent re-render.
   const signature = useMemo(
-    () => docs.map((d) => `${d.id}:${d.updated}`).join("|"),
+    () => docs.map((d) => `${d.id}:${cardSyncSignature(d)}`).join("|"),
     [docs]
   );
 
   // ── Hydration ──────────────────────────────────────────────────────────────
   // Summaries carry no canonical/metadata, so the board needs the full records.
+  // The first load reads everything; after that only NEW or CHANGED cards are
+  // read, and merged into the board in place. It used to re-read the whole
+  // library on any change and show skeletons meanwhile — the board blanked and
+  // lost its scroll position whenever anything was saved (A087).
   // Loaded in chunks with a yield between them so a large library can't freeze
   // the frame, and guarded by a cancel token so an unmount mid-load can't set
-  // state (or a stale load overwrite a newer one).
+  // state (or a stale load overwrite a newer one). A cancelled run records
+  // nothing, so the run that replaced it re-plans whatever it did not finish.
   useEffect(() => {
     let cancelled = false;
+    const first = !hydratedRef.current;
+    const { load, drop } = planCardReload(docs, loadedSigRef.current);
+    if (!first && load.length === 0 && drop.length === 0) return;
+    const wanted = new Map(docs.map((d) => [d.id, cardSyncSignature(d)]));
     const run = async () => {
-      setHydrating(true);
-      const next = new Map<string, LoadedDoc>();
+      const fresh = new Map<string, LoadedDoc>();
       const CHUNK = 24;
-      for (let i = 0; i < docs.length; i += CHUNK) {
+      for (let i = 0; i < load.length; i += CHUNK) {
         if (cancelled) return;
-        const slice = docs.slice(i, i + CHUNK);
         const recs = await Promise.all(
-          slice.map((d) => loadDoc(d.id).catch(() => null))
+          load.slice(i, i + CHUNK).map((id) => loadDoc(id).catch(() => null))
         );
         if (cancelled) return;
-        for (const r of recs) if (r) next.set(r.id, r);
+        for (const r of recs) if (r) fresh.set(r.id, r);
         // Yield so the overlay stays responsive while a big library loads.
-        if (i + CHUNK < docs.length) await new Promise((r) => setTimeout(r, 0));
+        if (i + CHUNK < load.length) await new Promise((r) => setTimeout(r, 0));
       }
       if (cancelled) return;
-      setLoaded(next);
-      setHydrating(false);
+      for (const id of fresh.keys()) loadedSigRef.current.set(id, wanted.get(id) ?? "");
+      for (const id of drop) loadedSigRef.current.delete(id);
+      setLoaded((prev) => {
+        const next = new Map(prev);
+        for (const id of drop) next.delete(id);
+        for (const [id, rec] of fresh) next.set(id, rec);
+        return next;
+      });
+      if (first) {
+        hydratedRef.current = true;
+        setHydrating(false);
+      }
     };
     void run();
     return () => {
@@ -238,53 +335,40 @@ export function CardsView({
   // it re-ran a full canonical tree walk per document (cardChecklist) plus two
   // cardPreview passes for the ENTIRE library on every keystroke in the search
   // box. Filtering and sorting are a second, cheap memo below.
+  //
+  // And per CARD: `docs` is a new array after every save anywhere in the
+  // library, so each model is cached against its record and summary fields and
+  // only a card whose data changed is rebuilt.
+  const modelCacheRef = useRef(new Map<string, { rec: LoadedDoc; title: string; updated: string; created: string; model: CardModel }>());
   const models = useMemo(() => {
-    return docs
-      .map((d) => {
-        const rec = loaded.get(d.id);
-        if (!rec) return null;
-        const title = rec.title || d.title || "Untitled";
-        const checklist = cardChecklist(rec.canonical, 6);
-        return {
-          id: d.id,
-          title,
-          updated: rec.updated || d.updated,
-          created: rec.created || d.created,
-          metadata: rec.metadata || {},
-          canonical: rec.canonical,
-          // Always computed: a doc with a checklist usually has prose too, and
-          // the preview doubles as the search haystack below.
-          // Display copy: the checklist below renders the task items as real
-          // tick-boxes, so repeating them here printed them twice.
-          preview: cardPreview(rec.canonical, title, 220, { skipTasks: true }),
-          // The RENDERED face: real headings, lists and emphasis instead of one
-          // flat grey run. Pure and bounded (no marked/generateHTML) so it is
-          // cheap enough to compute for the whole library. `cardPreview` above
-          // stays for the empty-check and the accessible label.
-          previewHtml: cardPreviewHtml(rec.canonical, title, { skipTasks: true }),
-          // Search must still match text the preview trimmed or truncated.
-          haystack: cardPreview(rec.canonical, title, 2000),
-          checklist,
-        };
-      })
-      .filter(Boolean) as {
-      id: string;
-      title: string;
-      updated: string;
-      created: string;
-      metadata: Record<string, unknown>;
-      canonical: unknown;
-      preview: string;
-      previewHtml: string;
-      haystack: string;
-      checklist: ReturnType<typeof cardChecklist>;
-    }[];
+    const cache = modelCacheRef.current;
+    const live = new Set<string>();
+    const out: CardModel[] = [];
+    for (const d of docs) {
+      const rec = loaded.get(d.id);
+      if (!rec) continue;
+      live.add(d.id);
+      const hit = cache.get(d.id);
+      if (hit && hit.rec === rec && hit.title === d.title && hit.updated === d.updated && hit.created === d.created) {
+        out.push(hit.model);
+        continue;
+      }
+      const model = buildCardModel(d, rec);
+      cache.set(d.id, { rec, title: d.title, updated: d.updated, created: d.created, model });
+      out.push(model);
+    }
+    for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id);
+    return out;
   }, [docs, loaded]);
 
+  // Sorted once per data change, not per keystroke (the sort parses dates);
+  // filtering a sorted list keeps its order. The search key is lower-cased
+  // once per card, not once per card per keystroke.
+  const sorted = useMemo(() => sortCards(models), [models]);
   const cards = useMemo(() => {
-    const filtered = filterCards(models, query, (m) => (m as (typeof models)[number]).haystack);
-    return sortCards(filtered);
-  }, [models, query]);
+    const q = query.trim().toLowerCase();
+    return q ? sorted.filter((m) => m.searchKey.includes(q)) : sorted;
+  }, [sorted, query]);
 
   const boardRef = useRef<HTMLDivElement | null>(null);
   const colCount = useColumnCount(boardRef);
@@ -323,24 +407,33 @@ export function CardsView({
   // ── Escape ladder ──────────────────────────────────────────────────────────
   // Closes the most specific thing first so Escape never skips a level and
   // dumps the user out of the whole board unexpectedly.
+  //
+  // Bubble phase, and only for an Escape meant for the board (A057). This was
+  // a CAPTURE-phase window listener — first in line for every Escape on the
+  // page — so cancelling a card's delete confirmation closed the whole board,
+  // and the confirmation never heard the key. overlayShouldHandleEscape leaves
+  // Escape to dialogs, menus and controls outside the board.
+  //
+  // The composer's Escape COLLAPSES it and keeps the draft (it used to take the
+  // Cancel path and throw the text away); Cancel is the one discard.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (colorMenuFor) { setColorMenuFor(null); e.stopPropagation(); return; }
+      if (!overlayShouldHandleEscape(e, rootRef.current)) return;
+      e.preventDefault();
+      if (colorMenuFor) { setColorMenuFor(null); return; }
       if (editingId) {
         // Same path as Done / backdrop click — never a silent discard.
         if (cardCommitRef.current) cardCommitRef.current();
         else setEditingId(null);
-        e.stopPropagation();
         return;
       }
-      if (composerOpen) { cancelComposer(); e.stopPropagation(); return; }
-      if (query) { setQuery(""); e.stopPropagation(); return; }
+      if (composerOpen) { setComposerOpen(false); return; }
+      if (query) { setQuery(""); return; }
       onClose();
     };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [colorMenuFor, editingId, composerOpen, query, cancelComposer, onClose]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [colorMenuFor, editingId, composerOpen, query, onClose]);
 
   // Close the colour popover on any outside pointer press.
   useEffect(() => {
@@ -354,17 +447,67 @@ export function CardsView({
     return () => window.removeEventListener("pointerdown", onDown);
   }, [colorMenuFor]);
 
+  /**
+   * Pin and colour, applied to the board AT ONCE (A056). The write keeps
+   * `updated` untouched on purpose, and the library listing carries no
+   * metadata, so nothing about it told the board a card had changed: both
+   * buttons looked broken until the board was reopened. If the write fails,
+   * the card is re-read, so it shows what was actually stored.
+   */
+  const patchMeta = useCallback(
+    async (id: string, patch: Record<string, unknown>) => {
+      setLoaded((prev) => {
+        const rec = prev.get(id);
+        if (!rec) return prev;
+        const next = new Map(prev);
+        next.set(id, { ...rec, metadata: { ...rec.metadata, ...patch } });
+        return next;
+      });
+      try {
+        await onPatchMeta(id, patch);
+      } catch {
+        const rec = await loadDoc(id).catch(() => null);
+        setLoaded((prev) => {
+          const next = new Map(prev);
+          if (rec) next.set(id, rec);
+          return next;
+        });
+      }
+    },
+    [onPatchMeta, loadDoc]
+  );
   const togglePin = useCallback(
-    (id: string, next: boolean) => onPatchMeta(id, { [CARD_PINNED_KEY]: next }),
-    [onPatchMeta]
+    (id: string, next: boolean) => patchMeta(id, { [CARD_PINNED_KEY]: next }),
+    [patchMeta]
   );
   const setColor = useCallback(
     (id: string, color: CardColorId) => {
       setColorMenuFor(null);
-      return onPatchMeta(id, { [CARD_COLOR_KEY]: color });
+      return patchMeta(id, { [CARD_COLOR_KEY]: color });
     },
-    [onPatchMeta]
+    [patchMeta]
   );
+
+  // ── Progressive rendering ──────────────────────────────────────────────────
+  // Build RENDER_STEP cards, then more as the end of the board scrolls into
+  // view. Where IntersectionObserver is missing, everything renders at once.
+  const [renderLimit, setRenderLimit] = useState(RENDER_STEP);
+  useEffect(() => { setRenderLimit(RENDER_STEP); }, [query]);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = cards.length > renderLimit;
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!hasMore || !el) return;
+    if (typeof IntersectionObserver === "undefined") { setRenderLimit(Infinity); return; }
+    const io = new IntersectionObserver(
+      (entries) => { if (entries.some((en) => en.isIntersecting)) setRenderLimit((n) => n + RENDER_STEP); },
+      { root: boardRef.current, rootMargin: "800px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, renderLimit]);
+  const shownPinned = pinned.slice(0, renderLimit);
+  const shownOthers = others.slice(0, Math.max(0, renderLimit - shownPinned.length));
 
   const renderCard = (c: (typeof cards)[number]) => {
     const colorId = getCardColor(c);
@@ -544,7 +687,7 @@ export function CardsView({
   };
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div ref={rootRef} className="flex h-full flex-col bg-background">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <StickyNote className="size-4 shrink-0 text-primary" aria-hidden />
@@ -605,10 +748,20 @@ export function CardsView({
                 <button
                   type="button"
                   onClick={openComposer}
+                  aria-label={hasDraft ? "Continue your draft note" : undefined}
                   className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
                 >
                   <StickyNote className="size-4 shrink-0 opacity-60" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">Take a note…</span>
+                  {/* A kept draft (Escape collapses the composer without
+                      discarding it) shows here, so it is not invisible state. */}
+                  {hasDraft ? (
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="mr-1.5 rounded bg-primary/15 px-1 py-0.5 text-[10px] font-semibold uppercase text-primary">Draft</span>
+                      {draftTitle.trim() || draftBody.trim().split("\n")[0]}
+                    </span>
+                  ) : (
+                    <span className="min-w-0 flex-1 truncate">Take a note…</span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -712,20 +865,21 @@ export function CardsView({
           </div>
         ) : (
           <>
-            {pinned.length > 0 && (
+            {shownPinned.length > 0 && (
               <>
                 <h3 className="mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-50">
                   Pinned
                 </h3>
-                <Masonry items={pinned} cols={colCount} render={renderCard} />
-                {others.length > 0 && (
+                <Masonry items={shownPinned} cols={colCount} render={renderCard} />
+                {shownOthers.length > 0 && (
                   <h3 className="mt-4 mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-50">
                     Others
                   </h3>
                 )}
               </>
             )}
-            <Masonry items={others} cols={colCount} render={renderCard} />
+            <Masonry items={shownOthers} cols={colCount} render={renderCard} />
+            {hasMore && <div ref={moreRef} className="h-8" aria-hidden />}
           </>
         )}
       </div>

@@ -159,8 +159,10 @@ describe("read-only still allows NON-mutating selection commands", () => {
 
     const { ranges } = cm.view.state.selection;
     expect(ranges).toHaveLength(2);
-    expect(cm.view.state.sliceDoc(ranges[0].from, ranges[0].to)).toBe("# One");
-    expect(cm.view.state.sliceDoc(ranges[1].from, ranges[1].to)).toBe("## Two");
+    // The heading TEXT, not the `#` marker (A054 — formatting the marker
+    // turned the heading into a paragraph).
+    expect(cm.view.state.sliceDoc(ranges[0].from, ranges[0].to)).toBe("One");
+    expect(cm.view.state.sliceDoc(ranges[1].from, ranges[1].to)).toBe("Two");
     expect(cm.view.state.doc.toString()).toBe("# One\n\ntext\n\n## Two\n"); // non-mutating
   });
 
