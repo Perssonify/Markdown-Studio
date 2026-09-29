@@ -482,16 +482,30 @@ confines everything in the `base` layer to the editor's own subtrees:
 | Scope root | What it covers |
 | --- | --- |
 | `.perssonify-editor` | the editor container itself, on every mount |
+| `[data-pf-root]` | the `PerssonifyEditorIntegration` wrapper around it (carries `isDark`, `accent`, `accentColor`, `themeVars`) |
 | `.pf-app` | the standalone app and iframe embed shells |
 | `[data-base-ui-portal]`, `[data-sonner-toaster]` | menus, dialogs, sheets, tooltips, toasts — these portal to `document.body`, outside the container |
 | `[data-pf-portal]` | the few surfaces the editor attaches to `document.body` itself |
 
 Your headings keep their size and weight, your links keep their underline, your
-elements keep their margins and `box-sizing`. Design tokens are deliberately *not*
-scoped: they stay on `:root`, which is where the portalled surfaces read them from.
+elements keep their margins and `box-sizing`.
+
+The editor's **design tokens** (`--background`, `--primary`, `--border`,
+`--radius`, … and Tailwind's own theme variables) are *defined on those roots*,
+never on your `:root` or `.dark` — so a shadcn / Tailwind app keeps its own tokens
+of the same names, and your `<html class="dark">` does not recolour itself with the
+editor's palette. The portalled menus and dialogs are roots too, so they are themed
+along with the editor. Theme the editor through its props (`isDark`, `accent`,
+`accentColor`, `themeVars`) rather than by setting those names on `:root`. Rules
+that only make sense for a page the editor owns — hiding the page scrollbar, for
+one — apply only where `<html>` carries `.pf-app`, which a host page does not.
+
+One limit: `[data-base-ui-portal]` and `[data-sonner-toaster]` are attributes those
+libraries put on *every* portal, so if your own app also uses Base UI or sonner,
+your menus and toasts sit inside the scope as well.
 
 The scoping is applied by the library build only, and is pinned by
-`src/__tests__/scope-css.test.js`.
+`src/__tests__/scope-css.test.js` and the browser case `e2e/cases/library.mjs`.
 
 ### Integration Props
 

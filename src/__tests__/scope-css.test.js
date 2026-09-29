@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { SCOPE_ROOTS, scopeBaseLayer, scopeSelector } from "../../build/scope-css.mjs";
+import {
+  SCOPE_ROOTS,
+  TOKEN_SCOPE,
+  scopeBaseLayer,
+  scopeLibraryCss,
+  scopeSelector,
+  scopeTokens,
+} from "../../build/scope-css.mjs";
 
 /**
  * The published library stylesheet must not restyle the page it is imported
@@ -59,10 +66,10 @@ describe("library stylesheet scoping", () => {
     expect(scopeSelector("a").startsWith(":where(")).toBe(true);
   });
 
-  it("does NOT touch the theme layer — portalled surfaces read those tokens", () => {
-    // Menus, dialogs and toasts live on document.body, outside the editor
-    // container. Scoping the design tokens to the container would leave every
-    // one of them without a --background, --border or --primary to resolve.
+  it("leaves the theme layer to the token pass", () => {
+    // The base-layer pass only resets elements; where the design tokens are
+    // defined is `scopeTokens`' job (below), which keeps them reachable from
+    // the portalled surfaces.
     const out = scopeBaseLayer("@layer theme{:root,:host{--primary:red}}");
     expect(out).toBe("@layer theme{:root,:host{--primary:red}}");
   });
@@ -98,5 +105,89 @@ describe("library stylesheet scoping", () => {
     const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
     expect(read("src/extensions/emoji-suggestion.ts")).toContain('setAttribute("data-pf-portal"');
     expect(read("src/ui/FindReplace.tsx")).toContain("data-pf-portal");
+  });
+});
+
+/**
+ * The design tokens. They used to be written on `:root` and `.dark` —
+ * `--background`, `--primary`, `--border`, `--radius`: the names a shadcn or
+ * Tailwind host uses for its own design system, in unlayered rules that beat a
+ * host's layered ones whatever the import order — so importing the stylesheet
+ * recoloured the host page; `html::-webkit-scrollbar{display:none}` hid its
+ * scrollbar. Measured in a real browser by e2e/cases/library.mjs; pinned here
+ * at the transform.
+ */
+describe("library stylesheet — design tokens and page-level rules", () => {
+  const selectorsOf = (css) => {
+    const m = /^(?:@[^{]+\{)*([^{]+)\{/.exec(css);
+    return m[1].split(/,(?![^(]*\))/).map((s) => s.trim());
+  };
+
+  it("defines :root tokens on the editor's roots, never on the host's :root", () => {
+    const out = scopeTokens(":root{--primary:red}");
+    expect(selectorsOf(out)).toEqual([TOKEN_SCOPE]);
+    expect(out).not.toMatch(/(^|[\s,}]):root/);
+  });
+
+  it("does the same for Tailwind's theme layer, which merges with a host's same-named layer", () => {
+    const out = scopeTokens("@layer theme{:root,:host{--font-sans:Geist}}");
+    expect(out).toBe(`@layer theme{${TOKEN_SCOPE}{--font-sans:Geist}}`);
+  });
+
+  it("never matches a host element that carries the dark / theme / palette switch", () => {
+    const out = scopeTokens(".dark,[data-pf-theme=dark],[data-theme=dark]{--background:#000}");
+    for (const sel of selectorsOf(out)) {
+      // Every form ends at one of OUR roots.
+      expect(sel.endsWith(TOKEN_SCOPE) || sel.startsWith(TOKEN_SCOPE), sel).toBe(true);
+    }
+    expect(selectorsOf(out)).toContain(`${TOKEN_SCOPE}.dark`);
+    expect(selectorsOf(out)).toContain(`:where(.dark) ${TOKEN_SCOPE}`);
+  });
+
+  it("lets the switch closest to the editor win: an ancestor's switch weighs nothing", () => {
+    // Own form keeps the switch's weight; the inherited form is all :where().
+    const [own, inherited] = selectorsOf(scopeTokens(".dark[data-palette=mono]{--primary:#fff}"));
+    expect(own).toBe(`${TOKEN_SCOPE}.dark[data-palette=mono]`);
+    expect(inherited).toBe(`:where(.dark[data-palette=mono]) ${TOKEN_SCOPE}`);
+  });
+
+  it("has zero specificity and skips roots nested in the integration wrapper", () => {
+    // Nested roots inherit the wrapper's inline accentColor / themeVars; if they
+    // re-declared the defaults, those would never reach the editor.
+    expect(TOKEN_SCOPE).toMatch(/^:where\([^)]*\):not\(:where\(\[data-pf-root\] \*\)\)$/);
+    expect(SCOPE_ROOTS).toContain("[data-pf-root]");
+  });
+
+  it("confines page-level rules to a page that is ours", () => {
+    expect(scopeTokens("html::-webkit-scrollbar,.no-scrollbar::-webkit-scrollbar{display:none}"))
+      .toBe("html.pf-app::-webkit-scrollbar,.no-scrollbar::-webkit-scrollbar{display:none}");
+    expect(scopeTokens("html,.no-scrollbar{scrollbar-width:none}"))
+      .toBe("html.pf-app,.no-scrollbar{scrollbar-width:none}");
+  });
+
+  it("leaves keyframes, utilities, the base layer and hand-scoped rules alone", () => {
+    for (const css of [
+      "@keyframes spin{from{opacity:0}to{opacity:1}}",
+      ".dark\:bg-card:where(.dark *){color:red}",
+      "@layer base{html{line-height:1.5}}",
+      ".pf-app body,body.pf-app{margin:0}",
+    ]) {
+      expect(scopeTokens(css)).toBe(css);
+    }
+  });
+
+  it("the library build runs both passes", () => {
+    const out = scopeLibraryCss("@layer base{a{color:red}}:root{--primary:red}");
+    expect(out).toContain(`:where(${SCOPE_ROOTS.join(", ")}) a`);
+    expect(out).toContain(`${TOKEN_SCOPE}{--primary:red}`);
+  });
+
+  it("the integration wrapper is the token root for its subtree, error card included", () => {
+    const src = readFileSync(join(process.cwd(), "src/integration/PerssonifyEditorIntegration.tsx"), "utf8");
+    const wrapper = src.indexOf('data-pf-root=""');
+    expect(wrapper).toBeGreaterThan(-1);
+    // Outside the boundary, so the crash card (styled with the same tokens) gets them.
+    expect(src.indexOf("<ErrorBoundary", wrapper)).toBeGreaterThan(wrapper);
+    expect(src.lastIndexOf("<ErrorBoundary", wrapper)).toBe(-1);
   });
 });

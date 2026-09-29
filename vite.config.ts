@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 import path from "path";
 import { defineConfig, esmExternalRequirePlugin } from 'vite';
 import { libraryExternals } from './build/externals.mjs';
-import { scopeLibraryBaseLayer } from './build/scope-css.mjs';
+import { scopeLibraryStylesheet } from './build/scope-css.mjs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 
@@ -17,9 +17,10 @@ export default defineConfig({
   // default, so the npm tarball was shipping the app's favicons and
   // sw-recover.js to every library consumer.
   publicDir: false,
-  // `scopeLibraryBaseLayer` is deliberately absent from the app and embed configs:
-  // there the page is ours and a global reset is the correct behaviour. Only the
-  // published library stylesheet gets confined to the editor's own subtrees.
+  // `scopeLibraryStylesheet` is deliberately absent from the app and embed configs:
+  // there the page is ours, and a global reset plus `:root` design tokens are the
+  // correct behaviour. Only the published library stylesheet gets confined to the
+  // editor's own subtrees (build/scope-css.mjs).
   plugins: [
     // Dependencies and peers are external; devDependencies the library imports
     // are bundled. The list is DERIVED from package.json, and this plugin owns it
@@ -29,7 +30,7 @@ export default defineConfig({
     esmExternalRequirePlugin({ external: libraryExternals(pkg) }),
     react(),
     tailwindcss(),
-    scopeLibraryBaseLayer(),
+    scopeLibraryStylesheet(),
   ],
   build: {
     lib: {

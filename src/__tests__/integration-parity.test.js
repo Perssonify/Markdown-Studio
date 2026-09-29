@@ -92,13 +92,16 @@ describe("published package surface", () => {
     expect(PKG.scripts.build).toContain("tsconfig.build.json");
   });
 
-  it("declares every runtime-external dep as a peer dependency", () => {
+  it("declares every runtime-external dep as a peer dependency", async () => {
     // next-themes was externalized in vite.config.ts but only listed under
-    // devDependencies, so consumers hit an unresolved import at runtime.
-    const viteConfig = read("vite.config.ts");
-    const externalised = ["next-themes", "zustand", "lucide-react"];
-    for (const dep of externalised) {
-      expect(viteConfig).toContain(dep);
+    // devDependencies, so consumers hit an unresolved import at runtime. The
+    // externals are now DERIVED from the manifest (build/externals.mjs), so
+    // being external and being declared are one fact; this checks both halves
+    // through the helper the build uses rather than grepping the config.
+    const { libraryExternals } = await import("../../build/externals.mjs");
+    const externals = libraryExternals(PKG);
+    for (const dep of ["next-themes", "zustand", "lucide-react"]) {
+      expect(externals.some((re) => re.test(dep)), `${dep} must be external`).toBe(true);
       expect(PKG.peerDependencies[dep], `${dep} must be a peerDependency`).toBeTruthy();
     }
   });
