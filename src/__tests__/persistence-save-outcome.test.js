@@ -85,8 +85,16 @@ describe("what ⌘S says instead of 'Changes saved'", () => {
 });
 
 describe("handleSave branches on the commit (source pin)", () => {
-  const src = readFileSync(join(process.cwd(), "src/PerssonifyEditor.tsx"), "utf8").replace(/\r\n/g, "\n");
+  // handleSave lives in the editor's saving hook (src/editor/useAutosave.ts).
+  const src = readFileSync(join(process.cwd(), "src/editor/useAutosave.ts"), "utf8").replace(/\r\n/g, "\n");
   const body = src.slice(src.indexOf("const handleSave = useCallback("), src.indexOf("// ── Idle autosave"));
+
+  it("is the save the editor wires to ⌘S and the menu", () => {
+    const pe = readFileSync(join(process.cwd(), "src/PerssonifyEditor.tsx"), "utf8");
+    expect(pe).toMatch(/const \{ handleSave[^}]*\} = useAutosave\(/);
+    expect(pe).toContain("save: handleSave");
+    expect(pe).toContain("onSave={handleSave}");
+  });
 
   it("reports success and fires onSave only after a committed write", () => {
     const committedAt = body.indexOf("const committed = await saveActiveDoc(editor)");

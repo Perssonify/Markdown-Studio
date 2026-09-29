@@ -138,11 +138,20 @@ describe("the backup reminder", () => {
   });
 
   it("the full-backup export records it — only when something was written", () => {
-    const pe = read("src/PerssonifyEditor.tsx").replace(/\r\n/g, "\n");
-    const branch = pe.slice(pe.indexOf('if (type === "export-backup-zip")'));
-    const body = branch.slice(0, branch.indexOf("return;"));
+    // The backup is exportFullBackup (src/editor/useExportActions.ts)…
+    const exp = read("src/editor/useExportActions.ts").replace(/\r\n/g, "\n");
+    const start = exp.indexOf("export function exportFullBackup(");
+    expect(start).toBeGreaterThan(-1);
+    const body = exp.slice(start, exp.indexOf("\n}\n", start));
     expect(body).toMatch(/"perssonify-backup", \{ canonical: true \}/);
     expect(body).toMatch(/count > 0\) recordFullBackup\(\)/);
+    // …and it is what the File menu's full-backup action runs (the dispatcher
+    // is handleAction, src/editor/useEditorActions.ts).
+    const actions = read("src/editor/useEditorActions.ts").replace(/\r\n/g, "\n");
+    const at = actions.indexOf('if (type === "export-backup-zip")');
+    expect(at).toBeGreaterThan(-1);
+    const branch = actions.slice(at);
+    expect(branch.slice(0, branch.indexOf("return;"))).toContain("exportFullBackup(exportDocsRef);");
   });
 });
 
@@ -331,12 +340,17 @@ describe("one notice at a time, most urgent first", () => {
 
 describe("the boot path in PerssonifyEditor", () => {
   it("checks the library before seeding and skips the seed when it was wiped", () => {
-    const pe = read("src/PerssonifyEditor.tsx").replace(/\r\n/g, "\n");
-    const init = pe.indexOf("const existingDoc = await initialize();");
-    const check = pe.indexOf("noteLibraryAtBoot(useDocumentStore.getState().documents.length)");
-    const seed = pe.indexOf("} else if (initialDocument && !libraryWiped) {");
+    // The boot sequence lives in src/editor/useEditorBoot.ts.
+    const boot = read("src/editor/useEditorBoot.ts").replace(/\r\n/g, "\n");
+    const init = boot.indexOf("const existingDoc = await initialize();");
+    const check = boot.indexOf("noteLibraryAtBoot(useDocumentStore.getState().documents.length)");
+    const seed = boot.indexOf("} else if (initialDocument && !libraryWiped) {");
     expect(init).toBeGreaterThan(-1);
     expect(check).toBeGreaterThan(init);
     expect(seed).toBeGreaterThan(check);
+    // …and the editor runs it with the durabilityNotices prop it was given
+    // (shorthand: the prop itself, not some other value under its name).
+    const pe = read("src/PerssonifyEditor.tsx").replace(/\r\n/g, "\n");
+    expect(pe).toMatch(/useEditorBoot\(\{[^;]*\bdurabilityNotices,/);
   });
 });
