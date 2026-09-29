@@ -25,10 +25,11 @@ const SUITES = {
   csp: "vercel.json's Content-Security-Policy ENFORCED while every renderer and lazy surface runs",
   pwa: "The service worker: offline after one online visit, and updates that never force-reload a tab",
   perf: "Measurement only — not run in CI (timing noise)",
+  "perf-map": "Measurement only — the relationship map at library scale (A088); not run in CI",
 };
 
 const requested = process.argv.slice(2).filter((a) => !a.startsWith("-"));
-const suites = requested.length ? requested : Object.keys(SUITES).filter((s) => s !== "perf");
+const suites = requested.length ? requested : Object.keys(SUITES).filter((s) => !s.startsWith("perf"));
 
 for (const s of suites) {
   if (!SUITES[s]) {

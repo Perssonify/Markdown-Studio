@@ -32,6 +32,7 @@ bun run e2e:bridge         # the embed's host bridge from a second origin (needs
 bun run e2e:csp            # vercel.json's CSP ENFORCED while every renderer runs
 bun run e2e:pwa            # offline after one visit; updates that never force-reload a tab
 bun run e2e:perf           # measurement only, never asserted in CI
+node e2e/run.mjs perf-map  # measurement only: the relationship map at library scale
 ```
 
 `run.mjs` refuses to start without `dist-app/index.html`. `library` and
@@ -60,6 +61,9 @@ if you do not have one; `E2E_CHROME=/path/to/chrome` overrides.
 | `cases/journeys.mjs` | tier 3 — user simulation |
 | `cases/faults.mjs` | tier 4 — fault injection |
 | `cases/perf.mjs` | measurement, not a gate |
+| `cases/perf-map.mjs` | measurement, not a gate: the relationship map on a generated library under CPU throttling (A088) — first frame, settle, long tasks and frames (attributed to the layout loop vs React), wheel-zoom latency while the layout settles and once it rests; `PROFILE=1` / `PROFILE_ZOOM=1` print sourcemapped CPU profiles, `DUMP=1` the timelines |
+| `map-library.mjs` | a deterministic library shaped like a real one — folders of skewed sizes, hub notes, unlinked notes, broken links — for the map's scale cases |
+| `map-measure.mjs` | what the map has drawn, measured in the page: every note's dot (from `.pf-node-dot` elements, or a large map's batched `.pf-node-dots` paths), and the "nothing drawn over text" counts CLAUDE.md claims |
 | `fixtures/` | host pages the library and bridge suites are driven from |
 | `cases/harness.mjs` | the rig checking ITSELF — the pane readers against a document of known lines |
 | `cases/library.mjs` | the published stylesheet on a page that is not ours (`fixtures/host-page.html`, needs `dist/`): the host's elements, its own tokens on `:root`/`.dark` and its scrollbar survive; the editor subtree, the integration wrapper's inline accent and a portalled surface still resolve the editor's tokens; the theme switch closest to the editor wins |
@@ -67,7 +71,7 @@ if you do not have one; `E2E_CHROME=/path/to/chrome` overrides.
 | `cases/csp.mjs` | the production build served with vercel.json's headers, the report-only CSP switched to ENFORCING; KaTeX, Mermaid, abcjs, a data: image, Find, the map, Cards, Word export and /help must raise zero violations |
 | `cases/pwa.mjs` | the service worker: one online visit, then the network is killed and every lazy feature is used for the first time offline; then a byte-changed `sw.js` — the prompt appears, nothing reloads by itself, a dirty second tab is told rather than reloaded |
 | `renderers.mjs` | the probe document and actions `csp` and `pwa` share (a helper, not a case) |
-| `probes/` | one-off diagnostics kept because they are the evidence behind a fix. None is wired into `run.mjs` or CI; run one by hand with `node e2e/probes/<name>.mjs` against a production build (`bun run build:app` first; `embed-boot.mjs` needs `build:embed`). Two cover the audit fixes: `g2-audit-fixes.mjs` (AltGr typing in both panes, ⌘B in the Cards composer, broken-link marking, the Find regex Worker timing out, map wheel-zoom on a later open, Escape on a card's delete confirmation) and `g4-durability-trust.mjs` (the wiped-library boot path, the "Not saving" banner, the Version history delete confirm, the backup record, remote images and Referer under the image CSP, the relay consent prompt, the old-origin banner, no Admin/ads in production, the licence notice) |
+| `probes/` | one-off diagnostics kept because they are the evidence behind a fix. None is wired into `run.mjs` or CI; run one by hand with `node e2e/probes/<name>.mjs` against a production build (`bun run build:app` first; `embed-boot.mjs` needs `build:embed`). Two cover the audit fixes: `g2-audit-fixes.mjs` (AltGr typing in both panes, ⌘B in the Cards composer, broken-link marking, the Find regex Worker timing out, map wheel-zoom on a later open, Escape on a card's delete confirmation) and `g4-durability-trust.mjs` (the wiped-library boot path, the "Not saving" banner, the Version history delete confirm, the backup record, remote images and Referer under the image CSP, the relay consent prompt, the old-origin banner, no Admin/ads in production, the licence notice). Two are the evidence for the map's scale work (A088): `map-overlap.mjs` re-measures CLAUDE.md's "nothing drawn over text" counts across workspace sizes, desktop and phone, at fit / 4 zoom-outs / 8 zoom-ins, and fingerprints everything drawn so two builds can be compared; `map-trace.mjs` splits a map open (or, with `ZOOM=1`, a zoom) into script, style, layout and paint from a Chrome trace |
 
 ## What this campaign does NOT cover
 
@@ -168,8 +172,9 @@ only when someone runs them.
 
 **Scaled down from what was planned**
 - Continuous typing runs are ~480 characters, not 2000; the duration case is 8
-  rounds, not 20 minutes; the largest library is 120 documents, not 200; there is
-  no 200 KB document and no math-heavy document.
+  rounds, not 20 minutes; the largest library you edit and switch in is 120
+  documents, not 200 (the relationship map is opened on 2,000); there is no
+  200 KB document and no math-heavy document.
 - **Breakpoints** now assert five real switches, not two. The menu collapsing to
   ☰ and the panes stacking (both at 768px wide, on viewports tall enough to
   stack; the height half of the rule is the 667×375 landscape case above) are
