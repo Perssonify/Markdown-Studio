@@ -96,6 +96,15 @@ export function describeUncommittedSave(
 ): { message: string; type: "warning" | "error" } {
   switch (s.saveStatus) {
     case "blocked":
+      // Two refusals share the terminal "blocked" status; saveError tells them
+      // apart. A document from a newer build is not empty — telling its user
+      // "the editor is empty" sent them looking for content that was never lost.
+      if (s.saveError === SCHEMA_LOCK_ERROR) {
+        return {
+          message: "Not saved — this document was made by a newer version of the app, so it is open read-only. Open it in the newer version to edit it.",
+          type: "warning",
+        };
+      }
       return {
         message: "Not saved — the editor is empty but the stored document is not. Undo to restore it, or use Clear document if you meant to empty it.",
         type: "warning",

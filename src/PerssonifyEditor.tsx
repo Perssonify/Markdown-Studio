@@ -1754,7 +1754,10 @@ export function PerssonifyEditor({
       if (useDocumentStore.getState().saveStatus === "blocked") {
         if (Date.now() - lastAutosaveToastRef.current > 30_000) {
           lastAutosaveToastRef.current = Date.now();
-          toast.show("Document is empty — not saved. Undo to restore it, or delete the document to remove it.", "warning");
+          // The same wording ⌘S uses — which also knows that a document from a
+          // newer build is "blocked" without being empty.
+          const { message, type } = describeUncommittedSave(useDocumentStore.getState());
+          toast.show(message, type);
         }
       }
     } catch (e) {
