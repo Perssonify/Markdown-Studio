@@ -11,7 +11,7 @@ import { useLinkIndex } from "./hooks/useLinkIndex";
 import { buildContextPrompt } from "./integration/prompt-builder";
 import type { DocumentRecord } from "./store/document";
 import { extractText, resolveDocTitle } from "./store/document";
-import { clearLocalData, configureLocalStores, ConflictError, useDocumentStore } from "./store/documentStore";
+import { clearLocalData, ConflictError, useDocumentStore } from "./store/documentStore";
 import { snapshotStore } from "./store/snapshot-store";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { buildZipAsync, readDocuments } from "./store/zip-builder";
@@ -32,21 +32,20 @@ import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation"
 import { usePaneCommands } from "./editor/usePaneCommands";
 import { useBottomTray, useConsoleContext, useTrayTabs } from "./editor/useBottomTray";
 import { collectImportItems, useImportPipeline } from "./editor/useImportPipeline";
+import { useEditorBoot, usePersistPreferences } from "./editor/useEditorBoot";
 import { canonicalToHtml, canonicalToMarkdown } from "./engine/serialize-doc";
 import { extractHeadings } from "./store/doc-outline";
-import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
 import { LinkBuilderDialog } from "./ui/LinkBuilderDialog";
 import { collectFolderExport, groupDocsByFolder, useFolderStore } from "./store/folders";
 import { searchDocuments } from "./store/search";
 import { docSearchText, docSearchTextLower } from "./store/doc-text";
-import { normalizeMarkdownFeatures } from "./store/settings";
 import { useUIStore } from "./store/uiStore";
 import { MenuBar } from "./ui/MenuBar";
 import { AdUnit } from "./ui/AdUnit";
 import { DurabilityNotices } from "./ui/DurabilityNotices";
-import { noteLibraryAtBoot, recordFullBackup } from "./store/storage-durability";
+import { recordFullBackup } from "./store/storage-durability";
 import { BottomTray } from "./ui/BottomTray";
 import { EditorLayout } from "./ui/EditorPanes";
 import { EditorContextMenu } from "./ui/EditorContextMenu";
@@ -54,7 +53,6 @@ import { Icons } from "./ui/Icons";
 import { StatusBar } from "./ui/StatusBar";
 import { ToastType, useToast } from "./ui/Toast";
 import { EditorToolbar } from "./ui/Toolbar";
-import { diagError } from "./utils/diag";
 
 // Handle types for the sub-panes
 import { FileTextIcon } from "lucide-react";
@@ -247,48 +245,18 @@ export function PerssonifyEditor({
     return () => store.registerLiveCanonical(null);
   }, []);
 
-  // Persist mode preference whenever the user switches modes (after init)
-  useEffect(() => {
-    if (!initDoneRef.current) return;
-    useDocumentStore.getState().getStorage().setPrefs({ editorMode: mode }).catch(() => { });
-  }, [mode]);
-
-  // Persist markdown feature/flavor settings whenever they change (after init)
-  useEffect(() => {
-    if (!initDoneRef.current) return;
-    useDocumentStore.getState().getStorage().setPrefs({ markdownFeatures }).catch(() => { });
-  }, [markdownFeatures]);
-
-  // Persist the folder tree overlay whenever it changes (after init).
-  useEffect(() => {
-    return useFolderStore.subscribe((state) => {
-      if (!initDoneRef.current) return;
-      useDocumentStore
-        .getState()
-        .getStorage()
-        .setPrefs({
-          folderTree: {
-            folders: state.folders,
-            docParents: state.docParents,
-            docOrder: state.docOrder,
-            expanded: state.expanded,
-          },
-        })
-        .catch(() => { });
-    });
-  }, []);
-
-  // Drop folder metadata for documents that no longer exist.
-  useEffect(() => {
-    if (!initDoneRef.current) return;
-    useFolderStore.getState().pruneOrphans(new Set(documents.map((d) => d.id)));
-  }, [documents]);
-
   // ── Refs ──────────────────────────────────────────────────────────────────
   const cmRef = useRef<CodeMirrorPaneHandle>(null);
   const tiptapRef = useRef<TiptapPaneHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const initDoneRef = useRef(false);
+
+  // Write preferences (view mode, markdown features, folder tree) back as they
+  // change once boot has finished, and prune folder metadata for deleted
+  // documents (usePersistPreferences). Called here because it needs
+  // initDoneRef; nothing between the live-canonical registration above and
+  // this call registers an effect, so its effects keep their original order.
+  usePersistPreferences({ initDoneRef, mode, markdownFeatures, documents });
 
   // ── Misc hooks ────────────────────────────────────────────────────────────
   const toast = useToast();
@@ -798,22 +766,6 @@ export function PerssonifyEditor({
     clearLocalData: (opts?: { preferences?: boolean }) => clearLocalData(opts),
   }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical, hydrateEditorWithDoc, prepareToLeaveActiveDoc, activateAndCapture]);
 
-  // ── Inject storage adapter before init (runs once, synchronously before engine) ──
-  const storageInjectedRef = useRef(false);
-  if (!storageInjectedRef.current) {
-    storageInjectedRef.current = true;
-    if (storageAdapter) {
-      initStorage(storageAdapter);
-      // With a host's own adapter, storageConfig still decides where the
-      // editor's OTHER browser stores go (version history, the crash stash) —
-      // or that they are off (see configureLocalStores).
-      if (storageConfig) configureLocalStores(storageConfig);
-    } else if (storageConfig) {
-      initStorage(storageConfig);
-    }
-  }
-
-  // ── Init ──────────────────────────────────────────────────────────────────
   // Rebuild the link index and push a fresh graph to the host after a document
   // mutation (add/update/append), reading live store state so the host sees the
   // new nodes/edges without a stale-render race.
@@ -852,196 +804,20 @@ export function PerssonifyEditor({
     return { id, updated: true };
   }, [switchToDoc, waitForEditor, engine, setFromHtml, patchDocById]);
 
-  useEffect(() => {
-    if (!engineReady || !engine || initDoneRef.current) return;
-    (async () => {
-      const loadingId = toastSonner.loading("Initializing editor…", { duration: Infinity });
-      try {
-        // Hydrate syncMode from storage prefs before rendering content
-        const storage = useDocumentStore.getState().getStorage();
-        // Load the per-doc history-cache config (enabled/limits) from prefs.
-        void historyCache.init({
-          getPrefs: () => storage.getPrefs(),
-          setPrefs: (p) => storage.setPrefs(p),
-        });
-        const prefs = await storage.getPrefs();
-        if (typeof prefs["syncMode"] === "string") {
-          setInitialSyncMode(prefs["syncMode"]);
-        }
-        if (prefs["markdownFeatures"]) {
-          setInitialMarkdownFeatures(
-            normalizeMarkdownFeatures(prefs["markdownFeatures"])
-          );
-        }
-        if (prefs["folderTree"] && typeof prefs["folderTree"] === "object") {
-          useFolderStore.getState().setInitialTree(prefs["folderTree"] as any);
-        }
-
-        // A `?view_mode=` deep link (applied by App.tsx before this async init ran)
-        // is authoritative for this session and must win over the persisted /
-        // initialMode default — otherwise this prefs-load would clobber it. App.tsx
-        // hands it off via sessionStorage because it strips the param from the URL
-        // synchronously; consume it one-shot here.
-        let urlMode: string | null = null;
-        try {
-          urlMode = sessionStorage.getItem("pf:session-view-mode");
-          if (urlMode) sessionStorage.removeItem("pf:session-view-mode");
-        } catch { /* ignore */ }
-        if (urlMode === "md" || urlMode === "html" || urlMode === "split") {
-          setMode(urlMode);
-        } else if (!prefs["editorMode"]) {
-          // Apply initialMode prop — only overrides if the user hasn't persisted
-          // a mode preference yet (prefs key absent means first launch).
-          setMode(initialMode);
-        } else if (typeof prefs["editorMode"] === "string") {
-          setMode(prefs["editorMode"] as "md" | "html" | "split");
-        } else {
-          setMode(initialMode);
-        }
-
-        const existingDoc = await initialize();
-        // A library the BROWSER emptied (eviction, a cleared or damaged
-        // database) must not be greeted as a first visit: seeding the starter
-        // documents would dress the loss up as a fresh install. Read-only — it
-        // only decides whether to seed; the notice explains (A017).
-        const libraryWiped =
-          durabilityNotices && noteLibraryAtBoot(useDocumentStore.getState().documents.length);
-
-        if (existingDoc) {
-          setEditorReady(true);
-          const editor = await waitForEditor();
-          if (existingDoc.canonical && editor) {
-            // The hydration ritual — it also keeps a document from a newer
-            // build (content this schema cannot load) read-only instead of
-            // loading it as an empty editor that the next save would persist.
-            hydrateEditorWithDoc(existingDoc.id, existingDoc.canonical);
-          } else if (existingDoc.canonical && !editor) {
-            // Editor slow to mount (cold load / slow device). Keep waiting in
-            // the background and hydrate when it appears — WITHOUT this, the
-            // editor stayed empty while looking "ready", and the next save
-            // would have wiped the stored document. Saves stay blocked by the
-            // hydratedDocId guard until hydration lands.
-            void waitForEditor(60000).then((late) => {
-              const s = useDocumentStore.getState();
-              if (!late || s.hydratedDocId != null) return;
-              const doc = s.activeDoc;
-              if (!doc?.canonical) return;
-              const editorEmpty = (late.getText?.() ?? "").trim().length === 0;
-              if (editorEmpty) hydrateEditorWithDoc(doc.id, doc.canonical);
-            });
-            if (cmRef.current) {
-              const html = existingDoc._ingestHtml || "";
-              const md = html ? engine.htmlToMd(html) : "# " + (existingDoc.title || "Untitled") + "\n\n";
-              cmRef.current.setValue(md);
-            }
-          } else if (cmRef.current) {
-            const html = existingDoc._ingestHtml || "";
-            const md = html ? engine.htmlToMd(html) : "# " + (existingDoc.title || "Untitled") + "\n\n";
-            cmRef.current.setValue(md);
-            // No stored canonical — PUSH the ingest content into the editor
-            // before marking hydrated (setValue alone is update-suppressed, so
-            // marking without pushing would let a save persist stale content).
-            setFromHtml(html || engine.mdToHtml(md));
-            useDocumentStore.getState().markHydrated(existingDoc.id);
-          }
-          toastSonner.success("Restored: " + existingDoc.title, { id: loadingId, duration: 3000 });
-        } else if (initialDocument && !libraryWiped) {
-          // No stored documents — seed with the provided initial document.
-          const doc = createDoc(initialDocument.content, "markdown", "api", { mdToHtml: engine.mdToHtml });
-          if (doc) {
-            if (initialDocument.title) {
-              // F4. `title` is the NAME TO FALL BACK TO, not a rename. Setting
-              // `userTitle` here made seeding masquerade as a user action:
-              // `resolveDocTitle` treats a non-placeholder `userTitle` as a pin,
-              // so the welcome document was permanently called "Welcome" while
-              // its own H1 read "Markdown Studio", and editing that heading
-              // renamed nothing — alone among every document in the app. Same
-              // principle as `createFolder`'s `startNaming`: a programmatic
-              // creation must not leave traces only a user's action should.
-              doc.title = initialDocument.title;
-            }
-            
-            // Activate the doc in the store WITHOUT persisting (sets activeDocId)
-            // This causes EditorLayout to mount and Tiptap to initialize
-            await finalizeDoc(doc as any, null, true);
-            
-            // Set editor ready so EditorLayout mounts and Tiptap starts initializing
-            setEditorReady(true);
-            
-            // Now wait for Tiptap to be ready with more generous timeout
-            await new Promise((r) => setTimeout(r, 100)); // Give UI time to mount
-            const editor = await waitForEditor(3000);
-
-            // If we have an editor and HTML content, sync it in and persist
-            if (editor && doc._ingestHtml) {
-              setFromHtml(doc._ingestHtml);
-              // Give Tiptap time to process the HTML
-              await new Promise((r) => requestAnimationFrame(r));
-              await new Promise((r) => requestAnimationFrame(r));
-              // Now finalize with the editor instance to capture canonical and persist
-              await finalizeDoc(doc as any, editor, false);
-              // Seed the companion documents AFTER the initial doc is live,
-              // through the ordinary import path (which converts headlessly
-              // against the live schema and never activates mid-loop, A031),
-              // then return to the initial document so the user lands where
-              // they expect. Best-effort: a failure here must not break startup.
-              if (starterDocuments?.length) {
-                try {
-                  await importItems(
-                    starterDocuments.map((d) => ({
-                      raw: d.markdown,
-                      format: "markdown" as IngestFormat,
-                      folderPath: d.folderPath ?? [],
-                    }))
-                  );
-                  await handleSwitchDoc(doc.id);
-                } catch (e) {
-                  diagError("initEffect.starterDocuments", e);
-                }
-              }
-              toastSonner.success("Ready", { id: loadingId, duration: 3000 });
-            } else if (cmRef.current && doc._ingestHtml) {
-              // Fallback: if editor still not ready, set markdown and persist manually
-              const md = engine.htmlToMd(doc._ingestHtml);
-              cmRef.current.setValue(md);
-              // Persist the doc with whatever canonical we have
-              const storage = useDocumentStore.getState().getStorage();
-              await storage.save(doc);
-              const list = await storage.list();
-              useDocumentStore.setState({ documents: list });
-              // NOTE: deliberately NOT marking hydrated here — the editor never
-              // mounted, so it holds nothing. The first md→html sync (user
-              // typing) marks hydration; until then saves stay safely blocked.
-              toastSonner.success("Ready", { id: loadingId, duration: 3000 });
-            } else {
-              toastSonner.dismiss(loadingId);
-            }
-          } else {
-            setEditorReady(true);
-            toastSonner.dismiss(loadingId);
-          }
-        } else {
-          // No stored documents and no initialDocument — show empty state.
-          setEditorReady(true);
-          toastSonner.dismiss(loadingId);
-        }
-        initDoneRef.current = true;
-      } catch (e: any) {
-        setEditorReady(true); // Ensure the loading screen is dismissed
-        // Optionally, store an error state if you want to display an error UI component
-        // setInitError(e instanceof Error ? e : new Error(String(e)));
-        toastSonner.error("Failed to initialize", { id: loadingId, duration: 4000 });
-        diagError("initEffect.CRASHED", e);
-      }
-    })();
-  }, [engineReady, engine]);
-
-  // ── Propagate storage metrics to host 
-  useEffect(() => {
-    if (storageMetrics && onStorageMetricsChange) {
-      onStorageMetricsChange(storageMetrics);
-    }
-  }, [storageMetrics, onStorageMetricsChange]);
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  // Storage injection (first render only), then — once the engine is ready —
+  // the init sequence: preferences, the stored library, hydration or first-run
+  // seeding, and the storage-metrics feed to the host (useEditorBoot). Its
+  // effects run here, where they always ran: just before saving's.
+  useEditorBoot({
+    storageAdapter, storageConfig, initStorage,
+    engineReady, engine, initDoneRef, cmRef,
+    initialize, createDoc, finalizeDoc, setFromHtml,
+    setInitialSyncMode, setInitialMarkdownFeatures, setMode, setEditorReady,
+    initialMode, initialDocument, starterDocuments, durabilityNotices,
+    waitForEditor, importItems, hydrateEditorWithDoc, handleSwitchDoc,
+    storageMetrics, onStorageMetricsChange,
+  });
 
   // ── Saving ────────────────────────────────────────────────────────────────
   // ⌘S, the idle autosave, the flush when a library surface opens, and the
