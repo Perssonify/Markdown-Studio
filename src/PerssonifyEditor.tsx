@@ -2762,7 +2762,7 @@ export function PerssonifyEditor({
 
 
             {showFindReplace && (
-              <LazyChunkBoundary>
+              <LazyChunkBoundary label="Find & Replace">
                 <React.Suspense fallback={null}>
                   <FindReplaceBar sourceRef={cmRef} previewRef={tiptapRef} mode={mode} onSync={forceSyncMdToHtml} syncHtmlToMd={forceSyncHtmlToMd} initialQuery={findSeed} initialMode={frMode} initialTarget={lastFocusedPaneRef.current === "md" ? "md" : "richtext"} onClose={closeFindReplace} />
                 </React.Suspense>
