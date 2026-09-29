@@ -809,11 +809,13 @@ prioritised list of what to do next if you want it more effective or more harden
 
 ## Environment Variables
 
-**One, for the embed build only.** `VITE_EMBED_ALLOWED_ORIGINS` (comma-separated
-origins, baked in at build time) is the allowlist of host pages the iframe embed's bridge
-will talk to; set it for any embed deployment served from an origin that holds user
-documents ([docs/integration-guide.md](docs/integration-guide.md)). Otherwise there are no
-build-time secrets and no `.env`. Runtime configuration (debounce, autosave, etc.) lives in
+**Two, both optional and build-time; no secrets and no `.env`.**
+`VITE_EMBED_ALLOWED_ORIGINS` (comma-separated origins, embed builds only) is the allowlist
+of host pages the iframe embed's bridge will talk to — set it for any embed deployment
+served from an origin that holds user documents
+([docs/integration-guide.md](docs/integration-guide.md)). `VITE_PERSSONIFY_DIAG=true`
+turns on the `[DIAG]` console tracing that is otherwise off (`?diag=1` or
+`localStorage.perssonify-diag = "1"` do the same at run time). Runtime configuration (debounce, autosave, etc.) lives in
 [src/constants.ts](src/constants.ts) and component props; see
 [docs/local-development.md](docs/local-development.md#environment-variables).
 

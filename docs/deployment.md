@@ -12,8 +12,9 @@
 | Area | In the repository | Owner action still needed |
 |---|---|---|
 | Domain serves the app | `uptime.yml` checks it every 30 min | Point markdownstudio.com at Vercel ([The domain](#the-domain)) |
+| Users on the old address keep their library | A "has moved — download a backup" banner on markdowneditor.perssonify.com | Serve the current build there; redirect only later ([The old address](#the-old-address)) |
 | Production only after CI | CI job names `verify` and `e2e` | Branch protection + Vercel deployment checks ([Gate production on CI](#gate-production-on-ci)) |
-| Reproducible builds | Bun pinned, SHA-pinned actions, `--frozen-lockfile`, Dependabot | Pin the same Bun in Vercel |
+| Reproducible builds | Bun pinned (`packageManager`, CI), SHA-pinned actions, `--frozen-lockfile`, Dependabot | Confirm Vercel builds with the same Bun |
 | npm package | `publish.yml` (tag-triggered, provenance) | Claim `@perssonify`, 2FA, token or trusted publishing, `npm` environment ([Publishing](#publishing-the-npm-package)) |
 | Security contact | `security.txt`, SECURITY.md, issue templates | Create and monitor security@markdownstudio.com |
 | Import relay costs | 4 MB cap, 25 s `maxDuration`, one log line per request | Firewall rate limit, spend alerts ([import-relay.md ▸ Operating it](import-relay.md#operating-it-owner-setup)) |
@@ -47,10 +48,30 @@ all name it.
 
 ---
 
+## The old address
+
+Browser storage belongs to an ORIGIN, so every library created on
+markdowneditor.perssonify.com stays there — the new domain opens empty for
+those users. The code handles its half: on that host (`LEGACY_APP_HOST` in
+`src/constants.ts`) the app shows a "Markdown Studio has moved" banner with a
+one-click full backup and a link to markdownstudio.com, where the backup
+imports; Help has "Moving your library".
+
+**Owner action:**
+1. Keep serving the CURRENT build on markdowneditor.perssonify.com (the same
+   Vercel project with that domain added, or its own deployment). The banner
+   only reaches people who load a build that has it.
+2. Do not redirect or retire the old host until its users have had time to
+   move: a redirect sends them to an empty library and strands the old one.
+3. Point the Labs page and any other links at markdownstudio.com.
+
+---
+
 ## Gate production on CI
 
-Vercel deploys `main` on every push and runs only `build:app`: no type check,
-no tests, no browser campaign. CI runs in parallel and nothing waits for it, so
+Vercel deploys `main` on every push and runs only its build command
+(`build:app`, then the sourcemap strip): no type check, no tests, no browser
+campaign. CI runs in parallel and nothing waits for it, so
 a red merge ships to every user. Two settings close that; `vercel.json` is
 deliberately not used to switch auto-deploys off.
 
@@ -78,8 +99,9 @@ Production**: instant, no rebuild.
 The standalone app is a PWA with a **prompting** service worker:
 
 - Navigations are network-first, so a fresh page load online gets the new HTML.
-- A tab that is already open installs the new worker in the background and
-  shows **"A new version of Markdown Studio is ready — Reload"**. Nothing
+- A tab that is already open finds the new version on its next check (it
+  checks once an hour while online and visible), installs the new worker in the
+  background and shows **"A new version of Markdown Studio is ready — Reload"**. Nothing
   reloads by itself; the worker takes over when the user presses Reload or
   closes every tab. Other tabs are then told, and reload on their own only when
   online, clean and in the background.
@@ -102,9 +124,10 @@ The standalone app is a PWA with a **prompting** service worker:
 - Dependabot (`.github/dependabot.yml`) proposes weekly updates for the Bun
   lockfile and for the pinned actions.
 
-**Owner action:** make Vercel build with the same Bun — a `packageManager`
-field in `package.json` (`"bun@1.4.0"`) or the Bun version in the project's
-build settings. Bump CI's `BUN_VERSION`, that field and `bun.lock` together.
+**Owner action:** make sure Vercel builds with the same Bun. `package.json`
+already declares `"packageManager": "bun@1.4.0"`; check the Bun version in a
+Vercel build log, and set it in the project's build settings if it differs.
+Bump CI's `BUN_VERSION`, that field and `bun.lock` together.
 
 ---
 
@@ -173,9 +196,10 @@ anyone can publish under that name (a squatting / dependency-confusion risk).
 **Releasing:**
 1. Bump `version` in `package.json` (single source of the version) and merge.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The **Publish to npm** workflow checks the tag matches `package.json`, runs
-   the type check, the unit tests and the library build, prints
-   `npm pack --dry-run`, waits for the `npm` environment's approval, and runs
+3. The **Publish to npm** workflow waits for the `npm` environment's approval
+   (the whole job runs in that environment), then checks the tag matches
+   `package.json`, runs the type check, the unit tests and the library build,
+   prints `npm pack --dry-run`, and runs
    `npm publish --provenance --access public`.
 4. Check the package page shows the provenance badge (built by this repository's
    workflow from this commit).
@@ -190,5 +214,6 @@ Never publish from a laptop. A bad release: [runbooks/bad-npm-release.md](runboo
   SECURITY.md and the issue templates. **Owner action:** create it, route it to
   at least two people, and test it. `security.txt` expires on 2027-09-29; the
   unit tests start failing 30 days before that as a reminder to renew.
-- `package.json` ▸ `bugs` still points at the private repository's issues (a
-  404 for the public). It should name a reachable channel.
+- `package.json` ▸ `bugs` names `https://markdownstudio.com` and the same
+  `security@markdownstudio.com` mailbox, so npm's bug link depends on the
+  domain and the mailbox above both working.

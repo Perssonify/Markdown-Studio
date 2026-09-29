@@ -10,7 +10,9 @@ Security problems do **not** go in an issue or a PR — see
 
 ## Getting set up
 
-The package manager is **Bun**.
+The package manager is **Bun** (1.4.0 — pinned by `packageManager` in
+`package.json`; CI installs with `bun install --frozen-lockfile`, so commit
+`bun.lock` with any dependency change).
 
 ```bash
 bun install
@@ -19,13 +21,14 @@ bun run dev          # standalone app on Vite's dev server
 
 ## The verification gate
 
-Run all four before you open a pull request. CI
+Run all five before you open a pull request. CI
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same commands
-on every PR to `main`, plus the embed build.
+on every PR to `main`, plus the embed build and the browser campaign
+(`bun run e2e`, see [`e2e/README.md`](e2e/README.md)).
 
 ```bash
-bunx tsc --noEmit    # type gate — must be clean (there is no ESLint config;
-                     # TypeScript strict mode is the de-facto linter)
+bun run lint         # ESLint — zero errors (warnings are the tracked backlog)
+bunx tsc --noEmit    # type gate — must be clean
 bun run test         # vitest — must pass
 bun run build:app    # standalone app build
 bun run build        # library build (@perssonify/editor)
@@ -39,9 +42,10 @@ bun run build        # library build (@perssonify/editor)
   fixed once.
 - **The `perssonify` naming is intentional.** The product is Markdown Studio,
   but the npm package, the `pf:` preference keys, the `perssonify-document`
-  export envelope and the `perssonify-snapshots` IndexedDB database are on-disk
-  contracts with existing installs. Renaming them orphans people's documents.
-  Do not "fix" them.
+  export envelope, the `perssonify-backup` archive and the `perssonify-docs` /
+  `perssonify-snapshots` IndexedDB databases are on-disk contracts with existing
+  installs ([`docs/data-contracts.md`](docs/data-contracts.md)). Renaming them
+  orphans people's documents. Do not "fix" them.
 - **Test files must be `.js`.** `vitest.config.js` only picks up
   `*.test.{js,jsx}` — renaming a test to `.ts` silently stops running it.
 - **Add tests under [`src/__tests__/`](src/__tests__/)** for anything you fix.
@@ -52,7 +56,9 @@ bun run build        # library build (@perssonify/editor)
 - **A node or mark added to `TiptapPane.tsx` must also be registered in
   `src/engine/serialize-doc.ts`** (`SERIALIZE_EXTENSIONS`), or headless export
   silently corrupts or throws on documents that use it.
-- **Style:** there is no lint or format config. Match the surrounding file.
+- **Style:** ESLint ([`eslint.config.js`](eslint.config.js)) checks correctness
+  — the React hook rules above all — not layout; there is no formatter config.
+  Match the surrounding file.
 
 ## Pull requests
 

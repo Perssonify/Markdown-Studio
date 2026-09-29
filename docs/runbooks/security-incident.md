@@ -2,7 +2,10 @@
 
 Use this when a vulnerability is reported (security@markdownstudio.com,
 [SECURITY.md](../../SECURITY.md)) or suspected, or something that looks like an
-exploit shows up in logs.
+exploit shows up in logs. The mailbox is named by `security.txt`, SECURITY.md
+and the issue templates, but creating it is an owner action
+([deployment.md ▸ Contacts that must exist](../deployment.md#contacts-that-must-exist));
+until it exists, a report sent there reaches no one (A007).
 
 ## What there is to compromise
 - **No server-side user data.** Documents live in each visitor's browser
@@ -24,8 +27,10 @@ exploit shows up in logs.
 3. **Decide whether to stop the bleeding now**:
    - Script execution via some content path → consider promoting the
      `Content-Security-Policy-Report-Only` header in `vercel.json` to enforcing
-     *immediately* (it has been validated against every renderer by
-     `e2e/cases/csp.mjs`); it blocks injected inline script.
+     *immediately*; it blocks injected inline script. `e2e/cases/csp.mjs` runs
+     the app under the ENFORCED policy (KaTeX, Mermaid, abcjs, a `data:`
+     image, Find, the map, Cards, Word export, /help) with zero violations; a
+     password-protected ZIP import is the one path it does not exercise.
    - Relay SSRF or abuse → Firewall deny rule on `/api/import`
      ([relay-abuse.md](relay-abuse.md)).
    - Compromised npm release → [bad-npm-release.md](bad-npm-release.md).
@@ -34,7 +39,8 @@ exploit shows up in logs.
 
 ## Fix and ship
 - Fix on a private branch; add a regression test (mutation-test it); run the
-  full gate (`bunx tsc --noEmit`, `bun run test`, the e2e suites).
+  full gate (`bun run lint`, `bunx tsc --noEmit`, `bun run test`, the three
+  builds, the e2e suites).
 - Deploy. Users receive it via the update prompt; for a severe issue, say in the
   advisory that users should press **Reload** (or close all tabs), because
   nothing force-reloads an open tab.

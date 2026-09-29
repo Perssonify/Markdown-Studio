@@ -14,11 +14,11 @@
 | What | File | Notes |
 |------|------|-------|
 | **The relay itself** | [`api/import.js`](../api/import.js) | Vercel Serverless Function, Node runtime. Default export is the handler; `isGlobalUnicast`, `isBlockedIp`, `assertPublicUrl`, `MAX_BYTES` and `TOO_LARGE_MESSAGE` are exported for tests. |
-| **The client that calls it** | [`src/store/url-import.ts`](../src/store/url-import.ts) | `fetchDirectOrProxy` — tries a direct browser fetch first, falls back to the relay only with the visitor's consent (`pf:import-relay`, asked once via `relayConsentPrompt`, changeable in Settings ▸ Privacy). `IMPORT_RELAY = "/api/import?url="`. A relay `413` is shown to the user as the relay's own message; any other non-2xx falls through to the download-and-drop guidance. |
+| **The client that calls it** | [`src/store/url-import.ts`](../src/store/url-import.ts) | `fetchDirectOrProxy` — tries a direct browser fetch first and falls back to the relay only with the visitor's consent: `relayPermitted` reads the stored answer (`pf:import-relay`), and only when there is none does it ask through the caller's `confirmRelay` callback, then remember the reply. `IMPORT_RELAY = "/api/import?url="`. A relay `413` is shown to the user as the relay's own message; any other non-2xx falls through to the download-and-drop guidance. |
 | **Provider URL rewriting** | [`src/store/import-url-normalize.ts`](../src/store/import-url-normalize.ts) | Turns share links into raw-download links *before* either fetch path runs. |
-| **The UI** | [`src/ui/UrlImportDialog.tsx`](../src/ui/UrlImportDialog.tsx) | Discloses to the user when the relay was used ("first-party — not a third-party proxy"). |
-| **Tests** | [`src/__tests__/import-relay.test.js`](../src/__tests__/import-relay.test.js), [`src/__tests__/ops-relay-client.test.js`](../src/__tests__/ops-relay-client.test.js) | The global-unicast allowlist (incl. the IPv4-in-IPv6, Teredo, 6to4, multicast/reserved and decimal/octal forms), `assertPublicUrl`, the `Sec-Fetch-Site` gate, response hardening, the port allowlist, the 4 MB cap, the log line, CORS pinning; and the client's handling of a `413`. |
-| **Routing** | [`vercel.json`](../vercel.json) | The SPA rewrite is `/((?!api/\|assets/).*)` — the `api/` exclusion is what keeps this function reachable. Delete it and every relay call returns `index.html`. `functions["api/import.js"].maxDuration` caps what one slow upstream can cost. |
+| **The UI** | [`src/ui/UrlImportDialog.tsx`](../src/ui/UrlImportDialog.tsx), [`src/ui/SettingsPrivacy.tsx`](../src/ui/SettingsPrivacy.tsx) | The dialog supplies `confirmRelay` (`useDialog().confirm` with `relayConsentPrompt`'s wording) and says when the relay was used ("fetched through the Markdown Studio server, as you allowed"). Settings ▸ Privacy ▸ **Import relay** changes the stored answer. |
+| **Tests** | [`src/__tests__/import-relay.test.js`](../src/__tests__/import-relay.test.js), [`src/__tests__/ops-relay-client.test.js`](../src/__tests__/ops-relay-client.test.js), [`src/__tests__/g4-relay-consent.test.js`](../src/__tests__/g4-relay-consent.test.js) | The global-unicast allowlist (incl. the IPv4-in-IPv6, Teredo, 6to4, multicast/reserved and decimal/octal forms), `assertPublicUrl`, the `Sec-Fetch-Site` gate, response hardening, the port allowlist, the 4 MB cap, the log line, CORS pinning; the client's handling of a `413`; and the consent rules (never without a way to ask, a stored "deny" wins, a failed prompt counts as "no"). |
+| **Routing** | [`vercel.json`](../vercel.json) | The SPA rewrite is `/((?!api/\|assets/\|\.well-known/).*)` — the `api/` exclusion is what keeps this function reachable. Delete it and every relay call returns `index.html`. `functions["api/import.js"].maxDuration` (25 s) caps what one slow upstream can cost. |
 
 There is **no other server code in the repo.** If you are looking for a backend, this is it.
 
@@ -34,23 +34,34 @@ all. Without a server hop, "Import from URL" simply cannot work for those hosts.
 
 The alternative — routing through a public CORS proxy — was rejected: it hands a
 third party the URL, the bytes, and the user's IP. A first-party relay on the app's
-own origin keeps the request inside this deployment. It does not make the request
-invisible: the relay receives the address being imported (share links often carry
-tokens), fetches the file, and passes it back through our server — and, like any
-request, the address can land in the hosting provider's request logs. That is why
-it is opt-in (below).
+own origin adds no proxy operator beyond the app's own hosting, and the host being
+imported from sees the relay's request, not the user's IP. It does not make the
+request private: the relay receives the address being imported (share links often
+carry tokens), fetches the file, and passes it back through our server — and, like
+any request, the address can land in the hosting provider's request logs. (The
+relay's own log line records hosts only, never a path or query.) That is why it is
+opt-in (below).
 
 **The relay is a fallback, not the default path, and it needs the visitor's
 consent.** `fetchDirectOrProxy` attempts a direct browser fetch first. Only when
 that throws (CORS or network error) does it consider the relay, and only if the
-visitor has agreed: the first time, the importer asks ("Fetch this link through our
-server?", `relayConsentPrompt`), and the answer is remembered in `pf:import-relay`
+visitor has agreed: the first time, the importer asks through its `confirmRelay`
+callback ("Fetch this link through our server?", worded by `relayConsentPrompt`),
+and the answer — yes or no — is remembered in `pf:import-relay`
 (`getRelayConsent` / `setRelayConsent`) and can be changed any time in **Settings ▸
-Privacy**. Without an "allow" the relay is never contacted and the user gets the
-download-and-drop guidance instead. Hosts the browser can already read — GitHub
-raw, Dropbox, anything that sets the CORS header — never touch the relay at all. A
-direct *timeout* is surfaced as a timeout and is **not** retried, because a slow
-origin does not get faster through an extra hop.
+Privacy ▸ Import relay**. Without a stored "allow", and with no way to ask (a
+caller that passes no `confirmRelay`), the relay is never contacted; the user gets
+the download-and-drop guidance instead, which names the Settings switch. Hosts the
+browser can already read — GitHub raw, Dropbox, anything that sets the CORS header
+— never touch the relay at all.
+
+A direct *timeout* is meant to be surfaced as a timeout and not retried, because a
+slow origin does not get faster through an extra hop. The check does not work in
+current browsers: it looks for an `AbortError`, but a fetch cut off by
+`AbortSignal.timeout()` rejects with a `TimeoutError`. So a timed-out direct fetch
+is handled like a CORS failure — the consent question, if unanswered, then a relay
+attempt — and, when that fails too, ends with a "blocks direct browser access"
+message instead of "timed out".
 
 ---
 
@@ -102,9 +113,9 @@ fetch(url)  ── succeeds ──▶   bytes ──▶ ingest
 
 | Knob | Value | Where |
 |------|-------|-------|
-| Max response size | 4 MB (`MAX_BYTES`) → `413` + `TOO_LARGE_MESSAGE` | `api/import.js` — a Vercel Function cannot return a body much over 4.5 MB, so this is the real ceiling for every relayed import (Google Drive always goes through the relay) |
+| Max response size | 4,000,000 bytes (`MAX_BYTES`) → `413` + `TOO_LARGE_MESSAGE` ("…larger than the 4 MB the import relay can carry. Download it and drag it into the editor instead.") | `api/import.js` — a Vercel Function cannot return a body much over 4.5 MB, so this is the real ceiling for every relayed import (Google Drive always goes through the relay). Checked on the declared `Content-Length` and again while streaming. |
 | Function wall clock | 25 s (`maxDuration`) | `vercel.json` — the platform backstop above the 20 s upstream timeout |
-| Upstream timeout | 20 s (`TIMEOUT_MS`) | `api/import.js` |
+| Upstream timeout | 20 s per hop (`TIMEOUT_MS`) | `api/import.js` |
 | Client timeout | 15 s (`URL_TIMEOUT_MS`) | `src/store/url-import.ts` — so the client gives up first |
 | Redirect hops | 5 (`MAX_HOPS`) | `api/import.js` |
 | Rate limit | 40 req / 60 s per IP (`RATE_MAX`) | `api/import.js` — in-memory, **per warm instance**; see [Operating it](#operating-it-owner-setup) for the real one |
@@ -250,10 +261,11 @@ bun run test src/__tests__/import-relay.test.js
 Against a deployment, `curl https://…/api/import?url=…` returns `403` because curl
 sends no `Sec-Fetch-Site` — but `curl -H 'sec-fetch-site: none' …` returns the
 file. That is expected (see §4); it is why the platform rate limit matters. To
-test by hand, open the deployed app and use **Tools ▸ Import from URL** with a
-CORS-blocked host (a Google Drive share link is the canonical case), then confirm
-the dialog shows the "server relay" disclosure and that the request produced one
-`"evt":"import_relay"` line in the deployment's logs.
+test by hand, open the deployed app and use **File ▸ Import ▸ From URL…** with a
+CORS-blocked host (a Google Drive share link is the canonical case), agree to the
+consent question (or switch the relay on in Settings ▸ Privacy first), then confirm
+the dialog says the file was fetched through the Markdown Studio server and that
+the request produced one `"evt":"import_relay"` line in the deployment's logs.
 
 ### Adding a control
 
@@ -309,8 +321,9 @@ settings an owner has to make once.
    without a deploy, and the app degrades exactly as it does on a static host:
    direct imports keep working, CORS-blocked hosts get the download-and-drop
    guidance.
-6. **Runtime.** `api/import.js` imports `undici` at runtime, so it must be a
-   production dependency, and the project's Node.js version should be pinned
+6. **Runtime.** `api/import.js` imports `undici` at runtime, so it must stay a
+   production dependency (it is, in `dependencies`), and the project's Node.js
+   version should be pinned
    (Project Settings → Node.js Version, matching `engines.node`) so a platform
    default change cannot move it underneath the pinned-dispatcher code.
 
