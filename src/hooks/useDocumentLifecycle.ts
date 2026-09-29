@@ -483,6 +483,13 @@ export function useDocumentLifecycle({
     // Superseded during the storage read: the editor still holds prior content
     // (or the user's fresh edits). Hydrating now would overwrite them.
     if (switchGenRef.current !== myGen) return;
+    if (!doc && useDocumentStore.getState().activeDocId !== docId) {
+      // The store stayed where it was: the document is gone (deleted in
+      // another tab) or could not be read. Say so — a click that silently
+      // does nothing reads as a broken library.
+      toast.show("That document could not be opened", "error");
+      return;
+    }
     if (doc?.canonical) {
       hydrateEditorWithDoc(docId, doc.canonical);
     } else if (doc && cmRef.current) {
@@ -501,7 +508,7 @@ export function useDocumentLifecycle({
         console.warn("[switchDoc] CM6 fallback failed:", e);
       }
     }
-  }, [flushAndCacheIfDirty, captureHistoryFor, autosaveOnLeave, restoreOrResetHistory, switchToDoc, resetHashes, setCanonical, setFromHtml, handleCanonicalChange, engine, tiptapRef, cmRef]);
+  }, [flushAndCacheIfDirty, captureHistoryFor, autosaveOnLeave, restoreOrResetHistory, switchToDoc, resetHashes, setCanonical, setFromHtml, handleCanonicalChange, engine, tiptapRef, cmRef, toast]);
 
   const handleCloseTab = useCallback(async (docId: string) => {
     // Generation guard: this path awaits a user dialog and/or storage before it
@@ -643,7 +650,15 @@ export function useDocumentLifecycle({
       });
       if (!ok) return;
     }
-    const doc = await revertActiveDoc();
+    let doc: any;
+    try {
+      doc = await revertActiveDoc();
+    } catch {
+      // The saved copy could not be READ (not merely absent): keep what is on
+      // screen rather than replacing it with nothing.
+      toast.show("The saved version could not be read — nothing was reverted", "error");
+      return;
+    }
     if (switchGenRef.current !== myGen) return;
     if (!doc) return;
     if (doc.canonical) {
@@ -844,7 +859,7 @@ export function useDocumentLifecycle({
       // store now considers active. Same hand-off addDocumentsImpl performs.
       const store = useDocumentStore.getState();
       if (store.activeDocId && store.hydratedDocId !== store.activeDocId) {
-        const rec = await store.getDocById(store.activeDocId);
+        const rec = await store.getDocById(store.activeDocId).catch(() => null);
         if (rec?.canonical) hydrateEditorWithDoc(rec.id, rec.canonical);
       }
       return;

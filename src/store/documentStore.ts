@@ -19,6 +19,7 @@ import type { IngestFormat, IngestSource } from "./ingest";
 import { completeIngest, ingest } from "./ingest";
 import {
   StorageQuotaError,
+  StorageReadError,
   createStorageAdapter,
   hasMetrics,
   IndexedDBStorageAdapter,
@@ -664,15 +665,25 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       return record;
     };
 
-    if (lastDocId && list.some((d) => d.id === lastDocId)) {
-      const doc = await storage.get(lastDocId);
-      if (doc) return activate(doc);
+    // The last-open document first, then the library in order. A document that
+    // cannot be READ is skipped rather than taking the whole boot down with it;
+    // if none can be read, the failure is reported (an empty result would read
+    // as "no documents yet").
+    const candidates = [
+      ...(lastDocId && list.some((d) => d.id === lastDocId) ? [lastDocId] : []),
+      ...list.map((d) => d.id).filter((id) => id !== lastDocId),
+    ];
+    let readError: unknown = null;
+    for (const id of candidates) {
+      try {
+        const doc = await storage.get(id);
+        if (doc) return activate(doc);
+      } catch (e) {
+        console.warn(`[documentStore] Could not open ${id} at startup:`, e);
+        readError ??= e;
+      }
     }
-
-    if (list.length > 0) {
-      const doc = await storage.get(list[0]?.id ?? "");
-      if (doc) return activate(doc);
-    }
+    if (readError) throw readError;
 
     return null;
   },
@@ -781,6 +792,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // same-tab timestamp wobble from adapters stamping `updated` on save.
     let stored: DocumentRecord | null | undefined;
     let storedReadFailed = false;
+    let storedCorrupt = false;
     try {
       stored = await storage.get(activeDoc.id);
       if (isNewerThanBase(stored?.updated, activeDoc.updated)) {
@@ -792,10 +804,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         throw new ConflictError();
       }
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith("This document was changed")) throw e;
-      // Storage read hiccup — proceed, EXCEPT the blank backstop below fails
-      // closed (we can't verify what we'd overwrite, so we don't risk a blank one).
+      if (e instanceof ConflictError) throw e;
+      // The stored copy could not be read (adapters REJECT on a failed read;
+      // null means absent — see StorageAdapter). Decided below, once we know
+      // this save still owns the editor.
       storedReadFailed = true;
+      storedCorrupt = e instanceof StorageReadError && e.corrupt;
+      console.warn("[documentStore] Could not read the stored copy before saving:", e);
     }
 
     // Re-assert the hydration chokepoint AFTER the await: a doc switch or delete
@@ -817,6 +832,18 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // two checks above still pass mid-delete — and the write below would put
       // the record straight back after `storage.delete` removed it.
       if (deletingDocs.has(activeDoc.id)) return false;
+    }
+
+    // FAIL CLOSED on a storage that did not answer: it cannot prove there is no
+    // newer version (another tab's) and no content to protect, so nothing is
+    // written and autosave retries. A record that is present but CORRUPT is the
+    // one exception — it cannot be anybody's readable work and the editor holds
+    // the only good copy, so a non-blank save may repair it (the blank backstop
+    // below still refuses a blank one).
+    if (storedReadFailed && !storedCorrupt) {
+      set({ saveStatus: "error", saveError: "Couldn't read the saved copy to check it is safe to overwrite" });
+      scheduleReadyReset((fn) => set(fn), "error", 3000, "editing");
+      return false;
     }
 
     set({ saveStatus: "saving" });
@@ -880,7 +907,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       syncFieldsToMetadata(updatedDoc);
 
       await storage.save(updatedDoc);
-      const list = await storage.list();
+      // The write has COMMITTED. A listing that fails now must not turn it
+      // into a reported failure (and a retry loop) — keep the last listing.
+      let list = get().documents;
+      try {
+        list = await storage.list();
+      } catch (e) {
+        console.warn("[documentStore] Listing after a save failed:", e);
+      }
 
       // A switch can cache NEWER typing while this write/list is pending.
       // Retire only the draft whose content actually reached storage; an older
@@ -955,7 +989,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   // ── Switch ─────────────────────────────────────────────────────────────────
   switchToDoc: async (docId, _tiptapEditor) => {
-    const { activeDocId, activeDoc, hydratedDocId: prevHydrated, saveStatus: prevStatus } = get();
+    const { activeDocId, activeDoc, hydratedDocId: prevHydrated, saveStatus: prevStatus, saveError: prevError } = get();
     if (docId === activeDocId) return null;
 
     const mySeq = ++switchSeq;
@@ -969,7 +1003,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // there (the status bar reads it whenever the doc is dirty).
     set({ activeDocId: docId, saveStatus: "ready", saveError: null, hydratedDocId: null });
 
-    const doc = await storage.get(docId);
+    let doc: DocumentRecord | null = null;
+    try {
+      doc = await storage.get(docId);
+    } catch (e) {
+      // Unreadable is handled like missing: the revert below keeps the user on
+      // the document the editor still shows. (The adapter REJECTS rather than
+      // returning null, so the save path can tell the two apart.)
+      console.warn(`[documentStore] Could not open ${docId}:`, e);
+    }
 
     // Superseded: a newer switch started while our storage read was in flight.
     // Do NOT apply our completion (or revert) — that would clobber the newer
@@ -982,7 +1024,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // another tab, transient storage error). Restoring hydratedDocId matters:
       // the editor still shows the old doc, and leaving it null would poison
       // the rest of the session — every save/draft-cache blocked.
-      set({ activeDocId: activeDoc?.id ?? null, hydratedDocId: prevHydrated, saveStatus: prevStatus });
+      set({ activeDocId: activeDoc?.id ?? null, hydratedDocId: prevHydrated, saveStatus: prevStatus, saveError: prevError });
       return null;
     }
 

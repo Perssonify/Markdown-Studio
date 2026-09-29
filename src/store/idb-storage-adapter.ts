@@ -60,6 +60,35 @@ export class StorageQuotaError extends Error {
   }
 }
 
+/**
+ * A stored document could not be READ — as opposed to not existing.
+ *
+ * Every adapter used to catch its read errors and return null, so a failed
+ * read was indistinguishable from "no such document": the blank-over-content
+ * backstop, the multi-tab check and the pre-overwrite snapshot all took the
+ * "nothing stored" branch and let the write through, which made their "fail
+ * closed" promise unreachable. `get()` now returns null ONLY for a genuine
+ * miss and throws this for everything else. `corrupt` marks a record that is
+ * present but cannot be parsed (as opposed to a storage that failed to answer).
+ */
+export class StorageReadError extends Error {
+  readonly corrupt: boolean;
+  constructor(message: string, opts: { cause?: unknown; corrupt?: boolean } = {}) {
+    super(message);
+    this.name = "StorageReadError";
+    this.corrupt = !!opts.corrupt;
+    if (opts.cause !== undefined) (this as { cause?: unknown }).cause = opts.cause;
+  }
+}
+
+/** Parse a stored record that IS present; a value that will not parse is
+ *  corrupt, never "missing". */
+export function parseStoredDocument(id: string, raw: string): DocumentRecord {
+  const doc = deserializeFromStorage(raw);
+  if (!doc) throw new StorageReadError(`Stored document ${id} could not be parsed`, { corrupt: true });
+  return doc;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_DB_NAME = "perssonify-docs";
@@ -279,16 +308,20 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
     );
   }
 
+  /** The document, or null when no document has this id. A read that FAILS
+   *  throws StorageReadError instead of pretending the document is absent. */
   async get(id: string): Promise<DocumentRecord | null> {
     await this._readyPromise;
+    let raw: string | undefined;
     try {
       const tx = this._db_().transaction(STORE_DOCS, "readonly");
-      const raw = await idbRequest<string | undefined>(tx.objectStore(STORE_DOCS).get(id));
-      if (raw) return deserializeFromStorage(raw);
+      raw = await idbRequest<string | undefined>(tx.objectStore(STORE_DOCS).get(id));
     } catch (e) {
       console.warn(`[IDBStorage] Failed to get doc ${id}:`, e);
+      throw new StorageReadError(`Could not read document ${id}`, { cause: e });
     }
-    return null;
+    if (raw === undefined || raw === null) return null;
+    return parseStoredDocument(id, raw);
   }
 
   async save(doc: DocumentRecord): Promise<void> {
