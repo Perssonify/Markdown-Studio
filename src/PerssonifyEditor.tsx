@@ -350,11 +350,10 @@ export function PerssonifyEditor({
     setWorkspaceView("editor");
   }, [setMode, setWorkspaceView]);
 
-  // Shared overlay shell for the graph / cards boards. Takes focus on mount,
-  // keeps Tab inside, closes on Escape at the CAPTURE phase (ProseMirror marks
-  // Escape defaultPrevented before it bubbles, which is why a plain bubble
-  // listener never fired), and marks the editor behind it inert so its controls
-  // are neither tabbable nor clickable while covered.
+  // Shared overlay shell for the graph / cards boards. Takes focus on mount and
+  // marks the editor behind it inert so its controls are neither tabbable nor
+  // clickable while covered. Escape is each surface's own (bubble phase, and
+  // only when pressed inside it — see ui/overlay-escape.ts).
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
 
@@ -2543,24 +2542,18 @@ export function PerssonifyEditor({
       }
     }
 
-    const onKeyCapture = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Capture phase: ProseMirror would otherwise mark this defaultPrevented.
-      const inOverlay = !!node && node.contains(document.activeElement);
-      // Let the overlay's own Escape ladder (clear search first) run when focus
-      // is genuinely inside it; only force-close when it can't hear the key.
-      if (inOverlay) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setWorkspaceView("editor");
-    };
-    document.addEventListener("keydown", onKeyCapture, true);
+    // No Escape listener here any more (A057). This used to force-close the
+    // overlay from a CAPTURE-phase document listener whenever focus was
+    // outside it — which is exactly where the delete-confirmation dialog, the
+    // library's rename box and every menu live, so their Escape closed the
+    // overlay instead (and the rename box's blur then committed the rename
+    // being cancelled). Cards and the map each close themselves on an Escape
+    // pressed inside them or with nothing focused (overlayShouldHandleEscape).
     return () => {
-      document.removeEventListener("keydown", onKeyCapture, true);
       for (const child of covered) child.removeAttribute("inert");
       if (restoreTo && document.body.contains(restoreTo)) restoreTo.focus?.();
     };
-  }, [anyOverlayOpen, setWorkspaceView]);
+  }, [anyOverlayOpen]);
 
   if (!engineReady || !editorReady) {
     return (

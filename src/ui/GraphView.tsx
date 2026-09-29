@@ -6,6 +6,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { prefersReducedMotion } from "../utils/reduced-motion";
+import { overlayShouldHandleEscape } from "./overlay-escape";
 import {
   stepsPerFrame,
   brokenLinks as computeBrokenLinks,
@@ -643,11 +644,15 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const anyFilterRef = useRef(anyFilter || brokenHi);
   anyFilterRef.current = anyFilter || brokenHi;
 
-  // Escape: clear an active search/filter first, else exit the graph. Respect
-  // defaultPrevented (dialogs above us).
+  // Escape: clear an active search/filter first, else exit the graph — but
+  // only an Escape meant for the map. It used to act on EVERY Escape in the
+  // window: in a library rename box beside the map it closed the map, and the
+  // blur that followed committed the rename the user was cancelling. See
+  // overlayShouldHandleEscape.
+  const rootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (!overlayShouldHandleEscape(e, rootRef.current)) return;
       e.preventDefault();
       if (anyFilterRef.current) clearFilters();
       else onClose();
@@ -1599,7 +1604,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background">
+    <div ref={rootRef} className="flex h-full flex-col overflow-hidden bg-background">
       {header}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {mapPane}
