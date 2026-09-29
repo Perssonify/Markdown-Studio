@@ -338,38 +338,46 @@ class SnapshotStore {
    * of a doc (that is the recovery point we most want to keep).
    */
   private async prune(justSavedDocId: string): Promise<void> {
-    // `id` is monotonic with insertion (mem seq / IDB autoIncrement), so it is
-    // the reliable recency signal and the tiebreak when several snapshots share
-    // the same millisecond `ts` — WITHOUT it, same-ms bursts sort ambiguously and
-    // the count/byte caps could evict the NEWEST record instead of the oldest.
+    // ONE read of the ring, then every cap decided in memory. This used to read
+    // the doc's snapshots and then ALL records twice more (the age pass and the
+    // byte pass each re-listed the store, payloads included) on every snapshot —
+    // i.e. on autosaves — so its cost grew with the whole history.
+    // Newest-first by `byRecentDesc` (timestamp, then insertion order), so
+    // same-millisecond bursts never evict the newest instead of the oldest.
+    const all = (await this.allRecords()).sort(byRecentDesc);
+    const doomed = new Set<number>();
+
     // 1) Per-doc count cap (drop oldest beyond MAX_PER_DOC).
-    const docSnaps = (await this.allForDoc(justSavedDocId)).sort(byRecentDesc);
-    for (const r of docSnaps.slice(MAX_PER_DOC)) await this.rawDelete(r.id);
+    all.filter((r) => r.docId === justSavedDocId)
+      .slice(MAX_PER_DOC)
+      .forEach((r) => doomed.add(r.id));
 
     // 2) Age cap (keep the newest per doc regardless of age).
-    const all = (await this.allRecords()).sort(byRecentDesc);
     const seenNewest = new Set<string>();
     const cutoff = Date.now() - MAX_AGE_MS;
     for (const r of all) {
       const isNewestForDoc = !seenNewest.has(r.docId);
       seenNewest.add(r.docId);
-      if (!isNewestForDoc && r.ts < cutoff) await this.rawDelete(r.id);
+      if (!isNewestForDoc && r.ts < cutoff) doomed.add(r.id);
     }
 
-    // 3) Global byte budget — evict oldest (never a doc's newest) until under.
-    const recs = (await this.allRecords()).sort(byRecentDesc); // newest first
-    let total = recs.reduce((s, r) => s + r.bytes, 0);
-    if (total <= MAX_TOTAL_BYTES) return;
-    const newestIdByDoc = new Map<string, number>();
-    for (const r of recs) if (!newestIdByDoc.has(r.docId)) newestIdByDoc.set(r.docId, r.id);
-    // Walk oldest→newest, evicting until under budget.
-    for (let i = recs.length - 1; i >= 0; i--) {
-      if (total <= MAX_TOTAL_BYTES) break;
-      const r = recs[i]!;
-      if (newestIdByDoc.get(r.docId) === r.id) continue; // never evict a doc's newest
-      await this.rawDelete(r.id);
-      total -= r.bytes;
+    // 3) Global byte budget over what survives — evict oldest (never a doc's
+    //    newest) until under.
+    const live = all.filter((r) => !doomed.has(r.id)); // still newest first
+    let total = live.reduce((s, r) => s + r.bytes, 0);
+    if (total > MAX_TOTAL_BYTES) {
+      const newestIdByDoc = new Map<string, number>();
+      for (const r of live) if (!newestIdByDoc.has(r.docId)) newestIdByDoc.set(r.docId, r.id);
+      // Walk oldest→newest, evicting until under budget.
+      for (let i = live.length - 1; i >= 0 && total > MAX_TOTAL_BYTES; i--) {
+        const r = live[i]!;
+        if (newestIdByDoc.get(r.docId) === r.id) continue; // never evict a doc's newest
+        doomed.add(r.id);
+        total -= r.bytes;
+      }
     }
+
+    for (const id of doomed) await this.rawDelete(id);
   }
 
   // ── Low-level accessors ──────────────────────────────────────────────────────

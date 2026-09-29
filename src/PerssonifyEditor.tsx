@@ -17,6 +17,7 @@ import { snapshotStore } from "./store/snapshot-store";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { captureIngestHeadless } from "./store/headless-ingest";
+import { buildZipAsync, readDocuments } from "./store/zip-builder";
 import { carryBlockAttrs } from "./store/card-save";
 import { canonicalMisfit, CURRENT_SCHEMA_VERSION, isNewerSchema } from "./store/schema-version";
 import { computeFidelity } from "./store/fidelity";
@@ -35,7 +36,7 @@ import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
 import { LinkBuilderDialog } from "./ui/LinkBuilderDialog";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, buildZip, extractArchive, isArchiveName, type ArchiveEntry } from "./store/archive";
+import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, extractArchive, isArchiveName, type ArchiveEntry } from "./store/archive";
 import { collectFolderExport, groupDocsByFolder, useFolderStore } from "./store/folders";
 import type { ImportResource } from "./store/url-import";
 import { searchDocuments } from "./store/search";
@@ -2142,8 +2143,18 @@ export function PerssonifyEditor({
       // pane-sync debounce — was silently missing from the ZIP. A backup that
       // quietly omits the paragraph you just typed is the worst kind.
       try { await autosaveRef.current(); } catch { /* fall through to stored copy */ }
+      // Read everything up front — one transaction on IndexedDB, parallel
+      // batches elsewhere — instead of one awaited read per document.
+      const { docs: records, unreadable } = await readDocuments(storage, entries.map((e) => e.docId));
+      // Serialising a document to markdown is main-thread work as well: yield
+      // between slices so a big export does not freeze the page (see buildZipAsync).
+      let sliceStart = performance.now();
       for (const { docId, dirSegments } of entries) {
-        const rec = await storage.get(docId);
+        if (performance.now() - sliceStart > 12) {
+          await new Promise((r) => setTimeout(r, 0));
+          sliceStart = performance.now();
+        }
+        const rec = records.get(docId);
         if (!rec) continue;
         // Full backup: always write canonical ProseMirror JSON so styled content
         // (colors/highlights/fonts) round-trips exactly on re-import. Otherwise
@@ -2190,9 +2201,14 @@ export function PerssonifyEditor({
           );
         }
       }
+      // An unreadable document is reported, never silently left out of what
+      // the user believes is a complete backup.
+      if (unreadable.length) {
+        toastRef.current.show(`${unreadable.length} document(s) could not be read and are NOT in this export`, "error");
+      }
       const count = Object.keys(files).length;
       if (count === 0) return 0;
-      const zip = buildZip(files);
+      const zip = await buildZipAsync(files);
       // Timestamped filename (YYYYMMDD-HHMMSSmmm) so each export is implicitly
       // version-stamped — a rudimentary portability/backup system.
       const ts = exportTimestamp();
