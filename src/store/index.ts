@@ -7,6 +7,7 @@ export {
   MemoryStorageAdapter,
   IndexedDBStorageAdapter,
   StorageQuotaError,
+  StorageReadError,
   type StorageAdapter,
   type IDBStorageConfig,
   type StorageMetrics,

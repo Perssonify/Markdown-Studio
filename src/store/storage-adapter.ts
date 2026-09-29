@@ -13,7 +13,6 @@
  */
 
 import {
-  deserializeFromStorage,
   serializeForStorage,
   stampUpdated,
   toSummary,
@@ -24,13 +23,15 @@ import { safeStorage } from "../utils/safe-storage";
 import {
   IndexedDBStorageAdapter,
   StorageQuotaError,
+  StorageReadError,
+  parseStoredDocument,
   type IDBStorageConfig,
   type StorageMetrics,
 } from "./idb-storage-adapter";
 import { diag } from "../utils/diag";
 
 // Re-export IDB types so callers only need to import from this module
-export { IndexedDBStorageAdapter, StorageQuotaError };
+export { IndexedDBStorageAdapter, StorageQuotaError, StorageReadError };
 
 export type { IDBStorageConfig, StorageMetrics };
 
@@ -60,6 +61,16 @@ declare global {
   }
 }
 
+/**
+ * Persistence contract for documents.
+ *
+ * `get` MUST resolve null only when no document has that id, and REJECT
+ * (ideally with StorageReadError) when the read itself fails or the stored
+ * value cannot be parsed. The save path's data-loss guards — the blank-over-
+ * content backstop, the multi-tab conflict check, the pre-overwrite snapshot —
+ * fail CLOSED on a rejected read; a read error reported as null walks straight
+ * past all three.
+ */
 export interface StorageAdapter {
   list(): Promise<DocumentSummary[]>;
   get(id: string): Promise<DocumentRecord | null>;
@@ -105,17 +116,22 @@ export class WindowStorageAdapter implements StorageAdapter {
 
   /**
    * Get a full document by ID.
+   *
+   * `window.storage` REJECTS for a key it does not have (see `delete` below),
+   * so a rejection here has to keep meaning "absent" — the API offers no way
+   * to tell that from a failure. A value that IS present but will not parse is
+   * a read error, never a miss (see StorageReadError).
    */
   async get(id: string): Promise<DocumentRecord | null> {
+    let value: string | undefined;
     try {
-      const result = await window.storage!.get(PREFIX + id);
-      if (result?.value) {
-        return deserializeFromStorage(result.value);
-      }
+      value = (await window.storage!.get(PREFIX + id))?.value;
     } catch (e) {
       console.warn(`[Storage] Failed to get doc ${id}:`, e);
+      return null;
     }
-    return null;
+    if (value === undefined || value === null) return null;
+    return parseStoredDocument(id, value);
   }
 
   /**
@@ -224,14 +240,18 @@ export class LocalStorageAdapter implements StorageAdapter {
     );
   }
 
+  /** null only when the key is absent; a storage that throws, or a value that
+   *  will not parse, is a read error (see StorageReadError). */
   async get(id: string): Promise<DocumentRecord | null> {
+    let raw: string | null;
     try {
-      const raw = localStorage.getItem(this._key(id));
-      if (raw) return deserializeFromStorage(raw);
+      raw = localStorage.getItem(this._key(id));
     } catch (e) {
       console.warn(`[Storage] Failed to get doc ${id}:`, e);
+      throw new StorageReadError(`Could not read document ${id}`, { cause: e });
     }
-    return null;
+    if (raw === null) return null;
+    return parseStoredDocument(id, raw);
   }
 
   async save(doc: DocumentRecord): Promise<void> {

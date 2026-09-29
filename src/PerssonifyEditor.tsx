@@ -1104,7 +1104,7 @@ export function PerssonifyEditor({
       const store = useDocumentStore.getState();
       const active = store.activeDocId;
       if (active && ids.includes(active) && store.hydratedDocId !== active) {
-        const rec = await store.getDocById(active);
+        const rec = await store.getDocById(active).catch(() => null);
         if (rec?.canonical) hydrateEditorWithDoc(active, rec.canonical);
       }
     }
@@ -1467,7 +1467,7 @@ export function PerssonifyEditor({
     if (firstDocId) {
       const store = useDocumentStore.getState();
       if (store.activeDocId === firstDocId && store.hydratedDocId !== firstDocId) {
-        const rec = await store.getDocById(firstDocId);
+        const rec = await store.getDocById(firstDocId).catch(() => null);
         if (rec?.canonical) hydrateEditorWithDoc(firstDocId, rec.canonical);
       }
     }
@@ -1992,7 +1992,8 @@ export function PerssonifyEditor({
     if (type === "prompt" && activeDoc) {
       try {
         const storage = useDocumentStore.getState().getStorage();
-        const docStoreGetter = { get: async (id: string) => (storage ? await storage.get(id) : null) };
+        // An unreadable linked document is left out of the prompt, not fatal to it.
+        const docStoreGetter = { get: async (id: string) => (storage ? await storage.get(id).catch(() => null) : null) };
         const promptText = await buildContextPrompt(activeDoc, docStoreGetter, linkIndex, {
           format: "markdown",
           mdConverter: (d) => d.markdownCache ?? (engine?.htmlToMd && d.htmlCache ? engine.htmlToMd(d.htmlCache) : extractText(d.canonical)),
