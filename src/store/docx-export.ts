@@ -13,14 +13,16 @@
  */
 
 import { Marked, type Token, type Tokens } from "marked";
+import { emStrongMaskFix } from "../engine/marked-emphasis-mask";
 import { downloadBlob, sanitizeFilename } from "./import-export";
 
 // Our own instance rather than marked's shared default: in the library build
 // marked is the HOST's copy, and anything the host registered on the default
 // instance would otherwise change what this exporter reads. Plain GFM, as the
-// default instance is.
+// default instance is, plus the same emphasis correction the editor applies.
 let docxMarked: Marked | null = null;
-const lexMarkdown = (markdown: string): Token[] => (docxMarked ??= new Marked()).lexer(markdown);
+const lexMarkdown = (markdown: string): Token[] =>
+  (docxMarked ??= new Marked({ tokenizer: emStrongMaskFix })).lexer(markdown);
 
 // docx types are only referenced via the dynamic import; keep this module light.
 type DocxModule = typeof import("docx");
