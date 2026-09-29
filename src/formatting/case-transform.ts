@@ -1,5 +1,6 @@
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
+import { fencedLineMask } from "./select-scope";
 
 /**
  * Case transforms (UPPERCASE / lowercase / Title Case) for both panes.
@@ -137,11 +138,17 @@ export function transformCaseCM(view: EditorView, mode: CaseMode, contentOnly: b
   if (changed) view.dispatch(spec);
 }
 
-/** Transform the case of every ATX heading line in the markdown pane. */
+/** Transform the case of every ATX heading line in the markdown pane — not a
+ *  `# comment` inside a fenced code block, which used to be upper-cased along
+ *  with the real headings (see fencedLineMask). */
 export function headingsCaseCM(view: EditorView, mode: CaseMode, contentOnly: boolean): void {
   const doc = view.state.doc;
+  const texts: string[] = [];
+  for (let i = 1; i <= doc.lines; i++) texts.push(doc.line(i).text);
+  const fenced = fencedLineMask(texts);
   const changes: { from: number; to: number; insert: string }[] = [];
   for (let i = 1; i <= doc.lines; i++) {
+    if (fenced[i - 1]) continue;
     const line = doc.line(i);
     const m = line.text.match(/^(#{1,6}\s+)(.*)$/);
     if (!m) continue;
