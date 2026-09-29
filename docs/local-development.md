@@ -62,7 +62,7 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 ### Add a formatting command (e.g. a new toolbar button)
 
 1. Add the button in [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) calling `dispatch("myCmd")`.
-2. Handle `"myCmd"` in **both** branches of [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts): `dispatchToTiptap` ([:336](../src/formatting/useFormatDispatcher.ts#L336)) for the rich-text pane and `dispatchToMd` ([:502](../src/formatting/useFormatDispatcher.ts#L502)) for the markdown pane.
+2. Handle `"myCmd"` in **both** branches of [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts): `dispatchToTiptap` ([:344](../src/formatting/useFormatDispatcher.ts#L344)) for the rich-text pane and `dispatchToMd` ([:512](../src/formatting/useFormatDispatcher.ts#L512)) for the markdown pane.
 3. If it should reflect active state, add detection in the format-state query ([:364](../src/formatting/useFormatDispatcher.ts#L364)).
 4. Optional shortcut: add to [src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts).
 

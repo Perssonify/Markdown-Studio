@@ -53,8 +53,8 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 - **What:** Bold, italic, underline, strikethrough, superscript, subscript, inline code; headings H1–H6, ordered/unordered/task lists, blockquote, code block, horizontal rule.
 - **Entry point:** [src/ui/Toolbar.tsx:176](../src/ui/Toolbar.tsx#L176) buttons, or keyboard shortcuts ([src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts)).
 - **Happy-path flow:** Toolbar button → `dispatch(cmd)` → `useFormatDispatcher` ([src/formatting/useFormatDispatcher.ts:138](../src/formatting/useFormatDispatcher.ts#L138)) picks the target pane via `getTargetPane()` ([:154](../src/formatting/useFormatDispatcher.ts#L154)):
-  - **Rich-text pane active** → `dispatchToTiptap()` ([:336](../src/formatting/useFormatDispatcher.ts#L336)) runs Tiptap commands.
-  - **Markdown pane active** → `dispatchToMd()` ([:502](../src/formatting/useFormatDispatcher.ts#L502)) edits the CM6 text directly via `mdWrap`/`mdPrefixLine`/`mdSetHeading` ([src/formatting/md-format-utils.ts](../src/formatting/md-format-utils.ts)).
+  - **Rich-text pane active** → `dispatchToTiptap()` ([:344](../src/formatting/useFormatDispatcher.ts#L344)) runs Tiptap commands.
+  - **Markdown pane active** → `dispatchToMd()` ([:512](../src/formatting/useFormatDispatcher.ts#L512)) edits the CM6 text directly via `mdWrap`/`mdPrefixLine`/`mdSetHeading` ([src/formatting/md-format-utils.ts](../src/formatting/md-format-utils.ts)).
 - **Data:** Operates on the active pane's content; result flows through the sync engine into canonical PM JSON.
 - **Indent / outdent (`Cmd+]` / `Cmd+[`, toolbar):** these mean **list nesting**, in both panes. Rich pane → `sinkListItem` / `liftListItem` with the item type taken from the selection (`taskItem` inside a checklist, `listItem` otherwise — hardcoding the latter made indent dead in every checklist). Markdown pane → CodeMirror's `indentMore`/`indentLess`, gated by `mdIndentable` ([src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts)) to list lines and lines inside a fenced block. Markdown has no paragraph indent — four leading spaces on a paragraph *is* an indented code block — so on anything else both panes no-op rather than change what the block is.
 - **Strikethrough round-trip:** TipTap renders `<s>`; turndown's core is CommonMark and this project does not load `turndown-plugin-gfm`, so an unmatched element is silently reduced to its text. The `strikethrough` rule in [src/engine/turndown-rules.ts](../src/engine/turndown-rules.ts) emits `~~…~~`. Without it, striking text in the rich pane was destroyed by the next sync and lost on export, with no fidelity warning — strikethrough is native Markdown, so nothing classed it as a loss.
@@ -240,7 +240,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 ### 14. Copy as Prompt
 
 - **What:** Copies the active document **plus its linked neighbors** to the clipboard, formatted as XML-tagged context for an LLM.
-- **Entry point:** **Tools ▸ Copy as Prompt** ([src/ui/MenuBar.tsx](../src/ui/MenuBar.tsx)) → handled in [src/PerssonifyEditor.tsx:506](../src/PerssonifyEditor.tsx#L506) (action dispatch) → `buildContextPrompt` ([src/integration/prompt-builder.ts:201](../src/integration/prompt-builder.ts#L201)).
+- **Entry point:** **Tools ▸ Copy as Prompt** ([src/ui/MenuBar.tsx](../src/ui/MenuBar.tsx)) → handled in [src/PerssonifyEditor.tsx:506](../src/PerssonifyEditor.tsx#L506) (action dispatch) → `buildContextPrompt` ([src/integration/prompt-builder.ts:232](../src/integration/prompt-builder.ts#L232)).
 - **Flow:** Resolves forward links (and optionally backlinks) of the active doc, caps at `maxDocs` (default 20), wraps each in `<document …>…</document>` and the set in `<documents>` with an optional `<knowledge_graph_summary>`.
 - **Data:** Reads the link index ([src/store/link-index.ts](../src/store/link-index.ts)) and document records.
 
