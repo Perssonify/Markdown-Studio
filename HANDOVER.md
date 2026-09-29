@@ -53,9 +53,12 @@ Authoritative reading, in order:
 2. `docs/gotchas.md` — the landmines.
 3. `docs/architecture.md` (ADRs), `docs/data-pipeline.md`, `docs/database.md`.
 4. `docs/features.md` — feature-by-feature with entry points and edge cases.
-5. `docs/v1-to-current-changelog.md` — the full v1→current delta (hand this to builders).
-6. `docs/backlog.md` — planned features + deferred findings + the state-machine decision.
-7. `docs/integration-guide.md` — for host apps embedding the library/iframe.
+5. `docs/audit-2026-09.md` — **what remains before launch**: the September 2026
+   production-readiness audit register (all 114 findings and their status), the owner
+   actions that are not code, and the deferred engineering work.
+6. `docs/v1-to-current-changelog.md` — the full v1→current delta (hand this to builders).
+7. `docs/backlog.md` — planned features + earlier audits' findings + the state-machine decision.
+8. `docs/integration-guide.md` — for host apps embedding the library/iframe.
 
 ---
 
