@@ -37,7 +37,7 @@ or serve the embed from its own origin.
 library) and the `ErrorBoundary`'s `onError` prop are the hook a host — or a
 future first-party endpoint — can subscribe to.
 
-**Why:** the product's privacy position (client-only, no accounts) makes a
+**Why:** the product's privacy position (documents stay in the browser, no accounts) makes a
 third-party tracker a real change of promise, and none has been chosen. A ring
 that holds only kind, version, browser family, error class, a redacted first
 line and script positions is useful in a bug report without being a data

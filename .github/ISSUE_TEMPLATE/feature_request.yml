@@ -5,10 +5,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Markdown Studio is deliberately **client-only**: no account, no backend,
-        nothing uploaded. Proposals that require a server, sync service, or
-        user accounts are very unlikely to land — please say how yours fits
-        inside the browser.
+        Markdown Studio deliberately keeps documents in the browser: no account,
+        and no server that stores or reads them (the only server code is the
+        opt-in relay for importing from a URL). Proposals that require a server,
+        sync service, or user accounts are very unlikely to land — please say
+        how yours fits inside the browser.
 
   - type: textarea
     id: problem

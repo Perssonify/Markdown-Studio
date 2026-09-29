@@ -1,6 +1,6 @@
 # Security Policy
 
-Markdown Studio (npm package `@perssonify/editor`) is a client-only Markdown
+Markdown Studio (npm package `@perssonify/editor`) is a browser-based Markdown
 editor: documents are converted in the visitor's browser and stored there
 (IndexedDB), with no account and no server copy. The one server-side component
 is `api/import.js` — a first-party "import relay" that fetches a user-supplied
@@ -20,8 +20,8 @@ embed's host-supplied parameters seriously. Thank you for looking.
 | Latest published `@perssonify/editor` on npm       | Yes       |
 | Any older tag, release or npm version              | No        |
 
-The app is continuously deployed from `main` and holds no server-side user
-data, so there is nothing to back-port to: fixes land on `main`, ship to the
+The app is continuously deployed from `main` and stores no documents on a
+server, so there is nothing to back-port to: fixes land on `main`, ship to the
 live deployment, and go out in the next npm release. Please reproduce against
 the live site or a current `main` build before reporting.
 
