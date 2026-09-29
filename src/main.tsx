@@ -9,7 +9,7 @@ import { App } from "./App";
 import { setupServiceWorkerUpdates } from "./pwa/sw-updates";
 import "./styles.css";
 import { initPalette } from "./theme/palette";
-import { reloadForChunkErrorIfSafe, watchSaveProblems } from "./utils/app-health";
+import { reloadForChunkErrorIfSafe, trackPageLeaving, watchSaveProblems } from "./utils/app-health";
 import { diag } from "./utils/diag";
 import { installGlobalErrorCapture, recordDiagnostic } from "./utils/diagnostics";
 
@@ -28,6 +28,7 @@ initPalette();
 // only when it can help and cannot hurt (online, nothing unsaved, not a loop);
 // otherwise the error reaches the code that asked for the chunk, which says
 // what happened (LazyChunkBoundary, the export handlers).
+trackPageLeaving();
 window.addEventListener("vite:preloadError", (event) => {
   recordDiagnostic({ kind: "chunk", error: (event as Event & { payload?: unknown }).payload });
   if (reloadForChunkErrorIfSafe()) event.preventDefault();
