@@ -30,6 +30,7 @@ import { Details, Summary } from "../extensions/Details";
 import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
 import { ThemeImage } from "../extensions/ThemeImage";
+import { UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
 import { TableBubbleMenu } from "./TableBubbleMenu";
@@ -309,6 +310,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         Table.configure({ resizable: false }),
         TableRow, TableCell, TableHeader,
         SearchHighlightExtension,
+        UnresolvedWikiLinks, // broken-link marking (a plugin: no schema change)
       ],
       content: defaultValue || "",
       editorProps: {

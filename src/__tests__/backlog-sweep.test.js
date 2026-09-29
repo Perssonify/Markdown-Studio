@@ -84,30 +84,26 @@ describe("B2 — a toast does not land on the status bar", () => {
 });
 
 describe("F3 — a broken wiki link looks broken", () => {
+  // A058: the three source pins that stood here asserted the DOM-mutation
+  // implementation (`setAttribute("data-unresolved"`…), and passed for as long
+  // as the feature never once worked — it compared "[object Object]" against
+  // link targets. The behaviour (marking, clearing, same-document anchors, a
+  // freshly typed link) is now held by links-resolution.test.js against a real
+  // editor; what stays here is the wiring and the stylesheet.
   const hook = codeOnly(read("src/hooks/useLinkIndex.ts"));
+  const pane = codeOnly(read("src/ui/TiptapPane.tsx"));
   const css = read("src/styles.css");
 
-  it("marks unresolved links in the DOM from the index that already knows", () => {
-    expect(hook).toContain('setAttribute("data-unresolved"');
-    expect(hook).toContain('removeAttribute("data-unresolved")');
-  });
-
-  it("clears the mark when a link resolves again", () => {
-    // Creating the missing document must un-break the link without a reload,
-    // which means the else branch has to run — not just the setter.
-    const effect = hook.slice(hook.indexOf('a[data-doc-link]'));
-    expect(effect.slice(0, 600)).toContain("else a.removeAttribute");
-  });
-
-  it("does not treat a same-document heading anchor as broken", () => {
-    // [[#Heading]] has an empty doc target and resolves within this document.
-    const effect = hook.slice(hook.indexOf('a[data-doc-link]'));
-    expect(effect.slice(0, 600)).toContain("if (target && broken.has(target))");
+  it("marks unresolved links with a decoration fed the library, not by writing PM's DOM", () => {
+    expect(hook).toContain("setWikiLinkLibrary(");
+    expect(hook).not.toContain('setAttribute("data-unresolved"');
+    expect(pane).toContain("UnresolvedWikiLinks");
   });
 
   it("styles it in both panes", () => {
     expect(css).toContain(".ProseMirror a.wiki-link[data-unresolved]");
     expect(css).toContain("[data-md-preview] a.wiki-link[data-unresolved]");
+    expect(css).toContain(".ProseMirror a.wiki-link:has(.wiki-link-unresolved)");
   });
 });
 

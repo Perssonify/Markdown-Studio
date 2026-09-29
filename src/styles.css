@@ -1344,6 +1344,18 @@ img[src$="#gh-light-mode-only"] { display: revert; }
   text-decoration-style: dashed;
   text-decoration-color: currentColor;
 }
+/* In the rich pane the state is a ProseMirror DECORATION (see
+   extensions/UnresolvedWikiLinks), which PM renders as a span INSIDE the link. The underline belongs to the <a>, so it is styled through
+   :has() — in a rule of its own, because an engine without :has() drops every
+   selector in a list that contains it. The span's colour is the fallback. */
+.ProseMirror a.wiki-link:has(.wiki-link-unresolved) {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
+  text-decoration-color: currentColor;
+}
+.ProseMirror .wiki-link-unresolved {
+  color: var(--muted-foreground);
+}
 
 /* Images — no border-radius: rounding clips the image's corner pixels, which
    truncates logos/screenshots that carry content to the edge. */
