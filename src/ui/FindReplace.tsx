@@ -320,7 +320,6 @@ export function FindReplaceBar({
     } else {
       setPos(clamp((window.innerWidth - w) / 2, Math.max(16, (window.innerHeight - h) / 2 - 40)));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-clamp on window resize so a shrinking viewport can't strand the fixed
