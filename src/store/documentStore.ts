@@ -68,6 +68,15 @@ export function isNewerThanBase(
 export const CONFLICT_MESSAGE =
   "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload.";
 
+/** A write refused because another tab wrote the record after the revision
+ *  this tab's content is based on. Carries CONFLICT_MESSAGE. */
+export class ConflictError extends Error {
+  constructor() {
+    super(CONFLICT_MESSAGE);
+    this.name = "ConflictError";
+  }
+}
+
 /**
  * What an explicit save should tell the user when `saveActiveDoc` resolved
  * WITHOUT committing. ⌘S used to say "Changes saved" (and fire the host's
@@ -289,8 +298,15 @@ interface DocumentState {
        *  per-doc presentation state: colour, pinned). */
       metadata?: Record<string, unknown>;
       /** Presentation-only patches (pin/colour) pass false so re-ordering by
-       *  "recently edited" isn't disturbed by a non-edit. Defaults to true. */
+       *  "recently edited" isn't disturbed by a non-edit. Defaults to true.
+       *  `false` applies `metadata` ONLY, onto the freshest stored record —
+       *  any canonical/title in the same patch is ignored. */
       touchUpdated?: boolean;
+      /** The `updated` of the copy this patch's content was derived from (a
+       *  card loaded earlier, say). A newer stored revision is another tab's
+       *  write: a content patch is then refused with a ConflictError. The open
+       *  document and a parked draft carry their own base automatically. */
+      expectedUpdated?: string | null;
     }
   ) => Promise<DocumentRecord | null>;
   /** Duplicate `docId`, or the active document when omitted. */
@@ -379,6 +395,62 @@ function liveCanonicalFor(docId: string): DocumentRecord["canonical"] | null {
     console.warn("[documentStore] liveCanonicalProvider threw:", e);
   }
   return null;
+}
+
+/**
+ * The revision THIS tab's copy of `docId` is based on — what a write must not
+ * overwrite a newer version of. For the open document that is
+ * `activeDoc.updated` (the same base saveActiveDoc checks); for a background
+ * document it is its parked draft's base, if any. `extra` is a caller's own
+ * provenance (a card loaded earlier); the OLDEST candidate wins. Null means the
+ * tab holds no copy of its own, so there is nothing to conflict with.
+ */
+function baseRevisionFor(docId: string, extra?: string | null): string | null {
+  const s = useDocumentStore.getState();
+  const own = s.activeDoc?.id === docId ? s.activeDoc.updated : s._draftBases.get(docId);
+  const candidates = [own, extra].filter((v): v is string => !!v);
+  if (!candidates.length) return null;
+  return candidates.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
+}
+
+/**
+ * Apply a title/metadata patch to the STORED record of a document another tab
+ * has overtaken, leaving this tab's content and its base untouched (see
+ * renameDoc for why both matter).
+ */
+async function applyTitleOnly(
+  set: (partial: Partial<DocumentState> | ((s: DocumentState) => Partial<DocumentState>)) => void,
+  get: () => DocumentState,
+  docId: string,
+  stored: DocumentRecord,
+  patch: { title?: string; userTitle?: string | null; metadata?: Record<string, unknown> }
+): Promise<DocumentRecord> {
+  if (patch.userTitle !== undefined) {
+    stored.userTitle = patch.userTitle;
+    stored.titlePinnedByUser = patch.userTitle != null;
+  }
+  if (patch.title !== undefined) stored.title = patch.title;
+  stored.updated = new Date().toISOString();
+  syncFieldsToMetadata(stored);
+  if (patch.metadata) stored.metadata = { ...stored.metadata, ...patch.metadata };
+  await storage.save(stored);
+  const list = await storage.list();
+  set((s) => ({
+    documents: list,
+    openTabs: s.openTabs.map((t) => (t.id === docId ? { ...t, title: stored.title } : t)),
+    activeDoc:
+      s.activeDoc?.id === docId
+        ? {
+            ...s.activeDoc,
+            title: stored.title,
+            userTitle: stored.userTitle,
+            titlePinnedByUser: stored.titlePinnedByUser,
+            ...(patch.metadata ? { metadata: { ...s.activeDoc.metadata, ...patch.metadata } } : {}),
+          }
+        : s.activeDoc,
+  }));
+  refreshMetrics(set, get);
+  return stored;
 }
 
 // ─── Metrics refresh helper ───────────────────────────────────────────────────
@@ -717,7 +789,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         // generic transient "error". Set before throwing so it survives the
         // caller's catch. A later real edit (setDirty → "editing") resumes.
         set({ saveStatus: "conflict", saveError: "Changed in another tab" });
-        throw new Error(CONFLICT_MESSAGE);
+        throw new ConflictError();
       }
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("This document was changed")) throw e;
@@ -1001,12 +1073,19 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const target = await storage.get(docId);
     if (!target) return;
 
+    // Another tab wrote this document after the revision this tab's copy is
+    // based on. The rename still lands — a title is not content — but ONLY on
+    // the stored record: merging this tab's live content into it would replace
+    // the other tab's work, and stamping it into the store's activeDoc would
+    // launder the conflict so the next autosave saw no drift at all.
+    const conflicted = isNewerThanBase(target.updated, baseRevisionFor(docId));
+
     // If the live editor currently holds this doc, its on-disk canonical lags the
     // editor by up to one autosave interval. Persist the LIVE content alongside
     // the new title so a rename can never rewind unsaved edits (the "renamed and
     // lost my changes" data-loss class the user hit). liveCanonicalFor refuses a
     // blank, so a rename never wipes content either.
-    const live = liveCanonicalFor(docId);
+    const live = conflicted ? null : liveCanonicalFor(docId);
     if (live) target.canonical = live;
 
     // Store as an explicit user title — this takes priority over content-derived
@@ -1026,6 +1105,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const cachedEdit = get().getUnsavedEdit(docId);
     if (live && cachedEdit && JSON.stringify(cachedEdit) === JSON.stringify(live)) {
       get().clearUnsavedEdit(docId);
+    } else if (!conflicted && get()._draftBases.has(docId)) {
+      // A parked draft of a document renamed WITHOUT a conflict is still based
+      // on the same content — the new stamp is this tab's own write. Left on
+      // the old stamp, the draft's next save measured its own rename as
+      // "another tab" and refused.
+      get()._draftBases.set(docId, target.updated);
     }
 
     set((s) => ({
@@ -1034,25 +1119,67 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         t.id === docId ? { ...t, title: newTitle } : t
       ),
       // Update activeDoc in-place if this is the currently open doc so the
-      // editor header and tab bar reflect the change without a reload.
+      // editor header and tab bar reflect the change without a reload. In a
+      // conflict only the title moves; the content base stays where it was.
       activeDoc:
-        s.activeDoc?.id === docId
-          ? { ...target }
-          : s.activeDoc,
+        s.activeDoc?.id !== docId
+          ? s.activeDoc
+          : conflicted
+            ? { ...s.activeDoc, title: target.title, userTitle: target.userTitle, titlePinnedByUser: true }
+            : { ...target },
       counts:
-        s.activeDoc?.id === docId ? computeCounts(target.canonical) : s.counts,
+        s.activeDoc?.id === docId && !conflicted ? computeCounts(target.canonical) : s.counts,
     }));
     refreshMetrics(set, get);
   },
 
   // ── Patch by id (non-active safe) ────────────────────────────────────────────
   patchDocById: async (docId, patch) => {
+    // Presentation-only (a card's colour or pin): METADATA onto the freshest
+    // stored copy, with `updated` untouched — nothing else. It used to write
+    // the store's copy of the document (for the active one, with the live
+    // editor content merged in) under the OLD timestamp, which put new content
+    // on disk looking older than it was: another tab's newer version was
+    // overwritten and its conflict check then saw nothing, so two tabs
+    // ping-ponged last-writer-wins.
+    if (patch.touchUpdated === false) {
+      const stored = await storage.get(docId);
+      if (!stored) return null;
+      if (patch.metadata) stored.metadata = { ...stored.metadata, ...patch.metadata };
+      // Tell the adapter's save() to leave `updated` alone — see stampUpdated.
+      (stored as DocumentRecord & { _preserveUpdated?: boolean })._preserveUpdated = true;
+      await storage.save(stored);
+      const list = await storage.list();
+      set((s) => ({
+        documents: list,
+        // The open document picks up the metadata only; its content and the
+        // revision its content is based on are not this patch's business.
+        activeDoc:
+          s.activeDoc?.id === docId && patch.metadata
+            ? { ...s.activeDoc, metadata: { ...s.activeDoc.metadata, ...patch.metadata } }
+            : s.activeDoc,
+      }));
+      refreshMetrics(set, get);
+      return stored;
+    }
+
     // Load from storage so we can patch a doc that isn't currently open. Prefer
     // the live activeDoc copy if it's the target (it may hold unsaved canonical).
     const { activeDoc: liveActive } = get();
-    const target =
-      liveActive?.id === docId ? { ...liveActive } : await storage.get(docId);
+    const stored = await storage.get(docId);
+    const target = liveActive?.id === docId ? { ...liveActive } : stored;
     if (!target) return null;
+
+    // The same multi-tab check saveActiveDoc makes. The base is the OLDEST
+    // revision this write's content derives from: the open document's, a
+    // parked draft's, or the one the caller read it from (a card).
+    const conflicted = !!stored && isNewerThanBase(stored.updated, baseRevisionFor(docId, patch.expectedUpdated));
+    if (conflicted) {
+      // Replacing content would overwrite the other tab's work: refuse.
+      if (patch.canonical !== undefined) throw new ConflictError();
+      // A title is not content: apply it to the stored record only (see renameDoc).
+      return applyTitleOnly(set, get, docId, stored!, patch);
+    }
 
     if (patch.canonical !== undefined) {
       target.canonical = patch.canonical;
@@ -1079,15 +1206,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       target.userTitle = resolved.userTitle;
       target.titlePinnedByUser = resolved.titlePinnedByUser;
     }
-    if (patch.touchUpdated !== false) {
-      target.updated = new Date().toISOString();
-    } else {
-      // Tell the adapter's save() to leave `updated` alone. Without this the
-      // adapter stamped "now" anyway, so a presentation-only patch (a card's
-      // colour or pin) still re-sorted the board as if the note had been edited
-      // — exactly what this flag was added to prevent.
-      (target as DocumentRecord & { _preserveUpdated?: boolean })._preserveUpdated = true;
-    }
+    target.updated = new Date().toISOString();
     syncFieldsToMetadata(target);
     // Merged AFTER syncFieldsToMetadata: that call re-spreads metadata with the
     // doc's `:::fields:::` values, so merging earlier would let a same-named
@@ -1095,9 +1214,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (patch.metadata) {
       target.metadata = { ...target.metadata, ...patch.metadata };
     }
+    delete (target as { _persistedCanonical?: unknown })._persistedCanonical;
 
     await storage.save(target);
     const list = await storage.list();
+    // A title-only patch of a document with a parked draft moved its stamp by
+    // this tab's own write — rebase the draft, as renameDoc does.
+    if (patch.canonical === undefined && liveActive?.id !== docId && get()._draftBases.has(docId)) {
+      get()._draftBases.set(docId, target.updated);
+    }
     set((s) => ({
       documents: list,
       openTabs: s.openTabs.map((t) =>
