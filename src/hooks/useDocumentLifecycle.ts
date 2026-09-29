@@ -4,7 +4,7 @@ import { nextSyncCost, nextSyncWait } from "./sync-schedule";
 import { cleanPasteHtml, sanitizePastedHtml } from "../engine/html-cleaner";
 import { historyCache } from "../store/history-cache";
 import type { IngestFormat, IngestSource } from "../store/ingest";
-import { collectUnloadStash, useDocumentStore } from "../store/documentStore";
+import { collectUnloadStash, isBlankCanonical, useDocumentStore } from "../store/documentStore";
 import { stashUnsaved } from "../store/crash-recovery";
 import { useUIStore } from "../store/uiStore";
 import { createDocument } from "../store/document";
@@ -1020,7 +1020,15 @@ export function useDocumentLifecycle({
     if (id && draft) stashUnsaved(collectUnloadStash(s, draft, Date.now()));
     s.markHydrated(null);
     useUIStore.getState().setEditorReady(false); // no typing into an editor nobody hydrated
-    if (id && draft) {
+    // The blank-over-content backstop applies here as on every other write:
+    // patchDocById has no guard of its own (a host clearing a document through
+    // the bridge is legitimate), so an EMPTIED editor unmounted inside the
+    // autosave window wrote a blank canonical over the stored document. As in
+    // collectUnloadStash, a blank draft is written only over a document that is
+    // blank too; otherwise it stays cached, never persisted.
+    const stored = id ? s.documents.find((d) => d.id === id) : undefined;
+    const blankOverContent = !!draft && isBlankCanonical(draft) && (!stored || (stored.wordCount ?? 0) > 0);
+    if (id && draft && !blankOverContent) {
       s.patchDocById(id, { canonical: draft })
         .then(() => {
           const now = useDocumentStore.getState();
