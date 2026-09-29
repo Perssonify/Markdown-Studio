@@ -162,6 +162,114 @@ const overlaps = (a: LabelBox, b: LabelBox) =>
 const inside = (outer: LabelBox, inner: LabelBox) =>
   inner.x0 >= outer.x0 && inner.x1 <= outer.x1 && inner.y0 >= outer.y0 && inner.y1 <= outer.y1;
 
+// ── Spatial index ────────────────────────────────────────────────────────────
+
+/** Cells a single box may occupy before it is kept on a plain list instead. */
+const GRID_MAX_CELLS = 1024;
+/** Cell coordinates are packed into one number; beyond this a box is "oversize". */
+const GRID_RANGE = 1 << 20;
+
+/**
+ * A uniform grid over boxes, for "does anything overlap this box?" in time
+ * proportional to what is NEAR it. The label placer and the chip scorer used to
+ * answer that by scanning every box on the map for every candidate position —
+ * every dot, chip and placed label, several candidates per note — which at
+ * 2,000 notes was millions of comparisons per rendered frame.
+ *
+ * It answers EXACTLY what the scan answered: two boxes that overlap share at
+ * least one cell (a point inside both lies in a cell each of them covers), so
+ * nothing that overlaps can be missed, and everything found is re-tested with
+ * the same strict `overlaps`. Boxes are returned in insertion order, so a sum
+ * over them adds the same terms in the same order the scan did.
+ */
+export class BoxGrid {
+  readonly boxes: LabelBox[] = [];
+  private readonly cells = new Map<number, number[]>();
+  private readonly oversize: number[] = [];
+  private stamp: Int32Array = new Int32Array(64);
+  private query = 0;
+
+  constructor(private readonly cell: number) {}
+
+  /** Cell range a box covers — or null for one that cannot be indexed (too
+   *  large, not finite, inverted), which is then checked on every query, so the
+   *  answer stays the scan's answer for ANY input. */
+  private span(b: LabelBox) {
+    const gx0 = Math.floor(b.x0 / this.cell), gx1 = Math.floor(b.x1 / this.cell);
+    const gy0 = Math.floor(b.y0 / this.cell), gy1 = Math.floor(b.y1 / this.cell);
+    if (!(gx1 >= gx0 && gy1 >= gy0)) return null;
+    if ((gx1 - gx0 + 1) * (gy1 - gy0 + 1) > GRID_MAX_CELLS
+      || gx0 <= -GRID_RANGE || gy0 <= -GRID_RANGE || gx1 >= GRID_RANGE || gy1 >= GRID_RANGE) return null;
+    return { gx0, gx1, gy0, gy1 };
+  }
+
+  add(b: LabelBox) {
+    const index = this.boxes.length;
+    this.boxes.push(b);
+    const s = this.span(b);
+    if (s === null) { this.oversize.push(index); return; }
+    for (let gx = s.gx0; gx <= s.gx1; gx++) {
+      for (let gy = s.gy0; gy <= s.gy1; gy++) {
+        const key = gx * 2 * GRID_RANGE + gy;
+        const list = this.cells.get(key);
+        if (list) list.push(index); else this.cells.set(key, [index]);
+      }
+    }
+  }
+
+  /** True when any stored box overlaps `b` — the scan's `boxes.some(overlaps)`.
+   *  A yes/no does not care about order, so this walks the cells and stops at
+   *  the first hit. */
+  hits(b: LabelBox): boolean {
+    const s = this.span(b);
+    // A query box too big (or too strange) to walk cell by cell: the scan.
+    if (s === null) return this.boxes.some((o) => overlaps(b, o));
+    for (const i of this.oversize) if (overlaps(b, this.boxes[i]!)) return true;
+    for (let gx = s.gx0; gx <= s.gx1; gx++) {
+      for (let gy = s.gy0; gy <= s.gy1; gy++) {
+        const list = this.cells.get(gx * 2 * GRID_RANGE + gy);
+        if (!list) continue;
+        for (const i of list) if (overlaps(b, this.boxes[i]!)) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Σ f(box) over every stored box, in insertion order — for an `f` that is
+   * exactly 0 on a box that does not overlap `b` (the chip scorer's overlap
+   * AREA). Such boxes are skipped; adding +0 never changes a sum, so the
+   * result is bit-for-bit the scan's. Boxes kept off the grid are always
+   * included, so even a NaN box poisons the sum exactly as the scan would.
+   */
+  sum(b: LabelBox, f: (o: LabelBox) => number): number {
+    const s = this.span(b);
+    if (s === null) {
+      let total = 0;
+      for (const o of this.boxes) total += f(o);
+      return total;
+    }
+    if (this.stamp.length < this.boxes.length) this.stamp = new Int32Array(this.boxes.length * 2);
+    const q = ++this.query;
+    const found: number[] = [...this.oversize];
+    for (let gx = s.gx0; gx <= s.gx1; gx++) {
+      for (let gy = s.gy0; gy <= s.gy1; gy++) {
+        const list = this.cells.get(gx * 2 * GRID_RANGE + gy);
+        if (!list) continue;
+        for (const i of list) {
+          if (this.stamp[i] === q) continue;
+          this.stamp[i] = q;
+          if (overlaps(b, this.boxes[i]!)) found.push(i);
+        }
+      }
+    }
+    found.sort((x, y) => x - y);
+    let total = 0;
+    for (const i of found) total += f(this.boxes[i]!);
+    return total;
+  }
+}
+
 // ── Label placement ──────────────────────────────────────────────────────────
 
 /** Where a label ended up, as an offset from its anchor point in SCREEN pixels
@@ -174,6 +282,11 @@ export interface LabelPlacement {
   /** The string to draw — the compact form when the full name did not fit. */
   text: string;
 }
+
+/** Screen-pixel cell of the placer's index — about a label's height, a third
+ *  of a typical label's width. Any size gives the same answer; this one keeps
+ *  both the cells a box spans and the boxes per cell small. */
+const LABEL_GRID_CELL = 40;
 
 /** Last-resort compact form of a label, for views too dense for the full name.
  *  A shortened name still orients the reader; a dropped one leaves an anonymous
@@ -230,7 +343,10 @@ export interface PlaceLabelsOptions {
  */
 export function placeLabels(opts: PlaceLabelsOptions): Map<string, LabelPlacement> {
   const { order, forced, positions, radius, label, cam, obstacles = [], bounds, reject, limit } = opts;
-  const boxes: LabelBox[] = [...obstacles];
+  // Everything already on the canvas, indexed: a candidate is tested against
+  // what is near it, not against every dot on the map (see BoxGrid).
+  const boxes = new BoxGrid(LABEL_GRID_CELL);
+  for (const o of obstacles) boxes.add(o);
   const out = new Map<string, LabelPlacement>();
   const forcedSet = forced ?? new Set<string>();
   const max = limit == null ? order.length : Math.min(order.length, limit + forcedSet.size);
@@ -273,9 +389,9 @@ export function placeLabels(opts: PlaceLabelsOptions): Map<string, LabelPlacemen
       ];
       for (const c of candidates) {
         if (bounds && !inside(bounds, c.box)) continue;
-        if (boxes.some((o) => overlaps(c.box, o))) continue;
+        if (boxes.hits(c.box)) continue;
         if (reject?.(id, c.box)) continue;
-        boxes.push(c.box);
+        boxes.add(c.box);
         out.set(id, c.place);
         done = true;
         break;
@@ -363,9 +479,79 @@ export function folderChipWidth(name: string, maxChars = FOLDER_NAME_MAX): numbe
  * back along the border when two clusters would otherwise stack their names.
  */
 export function folderRects(opts: FolderRectsOptions): FolderRect[] {
-  const { folders, positions, radius, label, k, avoid = [] } = opts;
+  const { avoid = [] } = opts;
   const out: FolderRect[] = [];
   const chips: LabelBox[] = [];
+  // The dots a chip steers around, indexed once: every candidate slot of every
+  // folder used to be scored against every dot on the map (see BoxGrid — the
+  // sum is the same terms in the same order, so the chosen slot is identical).
+  let avoidIndex: BoxGrid | null = null;
+  if (avoid.length > 32) {
+    avoidIndex = new BoxGrid(32 / opts.k);
+    for (const o of avoid) avoidIndex.add(o);
+  }
+  const area = (c: LabelBox, o: LabelBox) =>
+    Math.max(0, Math.min(c.x1, o.x1) - Math.max(c.x0, o.x0))
+    * Math.max(0, Math.min(c.y1, o.y1) - Math.max(c.y0, o.y0));
+
+  for (const box of containerGeometry(opts)) {
+    const { chipW, chipH, inset, x0, x1, y0, y1 } = box;
+    // The chip slides along the top border, then the bottom, looking for clear
+    // ground. Four corners were not enough: zoomed out, a screen-constant chip
+    // covers a lot of world, and when every corner was taken it fell back to the
+    // first one and stamped the folder's name over someone's note.
+    const slot = (sx: number, sy: number): LabelBox =>
+      ({ x0: sx, y0: sy - chipH / 2, x1: sx + chipW, y1: sy + chipH / 2 });
+    const left = x0 + inset, right = x1 - inset - chipW;
+    const candidates: LabelBox[] = [];
+    // Rows in preference order: straddling the top border, straddling the
+    // bottom, then just OUTSIDE each. Measured zoomed out on a 25- and 40-note
+    // workspace, the two straddling rows alone ran out of clear ground and the
+    // least-overlap fallback dropped a chip on a note's dot. The gap between two
+    // containers is normally empty, so stepping the chip clear of its own box is
+    // a better answer than covering someone's note with it.
+    const rows = [y0, y1, y0 - chipH, y1 + chipH];
+    // Denser sampling for the same reason: five stops along a border is not many
+    // once a screen-constant chip covers a lot of world.
+    const stops = [0, 1, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875];
+    for (const y of rows) {
+      for (const t of stops) {
+        candidates.push(slot(left + (right - left) * t, y));
+      }
+    }
+    let chip = candidates[0]!;
+    let best = Infinity;
+    for (const c of candidates) {
+      // A chip must never sit on another chip; a dot it can only be nudged off.
+      if (chips.some((o) => overlaps(c, o))) continue;
+      let score = 0;
+      if (avoidIndex) score = avoidIndex.sum(c, (o) => area(c, o));
+      else for (const o of avoid) score += area(c, o);
+      if (score < best) { best = score; chip = c; }
+      if (score === 0) break;
+    }
+    chips.push(chip);
+
+    out.push({ id: box.id, name: box.name, label: box.label, docIds: box.docIds, x0, y0, x1, y1, chip });
+  }
+  return out;
+}
+
+/** A folder's container without its chip: what the LAYOUT keeps apart. The
+ *  same rectangle `folderRects` draws (it is computed by the same function);
+ *  the physics simply has no use for where the name tab lands, and searching
+ *  for a clear slot for it three times a step was pure waste. */
+export type FolderBounds = Omit<FolderRect, "chip">;
+
+export function folderBounds(opts: Omit<FolderRectsOptions, "avoid">): FolderBounds[] {
+  return containerGeometry(opts).map(({ id, name, label, docIds, x0, y0, x1, y1 }) =>
+    ({ id, name, label, docIds, x0, y0, x1, y1 }));
+}
+
+/** THE container geometry — see `folderRects`. */
+function containerGeometry(opts: Omit<FolderRectsOptions, "avoid">) {
+  const { folders, positions, radius, label, k } = opts;
+  const out: (FolderBounds & { chipW: number; chipH: number; inset: number })[] = [];
   // Container geometry is world-STABLE below 1×. Sizing it purely in screen
   // pixels (`/k`) meant zooming out inflated every box in world terms — at 0.3×
   // a container claimed three times the ground it was solved for, so boxes that
@@ -415,45 +601,7 @@ export function folderRects(opts: FolderRectsOptions): FolderRect[] {
     const shortfall = folderChipWidth(name, maxChars) * gs + 2 * inset - (x1 - x0);
     if (shortfall > 0) { x0 -= shortfall / 2; x1 += shortfall / 2; }
 
-    // The chip slides along the top border, then the bottom, looking for clear
-    // ground. Four corners were not enough: zoomed out, a screen-constant chip
-    // covers a lot of world, and when every corner was taken it fell back to the
-    // first one and stamped the folder's name over someone's note.
-    const slot = (sx: number, sy: number): LabelBox =>
-      ({ x0: sx, y0: sy - chipH / 2, x1: sx + chipW, y1: sy + chipH / 2 });
-    const left = x0 + inset, right = x1 - inset - chipW;
-    const candidates: LabelBox[] = [];
-    // Rows in preference order: straddling the top border, straddling the
-    // bottom, then just OUTSIDE each. Measured zoomed out on a 25- and 40-note
-    // workspace, the two straddling rows alone ran out of clear ground and the
-    // least-overlap fallback dropped a chip on a note's dot. The gap between two
-    // containers is normally empty, so stepping the chip clear of its own box is
-    // a better answer than covering someone's note with it.
-    const rows = [y0, y1, y0 - chipH, y1 + chipH];
-    // Denser sampling for the same reason: five stops along a border is not many
-    // once a screen-constant chip covers a lot of world.
-    const stops = [0, 1, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875];
-    for (const y of rows) {
-      for (const t of stops) {
-        candidates.push(slot(left + (right - left) * t, y));
-      }
-    }
-    const area = (c: LabelBox, o: LabelBox) =>
-      Math.max(0, Math.min(c.x1, o.x1) - Math.max(c.x0, o.x0))
-      * Math.max(0, Math.min(c.y1, o.y1) - Math.max(c.y0, o.y0));
-    let chip = candidates[0]!;
-    let best = Infinity;
-    for (const c of candidates) {
-      // A chip must never sit on another chip; a dot it can only be nudged off.
-      if (chips.some((o) => overlaps(c, o))) continue;
-      let score = 0;
-      for (const o of avoid) score += area(c, o);
-      if (score < best) { best = score; chip = c; }
-      if (score === 0) break;
-    }
-    chips.push(chip);
-
-    out.push({ id: folder.id, name, label: labelText, docIds: folder.docIds, x0, y0, x1, y1, chip });
+    out.push({ id: folder.id, name, label: labelText, docIds: folder.docIds, x0, y0, x1, y1, chipW, chipH, inset });
   }
   return out;
 }
@@ -476,4 +624,19 @@ export function folderRects(opts: FolderRectsOptions): FolderRect[] {
  *  smoothest way to watch the map unfold. */
 export function stepsPerFrame(n: number) {
   return n <= 60 ? 1 : Math.min(6, Math.ceil(n / 60));
+}
+
+/** Above this many notes the map is drawn and paced for SCALE (GraphView):
+ *  ordinary dots, links and arrowheads become a few batched paths, the layout
+ *  is stepped against a clock, and the moving layout is painted a few times a
+ *  second rather than every step. Measured at 2,000 notes under 4× CPU
+ *  throttling, one SVG element per note and per link was ~10,000 elements
+ *  restyled on every frame and on every step of a zoom — over four seconds a
+ *  frame, and a wheel zoom that took more than a second to answer. At or below
+ *  it nothing changes: every note is its own element and every step is painted,
+ *  so a small workspace looks and behaves exactly as it always has. */
+export const LARGE_MAP_MIN = 250;
+
+export function isLargeMap(n: number) {
+  return n > LARGE_MAP_MIN;
 }
