@@ -3,6 +3,7 @@ import { markedEmoji } from "marked-emoji";
 import markedFootnote from "marked-footnote";
 import type { MarkdownFeatureSettings } from "../store/settings";
 import { EMOJI_MAP } from "./emoji-map";
+import { emStrongMaskFix } from "./marked-emphasis-mask";
 import { mathBlockExtension, mathInlineExtension } from "./math-marked";
 import { wikiLinkExtension } from "./wiki-link-marked";
 
@@ -52,7 +53,9 @@ export function buildMarked(features: MarkdownFeatureSettings): Marked {
 
   // Per-feature disables (only meaningful when gfm is on). Overriding a
   // tokenizer to return undefined makes marked skip that construct.
-  const tokenizer: TokenizerObject = {};
+  // `emStrongMaskFix` is not a feature: it corrects which delimiters marked
+  // lets close emphasis after a code span ending in a backslash (see module).
+  const tokenizer: TokenizerObject = { ...emStrongMaskFix };
   if (!features.tables) tokenizer.table = () => undefined;
   if (features.strikethrough) {
     // marked's default GFM `del` ALSO matches a SINGLE `~…~`, so a stray tilde

@@ -8886,6 +8886,342 @@
     "editor": "changed",
     "was": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><input checked=\"\" disabled=\"\" type=\"checkbox\"> done</li>\n<li style=\"display:list-item;margin-bottom:2px\"><input disabled=\"\" type=\"checkbox\"> </li>\n</ul>\n"
    }
+  },
+  {
+   "id": "c976",
+   "from": "curated: emphasis after backslash code span: minimal",
+   "via": "engine",
+   "features": 0,
+   "md": "`\\`**No new**`\n",
+   "html": "<p><code>\\</code><strong>No new</strong>`</p>\n"
+  },
+  {
+   "id": "c977",
+   "from": "curated: emphasis after backslash code span: minimal",
+   "via": "engine",
+   "features": 2,
+   "md": "`\\`**No new**`\n",
+   "html": "<p><code>\\</code><strong>No new</strong>`</p>\n"
+  },
+  {
+   "id": "c978",
+   "from": "curated: emphasis after backslash code span: minimal",
+   "via": "engine",
+   "features": 13,
+   "md": "`\\`**No new**`\n",
+   "html": "<p><code>\\</code><strong>No new</strong>`</p>\n"
+  },
+  {
+   "id": "c979",
+   "from": "curated: emphasis after backslash code span: CLAUDE.md paragraph",
+   "via": "engine",
+   "features": 0,
+   "md": "- **AltGr is never a shortcut** (A052). Windows delivers AltGr as Ctrl+Alt, so on\n  German layouts `[` and `]` were swallowed — no `[[wiki links]]` —\n  and CodeMirror's `Mod-Alt-\\` ate the backslash. TipTap's own `Mod-Alt-*` keymaps sit\n  behind `AltGraphPassthrough`, so the character still types. **No new keymap may bind Ctrl+Alt\n  plus a character key.** Deliberate consequences follow.\n",
+   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><strong>AltGr is never a shortcut</strong> (A052). Windows delivers AltGr as Ctrl+Alt, so on<br>German layouts <code>[</code> and <code>]</code> were swallowed — no <code>[[wiki links]]</code> —<br>and CodeMirror&#39;s <code>Mod-Alt-\\</code> ate the backslash. TipTap&#39;s own <code>Mod-Alt-*</code> keymaps sit<br>behind <code>AltGraphPassthrough</code>, so the character still types. <strong>No new keymap may bind Ctrl+Alt<br>plus a character key.</strong> Deliberate consequences follow.</li>\n</ul>\n"
+  },
+  {
+   "id": "c980",
+   "from": "curated: emphasis after backslash code span: CLAUDE.md paragraph",
+   "via": "engine",
+   "features": 2,
+   "md": "- **AltGr is never a shortcut** (A052). Windows delivers AltGr as Ctrl+Alt, so on\n  German layouts `[` and `]` were swallowed — no `[[wiki links]]` —\n  and CodeMirror's `Mod-Alt-\\` ate the backslash. TipTap's own `Mod-Alt-*` keymaps sit\n  behind `AltGraphPassthrough`, so the character still types. **No new keymap may bind Ctrl+Alt\n  plus a character key.** Deliberate consequences follow.\n",
+   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><strong>AltGr is never a shortcut</strong> (A052). Windows delivers AltGr as Ctrl+Alt, so on\nGerman layouts <code>[</code> and <code>]</code> were swallowed — no <code>[[wiki links]]</code> —\nand CodeMirror&#39;s <code>Mod-Alt-\\</code> ate the backslash. TipTap&#39;s own <code>Mod-Alt-*</code> keymaps sit\nbehind <code>AltGraphPassthrough</code>, so the character still types. <strong>No new keymap may bind Ctrl+Alt\nplus a character key.</strong> Deliberate consequences follow.</li>\n</ul>\n"
+  },
+  {
+   "id": "c981",
+   "from": "curated: emphasis after backslash code span: CLAUDE.md paragraph",
+   "via": "engine",
+   "features": 13,
+   "md": "- **AltGr is never a shortcut** (A052). Windows delivers AltGr as Ctrl+Alt, so on\n  German layouts `[` and `]` were swallowed — no `[[wiki links]]` —\n  and CodeMirror's `Mod-Alt-\\` ate the backslash. TipTap's own `Mod-Alt-*` keymaps sit\n  behind `AltGraphPassthrough`, so the character still types. **No new keymap may bind Ctrl+Alt\n  plus a character key.** Deliberate consequences follow.\n",
+   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><strong>AltGr is never a shortcut</strong> (A052). Windows delivers AltGr as Ctrl+Alt, so on<br>German layouts <code>[</code> and <code>]</code> were swallowed — no <code>[[wiki links]]</code> —<br>and CodeMirror&#39;s <code>Mod-Alt-\\</code> ate the backslash. TipTap&#39;s own <code>Mod-Alt-*</code> keymaps sit<br>behind <code>AltGraphPassthrough</code>, so the character still types. <strong>No new keymap may bind Ctrl+Alt<br>plus a character key.</strong> Deliberate consequences follow.</li>\n</ul>\n"
+  },
+  {
+   "id": "c982",
+   "from": "curated: emphasis after backslash code span: prose",
+   "via": "engine",
+   "features": 0,
+   "md": "Use `\\` to escape. **Note:** a `*` is literal and *this* is not.\n",
+   "html": "<p>Use <code>\\</code> to escape. <strong>Note:</strong> a <code>*</code> is literal and <em>this</em> is not.</p>\n"
+  },
+  {
+   "id": "c983",
+   "from": "curated: emphasis after backslash code span: prose",
+   "via": "engine",
+   "features": 2,
+   "md": "Use `\\` to escape. **Note:** a `*` is literal and *this* is not.\n",
+   "html": "<p>Use <code>\\</code> to escape. <strong>Note:</strong> a <code>*</code> is literal and <em>this</em> is not.</p>\n"
+  },
+  {
+   "id": "c984",
+   "from": "curated: emphasis after backslash code span: prose",
+   "via": "engine",
+   "features": 13,
+   "md": "Use `\\` to escape. **Note:** a `*` is literal and *this* is not.\n",
+   "html": "<p>Use <code>\\</code> to escape. <strong>Note:</strong> a <code>*</code> is literal and <em>this</em> is not.</p>\n"
+  },
+  {
+   "id": "c985",
+   "from": "curated: emphasis after backslash code span: path",
+   "via": "engine",
+   "features": 0,
+   "md": "Path `C:\\` then *em* and __strong__ and `x`.\n",
+   "html": "<p>Path <code>C:\\</code> then <em>em</em> and <strong>strong</strong> and <code>x</code>.</p>\n"
+  },
+  {
+   "id": "c986",
+   "from": "curated: emphasis after backslash code span: path",
+   "via": "engine",
+   "features": 2,
+   "md": "Path `C:\\` then *em* and __strong__ and `x`.\n",
+   "html": "<p>Path <code>C:\\</code> then <em>em</em> and <strong>strong</strong> and <code>x</code>.</p>\n"
+  },
+  {
+   "id": "c987",
+   "from": "curated: emphasis after backslash code span: path",
+   "via": "engine",
+   "features": 13,
+   "md": "Path `C:\\` then *em* and __strong__ and `x`.\n",
+   "html": "<p>Path <code>C:\\</code> then <em>em</em> and <strong>strong</strong> and <code>x</code>.</p>\n"
+  },
+  {
+   "id": "c988",
+   "from": "curated: emphasis after backslash code span: several",
+   "via": "engine",
+   "features": 0,
+   "md": "`a\\` **b** *c* `d` **e** `f\\` _g_ `h`\n",
+   "html": "<p><code>a\\</code> <strong>b</strong> <em>c</em> <code>d</code> <strong>e</strong> <code>f\\</code> <em>g</em> <code>h</code></p>\n"
+  },
+  {
+   "id": "c989",
+   "from": "curated: emphasis after backslash code span: several",
+   "via": "engine",
+   "features": 2,
+   "md": "`a\\` **b** *c* `d` **e** `f\\` _g_ `h`\n",
+   "html": "<p><code>a\\</code> <strong>b</strong> <em>c</em> <code>d</code> <strong>e</strong> <code>f\\</code> <em>g</em> <code>h</code></p>\n"
+  },
+  {
+   "id": "c990",
+   "from": "curated: emphasis after backslash code span: several",
+   "via": "engine",
+   "features": 13,
+   "md": "`a\\` **b** *c* `d` **e** `f\\` _g_ `h`\n",
+   "html": "<p><code>a\\</code> <strong>b</strong> <em>c</em> <code>d</code> <strong>e</strong> <code>f\\</code> <em>g</em> <code>h</code></p>\n"
+  },
+  {
+   "id": "c991",
+   "from": "curated: emphasis after backslash code span: nested run",
+   "via": "engine",
+   "features": 0,
+   "md": "**a `\\` b** then *c* `x`\n",
+   "html": "<p><strong>a <code>\\</code> b</strong> then <em>c</em> <code>x</code></p>\n"
+  },
+  {
+   "id": "c992",
+   "from": "curated: emphasis after backslash code span: nested run",
+   "via": "engine",
+   "features": 2,
+   "md": "**a `\\` b** then *c* `x`\n",
+   "html": "<p><strong>a <code>\\</code> b</strong> then <em>c</em> <code>x</code></p>\n"
+  },
+  {
+   "id": "c993",
+   "from": "curated: emphasis after backslash code span: nested run",
+   "via": "engine",
+   "features": 13,
+   "md": "**a `\\` b** then *c* `x`\n",
+   "html": "<p><strong>a <code>\\</code> b</strong> then <em>c</em> <code>x</code></p>\n"
+  },
+  {
+   "id": "c994",
+   "from": "curated: emphasis after backslash code span: link text",
+   "via": "engine",
+   "features": 0,
+   "md": "`\\` [**a**](x) *b* `y`\n",
+   "html": "<p><code>\\</code> <a href=\"x\"><strong>a</strong></a> <em>b</em> <code>y</code></p>\n"
+  },
+  {
+   "id": "c995",
+   "from": "curated: emphasis after backslash code span: link text",
+   "via": "engine",
+   "features": 2,
+   "md": "`\\` [**a**](x) *b* `y`\n",
+   "html": "<p><code>\\</code> <a href=\"x\"><strong>a</strong></a> <em>b</em> <code>y</code></p>\n"
+  },
+  {
+   "id": "c996",
+   "from": "curated: emphasis after backslash code span: link text",
+   "via": "engine",
+   "features": 13,
+   "md": "`\\` [**a**](x) *b* `y`\n",
+   "html": "<p><code>\\</code> <a href=\"x\"><strong>a</strong></a> <em>b</em> <code>y</code></p>\n"
+  },
+  {
+   "id": "c997",
+   "from": "curated: emphasis after backslash code span: heading",
+   "via": "engine",
+   "features": 0,
+   "md": "# `\\` and **bold** `x`\n",
+   "html": "<h1><code>\\</code> and <strong>bold</strong> <code>x</code></h1>\n"
+  },
+  {
+   "id": "c998",
+   "from": "curated: emphasis after backslash code span: heading",
+   "via": "engine",
+   "features": 2,
+   "md": "# `\\` and **bold** `x`\n",
+   "html": "<h1><code>\\</code> and <strong>bold</strong> <code>x</code></h1>\n"
+  },
+  {
+   "id": "c999",
+   "from": "curated: emphasis after backslash code span: heading",
+   "via": "engine",
+   "features": 13,
+   "md": "# `\\` and **bold** `x`\n",
+   "html": "<h1><code>\\</code> and <strong>bold</strong> <code>x</code></h1>\n"
+  },
+  {
+   "id": "c1000",
+   "from": "curated: emphasis after backslash code span: table cell",
+   "via": "engine",
+   "features": 0,
+   "md": "| a |\n|---|\n| `\\` **b** `c` |\n",
+   "html": "<table>\n<thead>\n<tr>\n<th>a</th>\n</tr>\n</thead>\n<tbody><tr>\n<td><code>\\</code> <strong>b</strong> <code>c</code></td>\n</tr>\n</tbody></table>\n"
+  },
+  {
+   "id": "c1001",
+   "from": "curated: emphasis after backslash code span: table cell",
+   "via": "engine",
+   "features": 2,
+   "md": "| a |\n|---|\n| `\\` **b** `c` |\n",
+   "html": "<p>| a |\n|---|\n| <code>\\</code> <strong>b</strong> <code>c</code> |</p>\n"
+  },
+  {
+   "id": "c1002",
+   "from": "curated: emphasis after backslash code span: table cell",
+   "via": "engine",
+   "features": 13,
+   "md": "| a |\n|---|\n| `\\` **b** `c` |\n",
+   "html": "<p>| a |<br>|---|<br>| <code>\\</code> <strong>b</strong> <code>c</code> |</p>\n"
+  },
+  {
+   "id": "c1003",
+   "from": "curated: emphasis after backslash code span: task item",
+   "via": "engine",
+   "features": 0,
+   "md": "- [ ] `\\` **b** `c`\n",
+   "html": "<ul data-type=\"taskList\">\n<li data-type=\"taskItem\" data-checked=\"false\"><code>\\</code> <strong>b</strong> <code>c</code></li>\n</ul>\n"
+  },
+  {
+   "id": "c1004",
+   "from": "curated: emphasis after backslash code span: task item",
+   "via": "engine",
+   "features": 2,
+   "md": "- [ ] `\\` **b** `c`\n",
+   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\">[ ] <code>\\</code> <strong>b</strong> <code>c</code></li>\n</ul>\n"
+  },
+  {
+   "id": "c1005",
+   "from": "curated: emphasis after backslash code span: task item",
+   "via": "engine",
+   "features": 13,
+   "md": "- [ ] `\\` **b** `c`\n",
+   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><input disabled=\"\" type=\"checkbox\"> <code>\\</code> <strong>b</strong> <code>c</code></li>\n</ul>\n"
+  },
+  {
+   "id": "c1006",
+   "from": "curated: emphasis after backslash code span: escaped backslash before code",
+   "via": "engine",
+   "features": 0,
+   "md": "\\\\`a` **b** `c`\n",
+   "html": "<p>\\<code>a</code> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1007",
+   "from": "curated: emphasis after backslash code span: escaped backslash before code",
+   "via": "engine",
+   "features": 2,
+   "md": "\\\\`a` **b** `c`\n",
+   "html": "<p>\\<code>a</code> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1008",
+   "from": "curated: emphasis after backslash code span: escaped backslash before code",
+   "via": "engine",
+   "features": 13,
+   "md": "\\\\`a` **b** `c`\n",
+   "html": "<p>\\<code>a</code> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1009",
+   "from": "curated: emphasis after backslash code span: double backtick span",
+   "via": "engine",
+   "features": 0,
+   "md": "``a\\`` **b** `c`\n",
+   "html": "<p><code>a\\</code> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1010",
+   "from": "curated: emphasis after backslash code span: double backtick span",
+   "via": "engine",
+   "features": 2,
+   "md": "``a\\`` **b** `c`\n",
+   "html": "<p><code>a\\</code> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1011",
+   "from": "curated: emphasis after backslash code span: double backtick span",
+   "via": "engine",
+   "features": 13,
+   "md": "``a\\`` **b** `c`\n",
+   "html": "<p><code>a\\</code> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1012",
+   "from": "curated: emphasis after backslash code span: reference link",
+   "via": "engine",
+   "features": 0,
+   "md": "`\\` [*a*][r] **b** `c`\n\n[r]: /r\n",
+   "html": "<p><code>\\</code> <a href=\"/r\"><em>a</em></a> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1013",
+   "from": "curated: emphasis after backslash code span: reference link",
+   "via": "engine",
+   "features": 2,
+   "md": "`\\` [*a*][r] **b** `c`\n\n[r]: /r\n",
+   "html": "<p><code>\\</code> <a href=\"/r\"><em>a</em></a> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1014",
+   "from": "curated: emphasis after backslash code span: reference link",
+   "via": "engine",
+   "features": 13,
+   "md": "`\\` [*a*][r] **b** `c`\n\n[r]: /r\n",
+   "html": "<p><code>\\</code> <a href=\"/r\"><em>a</em></a> <strong>b</strong> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1015",
+   "from": "curated: emphasis after backslash code span: wiki link",
+   "via": "engine",
+   "features": 0,
+   "md": "`\\` [[Doc|**alias**]] *b* `c`\n",
+   "html": "<p><code>\\</code> <a data-doc-link=\"Doc\" class=\"wiki-link\" href=\"#\"><strong>alias</strong></a> <em>b</em> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1016",
+   "from": "curated: emphasis after backslash code span: wiki link",
+   "via": "engine",
+   "features": 2,
+   "md": "`\\` [[Doc|**alias**]] *b* `c`\n",
+   "html": "<p><code>\\</code> <a data-doc-link=\"Doc\" class=\"wiki-link\" href=\"#\"><strong>alias</strong></a> <em>b</em> <code>c</code></p>\n"
+  },
+  {
+   "id": "c1017",
+   "from": "curated: emphasis after backslash code span: wiki link",
+   "via": "engine",
+   "features": 13,
+   "md": "`\\` [[Doc|**alias**]] *b* `c`\n",
+   "html": "<p><code>\\</code> <a data-doc-link=\"Doc\" class=\"wiki-link\" href=\"#\"><strong>alias</strong></a> <em>b</em> <code>c</code></p>\n"
   }
  ],
  "docx": [
@@ -9068,6 +9404,27 @@
    "changed": {
     "why": "marked 17: '- [ ] ' alone is not a task item (GFM), so the exported item reads [ ]."
    }
+  },
+  {
+   "id": "d26",
+   "from": "curated: emphasis after backslash code span: minimal",
+   "md": "`\\`**No new**`\n",
+   "xml": "<w:body><w:p><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">\\</w:t></w:r><w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t xml:space=\"preserve\">No new</w:t></w:r><w:r><w:t xml:space=\"preserve\">`</w:t></w:r></w:p><w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\" w:orient=\"portrait\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\" w:header=\"708\" w:footer=\"708\" w:gutter=\"0\"/><w:pgNumType/><w:docGrid w:linePitch=\"360\"/></w:sectPr></w:body>"
+  },
+  {
+   "id": "d27",
+   "from": "curated: emphasis after backslash code span: CLAUDE.md paragraph",
+   "md": "- **AltGr is never a shortcut** (A052). Windows delivers AltGr as Ctrl+Alt, so on\n  German layouts `[` and `]` were swallowed — no `[[wiki links]]` —\n  and CodeMirror's `Mod-Alt-\\` ate the backslash. TipTap's own `Mod-Alt-*` keymaps sit\n  behind `AltGraphPassthrough`, so the character still types. **No new keymap may bind Ctrl+Alt\n  plus a character key.** Deliberate consequences follow.\n",
+   "xml": "<w:body><w:p><w:pPr><w:pStyle w:val=\"ListParagraph\"/><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"1\"/></w:numPr></w:pPr><w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t xml:space=\"preserve\">AltGr is never a shortcut</w:t></w:r><w:r><w:t xml:space=\"preserve\"> (A052). Windows delivers AltGr as Ctrl+Alt, so on\nGerman layouts </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">[</w:t></w:r><w:r><w:t xml:space=\"preserve\"> and </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">]</w:t></w:r><w:r><w:t xml:space=\"preserve\"> were swallowed — no </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">[[wiki links]]</w:t></w:r><w:r><w:t xml:space=\"preserve\"> —\nand CodeMirror&apos;s </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">Mod-Alt-\\</w:t></w:r><w:r><w:t xml:space=\"preserve\"> ate the backslash. TipTap&apos;s own </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">Mod-Alt-*</w:t></w:r><w:r><w:t xml:space=\"preserve\"> keymaps sit\nbehind </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">AltGraphPassthrough</w:t></w:r><w:r><w:t xml:space=\"preserve\">, so the character still types. </w:t></w:r><w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t xml:space=\"preserve\">No new keymap may bind Ctrl+Alt\nplus a character key.</w:t></w:r><w:r><w:t xml:space=\"preserve\"> Deliberate consequences follow.</w:t></w:r></w:p><w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\" w:orient=\"portrait\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\" w:header=\"708\" w:footer=\"708\" w:gutter=\"0\"/><w:pgNumType/><w:docGrid w:linePitch=\"360\"/></w:sectPr></w:body>",
+   "changed": {
+    "why": "marked 15 escapes HTML in the renderer instead of in the tokens. The Word export reads token text, so it used to show &#39;, &amp;, &quot;, &lt; and &gt; literally for apostrophes, ampersands, quotes and angle brackets; it now shows the characters."
+   }
+  },
+  {
+   "id": "d28",
+   "from": "curated: emphasis after backslash code span: several",
+   "md": "`a\\` **b** *c* `d` **e** `f\\` _g_ `h`\n",
+   "xml": "<w:body><w:p><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">a\\</w:t></w:r><w:r><w:t xml:space=\"preserve\"> </w:t></w:r><w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t xml:space=\"preserve\">b</w:t></w:r><w:r><w:t xml:space=\"preserve\"> </w:t></w:r><w:r><w:rPr><w:i/><w:iCs/></w:rPr><w:t xml:space=\"preserve\">c</w:t></w:r><w:r><w:t xml:space=\"preserve\"> </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">d</w:t></w:r><w:r><w:t xml:space=\"preserve\"> </w:t></w:r><w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t xml:space=\"preserve\">e</w:t></w:r><w:r><w:t xml:space=\"preserve\"> </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">f\\</w:t></w:r><w:r><w:t xml:space=\"preserve\"> </w:t></w:r><w:r><w:rPr><w:i/><w:iCs/></w:rPr><w:t xml:space=\"preserve\">g</w:t></w:r><w:r><w:t xml:space=\"preserve\"> </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii=\"Consolas\" w:cs=\"Consolas\" w:eastAsia=\"Consolas\" w:hAnsi=\"Consolas\"/></w:rPr><w:t xml:space=\"preserve\">h</w:t></w:r></w:p><w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\" w:orient=\"portrait\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\" w:header=\"708\" w:footer=\"708\" w:gutter=\"0\"/><w:pgNumType/><w:docGrid w:linePitch=\"360\"/></w:sectPr></w:body>"
   }
  ]
 }

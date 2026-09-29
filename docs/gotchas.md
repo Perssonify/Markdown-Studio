@@ -149,6 +149,32 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
   [src/__tests__/fenced-code-roundtrip.test.js](../src/__tests__/fenced-code-roundtrip.test.js).
 
+## A code span ending in a backslash hid the emphasis after it (marked ≥ 15.0.8)
+
+- **Symptom:** "Use `` `\` `` to escape. `**Note:**` …" showed the asterisks
+  literally — in the rich pane and in the Word export — and so did every `*`, `_`
+  and `**` up to the next backtick in the paragraph. CLAUDE.md contained exactly
+  such a paragraph (`` `Mod-Alt-\` ``). marked 12 rendered it correctly.
+- **Cause:** to decide which delimiters may close emphasis, marked masks the run
+  first. Since 15.0.8 it masks backslash escapes BEFORE code spans, but inside a
+  code span a backslash is literal, so the span's closing backtick reads as
+  escaped and its opener pairs with the next backtick instead. The code span
+  itself is still tokenised correctly; only the mask is wrong. Still present in
+  18.0.14.
+- **Fix:** `emStrongMaskFix` ([src/engine/marked-emphasis-mask.ts](../src/engine/marked-emphasis-mask.ts)),
+  an `emStrong` tokenizer override that both `build-marked.ts` and the Word export
+  install, hands marked's own emStrong a mask built with code spans and escapes in
+  ONE left-to-right pass. It steps in only for a run that contains a backslash
+  directly before a backtick.
+- **Watch for:** the module mirrors marked's reference-link masking and calls its
+  (TypeScript-private) `linkInText`. After a marked upgrade, the "emphasis after
+  backslash code span" cases in `marked-upgrade-parity.test.js` say whether it
+  still works — and whether upstream has fixed it, in which case delete the module
+  and keep the cases.
+- **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
+  [src/store/docx-export.ts](../src/store/docx-export.ts),
+  [src/__tests__/marked-upgrade-parity.test.js](../src/__tests__/marked-upgrade-parity.test.js).
+
 ## Reading CodeMirror's text with `innerText` double-counts blank lines
 
 - **Symptom:** a browser check reads `document.querySelector(".cm-content").innerText`
