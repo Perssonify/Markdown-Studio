@@ -19,13 +19,19 @@ const WIKI_LINK_RE = /\[\[([^\]]+)\]\]/g;
 
 export interface WikiLink {
   raw: string;
+  /** The DOCUMENT part of the reference — before any "#". */
   target: string;
   displayText: string;
+  /** The heading part, after the first "#" (absent when there is none). The
+   *  resolver tries `target#anchor` as a whole title first — see
+   *  resolveWikiLink. */
+  anchor?: string;
 }
 
 interface UnresolvedLink {
   target: string;
   displayText: string;
+  anchor?: string;
 }
 
 export interface LinkIndex {
@@ -73,11 +79,15 @@ export function scanWikiLinks(
 ): WikiLink[] {
   if (!canonical?.content) return [];
   const links: WikiLink[] = [];
-  // Strip a "#heading" anchor from a reference so the graph/backlinks connect
-  // documents, not doc#heading pseudo-targets.
-  const docOf = (ref: string) => {
+  // Split a reference the way the renderer does (engine/preprocessor): the
+  // document before the first "#", the heading after it. The graph/backlinks
+  // connect DOCUMENTS, so the heading is carried beside the target rather than
+  // being part of it.
+  const splitRef = (ref: string): { target: string; anchor?: string } => {
     const h = ref.indexOf("#");
-    return (h >= 0 ? ref.slice(0, h) : ref).trim();
+    if (h < 0) return { target: ref.trim() };
+    const anchor = ref.slice(h + 1).trim();
+    return anchor ? { target: ref.slice(0, h).trim(), anchor } : { target: ref.slice(0, h).trim() };
   };
   walkNodes(canonical as PMNode, (node: PMNode) => {
     // Rendered internal links: a text node carrying a link mark with a
@@ -87,9 +97,16 @@ export function scanWikiLinks(
       (m) => (m.type === "link" || m.type === "wikiLink") && m.attrs && "docLink" in m.attrs
     );
     if (linkMark) {
-      const target = docOf(String(linkMark.attrs?.["docLink"] ?? ""));
-      if (target) {
-        links.push({ raw: `[[${target}]]`, target, displayText: node.text ?? target });
+      const split = splitRef(String(linkMark.attrs?.["docLink"] ?? ""));
+      const attrAnchor = String(linkMark.attrs?.["anchor"] ?? "").trim();
+      const anchor = attrAnchor || split.anchor;
+      if (split.target) {
+        links.push({
+          raw: `[[${split.target}]]`,
+          target: split.target,
+          displayText: node.text ?? split.target,
+          ...(anchor ? { anchor } : {}),
+        });
       }
       return; // don't also regex the display text of a rendered link
     }
@@ -114,9 +131,9 @@ export function scanWikiLinks(
       const pipeIdx = inner.indexOf("|");
       const ref = pipeIdx >= 0 ? inner.slice(0, pipeIdx).trim() : inner.trim();
       const display = pipeIdx >= 0 ? inner.slice(pipeIdx + 1).trim() : ref;
-      const target = docOf(ref);
+      const { target, anchor } = splitRef(ref);
       if (!target) continue; // pure same-doc anchor — not a document link
-      links.push({ raw: match[0], target, displayText: display });
+      links.push({ raw: match[0], target, displayText: display, ...(anchor ? { anchor } : {}) });
     }
   });
   return links;
@@ -141,32 +158,86 @@ function walkNodes(
   }
 }
 
+/** A resolved wiki link: the document, and the heading to open it at (null
+ *  when there is none — including when the "#" turned out to be part of the
+ *  document's title). */
+export interface WikiResolution {
+  id: string;
+  anchor: string | null;
+}
+
+/** Title comparison key: NFKC, case-insensitive, whitespace collapsed. */
+const titleKey = (s: string) => s.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+/** The same, with the space around "#" dropped. The renderer TRIMS both halves
+ *  of `[[C# Tips]]` ("C" / "Tips"), so a title can only be recognised from
+ *  those halves if the spacing around its "#" is not significant. */
+const hashKey = (s: string) => titleKey(s).replace(/\s*#\s*/g, "#");
+
 /**
- * Resolve a wiki-link target string to a document ID.
- * Tries: exact ID match, then title match (case-insensitive).
+ * THE wiki-link resolver — used by the link index (graph, backlinks, the
+ * broken-link list), the click handler and the broken-link decoration, so all
+ * three always agree about where a link goes. Build it once per library.
+ *
+ * `docLink` / `anchor` are the two halves the renderer produces from
+ * `[[docLink#anchor|display]]`. In order:
+ *  1. with an anchor, the WHOLE reference as a title — `[[C# Tips]]` names the
+ *     note "C# Tips"; splitting it first sent it to a note called "C" (or,
+ *     worse, see 3) and made such titles unlinkable;
+ *  2. an exact document id, then an exact title (case-insensitive, NFKC,
+ *     whitespace-normalised); first match in library order wins;
+ *  3. nothing else. There used to be a PARTIAL match (`title.includes(target)`):
+ *     `[[C# Tips]]` resolved to "Changelog" in the graph and backlinks — the
+ *     first title containing "c" — while a click on the same link said
+ *     "Document not found".
+ */
+export function createWikiResolver(
+  documents: DocRecord[]
+): (docLink: string, anchor?: string | null) => WikiResolution | null {
+  const byId = new Map<string, string>();
+  const byTitle = new Map<string, string>();
+  const byHashTitle = new Map<string, string>();
+  for (const d of documents) {
+    if (!byId.has(d.id)) byId.set(d.id, d.id);
+    const t = d.title ?? "";
+    if (!t) continue;
+    const k = titleKey(t);
+    if (!byTitle.has(k)) byTitle.set(k, d.id);
+    if (t.includes("#")) {
+      const hk = hashKey(t);
+      if (!byHashTitle.has(hk)) byHashTitle.set(hk, d.id);
+    }
+  }
+  return (docLink, anchor) => {
+    const target = (docLink ?? "").trim();
+    const heading = (anchor ?? "").trim();
+    if (heading) {
+      const whole = byHashTitle.get(hashKey(`${target}#${heading}`));
+      if (whole) return { id: whole, anchor: null };
+    }
+    if (!target) return null; // a same-document anchor names no document
+    const id = byId.get(target) ?? byTitle.get(titleKey(target));
+    return id ? { id, anchor: heading || null } : null;
+  };
+}
+
+/** One-off resolution (see createWikiResolver — prefer building it once). */
+export function resolveWikiLink(
+  docLink: string,
+  anchor: string | null | undefined,
+  documents: DocRecord[]
+): WikiResolution | null {
+  return createWikiResolver(documents)(docLink, anchor);
+}
+
+/**
+ * Resolve a wiki-link target string to a document ID (no heading).
+ * Kept for the store's public API; same rules as resolveWikiLink.
  */
 export function resolveTarget(
   target: string,
   documents: DocRecord[]
 ): string | null {
-  // Exact ID match
-  const byId = documents.find((d) => d.id === target);
-  if (byId) return byId.id;
-
-  // Title match (case-insensitive)
-  const lower = target.toLowerCase();
-  const byTitle = documents.find(
-    (d) => (d.title ?? "").toLowerCase() === lower
-  );
-  if (byTitle) return byTitle.id;
-
-  // Partial title match
-  const byPartial = documents.find((d) =>
-    (d.title ?? "").toLowerCase().includes(lower)
-  );
-  if (byPartial) return byPartial.id;
-
-  return null; // unresolved
+  return resolveWikiLink(target, null, documents)?.id ?? null;
 }
 
 // --- Link Index ---
@@ -179,6 +250,7 @@ export function buildLinkIndex(documents: DocRecord[]): LinkIndex {
   const reverse = new Map<string, Set<string>>();
   const unresolved = new Map<string, UnresolvedLink[]>();
   const contexts = new Map<string, string>();
+  const resolve = createWikiResolver(documents);
 
   for (const doc of documents) {
     const links = scanWikiLinks(doc.canonical);
@@ -186,7 +258,7 @@ export function buildLinkIndex(documents: DocRecord[]): LinkIndex {
     const unresolvedList: UnresolvedLink[] = [];
 
     for (const link of links) {
-      const targetId = resolveTarget(link.target, documents);
+      const targetId = resolve(link.target, link.anchor)?.id ?? null;
       if (targetId && targetId !== doc.id) {
         forwardSet.add(targetId);
 
@@ -203,6 +275,7 @@ export function buildLinkIndex(documents: DocRecord[]): LinkIndex {
         unresolvedList.push({
           target: link.target,
           displayText: link.displayText,
+          ...(link.anchor ? { anchor: link.anchor } : {}),
         });
       }
     }
@@ -241,9 +314,10 @@ export function updateDocInIndex(
   const links = scanWikiLinks(doc.canonical);
   const newForward = new Set<string>();
   const newUnresolved: UnresolvedLink[] = [];
+  const resolve = createWikiResolver(allDocuments);
 
   for (const link of links) {
-    const targetId = resolveTarget(link.target, allDocuments);
+    const targetId = resolve(link.target, link.anchor)?.id ?? null;
     if (targetId && targetId !== doc.id) {
       newForward.add(targetId);
       if (!reverse.has(targetId)) reverse.set(targetId, new Set());
@@ -255,6 +329,7 @@ export function updateDocInIndex(
       newUnresolved.push({
         target: link.target,
         displayText: link.displayText,
+        ...(link.anchor ? { anchor: link.anchor } : {}),
       });
     }
   }

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { setWikiLinkLibrary } from "../extensions/UnresolvedWikiLinks";
 import {
   buildLinkIndex,
   exportGraph,
   getBacklinks,
   getForwardLinks,
+  resolveWikiLink,
   updateDocInIndex,
   type LinkIndex,
   type DocRecord,
@@ -213,35 +215,25 @@ export function useLinkIndex({
   }, [linkIndex, activeDocId, setActiveBacklinks, setActiveForwardLinks, setActiveUnresolved]);
 
   /**
-   * F3. Mark unresolved wiki links in the rendered document.
+   * F3 / A058. Mark unresolved wiki links in the rendered document.
    *
    * A `[[link]]` whose target does not exist rendered EXACTLY like one that
-   * works — same class, same colour — so the only way to discover a broken
-   * link was to click it, or to open the relationship map and read the broken-
-   * link chip. A link that silently goes nowhere is the failure a writer most
-   * needs told about, and the index already knows: `linkIndex.unresolved` is
-   * computed for every document and drives that very chip.
+   * works, so the only way to discover a broken link was to click it. The
+   * marking itself is a ProseMirror decoration (extensions/UnresolvedWikiLinks
+   * — see there for why writing `data-unresolved` into PM's DOM never worked);
+   * this hook only hands it the library to resolve against, every time the
+   * index — and so `fullDocsRef` — changes. Not in the mark, deliberately: the
+   * answer depends on OTHER documents existing, and baking it into the stored
+   * mark would make every rename dirty every document that points at it.
    *
-   * Done in the DOM rather than in the mark, deliberately. The unresolved set
-   * changes when OTHER documents are created, renamed or deleted — nothing to
-   * do with this document's content — so baking it into the stored mark would
-   * make a link's own data depend on its neighbours, and every rename would
-   * dirty every document that points at it.
+   * Nothing is marked until the library has actually loaded: an empty list
+   * would flash every link as broken on a cold start.
    */
   useEffect(() => {
-    const el = tiptapRef.current?.getEditor?.()?.view?.dom as HTMLElement | undefined;
-    if (!el || !activeDocId) return;
-    const broken = new Set(
-      (linkIndex.unresolved.get(activeDocId) ?? []).map((t) => String(t).trim().toLowerCase())
-    );
-    for (const a of Array.from(el.querySelectorAll<HTMLElement>("a[data-doc-link]"))) {
-      const target = (a.getAttribute("data-doc-link") ?? "").trim().toLowerCase();
-      // A pure heading anchor ([[#Heading]]) has an empty doc target and is
-      // resolved within this document, so it is never "broken" in this sense.
-      if (target && broken.has(target)) a.setAttribute("data-unresolved", "");
-      else a.removeAttribute("data-unresolved");
-    }
-  }, [linkIndex, activeDocId, tiptapRef, documents]);
+    const docs = fullDocsRef.current;
+    const editor = tiptapRef.current?.getEditor?.() as Parameters<typeof setWikiLinkLibrary>[1] | undefined;
+    setWikiLinkLibrary(docs.length ? docs : null, editor ?? null);
+  }, [linkIndex, tiptapRef]);
 
   // Push graph data into editorStore when showGraph changes
   useEffect(() => {
@@ -275,18 +267,22 @@ export function useLinkIndex({
       );
   }, [documents, linkIndex, toast]);
 
-  // Wire up wiki-link click handler on the Tiptap DOM
+  // Wiki-link / link click handling for the rich pane.
+  //
+  // DELEGATED on `document` and resolved at EVENT time — never bound to the
+  // editor's DOM. It used to be attached to `editor.view.dom` in an effect with
+  // no dependency on the editor instance, so once the editor remounted
+  // (closing the last document, then opening another) the listener stayed on
+  // the destroyed editor's element and every wiki and external link did
+  // nothing. Same pattern as useKeyboardShortcuts: the scope check runs per
+  // event against whatever editor exists now.
   useEffect(() => {
-    const editor = tiptapRef.current?.getEditor?.();
-    if (!editor) return;
-
-    const el = editor.view?.dom;
-    if (!el) return;
-
     const handler = (e: Event) => {
-      const target = e.target as HTMLElement;
+      const el = tiptapRef.current?.getEditor?.()?.view?.dom;
+      const target = e.target as HTMLElement | null;
+      if (!el || !target || !el.contains(target)) return;
       const anchor = target.closest("a");
-      if (!anchor) return;
+      if (!anchor || !el.contains(anchor)) return;
 
       // 1) Wiki links ([[Title]]) and heading anchors ([[Doc#Heading]],
       //    [[#Heading]]) → switch documents and/or scroll to a heading.
@@ -302,17 +298,16 @@ export function useLinkIndex({
           return;
         }
 
-        const targetDoc = fullDocsRef.current.find(
-          (d) =>
-            d.id === linkTarget ||
-            (d.title ?? "").toLowerCase() === linkTarget.toLowerCase()
-        );
-        if (targetDoc) {
+        // THE resolver — the one the graph, backlinks and broken-link marking
+        // use — so a link never goes somewhere other than where the map says.
+        const resolved = resolveWikiLink(linkTarget, anchorName, fullDocsRef.current);
+        const targetDoc = resolved ? fullDocsRef.current.find((d) => d.id === resolved.id) : undefined;
+        if (resolved && targetDoc) {
           const handled = onLinkClick?.({ kind: "doc", targetId: targetDoc.id, targetTitle: targetDoc.title ?? "" });
           if (handled !== true) {
             // A heading anchor scrolls after (and across) the switch; a plain
-            // doc link just switches.
-            if (anchorName) onAnchorNavigate?.(targetDoc.id, anchorName);
+            // doc link — or a title that itself contains "#" — just switches.
+            if (resolved.anchor) onAnchorNavigate?.(targetDoc.id, resolved.anchor);
             else handleSwitchDoc(targetDoc.id);
           }
         } else {
@@ -339,8 +334,8 @@ export function useLinkIndex({
       // the host is expected to handle them via onLinkClick.
     };
 
-    el.addEventListener("click", handler);
-    return () => el.removeEventListener("click", handler);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
   }, [handleSwitchDoc, toast, editorReady, tiptapRef, onLinkClick, onAnchorNavigate]);
 
   return { linkIndex, handleGraphExport, fullDocsRef, rebuildLinks };
