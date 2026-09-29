@@ -377,8 +377,9 @@ class SnapshotStore {
 
   /**
    * Enforce the bounds: per-doc count, global byte budget, and age. Called after
-   * each record. Evicts oldest first — but NEVER the single most-recent snapshot
-   * of a doc (that is the recovery point we most want to keep).
+   * each record. Evicts oldest first — but never the single most-recent snapshot
+   * of a LIVE doc (that is the recovery point we most want to keep). A deleted
+   * document's pre-delete copy is the exception: it expires with age (A079).
    */
   private async prune(justSavedDocId: string): Promise<void> {
     // ONE read of the ring, then every cap decided in memory. This used to read

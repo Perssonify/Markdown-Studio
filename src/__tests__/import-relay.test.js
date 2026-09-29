@@ -163,7 +163,7 @@ afterEach(() => {
 });
 
 describe("import relay — Sec-Fetch-Site gate (handler)", () => {
-  it("REJECTS a request with no Sec-Fetch-Site header (non-browser open-proxy call)", async () => {
+  it("REJECTS a request with no Sec-Fetch-Site header (a script that does not send one)", async () => {
     const calls = stubFetch();
     const req = makeReq({ headers: { "sec-fetch-site": undefined } });
     const res = makeRes();

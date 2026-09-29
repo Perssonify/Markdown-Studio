@@ -152,7 +152,7 @@ function WorkspacePanelInner({
 }: WorkspacePanelProps) {
   const asideRef = useRef<HTMLElement>(null);
 
-  // Left-edge resize — identity-stable drag callbacks (see DocNavPanel for the
+  // Right-edge resize — identity-stable drag callbacks (see DocNavPanel for the
   // mid-drag-teardown rationale); read onResize through a ref.
   const onResizeRef = useRef(onResize);
   useEffect(() => { onResizeRef.current = onResize; }, [onResize]);
