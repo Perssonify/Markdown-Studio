@@ -19,7 +19,7 @@ interface PaneHeaderProps {
   icon: React.ElementType;
   label: string;
   children?: React.ReactNode;
-  headerRef?: RefObject<HTMLDivElement | null>;
+  headerRef?: RefObject<HTMLDivElement>;
 }
 
 /** Split-ratio bounds and the keyboard nudge, shared by the pointer and key paths. */
@@ -129,7 +129,7 @@ interface MarkdownPaneProps {
   syncMode: string;
   onSyncModeChange: (mode: string) => void;
   onFocus?: () => void;
-  headerRef?: RefObject<HTMLDivElement | null>;
+  headerRef?: RefObject<HTMLDivElement>;
   syncScroll?: boolean;
   onSyncScrollChange?: (sync: boolean) => void;
   isSplit?: boolean;
@@ -199,7 +199,7 @@ interface HtmlPaneProps {
   pasteStyled: boolean;
   setPasteStyled: (styled: boolean) => void;
   onFocus?: () => void;
-  headerRef?: RefObject<HTMLDivElement | null>;
+  headerRef?: RefObject<HTMLDivElement>;
   showImages: boolean;
   setShowImages: (show: boolean) => void;
 }
