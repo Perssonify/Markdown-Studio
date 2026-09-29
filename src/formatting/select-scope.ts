@@ -41,6 +41,52 @@ export const SCOPE_GROUPS = ["Headings", "Paragraphs & lists", "Blocks", "Inline
 
 interface Range { from: number; to: number }
 
+/** One fenced code block: the indices of its opening-fence line and its last
+ *  line (the closing fence, or the document's last line when unclosed). */
+export interface FenceBlock { start: number; end: number }
+
+/**
+ * THE fence tracker for line-based markdown scanning — the Select scopes, the
+ * heading case transforms and Find's heading/code scopes all use it, so they
+ * agree about what is code. CommonMark's rules:
+ *  - an opening fence is 3+ backticks or tildes, indented at most 3 spaces (a
+ *    backtick fence's info string may not contain a backtick);
+ *  - it is closed only by a fence of the SAME character, at least as long,
+ *    with nothing after it but whitespace — so ```` can hold a ``` line and
+ *    ~~~ can hold ```;
+ *  - an unclosed fence runs to the end of the document.
+ * Every heading detector used to find `# install deps` inside a ```bash block
+ * and upper-case it, bold it, or select it as a heading (A062).
+ */
+export function fencedBlocks(lines: readonly string[]): FenceBlock[] {
+  const out: FenceBlock[] = [];
+  let open: { ch: string; len: number; start: number } | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (open) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+      if (close && close[1]![0] === open.ch && close[1]!.length >= open.len) {
+        out.push({ start: open.start, end: i });
+        open = null;
+      }
+      continue;
+    }
+    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence && !(fence[1]![0] === "`" && fence[2]!.includes("`"))) {
+      open = { ch: fence[1]![0]!, len: fence[1]!.length, start: i };
+    }
+  }
+  if (open) out.push({ start: open.start, end: lines.length - 1 });
+  return out;
+}
+
+/** Per line: is it part of a fenced code block (a fence line, or inside one)? */
+export function fencedLineMask(lines: readonly string[]): boolean[] {
+  const mask = new Array<boolean>(lines.length).fill(false);
+  for (const b of fencedBlocks(lines)) for (let i = b.start; i <= b.end; i++) mask[i] = true;
+  return mask;
+}
+
 // Block markers, stripped from a line-scope selection (see contentOf).
 const HEADING_MARK = /^ {0,3}#{1,6}(?:\s+|$)/;
 const HEADING_CLOSE = /\s+#+\s*$/;              // optional closing sequence: "## Title ##"
@@ -82,18 +128,14 @@ function mdScopeRanges(doc: string, scope: string): Range[] {
   const push = (r: Range | null) => { if (r) out.push(r); };
 
   // Line-based block scopes (skip inside fenced code, except when selecting code).
-  let inFence = false, fenceStart = -1, fenceMark = "";
+  const blocks = fencedBlocks(lines);
+  if (scope === "codeBlock") {
+    for (const b of blocks) out.push({ from: starts[b.start]!, to: starts[b.end]! + lines[b.end]!.length });
+  }
+  const fenced = fencedLineMask(lines);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    const fenceM = line.match(/^(```|~~~)/);
-    if (inFence) {
-      if (fenceM && line.startsWith(fenceMark)) {
-        if (scope === "codeBlock") out.push({ from: starts[fenceStart]!, to: starts[i]! + line.length });
-        inFence = false;
-      }
-      continue;
-    }
-    if (fenceM) { inFence = true; fenceStart = i; fenceMark = fenceM[1]!; continue; }
+    if (fenced[i]) continue;
 
     if (scope === "headings" && /^#{1,6}\s/.test(line)) push(contentOf(i, HEADING_MARK, HEADING_CLOSE));
     else if (headingLevel && new RegExp(`^#{${headingLevel[1]}}\\s`).test(line)) push(contentOf(i, HEADING_MARK, HEADING_CLOSE));
