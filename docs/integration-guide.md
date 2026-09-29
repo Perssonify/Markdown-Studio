@@ -87,13 +87,15 @@ embeds relied on manual save.
 
 ### One editor per page, and logging out
 
-- **One editor per page.** The editor's stores are module singletons: two
-  instances in one page share the active document, parked drafts and whichever
-  storage was injected first, so typing in one can be saved as the other's
-  document. Mount one editor per page, or give each its own iframe (the embed
-  build). Unmounting and remounting a single instance is supported — unmounting
-  flushes and stashes what was typed, and the remount re-opens the same
-  document.
+- **One editor per page.** The editor's stores are module singletons, so a
+  second instance mounted while one is running refuses to start: it renders
+  "Only one Markdown Studio editor can be open on a page" instead of an editor,
+  logs a console error saying why, and touches no store, and the first editor
+  carries on (A106). If the first one unmounts, the waiting one takes over as
+  an ordinary remount. Mount one editor per page, or give each its own iframe
+  (the embed build). Unmounting and remounting a single instance is supported —
+  unmounting flushes and stashes what was typed, and the remount re-opens the
+  same document; so is React StrictMode's mount-unmount-mount in development.
 - **Switching storage needs a page load.** A different `storageAdapter` or
   `storageConfig` on a remount is ignored (with a warning).
 - **Logout on a shared device:** call `clearLocalData()` (exported from the
