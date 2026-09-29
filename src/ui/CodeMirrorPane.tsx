@@ -2,7 +2,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, type Extension, RangeSetBuilder, StateEffect, StateField, Transaction } from "@codemirror/state";
+import { Compartment, EditorState, type Extension, type Range, RangeSetBuilder, StateEffect, StateField, Transaction } from "@codemirror/state";
 import { placeholder as cmPlaceholder, Decoration, DecorationSet, drawSelection, EditorView, keymap, lineNumbers, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { CSSProperties, forwardRef, KeyboardEvent, useEffect, useImperativeHandle, useRef } from "react";
@@ -12,18 +12,16 @@ import {
   REPLACE_OLD_STYLE,
 } from "./search-colors";
 import { COMPOSITION_STALL_MS } from "../constants";
+import { perLineTextDirection } from "../extensions/cm-bidi";
+import type { HighlightSpec } from "../formatting/find-engine";
 import { useUIStore } from "../store/uiStore";
+import { dropAltGraphChords } from "../utils/alt-graph";
 
 /** Read-only extension pair for the editability compartment. */
 const roExt = (ro: boolean): Extension[] => [EditorState.readOnly.of(ro), EditorView.editable.of(!ro)];
 
-interface SearchTermState {
-  term: string;
-  isRegex: boolean;
-  replacement?: string;
-}
-
-const setSearchTerm = StateEffect.define<SearchTermState>();
+/** New highlights from the Find panel (null clears them). */
+const setSearchHighlights = StateEffect.define<HighlightSpec | null>();
 const searchHighlightMark = Decoration.mark({ class: "cm-searchMatch" });
 const replaceOldMark = Decoration.mark({
   class: "cm-replaceOld",
@@ -46,94 +44,46 @@ const groupMarks = GROUP_STYLES.map((s, i) =>
   Decoration.mark({ class: `cm-searchGroup cm-searchGroup-${i + 1}`, attributes: { style: s } })
 );
 
-let hasIndicesFlag = false;
-try { hasIndicesFlag = new RegExp("", "d").hasIndices === true; } catch { }
+/**
+ * Search highlights, drawn from the RANGES the Find panel computed — the same
+ * matches it counts and navigates. This field used to re-run the query itself
+ * with a hard-coded "gi" (so a case-sensitive or whole-word search highlighted
+ * text it did not count), located literal terms by `toLowerCase().indexOf`
+ * (misaligned after any "İ", which lower-cases to two code units), and ran the
+ * user's regex on the main thread yet again. Between updates from the panel,
+ * the decorations are mapped through edits.
+ */
+function buildSearchHighlights(spec: HighlightSpec, docLength: number): DecorationSet {
+  const decos: Range<Decoration>[] = [];
+  let widgets = 0;
+  for (const r of spec.ranges) {
+    // Zero-length matches (`^`, a lookahead) have nothing to paint.
+    if (r.to <= r.from || r.from < 0 || r.to > docLength) continue;
+    if (spec.replaceMode) {
+      decos.push(replaceOldMark.range(r.from, r.to));
+      if (r.preview != null && widgets < MAX_PREVIEW_WIDGETS) {
+        decos.push(Decoration.widget({ widget: new ReplacePreviewWidget(r.preview), side: 1 }).range(r.to));
+        widgets++;
+      }
+    } else {
+      decos.push(searchHighlightMark.range(r.from, r.to));
+      r.groups?.forEach(([gFrom, gTo], g) => {
+        if (g < groupMarks.length && gTo > gFrom && gFrom >= 0 && gTo <= docLength) decos.push(groupMarks[g]!.range(gFrom, gTo));
+      });
+    }
+  }
+  return Decoration.set(decos, true);
+}
 
 const searchHighlightField = StateField.define<DecorationSet>({
   create() { return Decoration.none; },
   update(decos, tr) {
-    let newTerm: SearchTermState | null = null;
     for (const e of tr.effects) {
-      if (e.is(setSearchTerm)) { newTerm = e.value; break; }
-    }
-    
-    if (newTerm === null) return tr.docChanged ? decos.map(tr.changes) : decos;
-
-    const { term, isRegex, replacement } = newTerm;
-    if (!term) return Decoration.none;
-
-    const doc = tr.state.doc.toString();
-    const showPreview = replacement !== undefined && replacement !== "";
-
-    if (isRegex) {
-      try {
-        const flags = hasIndicesFlag ? "gid" : "gi";
-        const re = new RegExp(term, flags);
-        const hasGroups = hasIndicesFlag && re.source.includes("(");
-
-        const allDecos: { from: number; to: number; deco: Decoration }[] = [];
-        let widgetCount = 0;
-        let m: RegExpExecArray | null;
-        
-        while ((m = re.exec(doc)) !== null) {
-          if (m[0].length === 0) { re.lastIndex++; continue; }
-          const mStart = m.index;
-          const mEnd = m.index + m[0].length;
-
-          if (showPreview) {
-            allDecos.push({ from: mStart, to: mEnd, deco: replaceOldMark });
-            if (widgetCount < MAX_PREVIEW_WIDGETS && replacement !== undefined) {
-              const expanded = m[0].replace(new RegExp(term, "i"), replacement);
-              if (expanded !== m[0]) { 
-                allDecos.push({ from: mEnd, to: mEnd,
-                  deco: Decoration.widget({ widget: new ReplacePreviewWidget(expanded), side: 1 }) });
-                widgetCount++;
-              }
-            }
-          } else {
-            allDecos.push({ from: mStart, to: mEnd, deco: searchHighlightMark });
-            
-            if (hasGroups && (m as any).indices) {
-              const indices = (m as any).indices;
-              for (let g = 1; g < indices.length && g <= GROUP_STYLES.length; g++) {
-                const idx = indices[g];
-                if (!idx) continue;
-                const [gFrom, gTo] = idx;
-                if (gFrom === gTo) continue;
-                allDecos.push({ from: gFrom, to: gTo, deco: groupMarks[g - 1]! });
-              }
-            }
-          }
-        }
-        allDecos.sort((a, b) => a.from - b.from || a.to - b.to);
-        const builder = new RangeSetBuilder<Decoration>();
-        for (const d of allDecos) builder.add(d.from, d.to, d.deco);
-        return builder.finish();
-      } catch { }
-      return Decoration.none;
-    }
-
-    const builder = new RangeSetBuilder<Decoration>();
-    const lower = doc.toLowerCase();
-    const searchLower = term.toLowerCase();
-    const len = term.length;
-    let idx = 0;
-    let widgetCount = 0;
-    
-    while ((idx = lower.indexOf(searchLower, idx)) !== -1) {
-      if (showPreview && replacement !== undefined) {
-        builder.add(idx, idx + len, replaceOldMark);
-        if (widgetCount < MAX_PREVIEW_WIDGETS && replacement !== doc.substring(idx, idx + len)) {
-          builder.add(idx + len, idx + len,
-            Decoration.widget({ widget: new ReplacePreviewWidget(replacement), side: 1 }));
-          widgetCount++;
-        }
-      } else {
-        builder.add(idx, idx + len, searchHighlightMark);
+      if (e.is(setSearchHighlights)) {
+        return e.value ? buildSearchHighlights(e.value, tr.state.doc.length) : Decoration.none;
       }
-      idx += len;
     }
-    return builder.finish();
+    return tr.docChanged ? decos.map(tr.changes) : decos;
   },
   provide: f => EditorView.decorations.from(f),
 });
@@ -284,7 +234,8 @@ export interface CodeMirrorPaneHandle {
   replaceRange: (from: number, to: number, text: string) => void;
   insertAtCursor: (text: string) => void;
   wrapSelection: (before: string, after: string) => void;
-  setSearchHighlight: (term: string, isRegex?: boolean, replacement?: string) => void;
+  /** Draw the Find panel's matches (see buildSearchHighlights). */
+  setSearchHighlight: (spec: HighlightSpec) => void;
   clearSearchHighlight: () => void;
 }
 
@@ -329,7 +280,10 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         // Liveness stamp for isComposing() — a composition that is producing
         // input is real; see COMPOSITION_STALL_MS.
         if (update.docChanged && update.view.composing) composeStampRef.current = Date.now();
-        if (update.docChanged && !suppressNextUpdate.current) {
+        // Never report a change while read-only. The editability compartment
+        // is the lock; this is the belt to it: whatever reaches the document
+        // while the session is read-only must not be synced, dirtied or saved.
+        if (update.docChanged && !suppressNextUpdate.current && !readOnlyRef.current) {
           onChangeRef.current?.();
         }
         suppressNextUpdate.current = false;
@@ -341,13 +295,16 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
       // re-initialises the history field) around the current document.
       extensionsRef.current = [
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+        // Minus the Ctrl+Alt+<character> bindings: off the Mac those ARE AltGr
+        // typing (`Mod-Alt-\` ate the backslash on most European layouts).
+        keymap.of(dropAltGraphChords([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab])),
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         syntaxHighlighting(perssonifyHighlight),
         lineNumbers(),
         EditorView.lineWrapping,
         listHangingIndent, // wrapped list lines hang-indent under the item text
+        perLineTextDirection, // right-to-left lines read right-to-left (A099)
         EditorState.allowMultipleSelections.of(true), // Find ▸ Find all selects every match
         // REQUIRED for multi-range selections to be VISIBLE: the native DOM
         // selection can only render one contiguous range, so without drawSelection
@@ -363,6 +320,13 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         spellcheckCompartment.current.of(
           EditorView.contentAttributes.of({ spellcheck: String(spellcheckRef.current) })
         ),
+        // A089: CodeMirror gives its content role="textbox" but no name, so a
+        // screen reader could not tell the two panes apart. The description
+        // documents the Tab capture that `indentWithTab` imposes.
+        EditorView.contentAttributes.of({
+          "aria-label": "Markdown source",
+          "aria-description": "Tab indents. Press Escape, then Tab, to move focus out of the editor.",
+        }),
         updateListener,
       ];
       const state = EditorState.create({
@@ -395,6 +359,29 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
       });
     }, [spellcheck]);
 
+    /**
+     * Put a freshly `setState`-ed view back under the CURRENT preferences.
+     *
+     * `view.setState` rebuilds everything from the state it is handed, and the
+     * two paths that use it — resetHistory (every cross-document hydration)
+     * and restoreEditorState (the per-document history cache) — hand it
+     * extensions whose compartment contents were captured at MOUNT or at
+     * capture time. So a document switch silently reverted the pane to the
+     * mount-time read-only flag: editable in a read-only session (the audit
+     * watched such edits autosave), or still locked after read-only was turned
+     * off. Reconfiguring from the refs makes the live value win every time.
+     */
+    const reapplyLiveConfig = (view: EditorView) => {
+      view.dispatch({
+        effects: [
+          editableCompartment.current.reconfigure(roExt(readOnlyRef.current)),
+          spellcheckCompartment.current.reconfigure(
+            EditorView.contentAttributes.of({ spellcheck: String(spellcheckRef.current) })
+          ),
+        ],
+      });
+    };
+
     useImperativeHandle(ref, () => ({
       getValue: () => viewRef.current?.state.doc.toString() || "",
 
@@ -426,11 +413,17 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
 
       // Restore a previously captured EditorState. Caller must have validated
       // the cached text matches the current md-pane content (history-cache.ts).
+      //
+      // No `suppressNextUpdate` here or in resetHistory: `view.setState` runs
+      // no update listeners, so a flag armed before it was never consumed by
+      // it — it leaked into the user's NEXT transaction and swallowed that
+      // edit's onChange. The first edit after a document switch (a whole paste,
+      // say) was then never synced, never marked dirty and never saved.
       restoreEditorState: (state: EditorState) => {
         const view = viewRef.current;
         if (!view || !state) return;
-        suppressNextUpdate.current = true;
         view.setState(state);
+        reapplyLiveConfig(view);
       },
 
       // Drop undo/redo history by rebuilding the state around the current doc.
@@ -439,10 +432,10 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
       resetHistory: () => {
         const view = viewRef.current;
         if (!view) return;
-        suppressNextUpdate.current = true;
         view.setState(
           EditorState.create({ doc: view.state.doc.toString(), extensions: extensionsRef.current })
         );
+        reapplyLiveConfig(view);
       },
 
       setValue: (md: string) => {
@@ -539,16 +532,16 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         });
       },
 
-      setSearchHighlight: (term: string, isRegex = false, replacement?: string) => {
+      setSearchHighlight: (spec: HighlightSpec) => {
         const view = viewRef.current;
         if (!view) return;
-        view.dispatch({ effects: setSearchTerm.of({ term: term || "", isRegex, replacement }) });
+        view.dispatch({ effects: setSearchHighlights.of(spec) });
       },
 
       clearSearchHighlight: () => {
         const view = viewRef.current;
         if (!view) return;
-        view.dispatch({ effects: setSearchTerm.of({ term: "", isRegex: false }) });
+        view.dispatch({ effects: setSearchHighlights.of(null) });
       },
     }), []);
 

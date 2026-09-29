@@ -11,8 +11,8 @@ them:
   Three reproduced data-loss defects lived here.
 - **Real IndexedDB**, quota exhaustion, blocked storage, a second tab.
 - **Layout that is measured, not declared** — the toolbar compacts on its OWN
-  width, the panes stack on `matchMedia`, `pointer-coarse:` rules need touch
-  emulation.
+  width, the panes stack by the viewport's width AND height
+  (`src/ui/split-layout.ts`), `pointer-coarse:` rules need touch emulation.
 - **Duration.** Listener churn and uncancelled timers only show up over time.
 
 ## Running it
@@ -20,7 +20,7 @@ them:
 ```
 bun run build:app          # the suites run against a production build
 bun run e2e                # every suite except perf
-bun run e2e:smoke          # tier 1 — surfaces (the CI default)
+bun run e2e:smoke          # tier 1 — surfaces
 bun run e2e:deep           # the surfaces nothing else opens (settings, tray, pages, tour)
 bun run e2e:dataloss       # the data-loss sequences: two real tabs, real IndexedDB
 bun run e2e:journeys       # tier 3 — user simulation, incl. real composition
@@ -29,8 +29,19 @@ bun run e2e:stress         # tier 2 — scale and duration (slow)
 bun run e2e:harness        # the rig checking itself (run this first when a case looks wrong)
 bun run e2e:library        # the published stylesheet on a host page (needs `bun run build`)
 bun run e2e:bridge         # the embed's host bridge from a second origin (needs build:embed)
+bun run e2e:csp            # vercel.json's CSP ENFORCED while every renderer runs
+bun run e2e:pwa            # offline after one visit; updates that never force-reload a tab
 bun run e2e:perf           # measurement only, never asserted in CI
 ```
+
+`run.mjs` refuses to start without `dist-app/index.html`. `library` and
+`bridge` do not: without `dist/` or `dist-embed/` they log a note, run zero
+checks and exit green — build first, and read the output.
+
+CI (`.github/workflows/ci.yml`) builds all three outputs and runs harness,
+smoke, deep, dataloss, library, bridge, journeys, faults, csp and pwa, one
+after another, on every pull request and push to `main`; stress runs on pushes
+to `main` only; perf never runs in CI.
 
 Chromium comes from `playwright-core`. `bunx playwright-core install chromium`
 if you do not have one; `E2E_CHROME=/path/to/chrome` overrides.
@@ -44,16 +55,19 @@ if you do not have one; `E2E_CHROME=/path/to/chrome` overrides.
 | `run.mjs` | runs each suite in its own process so one crash cannot take the rest down |
 | `cases/surfaces.mjs` | tier 1 — blast radius |
 | `cases/surfaces-deep.mjs` | the surfaces no other suite opens: Settings, Version history, the bottom tray, `/about` and `/help`, the guided tour, the Outline tab |
-| `cases/dataloss.mjs` | the 1.77.0 data-loss sequences with two real tabs and real IndexedDB — picks up where `faults.mjs`'s multi-tab case stops |
+| `cases/dataloss.mjs` | the data-loss sequences with two real tabs and real IndexedDB — picks up where `faults.mjs`'s multi-tab case stops: the conflicted-draft rebase (F003), closing a conflicted document (F001) and reloading after a conflict (A018) |
 | `cases/stress.mjs` | tier 2 — scale and duration |
 | `cases/journeys.mjs` | tier 3 — user simulation |
 | `cases/faults.mjs` | tier 4 — fault injection |
 | `cases/perf.mjs` | measurement, not a gate |
 | `fixtures/` | host pages the library and bridge suites are driven from |
 | `cases/harness.mjs` | the rig checking ITSELF — the pane readers against a document of known lines |
-| `cases/library.mjs` | the published stylesheet on a page that is not ours (needs `dist/`) |
+| `cases/library.mjs` | the published stylesheet on a page that is not ours (`fixtures/host-page.html`, needs `dist/`): the host's elements, its own tokens on `:root`/`.dark` and its scrollbar survive; the editor subtree, the integration wrapper's inline accent and a portalled surface still resolve the editor's tokens; the theme switch closest to the editor wins |
 | `cases/bridge.mjs` | the embed's host bridge, driven from a second origin (needs `dist-embed/`) |
-| `probes/` | one-off diagnostics kept because they are the evidence behind a fix |
+| `cases/csp.mjs` | the production build served with vercel.json's headers, the report-only CSP switched to ENFORCING; KaTeX, Mermaid, abcjs, a data: image, Find, the map, Cards, Word export and /help must raise zero violations |
+| `cases/pwa.mjs` | the service worker: one online visit, then the network is killed and every lazy feature is used for the first time offline; then a byte-changed `sw.js` — the prompt appears, nothing reloads by itself, a dirty second tab is told rather than reloaded |
+| `renderers.mjs` | the probe document and actions `csp` and `pwa` share (a helper, not a case) |
+| `probes/` | one-off diagnostics kept because they are the evidence behind a fix. None is wired into `run.mjs` or CI; run one by hand with `node e2e/probes/<name>.mjs` against a production build (`bun run build:app` first; `embed-boot.mjs` needs `build:embed`). Two cover the audit fixes: `g2-audit-fixes.mjs` (AltGr typing in both panes, ⌘B in the Cards composer, broken-link marking, the Find regex Worker timing out, map wheel-zoom on a later open, Escape on a card's delete confirmation) and `g4-durability-trust.mjs` (the wiped-library boot path, the "Not saving" banner, the Version history delete confirm, the backup record, remote images and Referer under the image CSP, the relay consent prompt, the old-origin banner, no Admin/ads in production, the licence notice) |
 
 ## What this campaign does NOT cover
 
@@ -63,7 +77,8 @@ several were in the plan this campaign was built from and were not written.
 
 **Surfaces never driven at all**
 - **Find & Replace under load** — Replace All over a large document with a scope
-  filter active is the mutation with the widest blast radius in the app.
+  filter active is the mutation with the widest blast radius in the app. The
+  `csp` and `pwa` suites only open the panel.
 - The **library's JavaScript** on a host page. `cases/library.mjs` covers the
   published STYLESHEET (the claim that importing it does not restyle a host
   app); mounting the built component into a consumer's bundle is not driven.
@@ -89,6 +104,29 @@ several were in the plan this campaign was built from and were not written.
   and positioned by its parent, so a cx/cy sample would compare "0,0" with
   "0,0" and pass whatever the simulation did.
 
+- **Keyboard and assistive-tech plumbing** (`cases/surfaces.mjs`, the
+  A090-A100 block): the skip link is the first Tab stop and lands in the
+  editor; the toolbar and the folder tree are each ONE tab stop and walk on the
+  arrows; the library precedes `<main>` in the DOM; a keyboard-focused control
+  shows the 2px `--focus-ring` outline (read AFTER the Button's
+  `transition-all` settles — `probes/focus-ring-transition.mjs` is why);
+  forced colours keep the pressed state and the ring; print hides the chrome
+  and prints the rich pane unclipped; a 342×192 viewport (1366×768 at 400%)
+  gives the editor a full viewport and scrolls to the status bar; a 667×375
+  landscape phone keeps the panes side by side. `cases/surfaces-deep.mjs` also
+  asserts the collapsed tray is `inert`. Each was mutation-tested against a
+  build with its fix reverted.
+
+**Still Chromium only.** CI and this container install Chromium alone; Firefox
+and WebKit tiers need those browsers and a CI job that does not exist yet
+(A100, partial). So nothing iOS/Safari-specific (the `pagehide` stash, safe
+areas, storage eviction and the seven-day cap, the install tip) or
+Firefox-specific is exercised by a real engine.
+
+**Hand-run only.** The two audit probes in `probes/` cover behaviour that no
+suite asserts. Nothing runs them automatically, so a regression there shows up
+only when someone runs them.
+
 **Now reproduced in a browser that previously was not**
 - The **conflicted-draft rebase** and the **silent close of a conflicted
   document** (both fixed in 1.77.0). `faults.mjs` drove two tabs into a conflict
@@ -98,6 +136,11 @@ several were in the plan this campaign was built from and were not written.
   ASKS. Mutation-tested against a deliberately reverted build, where
   `TAB-B-EDIT-AFTER-RETURN` really is written over the other tab's text and the
   close prompt never appears.
+- The **reload after a conflict** (audit A018): the conflicted tab reloads, as
+  the conflict message tells it to, and `cases/dataloss.mjs` asserts its own
+  text survives on screen while the other tab's work stays on disk and the
+  conflict is still reported. Mutation-tested against a build with the stash's
+  base-revision restore removed: `TAB-B-EDIT` replaces the other tab's text.
 - **NOT reproduced here: the draft-retirement race (F002).** It needs a save
   whose `storage.list()` is still pending while a switch caches a newer draft,
   and holding an IndexedDB call open from outside the page would make it a test
@@ -107,18 +150,31 @@ several were in the plan this campaign was built from and were not written.
 **Races and failure modes not reproduced**
 - A **close or delete racing a document switch** (the generation guards are
   unit-tested against fakes, not against a real slow IndexedDB read).
-- An **archive import with a mid-loop switch**.
+- An **archive import with a click mid-loop**. Imports are converted
+  headlessly and never activated mid-loop (A031); that is tested against the
+  real editor in jsdom, not in a browser.
 - The window **immediately after `compositionend`**, and the **emoji suggestion
   list clicked mid-composition**.
-- **Slow or failing network**, **corrupt stored JSON**, **offline / PWA**.
+- **Slow or failing network** (a network that answers, slowly or with errors —
+  `pwa.mjs` covers only a network that is GONE), **corrupt stored JSON**.
+- **Offline / PWA — now covered by `cases/pwa.mjs`, with these limits:** it
+  cannot flip `navigator.onLine` reliably (Playwright's offline emulation leaves
+  it `true` in a reloaded, worker-controlled page), so the "never reload while
+  offline" gates are covered by unit tests only (`ops-app-health`,
+  `ops-sw-update`); the automatic reload of a clean BACKGROUND tab after another
+  tab applied an update is unit-tested only (visibility is not emulated); and a
+  password-protected ZIP (zip.js's WebAssembly/worker path) is exercised by
+  neither `pwa.mjs` nor `csp.mjs`.
 
 **Scaled down from what was planned**
 - Continuous typing runs are ~480 characters, not 2000; the duration case is 8
   rounds, not 20 minutes; the largest library is 120 documents, not 200; there is
   no 200 KB document and no math-heavy document.
 - **Breakpoints** now assert five real switches, not two. The menu collapsing to
-  ☰ and the panes stacking (both at 768px) are read off the separator's own
-  `aria-orientation`; the map's details rail is read as whether it docks to the
+  ☰ and the panes stacking (both at 768px wide, on viewports tall enough to
+  stack; the height half of the rule is the 667×375 landscape case above) are
+  read off the separator's own `aria-orientation`; the map's details rail is
+  read as whether it docks to the
   RIGHT of the canvas or UNDER it; and toolbar compaction and the cards column
   count are read at the boundary that actually decides them.
   Those last two key off an ELEMENT's measured box, not the window's, which is
@@ -156,5 +212,5 @@ several were in the plan this campaign was built from and were not written.
 - **Console errors are failures.** Every case asserts `errors` stayed empty, so
   a regression in an unrelated surface still fails the run.
 - `probes/` is where a hypothesis is tested before it becomes a case. Keep the
-  probe when it is the evidence for a fix — the comments in the source point at
-  them.
+  probe when it is the evidence for a fix, and name it where the fix is
+  documented — most of the 28 are not named anywhere else yet.

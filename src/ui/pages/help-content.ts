@@ -28,7 +28,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Getting started",
     blocks: [
       {
-        p: "Markdown Studio is a dual-pane Markdown editor. The left pane holds raw Markdown; the right pane is a rich-text preview you can also type into. Edit either side and the other updates instantly — they are always two views of the same document. It runs entirely in your browser: no account, no server, and nothing you write is uploaded.",
+        p: "Markdown Studio is a dual-pane Markdown editor. The left pane holds raw Markdown; the right pane is a rich-text preview you can also type into. Edit either side and the other updates instantly — they are always two views of the same document. It runs in your browser: there is no account, and your documents are stored in this browser rather than on a server (see “Offline & privacy” for the two features that do go online).",
       },
       {
         list: [
@@ -54,7 +54,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Right-click menu — right-click in either pane for format, insert, link, and clipboard actions in context.",
           "Status bar (bottom) — the active document, current view mode, document-link count, save state, and word/character counts. Two warnings can appear beside them: a fidelity note (e.g. “2 colors, 1 alignment not in MD”) when the open document holds formatting the Markdown pane cannot write, and a “N residuals” button — click it — listing what an import could not bring across. It sheds the least-important details first as the window narrows so it stays readable on phones.",
           "Pane headers — the Markdown pane's header carries the Styled switch (and, in Split, a scroll-sync toggle); the rich pane's carries an images on/off toggle and Styled paste.",
-          "Panel tray — the “Panel” chevron button at the far-left of the status bar expands a tabbed tray (Document Links; a read-only Console tab appears when enabled in Settings ▸ Admin). Click it (or the links count) to open, and again to collapse.",
+          "Panel tray — the “Panel” chevron button at the far-left of the status bar expands a tabbed tray (Document Links, plus a read-only diagnostics Console tab when it has been switched on for a support session). Click it (or the links count) to open, and again to collapse.",
         ],
       },
       {
@@ -164,13 +164,29 @@ export const HELP_SECTIONS: HelpSection[] = [
         p: "Shareable import links — any page URL can carry an ?import_url=<link> parameter; opening it opens the importer with that link already filled in (top-level documents only). Nothing is fetched until you press Fetch, so a link someone sends you can never make your browser call out on its own. The Share / embed builder (see “Sharing & embedding”) can generate one, and the Import-from-URL dialog offers a “Copy share link” for the source you just imported.",
       },
       {
-        p: "Password-protected archives — importing an encrypted .zip (by file or by URL) is detected automatically; you’re prompted for the password, and the archive is decrypted and opened in the browser (nothing is uploaded). A wrong password just asks again.",
+        p: "Password-protected archives — importing an encrypted .zip (by file or by URL) is detected automatically; you’re prompted for the password, and the archive is decrypted and opened in the browser (the password never leaves it). A wrong password just asks again.",
       },
       {
         p: "Version history (recover earlier content) — Tools ▸ Version history keeps automatic snapshots of a document before content is overwritten, cleared, or deleted, and these survive reloads. If something ever looks lost, open it and Restore an earlier version in place (your current content is snapshotted first, so a restore is itself reversible) or restore it as a new document — which is also how you recover a deleted document.",
       },
       { tip: "Your work autosaves as you type, and is kept safe in three more ways: closing or reloading the tab saves what you have just typed (the browser's database is too slow to finish during a reload, so a copy is written the moment you leave and picked up next time); the editor refuses to overwrite a document with an empty editor, so an accidental blank never wipes a saved file; and if a save is failing, the status bar says so for as long as it is true rather than reading “Unsaved changes”. Version history is the net beneath all of that." },
-      { tip: "If a URL import is blocked by the source site, download the file and drop it onto the editor (or the workspace panel's Files tab) instead." },
+      { tip: "If a URL import is blocked by the source site, the app offers to fetch it through its own server (it asks once — see “Offline & privacy”). Or download the file and drop it onto the editor (or the workspace panel's Files tab) instead." },
+    ],
+  },
+  {
+    id: "moving-library",
+    title: "Moving your library",
+    blocks: [
+      {
+        p: "Your library belongs to the browser and the web address you use it in. Another browser, another device, or another address — such as the move from markdowneditor.perssonify.com to markdownstudio.com — starts with an empty library. To bring your documents along:",
+      },
+      {
+        list: [
+          "Where your documents are now, choose File → Export → “Full backup (.zip) — restorable”. You get one file named perssonify-backup-<date and time>.zip.",
+          "In the new place, choose File → Open file… (or Import → File(s) / archive…) and pick that .zip — or simply drop it onto the editor.",
+          "Folders, titles, tags and formatting come back exactly as they were. Documents already in the new library are kept: a backup never overwrites them (restoring the same backup twice gives you copies).",
+        ],
+      },
     ],
   },
   {
@@ -190,7 +206,6 @@ export const HELP_SECTIONS: HelpSection[] = [
         list: [
           "view_mode=md | html | split — which pane(s) to show on open (split is the default).",
           "readonly=true — open read-only: editing is disabled, the formatting toolbar is hidden, and the view mode is locked (the menu bar and reading stay available).",
-          "ads=true — show the optional support ads (off by default; never shown in embeds).",
           "import_url=<link> — open the importer pre-filled with that link (top-level documents only). You review it and press Fetch; the link never fetches by itself.",
         ],
       },
@@ -245,15 +260,33 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Offline & privacy",
     blocks: [
       {
-        p: "The editor is completely client-side. Your documents are stored locally in this browser and are never uploaded — there is no backend that can read them.",
+        p: "Your documents are stored in this browser, on this device. There is no account, and Markdown Studio has no server that stores or reads your documents. Two features do reach the network, and both are under your control:",
       },
       {
         list: [
-          "Install it as an app (from your browser’s install/Add-to-Home-Screen option) to work offline.",
-          "Clearing your browser’s site data will remove your documents, so export anything important.",
-          "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write. Preferences fall back to their defaults and documents cannot be saved between visits, so export before you close the tab.",
+          "Import from URL fetches the link you enter. If that site blocks browsers from reading it, the app can fetch it through its own server instead — it asks you first and remembers the answer (change it in Settings → Privacy). The server receives the address, downloads the file and passes it straight back without keeping a copy; like any web request, the address may appear in our hosting provider's logs, so avoid importing links that carry secrets.",
+          "Images in a document load from wherever they are hosted, which lets that site see when the document is opened. Settings → Privacy → Block remote images stops that; blocked images show as their description, and the setting applies the next time the app loads.",
+          "It keeps working offline once it has loaded one time while online. Installing it as an app (your browser’s Install or Add to Home Screen option) also protects your library from Safari clearing the storage of sites you have not visited for 7 days.",
+          "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write, but nothing is saved: a “Not saving” banner says so for as long as it is true. Export before you close the tab.",
         ],
       },
+    ],
+  },
+  {
+    id: "keeping-safe",
+    title: "Keeping your library safe",
+    blocks: [
+      {
+        p: "Because your documents live in the browser, the browser can take them away: Safari clears a website's storage after seven days without a visit unless the site is added to the Home Screen or Dock, and other browsers clear it when the disk runs low or when you clear browsing data. Three things protect you:",
+      },
+      {
+        list: [
+          "Persistent storage — after your first save, the app asks the browser to keep your library. Settings → Storage & backup shows whether it agreed and how much space the library uses, with a button to ask again.",
+          "Full backups — File → Export → “Full backup (.zip) — restorable”, or the button in Settings → Storage & backup. If your last one is more than a week old (or you have never made one), a gentle reminder appears above the status bar.",
+          "Version history — Tools → Version history keeps earlier versions of each document, including documents you delete.",
+        ],
+      },
+      { tip: "If your library ever comes back empty in a browser that used to hold documents, the app tells you instead of quietly starting over — restore your latest full backup from the banner it shows." },
     ],
   },
 ];

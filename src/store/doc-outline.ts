@@ -30,6 +30,46 @@ interface PMNode {
   content?: PMNode[];
 }
 
+/**
+ * THE normaliser for heading anchors — `[[Doc#Heading]]`, `[[#Heading]]`, the
+ * "Link to heading" menu's links — on BOTH sides of the comparison: the anchor
+ * a link carries and the heading text it is matched against.
+ *
+ * It used to be `toLowerCase().replace(/[^a-z0-9]+/g, " ")`, which erased every
+ * letter outside ASCII: each Cyrillic, CJK or Arabic heading normalised to "",
+ * so `[[#Заключение]]` jumped to the FIRST non-Latin heading in the document,
+ * and "Über" matched "ber". Now:
+ *  - NFKC first, so a precomposed "é" and "e" + combining acute are the same
+ *    heading, as are full-width and ASCII digits;
+ *  - letters, digits and combining MARKS are kept, in every script. Marks
+ *    matter: Devanagari/Thai/Arabic vowel signs are marks, and dropping them
+ *    would merge distinct headings — a strictly weaker key than keeping them;
+ *  - everything else (punctuation, symbols, emoji, whitespace runs) collapses
+ *    to one space, which keeps matching tolerant of `Setup: Part 1` vs
+ *    `Setup — Part 1`.
+ */
+export function normalizeHeadingAnchor(text: string): string {
+  return text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}\p{M}]+/gu, " ").trim();
+}
+
+/**
+ * Index of the heading an anchor points at, among `headingTexts` (document
+ * order), or -1. Normalised matching via normalizeHeadingAnchor.
+ *
+ * An anchor with no letters or digits at all (`[[#🎉]]`) normalises to "" —
+ * and so would every other emoji- or punctuation-only heading, which is the
+ * shape of the old bug (all non-Latin headings collided on ""). Such an anchor
+ * is compared on its exact (NFKC, trimmed) text instead.
+ */
+export function findHeadingByAnchor(headingTexts: readonly string[], anchor: string): number {
+  const wanted = normalizeHeadingAnchor(anchor);
+  if (!wanted) {
+    const raw = anchor.normalize("NFKC").trim();
+    return raw ? headingTexts.findIndex((t) => t.normalize("NFKC").trim() === raw) : -1;
+  }
+  return headingTexts.findIndex((t) => normalizeHeadingAnchor(t) === wanted);
+}
+
 /** Concatenate all descendant text of a node (heading label). */
 function textOf(node: PMNode): string {
   if (typeof node.text === "string") return node.text;
@@ -39,9 +79,15 @@ function textOf(node: PMNode): string {
 
 /**
  * Walk the top-level (and nested) blocks collecting heading nodes in document
- * order. Returns at most `limit` headings (default 40) to keep the graph legible.
+ * order. Returns at most `limit` headings — ALL of them by default.
+ *
+ * The default used to be 40, a cap meant for the long-removed in-graph
+ * structure view. Every remaining consumer inherited it: the Workspace Outline,
+ * the right-click "Link to heading" menu and the console's `doc.outline` all
+ * silently stopped at the 40th heading of a long document, and the map rail's
+ * "+N more" under-counted. The map rail applies its own display cap.
  */
-export function extractHeadings(canonical: unknown, limit = 40): OutlineHeading[] {
+export function extractHeadings(canonical: unknown, limit = Infinity): OutlineHeading[] {
   const doc = canonical as PMNode | null | undefined;
   if (!doc || !Array.isArray(doc.content)) return [];
 

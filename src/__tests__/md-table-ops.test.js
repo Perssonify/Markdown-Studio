@@ -267,9 +267,9 @@ describe('mdAddColumnBefore', () => {
   it('shifts the alignments with the columns rather than the cell text alone', () => {
     // The separator carries per-column alignment; splicing the cells without
     // splicing `alignments` re-points every alignment one column to the left.
-    // (`:---` explicit-left is normalised away by parseSeparator — left is GFM's
-    // default, so the rendered table is unchanged. center and right are the two
-    // that carry meaning.)
+    // (`:---` explicit-left is KEPT as "left" since A053 — it renders as
+    // align="left", which the unmarked default does not; see
+    // formatting-table-cells.test.js. center and right are exercised here.)
     const text = '| A | B |\n| :---: | ---: |\n| 1 | 2 |';
     const view = mockView(text, 1); // col 0
     mdAddColumnBefore(view);

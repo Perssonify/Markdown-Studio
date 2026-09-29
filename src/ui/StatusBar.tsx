@@ -13,14 +13,15 @@ import {
   PanelBottom,
   PenLine
 } from "lucide-react";
-import React, { useState, useSyncExternalStore } from "react";
+import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MODES } from "../constants";
-import { useDocumentStore } from "../store/documentStore";
+import { SCHEMA_LOCK_ERROR, useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 import { formatEstBytes, historyCache } from "../store/history-cache";
 import { useUIStore } from "../store/uiStore";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import { ResidualsDialog } from "./ResidualsDialog";
+import { INITIAL_ANNOUNCER, nextAnnouncement } from "./save-announcer";
 
 /** The status bar reports STATE. It deliberately carries no view switcher:
  *  the relationship-map toggle used to live here as well as in the top bar —
@@ -71,6 +72,17 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showResiduals, setShowResiduals] = useState(false);
 
+  // What the live region SAYS is decided separately from what the bar SHOWS:
+  // only failures and the recovery from one are announced (see save-announcer).
+  // `seq` keys the text node so a repeat of the same sentence is still news.
+  const announcerRef = useRef(INITIAL_ANNOUNCER);
+  const [announcement, setAnnouncement] = useState<{ text: string; seq: number }>({ text: "", seq: 0 });
+  useEffect(() => {
+    const { state, message } = nextAnnouncement(announcerRef.current, { status: saveStatus, error: saveError });
+    announcerRef.current = state;
+    if (message) setAnnouncement((a) => ({ text: message, seq: a.seq + 1 }));
+  }, [saveStatus, saveError]);
+
   // Surface storage usage as it gets high, so users aren't surprised by a
   // hard quota error. Hidden below 60% to avoid noise.
   const storagePct = storageMetrics ? Math.round(storageMetrics.pct) : 0;
@@ -95,22 +107,28 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
        while the user typed, and the implicit `contentinfo` landmark was lost.
        Only the save-state block below is genuinely a live status. */
     <footer
+      data-print-hide
       className="pf-safe-bottom shrink-0 flex items-stretch justify-between gap-1 min-h-7 pointer-coarse:min-h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground select-none transition-colors duration-200"
     >
       {/* ── Far-left: the primary, obvious tray expand/collapse control. A
           full-height, bordered, labeled chevron so it reads unmistakably as
-          "open the panel", echoing the chevrons the old backlinks bar had. */}
+          "open the panel", echoing the chevrons the old backlinks bar had.
+          A096: its accessible name contains its visible label ("Panel") — it
+          used to be "Expand bottom tray", which a speech-input user saying
+          "click Panel" could not reach — and it is a disclosure, so the state
+          rides aria-expanded rather than a name that changes. */}
       {onToggleTray ? (
         <button
+          type="button"
           onClick={onToggleTray}
-          aria-pressed={trayOpen}
+          aria-expanded={!!trayOpen}
           className={`group flex items-center gap-1.5 pl-2.5 pr-2 border-r transition-colors ${
             trayOpen
-              ? "bg-primary/10 text-primary border-primary/30"
+              ? "bg-primary/10 text-primary-strong border-primary/30"
               : "text-muted-foreground border-border hover:bg-accent hover:text-foreground"
           }`}
           title={trayOpen ? "Collapse panel tray" : "Expand panel tray (Document links, tools)"}
-          aria-label={trayOpen ? "Collapse bottom tray" : "Expand bottom tray"}
+          aria-label="Panel tray"
         >
           <PanelBottom className="w-3.5 h-3.5 shrink-0" />
           <span className="hidden font-medium sm:inline">Panel</span>
@@ -136,7 +154,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
 
         {fidelityBadge && (
           <div
-            className="flex items-center gap-1 text-amber-500 font-medium"
+            className="flex items-center gap-1 text-amber-800 dark:text-amber-500 font-medium"
             /* Plain language, not schema vocabulary: this badge is the only
                warning a user gets before an export drops the formatting. */
             title={`${fidelityReport?.totalLossCount} formatting detail(s) in this document cannot be written as Markdown (alignment has no Markdown or HTML carrier at all; colour, highlight and font are stripped in Clean mode). They stay in the rich pane, but will not survive an export.`}
@@ -153,7 +171,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
              that it does not quietly change your document. */
           <button
             onClick={() => setShowResiduals(true)}
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 pointer-coarse:py-1.5 text-amber-500/80 transition-colors hover:bg-accent hover:text-foreground"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 pointer-coarse:py-1.5 text-amber-800 dark:text-amber-500 transition-colors hover:bg-accent hover:text-foreground"
             title={`${residualCount} thing(s) in the imported source have no place in the document model — click for details`}
           >
             <AlertCircle className="size-3" />
@@ -166,7 +184,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             onClick={onToggleLinks}
             aria-pressed={linksActive}
             className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 pointer-coarse:py-1.5 transition-colors ${
-              linksActive ? "bg-primary/10 text-primary" : "text-blue-500/80 hover:bg-accent hover:text-foreground"
+              linksActive ? "bg-primary/10 text-primary-strong" : "text-blue-700 dark:text-blue-400 hover:bg-accent hover:text-foreground"
             }`}
             title="Document links — backlinks & outgoing (click to expand)"
           >
@@ -178,10 +196,17 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
         )}
       </div>
 
-      {/* Center Section: Sync/Save State — the one part worth announcing. */}
+      {/* The one live region. Visually hidden, because what it SAYS is not
+          what the block below SHOWS: only failures and recovery are spoken. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        <span key={announcement.seq}>{announcement.text}</span>
+      </span>
+
+      {/* Center Section: Sync/Save State. Deliberately NOT a live region any
+          more — it walks editing → saving → saved on every autosave, and
+          announcing that cycle interrupted a screen-reader user several times
+          a minute while they typed (A096). */}
       <div
-        role="status"
-        aria-live="polite"
         className="flex-1 inline-flex items-center justify-center pointer-events-none px-2"
       >
         {/* "Unsaved changes" and "Save failed" keep their text at every width —
@@ -201,19 +226,19 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
           </div>
         )}
         {saveStatus === "editing" && !saveError && (
-          <div className="flex items-center gap-1.5 text-amber-500 font-medium whitespace-nowrap">
+          <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-500 font-medium whitespace-nowrap">
             <PenLine className="size-3" />
             <span>Unsaved changes</span>
           </div>
         )}
         {saveStatus === "saving" && (
-          <div className="flex items-center gap-1.5 text-primary animate-pulse">
+          <div className="flex items-center gap-1.5 text-primary-strong animate-pulse">
             <Loader2 className="size-3 animate-spin" />
             <span className="hidden xs:inline font-medium tracking-tight">Saving…</span>
           </div>
         )}
         {saveStatus === "saved" && (
-          <div className="flex items-center gap-1.5 text-emerald-500 font-medium">
+          <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-500 font-medium">
             <CheckCircle2 className="size-3" />
             <span className="hidden xs:inline">Changes saved</span>
           </div>
@@ -224,7 +249,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <span>Save failed</span>
           </div>
         )}
-        {saveStatus === "blocked" && (
+        {saveStatus === "blocked" && saveError !== SCHEMA_LOCK_ERROR && (
           // TERMINAL: the data-loss backstop refused to write a blank editor
           // over a document that has content. Autosave deliberately does not
           // re-arm, so without a branch here the state was invisible except for
@@ -236,6 +261,30 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <AlertTriangle className="size-3 shrink-0" />
             <span className="hidden sm:inline">Empty editor — not saving</span>
             <span className="sm:hidden">Not saving</span>
+          </div>
+        )}
+        {saveStatus === "blocked" && saveError === SCHEMA_LOCK_ERROR && (
+          // TERMINAL: a document from a newer build, shown read-only as a
+          // best-effort copy. Saving it would replace the real content.
+          <div
+            className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
+            title="This document was made by a newer version of the app. It is shown read-only so its content cannot be overwritten — open it in the newer version to edit it."
+          >
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="hidden sm:inline">Newer version — read-only</span>
+            <span className="sm:hidden">Read-only</span>
+          </div>
+        )}
+        {saveStatus === "full" && (
+          // TERMINAL: storage is out of room. The old "Save failed — retrying"
+          // retried forever and said nothing about what would help.
+          <div
+            className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
+            title="Storage is full, so your latest changes are not saved. Delete documents or old versions (Version history) to free space, then keep typing to retry."
+          >
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="hidden sm:inline">Storage full — not saving</span>
+            <span className="sm:hidden">Storage full</span>
           </div>
         )}
         {saveStatus === "conflict" && (
@@ -254,7 +303,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
       <div className="flex items-center gap-3 px-2">
         {showStorage && (
           <div
-            className={`flex items-center gap-1 font-medium tabular-nums ${storageCritical ? "text-destructive" : "text-amber-500"}`}
+            className={`flex items-center gap-1 font-medium tabular-nums ${storageCritical ? "text-destructive" : "text-amber-800 dark:text-amber-500"}`}
             title={`Local storage: ${storagePct}% used (${(storageMetrics!.usedBytes / (1024 * 1024)).toFixed(1)} MB of ${(storageMetrics!.maxBytes / (1024 * 1024)).toFixed(0)} MB)`}
           >
             <HardDrive className="size-3" />
@@ -281,7 +330,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <button
               onClick={onOpenMemory}
               className={`hidden sm:flex items-center gap-1 rounded-md p-1 transition-all hover:bg-accent active:scale-95 ${
-                memPct >= 100 ? "text-destructive" : memPct >= 75 ? "text-amber-500" : "hover:text-foreground"
+                memPct >= 100 ? "text-destructive" : memPct >= 75 ? "text-amber-800 dark:text-amber-500" : "hover:text-foreground"
               }`}
               title={`Undo-history memory (estimated): ${formatEstBytes(memStats.totalEstBytes)} of ${formatEstBytes(memStats.budgetBytes)} — click to manage`}
               aria-label="Memory and undo history"

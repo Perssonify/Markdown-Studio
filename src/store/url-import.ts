@@ -20,6 +20,7 @@
 import type { IngestFormat } from "./ingest";
 import { ArchiveEncryptedError, ArchiveWrongPasswordError, extractArchive, isArchiveName, type ArchiveEntry } from "./archive";
 import { normalizeImportUrl } from "./import-url-normalize";
+import { safeStorage } from "../utils/safe-storage";
 
 /** Same 5 MB ceiling used for file imports (import-export.ts). */
 export const MAX_URL_BYTES = 5_000_000;
@@ -198,6 +199,76 @@ function looksLikeArchiveBytes(bytes: Uint8Array): boolean {
  */
 const IMPORT_RELAY = "/api/import?url=";
 
+/**
+ * The visitor's answer to "may we fetch this through our server?".
+ *
+ * The relay used to engage SILENTLY on any CORS failure, under a privacy story
+ * that said nothing ever leaves the browser — yet it sends the address being
+ * imported to our server (whose host logs request URLs, and share links often
+ * carry tokens) and passes the file back through it. It is now opt-in: asked
+ * once, before the first use, and remembered here. `null` = not asked yet.
+ * Changeable at any time in Settings ▸ Privacy.
+ */
+export const RELAY_CONSENT_KEY = "pf:import-relay";
+export type RelayConsent = "allow" | "deny";
+
+export function getRelayConsent(): RelayConsent | null {
+  const v = safeStorage.get(RELAY_CONSENT_KEY);
+  return v === "allow" || v === "deny" ? v : null;
+}
+
+export function setRelayConsent(value: RelayConsent | null): void {
+  if (value === null) safeStorage.remove(RELAY_CONSENT_KEY);
+  else safeStorage.set(RELAY_CONSENT_KEY, value);
+}
+
+/**
+ * The one-time consent question, worded from what `api/import.js` actually
+ * does: the address goes to our server, which downloads the file and streams
+ * it back without keeping a copy — and, like any request, the address can land
+ * in the hosting provider's request logs. Shape matches `ConfirmOptions`.
+ */
+export function relayConsentPrompt(host: string): {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cancelLabel: string;
+} {
+  return {
+    title: "Fetch this link through our server?",
+    description:
+      `${host || "This site"} doesn't let browsers read its files directly. Markdown Studio can fetch ` +
+      "it through its own server instead: the server receives the address you entered, downloads " +
+      "the file and passes it straight back to you without keeping a copy. Like any web request, " +
+      "the address may appear in our hosting provider's logs, so avoid links that carry secrets. " +
+      "Your answer is remembered — change it any time in Settings ▸ Privacy.",
+    confirmLabel: "Fetch via our server",
+    cancelLabel: "Don't use the server",
+  };
+}
+
+/**
+ * Asks the user whether a blocked URL may be fetched through the relay.
+ * Resolves true to allow. Supplied by the UI (`useDialog().confirm`); without
+ * one, and without a stored "allow", the relay is never used.
+ */
+export type ConfirmRelay = (target: URL) => Promise<boolean>;
+
+/** May this fetch go through the relay? Asks at most once, then remembers. */
+async function relayPermitted(target: URL, confirmRelay?: ConfirmRelay): Promise<boolean> {
+  const stored = getRelayConsent();
+  if (stored) return stored === "allow";
+  if (!confirmRelay) return false;
+  let allowed = false;
+  try {
+    allowed = await confirmRelay(target);
+  } catch {
+    allowed = false;
+  }
+  setRelayConsent(allowed ? "allow" : "deny");
+  return allowed;
+}
+
 /** A per-attempt timeout signal (uses AbortSignal.timeout when available). */
 function timeoutSignal(timeoutMs: number): { signal: AbortSignal; clear: () => void } {
   if (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal) {
@@ -213,14 +284,16 @@ function timeoutSignal(timeoutMs: number): { signal: AbortSignal; clear: () => v
 
 /**
  * Fetch a URL directly; on a CORS/network failure (a thrown TypeError), retry
- * through the same-origin {@link IMPORT_RELAY}. A direct timeout is surfaced
- * as-is (a slow origin won't get faster through the relay). Returns whether the
- * relay was used so the UI can disclose it.
+ * through the same-origin {@link IMPORT_RELAY} — but only with the visitor's
+ * consent ({@link relayPermitted}). A direct timeout is surfaced as-is (a slow
+ * origin won't get faster through the relay). Returns whether the relay was
+ * used so the UI can disclose it.
  */
 async function fetchDirectOrProxy(
   url: URL,
   doFetch: typeof fetch,
   timeoutMs: number,
+  confirmRelay?: ConfirmRelay,
 ): Promise<{ res: Response; viaProxy: boolean }> {
   const attempt = async (href: string, ms: number): Promise<Response> => {
     const { signal, clear } = timeoutSignal(ms);
@@ -239,18 +312,41 @@ async function fetchDirectOrProxy(
   try {
     return { res: await attempt(url.href, timeoutMs), viaProxy: false };
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") {
+    // AbortSignal.timeout() rejects with a "TimeoutError", not an
+    // "AbortError" (only the setTimeout fallback aborts plainly), so a slow
+    // origin read as a CORS failure: the user was asked to allow the relay
+    // for a site that simply had not answered yet.
+    const name = (e as { name?: unknown } | null)?.name;
+    if (name === "AbortError" || name === "TimeoutError") {
       throw new UrlImportError("The request timed out.");
     }
     // Direct cross-origin fetch blocked (CORS) or a network error. Retry through
-    // the app's own same-origin relay (reliable + first-party). A 404 (relay not
+    // the app's own same-origin relay (reliable + first-party) — IF the visitor
+    // has agreed to their link being fetched by our server. A 404 (relay not
     // deployed) or any non-2xx just falls through to the guidance below.
+    if (!(await relayPermitted(url, confirmRelay))) {
+      throw new UrlImportError(
+        "This site blocks direct browser access, and fetching it through the " +
+          "Markdown Studio server is turned off. Download the file and drag it in " +
+          '(or use "Import file"), paste its content below, or allow the import ' +
+          "relay in Settings ▸ Privacy.",
+        true,
+      );
+    }
+    let relayTooLarge: string | null = null;
     try {
       const res = await attempt(IMPORT_RELAY + encodeURIComponent(url.href), timeoutMs);
       if (res.ok) return { res, viaProxy: true };
+      // 413: the file is over what a serverless response can carry (~4 MB). The
+      // relay says so; "the relay is unavailable" below would be untrue.
+      if (res.status === 413) {
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        relayTooLarge = typeof body?.error === "string" ? body.error : "That file is too large for the import relay.";
+      }
     } catch {
       /* relay unavailable — fall through */
     }
+    if (relayTooLarge) throw new UrlImportError(relayTooLarge);
     throw new UrlImportError(
       "Couldn't fetch that URL. The host blocks direct browser access and the import " +
         'relay is unavailable. Download the file and drag it in (or use "Import file"), ' +
@@ -270,7 +366,13 @@ async function fetchDirectOrProxy(
  */
 export async function fetchImportResource(
   rawUrl: string,
-  opts: { timeoutMs?: number; fetchImpl?: typeof fetch; password?: string } = {},
+  opts: {
+    timeoutMs?: number;
+    fetchImpl?: typeof fetch;
+    password?: string;
+    /** Ask before the first use of the server relay (see {@link RelayConsent}). */
+    confirmRelay?: ConfirmRelay;
+  } = {},
 ): Promise<ImportResource> {
   const timeoutMs = opts.timeoutMs ?? URL_TIMEOUT_MS;
   const doFetch = opts.fetchImpl ?? fetch;
@@ -279,9 +381,9 @@ export async function fetchImportResource(
   const { fetchUrl, provider, bestEffort } = normalizeImportUrl(rawUrl);
   const url = validateImportUrl(fetchUrl);
 
-  // Direct fetch first (no third party); fall back to the CORS proxy only if the
-  // browser blocks the direct request.
-  const { res, viaProxy } = await fetchDirectOrProxy(url, doFetch, timeoutMs);
+  // Direct fetch first (no third party); fall back to our relay only if the
+  // browser blocks the direct request AND the visitor has agreed to it.
+  const { res, viaProxy } = await fetchDirectOrProxy(url, doFetch, timeoutMs, opts.confirmRelay);
   if (!res.ok) {
     throw new UrlImportError(`The server responded with ${res.status} ${res.statusText}.`);
   }

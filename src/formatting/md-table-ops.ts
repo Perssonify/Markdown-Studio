@@ -19,6 +19,10 @@ export interface ParsedTable {
   cursorRow: number;
   cursorCol: number;
   sepLineIdx: number;
+  /** Leading whitespace of the table's first line. A table inside a list item
+   *  is indented to the item's content column; re-rendering it flush-left
+   *  pulled it out of the list. */
+  indent: string;
 }
 
 // ---- Parser ----
@@ -82,10 +86,11 @@ export function mdParseTableAtCursor(view: EditorView): ParsedTable | null {
   if (cursorLineIdx > sepLineIdx) cursorRow--;
   if (cursorLineIdx === sepLineIdx) cursorRow = 0; // on separator → treat as header
 
-  // cursorCol: count pipes before cursor offset within the line
+  // cursorCol: count the CELL SEPARATORS before the cursor — not every "|",
+  // which counted an escaped `\|` or a `[[Doc|Alias]]` pipe as a column too.
   const offsetInLine = pos - cursorLine.from;
-  const textBefore = cursorLine.text.slice(0, offsetInLine);
-  const cursorCol = Math.max(0, (textBefore.match(/\|/g) || []).length - 1);
+  const before = cellSeparators(cursorLine.text).filter((i) => i < offsetInLine).length;
+  const cursorCol = Math.max(0, before - 1);
 
   return {
     rows,
@@ -95,6 +100,7 @@ export function mdParseTableAtCursor(view: EditorView): ParsedTable | null {
     cursorRow: Math.min(cursorRow, rows.length - 1),
     cursorCol: Math.min(cursorCol, (rows[0]?.length ?? 1) - 1),
     sepLineIdx,
+    indent: /^[ \t]*/.exec(firstLine.text)?.[0] ?? "",
   };
 }
 
@@ -103,29 +109,29 @@ export function mdParseTableAtCursor(view: EditorView): ParsedTable | null {
 export function mdAddRowAfter(view: EditorView): void {
   const table = mdParseTableAtCursor(view);
   if (!table) return;
-  const { rows, alignments, from, to, cursorRow } = table;
+  const { rows, cursorRow } = table;
   const colCount = rows[0]?.length ?? 1;
   const newRow = Array<string>(colCount).fill("");
   rows.splice(cursorRow + 1, 0, newRow);
-  dispatchTable(view, from, to, rows, alignments);
+  dispatchTable(view, table);
 }
 
 export function mdAddRowBefore(view: EditorView): void {
   const table = mdParseTableAtCursor(view);
   if (!table) return;
-  const { rows, alignments, from, to, cursorRow } = table;
+  const { rows, cursorRow } = table;
   const colCount = rows[0]?.length ?? 1;
   const newRow = Array<string>(colCount).fill("");
   // Don't insert before header (row 0) — insert after instead
   const insertIdx = cursorRow === 0 ? 1 : cursorRow;
   rows.splice(insertIdx, 0, newRow);
-  dispatchTable(view, from, to, rows, alignments);
+  dispatchTable(view, table);
 }
 
 export function mdDeleteRow(view: EditorView): void {
   const table = mdParseTableAtCursor(view);
   if (!table) return;
-  const { rows, alignments, from, to, cursorRow } = table;
+  const { rows, cursorRow } = table;
   if (rows.length <= 1) {
     // Only header left — delete entire table
     mdDeleteTable(view);
@@ -137,36 +143,36 @@ export function mdDeleteRow(view: EditorView): void {
   } else {
     rows.splice(cursorRow, 1);
   }
-  dispatchTable(view, from, to, rows, alignments);
+  dispatchTable(view, table);
 }
 
 export function mdAddColumnAfter(view: EditorView): void {
   const table = mdParseTableAtCursor(view);
   if (!table) return;
-  const { rows, alignments, from, to, cursorCol } = table;
+  const { rows, alignments, cursorCol } = table;
   const insertIdx = cursorCol + 1;
   for (const row of rows) {
     row.splice(insertIdx, 0, "");
   }
   alignments.splice(insertIdx, 0, "");
-  dispatchTable(view, from, to, rows, alignments);
+  dispatchTable(view, table);
 }
 
 export function mdAddColumnBefore(view: EditorView): void {
   const table = mdParseTableAtCursor(view);
   if (!table) return;
-  const { rows, alignments, from, to, cursorCol } = table;
+  const { rows, alignments, cursorCol } = table;
   for (const row of rows) {
     row.splice(cursorCol, 0, "");
   }
   alignments.splice(cursorCol, 0, "");
-  dispatchTable(view, from, to, rows, alignments);
+  dispatchTable(view, table);
 }
 
 export function mdDeleteColumn(view: EditorView): void {
   const table = mdParseTableAtCursor(view);
   if (!table) return;
-  const { rows, alignments, from, to, cursorCol } = table;
+  const { rows, alignments, cursorCol } = table;
   if ((rows[0]?.length ?? 0) <= 1) {
     // Single column — delete entire table
     mdDeleteTable(view);
@@ -176,7 +182,7 @@ export function mdDeleteColumn(view: EditorView): void {
     row.splice(cursorCol, 1);
   }
   alignments.splice(cursorCol, 1);
-  dispatchTable(view, from, to, rows, alignments);
+  dispatchTable(view, table);
 }
 
 export function mdDeleteTable(view: EditorView): void {
@@ -215,22 +221,94 @@ export function isSeparatorLine(text: string): boolean {
   return /^\|[\s:|-]+\|$/.test(text.trim());
 }
 
-/** Parse a pipe row into cell strings */
-export function parsePipeRow(text: string): string[] {
-  const trimmed = text.trim();
-  // Remove leading and trailing pipes, split by |
-  const inner = trimmed.startsWith("|") ? trimmed.slice(1) : trimmed;
-  const content = inner.endsWith("|") ? inner.slice(0, -1) : inner;
-  return content.split("|").map((c) => c.trim());
+/** A `[[…]]` wiki link starting exactly at `lastIndex` (sticky). */
+const WIKI_AT = /\[\[[^\]]+\]\]/y;
+
+/**
+ * Offsets of the pipes in `text` that DELIMIT cells.
+ *
+ * `split("|")` treated every pipe as a column boundary, so adding one row to a
+ * two-column table holding `x \| y` and `[[Doc|Alias]]` rewrote it as FOUR
+ * columns — splitting the escaped pipe and the wiki link, and persisting it.
+ * This follows what actually renders the table:
+ *  - an ESCAPED pipe (`\|`, odd run of backslashes) is cell content;
+ *  - a `[[…]]` wiki link is one unit: the preprocessor turns it into a link
+ *    BEFORE marked splits the row, so its alias pipe never reaches marked;
+ *  - a pipe inside a backtick code span still DELIMITS. GFM splits a row into
+ *    cells before any inline parsing, and the marked build the preview uses
+ *    renders "| `a|b` |" as two cells — treating it as content would make the
+ *    table ops disagree with the table the user sees. (That is also why a
+ *    `[[…]]` inside a code span is NOT a unit: the preprocessor masks code, so
+ *    the link is never converted and marked splits it.)
+ */
+export function cellSeparators(text: string): number[] {
+  const out: number[] = [];
+  // marked's rule, verbatim: a pipe is escaped when an ODD run of backslashes
+  // precedes it — inside a code span too.
+  const escaped = (i: number) => {
+    let n = 0;
+    for (let j = i - 1; j >= 0 && text[j] === "\\"; j--) n++;
+    return n % 2 === 1;
+  };
+  let codeTicks = 0; // length of the backtick run that opened the current code span
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === "|") {
+      if (!escaped(i)) out.push(i);
+      continue;
+    }
+    if (ch === "`") {
+      if (!codeTicks && escaped(i)) continue; // a literal backtick opens nothing
+      let n = 1;
+      while (text[i + n] === "`") n++;
+      if (!codeTicks) codeTicks = n;
+      else if (n === codeTicks) codeTicks = 0;
+      i += n - 1;
+      continue;
+    }
+    if (!codeTicks && ch === "[" && text[i + 1] === "[") {
+      // The preprocessor's own wiki-link pattern, so "one unit" means exactly
+      // what it will convert.
+      WIKI_AT.lastIndex = i;
+      const m = WIKI_AT.exec(text);
+      if (m) { i += m[0].length - 1; continue; }
+    }
+  }
+  return out;
 }
 
-/** Parse separator line for alignments */
+/** Parse a pipe row into cell strings (trimmed; leading/trailing pipe optional). */
+export function parsePipeRow(text: string): string[] {
+  const trimmed = text.trim();
+  const seps = cellSeparators(trimmed);
+  const bounds = [-1, ...seps, trimmed.length];
+  const cells: string[] = [];
+  for (let i = 0; i < bounds.length - 1; i++) {
+    cells.push(trimmed.slice(bounds[i]! + 1, bounds[i + 1]!).trim());
+  }
+  // The outer pipes delimit nothing on their far side.
+  if (seps[0] === 0) cells.shift();
+  if (seps.length && seps[seps.length - 1] === trimmed.length - 1) cells.pop();
+  return cells;
+}
+
+/**
+ * Parse separator line for alignments.
+ *
+ * `:---` is an EXPLICIT left alignment and is kept as "left". It used to be
+ * folded into the unmarked default, so any table operation silently rewrote
+ * the user's `:---` as `---` — and the two are not the same table: marked emits
+ * `align="left"` for one and nothing for the other.
+ */
 export function parseSeparator(text: string): string[] {
   const cells = parsePipeRow(text);
   return cells.map((cell) => {
     const c = cell.trim();
-    if (c.startsWith(":") && c.endsWith(":")) return "center";
-    if (c.endsWith(":")) return "right";
+    const left = c.startsWith(":");
+    const right = c.endsWith(":");
+    if (left && right) return "center";
+    if (right) return "right";
+    if (left) return "left";
     return "";
   });
 }
@@ -271,6 +349,7 @@ export function renderTable(
     const w = widths[i];
     if (a === "center") return ":" + "-".repeat(Math.max(1, w! - 2)) + ":";
     if (a === "right") return "-".repeat(Math.max(1, w! - 1)) + ":";
+    if (a === "left") return ":" + "-".repeat(Math.max(1, w! - 1));
     return "-".repeat(w!);
   });
   const sepLine = "| " + sep.join(" | ") + " |";
@@ -286,13 +365,14 @@ export function renderTable(
 
 // ---- Internal ----
 
-function dispatchTable(
-  view: EditorView,
-  from: number,
-  to: number,
-  rows: string[][],
-  alignments: string[]
-): void {
-  const text = renderTable(rows, alignments);
+function dispatchTable(view: EditorView, table: ParsedTable): void {
+  const { rows, alignments, from, to, indent } = table;
+  // Re-indent every line to where the table was: a table inside a list item
+  // lives at the item's content column, and rendering it flush-left moved it
+  // out of the list.
+  const text = renderTable(rows, alignments)
+    .split("\n")
+    .map((line) => indent + line)
+    .join("\n");
   view.dispatch({ changes: { from, to, insert: text } });
 }

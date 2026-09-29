@@ -35,7 +35,12 @@ const linksIn = (md) => {
     .filter(Boolean);
 };
 
-const WELCOME_TITLE = "Welcome"; // App.tsx pins this via initialDocument.title
+// The welcome document is titled by its first H1, like every other document.
+// App.tsx passes initialDocument.title "Welcome", but that is only the name to
+// fall back to when there is no heading (F4 in PerssonifyEditor). This used to
+// hard-code "Welcome", so the test agreed with the starters' [[Welcome]] links
+// while every new user saw them drawn as broken.
+const WELCOME_TITLE = titleOf(DEFAULT_CONTENT);
 
 const docs = [
   { title: WELCOME_TITLE, markdown: DEFAULT_CONTENT },

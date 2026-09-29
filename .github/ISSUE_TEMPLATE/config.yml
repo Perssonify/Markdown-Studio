@@ -1,8 +1,11 @@
 blank_issues_enabled: true
 contact_links:
+  # The repository is private, so its GitHub security-advisory page is not
+  # reachable by outside reporters. The mailbox is the channel; it is also
+  # published at https://markdownstudio.com/.well-known/security.txt.
   - name: Report a security vulnerability (private)
-    url: https://github.com/SolutionPath/markdown-studio/security/advisories/new
-    about: Please report vulnerabilities privately — never in a public issue. See SECURITY.md.
+    url: mailto:security@markdownstudio.com
+    about: E-mail security@markdownstudio.com — never report a vulnerability in a public issue. See SECURITY.md for scope.
   - name: Contributing guide
     url: https://github.com/SolutionPath/markdown-studio/blob/main/CONTRIBUTING.md
     about: Setup, the verification gate, and the invariants to read before changing code.

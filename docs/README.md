@@ -5,7 +5,7 @@
 
 ## What this is, in one paragraph
 
-Markdown Studio is a **browser-only** markdown editor that runs two editing surfaces side by side: a raw-markdown pane (CodeMirror 6) and a rich-text pane (Tiptap 3 / ProseMirror). Edits in either pane sync to the other in real time, with the **canonical source of truth being ProseMirror JSON** — not the markdown text, not the HTML. It stores documents locally in **IndexedDB** (there is no server, no login, no database to provision), supports many documents in nested folders, wiki-style `[[links]]` between documents, a force-directed knowledge graph, and import/export across Markdown, HTML, and ProseMirror JSON. The same code ships two ways: as a **standalone web app** (deployed to Vercel) and as an **embeddable npm library** (`@perssonify/editor`).
+Markdown Studio is a **browser-based** markdown editor that runs two editing surfaces side by side: a raw-markdown pane (CodeMirror 6) and a rich-text pane (Tiptap 3 / ProseMirror). Edits in either pane sync to the other in real time, with the **canonical source of truth being ProseMirror JSON** — not the markdown text, not the HTML. It stores documents locally in **IndexedDB** (no account, no login, no database to provision, and no server copy — the only server code is an opt-in relay for importing from a URL), supports many documents in nested folders, wiki-style `[[links]]` between documents, a force-directed knowledge graph, and import/export across Markdown, HTML, and ProseMirror JSON. The same code ships two ways: as a **standalone web app** (deployed to Vercel) and as an **embeddable npm library** (`@perssonify/editor`).
 
 ## What it does for a user (concrete)
 
@@ -22,25 +22,26 @@ This repo uses **[Bun](https://bun.sh)** as its package manager and runner (see 
 ```bash
 git clone https://github.com/SolutionPath/markdown-studio.git
 cd markdown-studio
-bun install                 # installs deps from bun.lock
-bun run dev                 # starts the standalone app (Vite)
+bun install --frozen-lockfile   # exactly the locked tree (Bun 1.4.0, see packageManager)
+bun run dev                     # starts the standalone app (Vite 8)
 ```
 
-Expected output once Vite is up:
+Expected output once Vite is up (the version and timing vary):
 
 ```
-  VITE v6.x.x  ready in ~400 ms
+  VITE v8.x.x  ready in … ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
 ```
 
-Open `http://localhost:5173`. On an empty browser profile the first run seeds three linked documents — **Welcome** (which opens), **Changelog**, and **About Perssonify** in a folder — in a split view (markdown left, rich text right). They cross-link on purpose, so the relationship map has a real graph on day one. The browser console prints diagnostic boot lines prefixed `[DIAG +0ms] [BOOT]` — that's normal, see [domain-glossary.md#diag](domain-glossary.md#diag).
+Open `http://localhost:5173`. On an empty browser profile the first run seeds three linked documents — **Welcome** (which opens), **Changelog**, and **About Perssonify** in a folder — in a split view (markdown left, rich text right). They cross-link on purpose, so the relationship map has a real graph on day one. The structured `[DIAG]` boot trace is off by default; add `?diag=1` to the URL to see it (see [domain-glossary.md#diag](domain-glossary.md#diag)).
 
 Run the tests:
 
 ```bash
-bun run test                # vitest, one-shot
+bun run test                # vitest, one-shot (196 files, 2,126 tests)
+bun run lint                # ESLint: must report 0 errors
 ```
 
 Full setup, env vars, and recipes: [local-development.md](local-development.md).
@@ -81,6 +82,11 @@ Full annotated tree and a "where does X live?" table: [codebase-tour.md](codebas
 | [domain-glossary.md](domain-glossary.md) | Vocabulary: canonical, residuals, fidelity, transclusion, … |
 | [gotchas.md](gotchas.md) | Landmines, stale docs, dead code, perf cliffs |
 | [runbooks/](runbooks/) | When things break: documents vanished, sync loop, quota exceeded |
+| [audit-2026-09.md](audit-2026-09.md) | **What remains before launch** — the September 2026 production-readiness audit: all 114 findings with their status, the owner actions (accounts, settings, legal) and the deferred engineering work |
+| [deployment.md](deployment.md) | What the repository does for a release, and what an owner must switch on (domain, CI gate, npm, CSP) |
+| [deployment-todo.md](deployment-todo.md) | The launch checklist: what to switch on, in order, and what to check after every deploy |
+| [decisions.md](decisions.md) | Recorded product and architecture decisions, and why |
+| [backlog.md](backlog.md) | Planned features and the earlier audits' findings |
 | [contributing.md](contributing.md) | How to propose changes |
 
 ## Release history & changelog
@@ -91,4 +97,4 @@ Full annotated tree and a "where does X live?" table: [codebase-tour.md](codebas
   rebuilding or extending the app.
 
 The app has **no authentication** by design (a former Vercel edge-middleware password gate was
-removed — see [auth.md](auth.md)); it is a client-only, browser-storage app.
+removed — see [auth.md](auth.md)); its documents live in the visitor's browser storage.

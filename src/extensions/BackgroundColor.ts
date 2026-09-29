@@ -1,5 +1,6 @@
 import { Extension } from "@tiptap/core";
 import "@tiptap/extension-text-style";
+import { sanitizeCssColor } from "../engine/css-safety";
 
 export interface BackgroundColorOptions {
   /** Node/mark types the backgroundColor attribute is applied to. */
@@ -45,10 +46,15 @@ export const BackgroundColor = Extension.create<BackgroundColorOptions>({
             default: null,
             parseHTML: (element) =>
               element.style.backgroundColor?.replace(/['"]+/g, "") || null,
+            // The value is interpolated into a style attribute, and a canonical
+            // attr is whatever the JSON said: validate it as a colour here too
+            // (canonical-sanitize.ts does the same at the import boundary), so
+            // `red; position: fixed; inset: 0` can never become a declaration.
             renderHTML: (attributes) => {
-              if (!attributes["backgroundColor"]) return {};
+              const color = sanitizeCssColor(attributes["backgroundColor"] as string | null);
+              if (!color) return {};
               return {
-                style: `background-color: ${attributes["backgroundColor"]}`,
+                style: `background-color: ${color}`,
               };
             },
           },

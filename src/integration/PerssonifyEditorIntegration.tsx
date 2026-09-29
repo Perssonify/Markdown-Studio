@@ -6,8 +6,10 @@ import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter
 import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
 import { createAssociationStore, mergeGraphWithAssociations } from "./associations";
 import { createHostBridge } from "./host-bridge";
-import { formatDocumentsForPrompt, PromptFormat } from "./prompt-builder";
+import { formatDocumentsForPrompt, linkedPromptItems, PromptFormat } from "./prompt-builder";
 import { sanitizeCssColor } from "../theme/palette";
+import { warnDeprecated } from "./deprecation";
+import { clearLocalData } from "../store/documentStore";
 
 /** Rich payload for a link activation inside the editor. Lets a host resolve
  *  deep links (custom scheme / relative path) into its own app while external
@@ -35,10 +37,18 @@ export interface PerssonifyEditorIntegrationProps {
   /** Open read-only (session-only; never writes the visitor's saved setting). */
   readOnly?: boolean;
   /** @deprecated Accepted for API compatibility and NEVER consumed. Seed the
-   *  library with the imperative `addDocuments` handle instead. */
+   *  library with the imperative `addDocuments` handle instead. Logs a
+   *  one-time warning in development. */
   documents?: any[];
+  /** @deprecated Accepted for API compatibility and NEVER consumed: the editor
+   *  has no field-schema feature to configure. Logs a one-time warning in
+   *  development. */
   fieldSchemas?: FieldSchema[];
   associations?: Association[];
+  /** @deprecated Accepted for API compatibility and NEVER called: wiki links
+   *  resolve against the editor's own documents. To map a link into your app,
+   *  handle `onLinkClick` (`kind: "doc"` carries the target title and id).
+   *  Logs a one-time warning in development. */
   linkResolver?: (target: string) => string | null;
   allowedOrigins?: string[];
   onChange?: (data: any) => void;
@@ -48,11 +58,12 @@ export interface PerssonifyEditorIntegrationProps {
   onLinkClick?: (data: EditorLinkClick) => boolean | void;
   onGraphUpdate?: (data: any) => void;
   /** @deprecated Accepted for API compatibility and NEVER fired — the editor
-   *  exposes no field-change hook to forward. */
+   *  exposes no field-change hook to forward. Logs a one-time warning in
+   *  development. */
   onFieldChange?: (data: any) => void;
   /** @deprecated Accepted for API compatibility and NEVER fired — exports are
    *  driven by the host through the `exportAs` handle, which resolves when the
-   *  download has been triggered. */
+   *  download has been triggered. Logs a one-time warning in development. */
   onExport?: (data: any) => void;
   onReady?: (handle: EditorHandle | null) => void;
 
@@ -111,6 +122,8 @@ export interface EditorHandle {
   getActiveDocument: () => any;
   importContent: (content: string, format: string) => Promise<any>;
   setDocuments: (docs: any[]) => Promise<any>;
+  /** @deprecated Has no effect — nothing in the editor reads field schemas.
+   *  Logs a one-time warning in development. */
   setFieldSchemas: (schemas: FieldSchema[]) => void;
   setAssociations: (assocs: Association[]) => void;
   setTheme: (theme: string | boolean) => void;
@@ -142,15 +155,30 @@ export interface EditorHandle {
   getAssociations: (docId?: string) => any;
   copyAsPrompt: (opts?: CopyPromptOptions) => Promise<string>;
   exportAs: (format: string) => Promise<any>;
+  /** Erase everything the editor keeps in this browser — documents, version
+   *  history, the crash stash, drafts; `preferences: true` also removes its
+   *  `pf:` settings. For a logout on a shared device (A103). */
+  clearLocalData: (opts?: { preferences?: boolean }) => Promise<void>;
 }
+
+/** Props kept for API compatibility that have no effect, and what to do instead. */
+const DEPRECATED_PROPS: ReadonlyArray<readonly [keyof PerssonifyEditorIntegrationProps, string]> = [
+  ["fieldSchemas", "it has no effect (the editor has no field-schema feature). Remove the prop."],
+  [
+    "linkResolver",
+    "it is never called (wiki links resolve against the editor's own documents). Map links into your app from `onLinkClick` instead.",
+  ],
+  ["documents", "it is never read. Seed documents with the handle's `addDocuments()`."],
+  ["onFieldChange", "it is never fired (the editor exposes no field-change event)."],
+  ["onExport", "it is never fired. `exportAs()` resolves when its download has been triggered."],
+];
 
 export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEditorIntegrationProps>(
   function PerssonifyEditorIntegration(props, ref) {
     const {
       isDark: isDarkProp = true,
-      fieldSchemas: _fieldSchemasProp, // accepted for API compat; PE never consumed it
+      // fieldSchemas / linkResolver / documents: deprecated, see DEPRECATED_PROPS.
       associations: associationsProp,
-      linkResolver: _linkResolverProp, // accepted for API compat; PE never consumed it
       allowedOrigins,
       onChange: onChangeProp,
       onLinkClick: onLinkClickProp,
@@ -203,6 +231,19 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
       setAccentState(accent);
     }, [accent]);
 
+    // Deprecated props: accepted so existing hosts still compile, but they do
+    // nothing — so say so once (development builds only) instead of silently.
+    // Keyed on which ones are present, so a host re-rendering with a new
+    // callback identity does not re-run it.
+    const deprecatedPassed = DEPRECATED_PROPS.filter(([name]) => props[name] !== undefined)
+      .map(([name]) => name)
+      .join(",");
+    useEffect(() => {
+      for (const [name, detail] of DEPRECATED_PROPS) {
+        if (deprecatedPassed.split(",").includes(name)) warnDeprecated(`The \`${name}\` prop`, detail);
+      }
+    }, [deprecatedPassed]);
+
     useEffect(() => {
       if (associationsProp) {
         associationStoreRef.current.setAll(associationsProp);
@@ -252,6 +293,7 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
         },
 
         setFieldSchemas(schemas: FieldSchema[]) {
+          warnDeprecated("`setFieldSchemas()`", "it has no effect (nothing in the editor reads field schemas). Remove the call.");
           internalRef.current?.setFieldSchemas?.(schemas);
         },
 
@@ -290,19 +332,8 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
 
           if (includeLinked) {
             const graph = handle.getGraph();
-            const linkedIds = new Set<string>();
-            
-            for (const edge of graph.edges || []) {
-              if (edge.source === activeDoc.id) linkedIds.add(edge.target);
-              if (edge.target === activeDoc.id) linkedIds.add(edge.source);
-            }
-            
-            for (const id of linkedIds) {
-              const doc = internalRef.current?.getDocById?.(id);
-              if (doc) {
-                items.push({ doc });
-              }
-            }
+            const getDocById = internalRef.current?.getDocById;
+            if (getDocById) items.push(...(await linkedPromptItems(graph.edges || [], activeDoc.id, getDocById)));
           }
 
           const prompt = formatDocumentsForPrompt(items, { format: format as PromptFormat, preamble });
@@ -314,6 +345,12 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
           }
 
           return prompt;
+        },
+
+        clearLocalData(opts?: { preferences?: boolean }) {
+          // The core handle has it; this wrapper did not forward it, so a host
+          // using the integration had no logout path at all.
+          return clearLocalData(opts);
         },
 
         async openDocument(docId: string) {
@@ -412,17 +449,23 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
         enableSystem={false}
         enableColorScheme={false}
       >
-        <ErrorBoundary isDark={isDark}>
-          {/* Scope accent/theme overrides to the editor subtree so they never
-              leak into the host page. data-palette + data-theme on the same
-              element satisfy the palette's (light and dark) attribute selectors;
-              inline CSS vars (accentColor/themeVars) take highest precedence.
-              `display: contents` keeps the wrapper out of the layout. */}
-          <div
-            style={{ display: "contents", ...themeStyle }}
-            {...(accentState ? { "data-palette": accentState } : {})}
-            data-theme={isDark ? "dark" : "light"}
-          >
+        {/* Scope accent/theme overrides to the editor subtree so they never
+            leak into the host page. data-palette + data-theme on the same
+            element satisfy the palette's (light and dark) attribute selectors;
+            inline CSS vars (accentColor/themeVars) take highest precedence.
+            `display: contents` keeps the wrapper out of the layout.
+            `data-pf-root` makes it the element the published stylesheet DEFINES
+            the design tokens on for this subtree (they are no longer written
+            on the host's :root — see build/scope-css.mjs). It sits OUTSIDE the
+            error boundary so the crash card, which is styled with the same
+            tokens, still gets them. */}
+        <div
+          data-pf-root=""
+          style={{ display: "contents", ...themeStyle }}
+          {...(accentState ? { "data-palette": accentState } : {})}
+          data-theme={isDark ? "dark" : "light"}
+        >
+          <ErrorBoundary isDark={isDark}>
             <PerssonifyEditor
             _integrationRef={internalRef}
             storageAdapter={storageAdapter}
@@ -455,8 +498,8 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
               emitToHost("onGraphUpdate", data);
             }}
             />
-          </div>
-        </ErrorBoundary>
+          </ErrorBoundary>
+        </div>
       </ThemeProvider>
     );
   }

@@ -1,5 +1,11 @@
-import { RefObject, useEffect } from "react";
+import { RefObject, useEffect, useRef } from "react";
 import { useUIStore } from "../store/uiStore";
+import { isAltGraphInput } from "../utils/alt-graph";
+
+/** The markdown pane's handle, as far as this hook needs it. */
+interface MarkdownPaneLike {
+  getView?: () => { dom?: HTMLElement | null } | null;
+}
 
 interface KeyboardShortcutsOptions {
   dispatch: (command: string, value?: any) => void;
@@ -18,6 +24,12 @@ interface KeyboardShortcutsOptions {
   toggleCards?: () => void;
   cancelPendingSync: () => void;
   tiptapRef: RefObject<any>;
+  /** The markdown pane. With the rich pane's view, this is how the hook tells
+   *  "the caret is in the document" from "focus is in some other input". */
+  cmRef?: RefObject<MarkdownPaneLike | null>;
+  /** Which workspace surface is on screen. Formatting chords act only on
+   *  "editor"; the map and Cards cover the document they would edit. */
+  workspaceView?: "editor" | "map" | "cards";
   /** Prompt for a link URL via the app's styled dialog (falls back to
    *  window.prompt if not provided). */
   promptLink?: () => Promise<string | null>;
@@ -39,9 +51,17 @@ export function useKeyboardShortcuts(
     toggleCards,
     cancelPendingSync,
     tiptapRef,
+    cmRef,
+    workspaceView = "editor",
     promptLink,
   }: KeyboardShortcutsOptions
 ) {
+  // Read at EVENT time through a ref, like the container below: the view flips
+  // on every overlay open/close, and making it an effect dependency would
+  // re-subscribe the capture listener each time for no benefit.
+  const workspaceViewRef = useRef(workspaceView);
+  workspaceViewRef.current = workspaceView;
+
   useEffect(() => {
     // NOTE: this effect must NOT bail on a null container.
     //
@@ -59,6 +79,13 @@ export function useKeyboardShortcuts(
     // on the mount order.
     const handler = (e: KeyboardEvent) => {
       if (!useUIStore.getState().keyboardShortcutsEnabled) return; // disabled in Settings
+      // AltGr is TYPING, not a chord. Windows reports it as Ctrl+Alt, so without
+      // this every AltGr character met the `mod` test below: `[` and `]` (AltGr+8
+      // / AltGr+9 on a German layout) were swallowed as outdent / indent in both
+      // panes, and Hungarian AltGr+F — its `[` — opened Find & Replace through
+      // the physical-key match in the ⌥⌘F branch. See isAltGraphInput for why a
+      // plain Ctrl+Alt+F on a US layout still counts as a chord.
+      if (isAltGraphInput(e)) return;
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       // This listener is capture-phase on `document`, so it runs before
@@ -73,8 +100,14 @@ export function useKeyboardShortcuts(
       const key = e.key.toLowerCase();
       const shift = e.shiftKey;
 
+      const active = document.activeElement;
       const tiptapDom = tiptapRef.current?.getEditor?.()?.view?.dom;
-      const tiptapHasFocus = tiptapDom && tiptapDom.contains(document.activeElement);
+      const tiptapHasFocus = !!tiptapDom && tiptapDom.contains(active);
+      const cmDom = cmRef?.current?.getView?.()?.dom;
+      const cmHasFocus = !!cmDom && cmDom.contains(active);
+      // The caret is IN the document, and the document is what is on screen.
+      // Everything below the global chords edits the document, so it needs both.
+      const inDocument = (tiptapHasFocus || cmHasFocus) && workspaceViewRef.current === "editor";
 
       if (key === "f" && shift) { e.preventDefault(); (openSearch ?? toggleFind)(); return; }
       // ⌥⌘F — Find & Replace, and the ONLY keyboard route to Replace on macOS
@@ -107,6 +140,21 @@ export function useKeyboardShortcuts(
       if (key === "g" && shift && toggleGraph) { e.preventDefault(); toggleGraph(); return; }
       // ⌘⇧K toggles the Cards board (same overlay contract as the graph).
       if (key === "k" && shift && toggleCards) { e.preventDefault(); toggleCards(); return; }
+
+      // ── Document chords: only with the caret in the document ─────────────
+      //
+      // The scope check below (`scoped`) admits ANY focus inside the editor
+      // container, and the container holds a great deal that is not the
+      // document: the Cards composer and card editor, the library's search and
+      // rename boxes, the map's search, the Find panel. ⌘B / ⌘I / ⌘K pressed in
+      // any of those used to format the document hidden UNDER the overlay —
+      // whichever pane was last focused — and autosave it. The global chords
+      // above keep working from anywhere; these do nothing outside a pane, and
+      // leave the key to whatever has focus. ⌘Z included: `cancelPendingSync`
+      // drops the pending cross-pane projection, which is only right when the
+      // markdown pane is about to undo — from a text box it stranded the last
+      // edit in one pane.
+      if (!inDocument) return;
 
       // ⌘K (insert link) is handled here — before the tiptap-focus early return —
       // because it is not one of TipTap's own keymap shortcuts, so it would
@@ -211,5 +259,5 @@ export function useKeyboardShortcuts(
     };
     document.addEventListener("keydown", scoped, true);
     return () => document.removeEventListener("keydown", scoped, true);
-  }, [dispatch, updateFormats, save, newDoc, toast, toggleFind, openReplace, openSearch, toggleSidebar, toggleGraph, toggleCards, cancelPendingSync, tiptapRef, containerRef, promptLink]);
+  }, [dispatch, updateFormats, save, newDoc, toast, toggleFind, openReplace, openSearch, toggleSidebar, toggleGraph, toggleCards, cancelPendingSync, tiptapRef, cmRef, containerRef, promptLink]);
 }

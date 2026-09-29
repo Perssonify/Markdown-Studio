@@ -19,6 +19,7 @@ import type { IngestFormat, IngestSource } from "./ingest";
 import { completeIngest, ingest } from "./ingest";
 import {
   StorageQuotaError,
+  StorageReadError,
   createStorageAdapter,
   hasMetrics,
   IndexedDBStorageAdapter,
@@ -27,7 +28,10 @@ import {
 } from "./storage-adapter";
 import type { StorageMetrics } from "./idb-storage-adapter";
 import { snapshotStore } from "./snapshot-store";
-import { takeStashed } from "./crash-recovery";
+import { clearStash, configureRecovery, takeStashed, type RecoveryEntry } from "./crash-recovery";
+import { historyCache } from "./history-cache";
+import { useFolderStore } from "./folders";
+import { safeStorage } from "../utils/safe-storage";
 
 /**
  * A canonical doc is "blank" when it holds no real content — an empty/absent
@@ -44,6 +48,127 @@ export function isBlankCanonical(c: any): boolean {
     return !!n && n.type === "paragraph" && (!n.content || n.content.length === 0);
   }
   return false;
+}
+
+/**
+ * How far the stored `updated` may run ahead of the revision this tab's content
+ * is based on before it counts as ANOTHER tab's write. Absorbs same-tab stamp
+ * wobble from adapters stamping `updated` on save.
+ */
+export const CONFLICT_TOLERANCE_MS = 2000;
+
+/** True when `storedUpdated` is meaningfully newer than `baseUpdated` — i.e.
+ *  somebody else wrote the record after the revision this content came from. */
+export function isNewerThanBase(
+  storedUpdated: string | null | undefined,
+  baseUpdated: string | null | undefined
+): boolean {
+  if (!storedUpdated || !baseUpdated) return false;
+  const drift = new Date(storedUpdated).getTime() - new Date(baseUpdated).getTime();
+  return drift > CONFLICT_TOLERANCE_MS;
+}
+
+/** The saveError a document gets while it is locked read-only because its
+ *  content does not fit this build (see schema-version.ts). */
+export const SCHEMA_LOCK_ERROR = "Made by a newer version of the app — open read-only, not saving";
+
+/** The message a refused multi-tab write carries (the UI matches on its start). */
+export const CONFLICT_MESSAGE =
+  "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload.";
+
+/** A write refused because another tab wrote the record after the revision
+ *  this tab's content is based on. Carries CONFLICT_MESSAGE. */
+export class ConflictError extends Error {
+  constructor() {
+    super(CONFLICT_MESSAGE);
+    this.name = "ConflictError";
+  }
+}
+
+/**
+ * What an explicit save should tell the user when `saveActiveDoc` resolved
+ * WITHOUT committing. ⌘S used to say "Changes saved" (and fire the host's
+ * onSave) for every resolution — a refused blank write, a save aborted by a
+ * document switch, a swallowed write error — none of which put anything on disk.
+ */
+export function describeUncommittedSave(
+  s: Pick<DocumentState, "saveStatus" | "saveError">
+): { message: string; type: "warning" | "error" } {
+  switch (s.saveStatus) {
+    case "blocked":
+      // Two refusals share the terminal "blocked" status; saveError tells them
+      // apart. A document from a newer build is not empty — telling its user
+      // "the editor is empty" sent them looking for content that was never lost.
+      if (s.saveError === SCHEMA_LOCK_ERROR) {
+        return {
+          message: "Not saved — this document was made by a newer version of the app, so it is open read-only. Open it in the newer version to edit it.",
+          type: "warning",
+        };
+      }
+      return {
+        message: "Not saved — the editor is empty but the stored document is not. Undo to restore it, or use Clear document if you meant to empty it.",
+        type: "warning",
+      };
+    case "conflict":
+      return { message: CONFLICT_MESSAGE, type: "warning" };
+    case "full":
+      return { message: "Not saved — storage is full. Delete documents or old versions to free space.", type: "error" };
+    case "error":
+      return { message: s.saveError ? `Save failed — ${s.saveError}` : "Save failed", type: "error" };
+    default:
+      // An ownership abort: the document changed under the save.
+      return { message: "Save did not complete — try again", type: "warning" };
+  }
+}
+
+/**
+ * What the unload handler stashes (see crash-recovery.ts), as a pure function
+ * of the store state and the live editor canonical, so the exact set a reload
+ * will adopt can be tested without a page to unload.
+ *
+ * Every entry carries the revision it was written against (`base`). The active
+ * document's is `activeDoc.updated` — the revision the editor content is based
+ * on, which a refused conflict never advanced — and a parked draft's is its
+ * `_draftBases` entry. `live` must already be the canonical of the document the
+ * editor HOLDS (the caller checks `hydratedDocId`); a blank one is never
+ * stashed, and a blank parked draft only when the stored copy is blank too.
+ */
+export function collectUnloadStash(
+  s: Pick<
+    DocumentState,
+    "activeDocId" | "hydratedDocId" | "activeDoc" | "saveStatus" | "_unsavedEdits" | "_draftBases" | "documents"
+  >,
+  live: DocumentRecord["canonical"] | null,
+  at: number
+): RecoveryEntry[] {
+  const stash: RecoveryEntry[] = [];
+  const owns = !!s.activeDocId && s.hydratedDocId === s.activeDocId;
+  if (s.activeDocId && owns && live && !isBlankCanonical(live)) {
+    stash.push({
+      docId: s.activeDocId,
+      canonical: live,
+      at,
+      base: s.activeDoc?.id === s.activeDocId ? s.activeDoc.updated : undefined,
+      ...(s.saveStatus === "conflict" ? { conflict: true } : {}),
+    });
+  }
+  for (const [docId, canonical] of s._unsavedEdits) {
+    if (docId === s.activeDocId) continue;
+    // Honour the blank-over-content backstop here too. `patchDocById` has no
+    // such guard (a host clearing a document through the bridge is a
+    // legitimate write), so a blank canonical that `saveActiveDoc` had
+    // deliberately REFUSED — parking a terminal "blocked" status — was cached
+    // as that document's draft and then written to disk anyway on tab close,
+    // with no pre-clear snapshot to recover from.
+    if (isBlankCanonical(canonical)) {
+      const stored = s.documents.find((d) => d.id === docId);
+      // `documents` carries list summaries; a non-zero word count is proof
+      // the stored document is not itself blank.
+      if (!stored || (stored.wordCount ?? 0) > 0) continue;
+    }
+    stash.push({ docId, canonical, at, base: s._draftBases.get(docId) });
+  }
+  return stash;
 }
 
 //  Public types
@@ -66,7 +191,12 @@ export interface DocumentCounts {
 // the active doc, so this tab refused to save (last-writer-wins would clobber
 // that tab's work). It must NOT re-arm autosave either (the conflict would just
 // re-fire); a later real edit resumes saving (the user chose to keep editing).
-export type SaveStatus = "ready" | "editing" | "saving" | "saved" | "error" | "blocked" | "conflict";
+// "full" is TERMINAL too: storage is out of room. Re-arming autosave against a
+// full store just failed again every few seconds — the status bar read "Save
+// failed — retrying" forever, with nothing telling the user what would help.
+// Freeing space (a delete, erasing history or local data) or a real edit
+// retries.
+export type SaveStatus = "ready" | "editing" | "saving" | "saved" | "error" | "blocked" | "conflict" | "full";
 
 export interface DocumentWithIngestHtml extends DocumentRecord {
   _ingestHtml: string;
@@ -125,7 +255,21 @@ interface DocumentState {
    * editor over real content).
    */
   hydratedDocId: string | null;
+  /** Mark which document the editor holds. Refused (left null) for a document
+   *  locked by `markIncompatible` — the editor only holds a display copy. */
   markHydrated: (docId: string | null) => void;
+
+  /**
+   * A document whose stored content does not fit the live editor schema, or
+   * claims a newer schema version (see schema-version.ts). The editor shows a
+   * best-effort READ-ONLY copy, so the document is never marked hydrated and
+   * saveActiveDoc refuses it; renames and metadata changes keep the stored
+   * content. Cleared when the document is next hydrated with content that fits.
+   */
+  schemaLock: { docId: string; reason: string } | null;
+  markIncompatible: (docId: string, reason: string) => void;
+  clearIncompatible: (docId: string) => void;
+  isIncompatible: (docId: string) => boolean;
 
   /**
    * Register a getter that returns the LIVE TipTap editor's canonical for a
@@ -160,16 +304,44 @@ interface DocumentState {
     opts?: Parameters<typeof ingest>[3]
   ) => DocumentWithIngestHtml | null;
   finalizeDoc: (doc: DocumentRecord, tiptapEditor: TiptapEditorLike | null, skipPersist?: boolean) => Promise<DocumentRecord>;
-  saveActiveDoc: (tiptapEditor: TiptapEditorLike | null) => Promise<void>;
+  /**
+   * Persist a NEW document without activating it (import). Unlike finalizeDoc
+   * it leaves the open document, the editor and the switch sequence alone, so
+   * a long import never pulls the store off whatever the user opens meanwhile.
+   */
+  saveNewDoc: (doc: DocumentRecord) => Promise<void>;
+  /**
+   * Persist the live editor's content for the active document. Resolves
+   * `true` ONLY when the write committed. Resolution is not a commit: the
+   * blank-over-content refusal, an ownership abort (a switch or delete landed
+   * during the pre-save read) and a caught non-quota write error all resolve
+   * `false` — callers that report success (⌘S, a host's onSave) must check.
+   * A multi-tab conflict and a quota error reject.
+   */
+  saveActiveDoc: (tiptapEditor: TiptapEditorLike | null) => Promise<boolean>;
   setDirty: () => void;
   /** Permit the NEXT save to persist a blank canonical over a non-empty stored
    *  doc (one-shot). Used only by the explicit "Clear document" command so the
    *  data-loss backstop doesn't block a deliberate clear. */
   allowBlankSaveOnce: () => void;
+  /** Space was freed (a delete, erased history): a save parked on "full" may
+   *  succeed now, so resume autosave. A no-op in any other status. */
+  storageFreed: () => void;
   revertActiveDoc: () => Promise<DocumentRecord | null>;
   switchToDoc: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
   closeTab: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
-  deleteDoc: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
+  /**
+   * Delete a document. A recoverable "pre-delete" copy is kept in version
+   * history (for the snapshot age window) unless `purgeHistory` is set, in
+   * which case every version of the document is erased with it.
+   */
+  deleteDoc: (
+    docId: string,
+    tiptapEditor: TiptapEditorLike | null,
+    opts?: { purgeHistory?: boolean }
+  ) => Promise<DocumentRecord | null>;
+  /** Erase every version-history snapshot of one document. */
+  purgeDocHistory: (docId: string) => Promise<void>;
   renameDoc: (docId: string, newTitle: string) => Promise<void>;
   /** Patch an arbitrary document by id (may be non-active) and persist, without
    *  changing the active doc/editor. Used by the host bridge's updateDocument /
@@ -184,8 +356,15 @@ interface DocumentState {
        *  per-doc presentation state: colour, pinned). */
       metadata?: Record<string, unknown>;
       /** Presentation-only patches (pin/colour) pass false so re-ordering by
-       *  "recently edited" isn't disturbed by a non-edit. Defaults to true. */
+       *  "recently edited" isn't disturbed by a non-edit. Defaults to true.
+       *  `false` applies `metadata` ONLY, onto the freshest stored record —
+       *  any canonical/title in the same patch is ignored. */
       touchUpdated?: boolean;
+      /** The `updated` of the copy this patch's content was derived from (a
+       *  card loaded earlier, say). A newer stored revision is another tab's
+       *  write: a content patch is then refused with a ConflictError. The open
+       *  document and a parked draft carry their own base automatically. */
+      expectedUpdated?: string | null;
     }
   ) => Promise<DocumentRecord | null>;
   /** Duplicate `docId`, or the active document when omitted. */
@@ -240,6 +419,11 @@ let blankSaveAllowedFor: string | null = null;
 // resurrecting a document the user just deleted. Consulted by the save path.
 const deletingDocs = new Set<string>();
 
+// Documents locked read-only because their content does not fit this build
+// (see `schemaLock`). Module scope, like `deletingDocs`: the save path consults
+// it synchronously.
+const incompatibleDocs = new Map<string, string>();
+
 // Getter for the LIVE editor canonical of a doc (registered by PE). Returns the
 // current TipTap JSON when the editor holds that doc's content, else null. Kept
 // at module scope so non-editor persist paths (renameDoc/patchDocById) can reach
@@ -276,6 +460,150 @@ function liveCanonicalFor(docId: string): DocumentRecord["canonical"] | null {
   return null;
 }
 
+/**
+ * The revision THIS tab's copy of `docId` is based on — what a write must not
+ * overwrite a newer version of. For the open document that is
+ * `activeDoc.updated` (the same base saveActiveDoc checks); for a background
+ * document it is its parked draft's base, if any. `extra` is a caller's own
+ * provenance (a card loaded earlier); the OLDEST candidate wins. Null means the
+ * tab holds no copy of its own, so there is nothing to conflict with.
+ */
+function baseRevisionFor(docId: string, extra?: string | null): string | null {
+  const s = useDocumentStore.getState();
+  const own = s.activeDoc?.id === docId ? s.activeDoc.updated : s._draftBases.get(docId);
+  const candidates = [own, extra].filter((v): v is string => !!v);
+  if (!candidates.length) return null;
+  return candidates.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
+}
+
+/**
+ * Apply a title/metadata patch to the STORED record of a document another tab
+ * has overtaken, leaving this tab's content and its base untouched (see
+ * renameDoc for why both matter).
+ */
+async function applyTitleOnly(
+  set: (partial: Partial<DocumentState> | ((s: DocumentState) => Partial<DocumentState>)) => void,
+  get: () => DocumentState,
+  docId: string,
+  stored: DocumentRecord,
+  patch: { title?: string; userTitle?: string | null; metadata?: Record<string, unknown> }
+): Promise<DocumentRecord> {
+  if (patch.userTitle !== undefined) {
+    stored.userTitle = patch.userTitle;
+    stored.titlePinnedByUser = patch.userTitle != null;
+  }
+  if (patch.title !== undefined) stored.title = patch.title;
+  stored.updated = new Date().toISOString();
+  syncFieldsToMetadata(stored);
+  if (patch.metadata) stored.metadata = { ...stored.metadata, ...patch.metadata };
+  await storage.save(stored);
+  const list = await storage.list();
+  set((s) => ({
+    documents: list,
+    openTabs: s.openTabs.map((t) => (t.id === docId ? { ...t, title: stored.title } : t)),
+    activeDoc:
+      s.activeDoc?.id === docId
+        ? {
+            ...s.activeDoc,
+            title: stored.title,
+            userTitle: stored.userTitle,
+            titlePinnedByUser: stored.titlePinnedByUser,
+            ...(patch.metadata ? { metadata: { ...s.activeDoc.metadata, ...patch.metadata } } : {}),
+          }
+        : s.activeDoc,
+  }));
+  refreshMetrics(set, get);
+  return stored;
+}
+
+/**
+ * Point the editor's OTHER browser stores — version history (the snapshot
+ * database) and the crash-recovery stash — at a host's namespace, or turn them
+ * off. Both used to belong to the whole ORIGIN whatever storage a host
+ * injected: on a shared device user A's text showed up in user B's Version
+ * history, and one user's unsaved draft could be adopted by the next user's
+ * editor. The namespace defaults to a host's own `dbName`; with no config the
+ * standalone app's names are unchanged. Must run before initialize() — a
+ * change afterwards is ignored, like an adapter swap.
+ */
+export function configureLocalStores(
+  config?: Pick<IDBStorageConfig, "dbName" | "namespace" | "snapshots" | "crashRecovery">
+): void {
+  if (initialized) return;
+  const ns = config?.namespace || (config?.dbName && config.dbName !== "perssonify-docs" ? config.dbName : "");
+  snapshotStore.configure?.({
+    dbName: ns ? `perssonify-snapshots:${ns}` : undefined,
+    enabled: config?.snapshots !== false,
+  });
+  configureRecovery({
+    key: ns ? `pf:recovery:${ns}` : undefined,
+    enabled: config?.crashRecovery !== false,
+  });
+}
+
+/** localStorage keys other parts of the app keep that describe the LIBRARY
+ *  (not preferences), and so must go with it. `pf:library-canary` records how
+ *  many documents this origin had, so a later boot can tell "the browser wiped
+ *  the library" from a first run; left behind by a deliberate erase it would
+ *  report exactly that — falsely — and suppress the starter documents.
+ *  `pf:card-draft` is the Cards composer's unsaved note (CardsView) — the
+ *  user's own words, so an erase that kept it (it went only with
+ *  `preferences: true`) left a note behind on a shared device. */
+export const LIBRARY_KEYS = ["pf:library-canary", "pf:card-draft"];
+
+/**
+ * Erase everything this editor keeps in the browser: every document (with the
+ * document list and the adapter's prefs — which hold folder names), all
+ * version-history snapshots, the crash-recovery stash, parked drafts and undo
+ * stacks. For "erase my data", and for a host's logout on a shared device.
+ * `preferences: true` also removes the editor's own `pf:` settings (theme,
+ * fonts, panel sizes…) from localStorage.
+ *
+ * The store is reset FIRST — nothing active, nothing hydrated — so a save
+ * already waiting on its pre-write read cannot put a document back. The one
+ * editor per page shares this store (see useDocumentStore), so the open editor
+ * is left showing "No document open".
+ */
+export async function clearLocalData(opts: { preferences?: boolean } = {}): Promise<void> {
+  ++switchSeq;
+  cancelReadyReset();
+  incompatibleDocs.clear();
+  blankSaveAllowedFor = null;
+  useDocumentStore.setState({
+    documents: [], activeDoc: null, activeDocId: null, hydratedDocId: null, openTabs: [],
+    saveStatus: "ready", saveError: null, schemaLock: null, fidelityReport: null,
+    counts: { words: 0, chars: 0 }, _unsavedEdits: new Map(), _draftBases: new Map(),
+  });
+  historyCache.clear();
+  useFolderStore.getState().setInitialTree({});
+  clearStash();
+  for (const key of LIBRARY_KEYS) safeStorage.remove(key);
+
+  const adapter = storage;
+  if (typeof adapter.clear === "function") {
+    await adapter.clear();
+  } else {
+    for (const d of await adapter.list()) await adapter.delete(d.id);
+    await adapter.setPrefs({ lastActiveDocId: null, folderTree: null }).catch(() => {});
+  }
+  await snapshotStore.clearAll?.();
+
+  if (opts.preferences) {
+    const keys: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("pf:")) keys.push(k);
+      }
+    } catch { /* storage blocked — nothing to remove */ }
+    for (const k of keys) safeStorage.remove(k);
+  }
+  refreshMetrics(
+    (partial) => useDocumentStore.setState(partial),
+    () => useDocumentStore.getState()
+  );
+}
+
 // ─── Metrics refresh helper ───────────────────────────────────────────────────
 
 export function sameMetrics(a: StorageMetrics | null, b: StorageMetrics | null): boolean {
@@ -286,7 +614,8 @@ export function sameMetrics(a: StorageMetrics | null, b: StorageMetrics | null):
     a.maxBytes === b.maxBytes &&
     a.pct === b.pct &&
     a.docCount === b.docCount &&
-    a.available === b.available
+    a.available === b.available &&
+    a.limitKnown === b.limitKnown
   );
 }
 
@@ -370,6 +699,24 @@ function scheduleReadyReset(
   }, delay);
 }
 
+/**
+ * The document store.
+ *
+ * ONE EDITOR PER PAGE. This store — like the UI, editor and folder stores,
+ * the injected storage adapter, the snapshot ring and the crash-stash
+ * configuration — is a MODULE SINGLETON, shared by every `PerssonifyEditor`
+ * mounted in the same JavaScript realm. Two editors on one page share the
+ * active document, the hydration mark, parked drafts and whichever storage
+ * was injected first (`initStorage` after `initialize` is ignored): typing in
+ * one can be saved as the other's document. Isolation is per realm — mount
+ * one editor per page, or give each its own iframe (the embed build).
+ *
+ * A single editor may be UNMOUNTED and mounted again: unmount releases the
+ * editor (see useDocumentLifecycle.releaseEditor) and a second `initialize`
+ * re-activates the open document for the new instance. Switching to a
+ * different storage requires a page load; for a logout on a shared device,
+ * call `clearLocalData()`.
+ */
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   documents: [],
   activeDoc: null,
@@ -386,7 +733,20 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   _unsavedEdits: new Map(),
   _draftBases: new Map(),
   hydratedDocId: null,
-  markHydrated: (docId) => set({ hydratedDocId: docId }),
+  markHydrated: (docId) => set({ hydratedDocId: docId && incompatibleDocs.has(docId) ? null : docId }),
+  schemaLock: null,
+  markIncompatible: (docId, reason) => {
+    incompatibleDocs.set(docId, reason);
+    set((s) => ({
+      schemaLock: { docId, reason },
+      hydratedDocId: s.hydratedDocId === docId ? null : s.hydratedDocId,
+    }));
+  },
+  clearIncompatible: (docId) => {
+    if (!incompatibleDocs.delete(docId)) return;
+    set((s) => (s.schemaLock?.docId === docId ? { schemaLock: null } : {}));
+  },
+  isIncompatible: (docId) => incompatibleDocs.has(docId),
   registerLiveCanonical: (fn) => { liveCanonicalProvider = fn; },
 
   setEngine: (engine) => set({ _engine: engine }),
@@ -407,12 +767,22 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       storage = adapterOrConfig as StorageAdapter;
     } else {
       storage = new IndexedDBStorageAdapter(adapterOrConfig as IDBStorageConfig);
+      configureLocalStores(adapterOrConfig as IDBStorageConfig);
     }
   },
 
   // ── Initialize ─────────────────────────────────────────────────────────────
   initialize: async () => {
-    if (initialized) return null;
+    // A SECOND call is a remount — a host unmounting the editor and mounting
+    // it again. This store is a module singleton and survives the unmount, but
+    // the new editor instance starts EMPTY. This used to return null: the
+    // editor then seeded `initialDocument` again (one more copy per remount),
+    // or, with no seed, kept saying document X was active AND hydrated over an
+    // empty editor, so the first keystroke saved over X. A remount now
+    // re-activates the current document, UNHYDRATED, for the new editor to
+    // hydrate exactly as a fresh boot does. (The unload stash is one-shot per
+    // page load and is not taken again.)
+    const firstBoot = !initialized;
     initialized = true;
 
     const list = await storage.list();
@@ -430,43 +800,92 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // saves that happened after it was written, and adopting one then would
     // restore older content over newer as a "draft".
     const storedAt = new Map(list.map((d) => [d.id, Date.parse(d.updated) || 0]));
-    for (const entry of takeStashed()) {
+    const titleOf = new Map(list.map((d) => [d.id, d.title]));
+    for (const entry of firstBoot ? takeStashed() : []) {
       if (!storedAt.has(entry.docId)) continue;
-      if (entry.at <= (storedAt.get(entry.docId) ?? 0)) continue;
+      if (entry.at <= (storedAt.get(entry.docId) ?? 0)) {
+        // Older than disk. A stash that was already in CONFLICT when it was
+        // written is the one version of that text that exists anywhere: the
+        // tab had refused to save it. Keep it recoverable in Version history
+        // rather than dropping it on the floor. Best effort, never awaited.
+        if (entry.conflict) {
+          void snapshotStore
+            .record(entry.docId, titleOf.get(entry.docId) ?? "Untitled", entry.canonical, "autosave")
+            ?.catch?.(() => {});
+        }
+        continue;
+      }
       get().cacheUnsavedEdit(entry.docId, entry.canonical as DocumentRecord["canonical"]);
+      // Restore the revision the draft was written against. Adopting it
+      // WITHOUT its base let `activate` below take `updated` from the record
+      // now on disk — another tab's — so the multi-tab guard saw zero drift and
+      // the first autosave silently replaced that tab's work.
+      if (entry.base) get()._draftBases.set(entry.docId, entry.base);
     }
 
     const prefs = await storage.getPrefs();
     const lastDocId = prefs["lastActiveDocId"] as string | undefined;
+    // On a remount, the document that was open stays the one that opens.
+    const current = firstBoot ? null : get().activeDocId;
 
     // Activating a document at boot must honour a recovered draft the same way
     // switchToDoc does, or the stash above would be adopted and then ignored.
     const activate = (doc: DocumentRecord): DocumentRecord => {
       const draft = get().getUnsavedEdit(doc.id);
       const canonical = draft ?? doc.canonical;
+      // A recovered draft keeps its OWN provenance (see switchToDoc): the
+      // record's `updated` may be another tab's write.
+      const draftBase = draft ? get()._draftBases.get(doc.id) : undefined;
+      // Already known to conflict: saving could only be refused again, so say
+      // so now instead of arming an autosave to discover it.
+      const conflicted = !!draft && isNewerThanBase(doc.updated, draftBase);
       const record: DocumentRecord = draft
-        ? ({ ...doc, canonical, _persistedCanonical: doc.canonical } as DocumentRecord)
+        ? ({
+            ...doc,
+            canonical,
+            updated: draftBase ?? doc.updated,
+            _persistedCanonical: doc.canonical,
+          } as DocumentRecord)
         : doc;
+      ++switchSeq; // an activation, like finalizeDoc — see there
       set({
         activeDoc: record,
         activeDocId: doc.id,
+        // Nothing is in the editor yet — the caller hydrates it.
+        hydratedDocId: null,
         openTabs: [{ id: doc.id, title: doc.title }],
         counts: computeCounts(canonical),
-        saveStatus: draft ? "editing" : "ready",
+        saveStatus: conflicted ? "conflict" : draft ? "editing" : "ready",
+        saveError: conflicted ? "Changed in another tab" : null,
       });
       return record;
     };
 
-    if (lastDocId && list.some((d) => d.id === lastDocId)) {
-      const doc = await storage.get(lastDocId);
-      if (doc) return activate(doc);
+    // The last-open document first, then the library in order. A document that
+    // cannot be READ is skipped rather than taking the whole boot down with it;
+    // if none can be read, the failure is reported (an empty result would read
+    // as "no documents yet").
+    const candidates = [...new Set([
+      ...(current && list.some((d) => d.id === current) ? [current] : []),
+      ...(lastDocId && list.some((d) => d.id === lastDocId) ? [lastDocId] : []),
+      ...list.map((d) => d.id),
+    ])];
+    let readError: unknown = null;
+    for (const id of candidates) {
+      try {
+        const doc = await storage.get(id);
+        if (doc) return activate(doc);
+      } catch (e) {
+        console.warn(`[documentStore] Could not open ${id} at startup:`, e);
+        readError ??= e;
+      }
     }
+    if (readError) throw readError;
 
-    if (list.length > 0) {
-      const doc = await storage.get(list[0]?.id ?? "");
-      if (doc) return activate(doc);
+    // Nothing to open. On a remount, whatever the store still claimed is stale.
+    if (!firstBoot) {
+      set({ activeDoc: null, activeDocId: null, hydratedDocId: null, openTabs: [], saveStatus: "ready", saveError: null });
     }
-
     return null;
   },
 
@@ -511,6 +930,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // When an editor instance was provided, its content IS this doc's canonical
     // (completeIngest captured it) — mark hydrated; otherwise leave hydration
     // to whoever pushes content into the editor later.
+    //
+    // Claim the switch sequence: this is an activation, and a switchToDoc whose
+    // storage read is still in flight must not settle on top of it. Without
+    // the bump, New document during a slow switch left activeDocId on the
+    // switch's target and hydratedDocId on the new document — every save
+    // refused, and leaving the document cached nothing.
+    ++switchSeq;
     set((s) => ({
       activeDoc: { ...doc },
       activeDocId: doc.id,
@@ -544,10 +970,25 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     return doc;
   },
 
+  saveNewDoc: async (doc) => {
+    await storage.save(doc);
+    const list = await storage.list();
+    set({ documents: list });
+    refreshMetrics(set, get);
+  },
+
   // ── Save ───────────────────────────────────────────────────────────────────
   saveActiveDoc: async (tiptapEditor) => {
     const { activeDoc, hydratedDocId } = get();
-    if (!activeDoc || !tiptapEditor) return;
+    if (!activeDoc || !tiptapEditor) return false;
+
+    // Locked read-only (content from a newer build): the editor holds a display
+    // copy, and writing it would replace the real content with a lossy one.
+    // TERMINAL like the blank backstop — retrying cannot help.
+    if (incompatibleDocs.has(activeDoc.id)) {
+      set({ saveStatus: "blocked", saveError: SCHEMA_LOCK_ERROR });
+      return false;
+    }
 
     // Data-integrity chokepoint: the editor's content must belong to the
     // active document. If a code path switched documents without hydrating
@@ -567,26 +1008,25 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // same-tab timestamp wobble from adapters stamping `updated` on save.
     let stored: DocumentRecord | null | undefined;
     let storedReadFailed = false;
+    let storedCorrupt = false;
     try {
       stored = await storage.get(activeDoc.id);
-      if (stored?.updated && activeDoc.updated) {
-        const drift = new Date(stored.updated).getTime() - new Date(activeDoc.updated).getTime();
-        if (drift > 2000) {
-          // Park a TERMINAL "conflict" status so the UI can surface it
-          // persistently (the status bar) instead of it flickering through the
-          // generic transient "error". Set before throwing so it survives the
-          // caller's catch. A later real edit (setDirty → "editing") resumes.
-          set({ saveStatus: "conflict", saveError: "Changed in another tab" });
-          throw new Error(
-            "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload."
-          );
-        }
+      if (isNewerThanBase(stored?.updated, activeDoc.updated)) {
+        // Park a TERMINAL "conflict" status so the UI can surface it
+        // persistently (the status bar) instead of it flickering through the
+        // generic transient "error". Set before throwing so it survives the
+        // caller's catch. A later real edit (setDirty → "editing") resumes.
+        set({ saveStatus: "conflict", saveError: "Changed in another tab" });
+        throw new ConflictError();
       }
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith("This document was changed")) throw e;
-      // Storage read hiccup — proceed, EXCEPT the blank backstop below fails
-      // closed (we can't verify what we'd overwrite, so we don't risk a blank one).
+      if (e instanceof ConflictError) throw e;
+      // The stored copy could not be read (adapters REJECT on a failed read;
+      // null means absent — see StorageAdapter). Decided below, once we know
+      // this save still owns the editor.
       storedReadFailed = true;
+      storedCorrupt = e instanceof StorageReadError && e.corrupt;
+      console.warn("[documentStore] Could not read the stored copy before saving:", e);
     }
 
     // Re-assert the hydration chokepoint AFTER the await: a doc switch or delete
@@ -601,13 +1041,25 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     {
       const s = get();
       if (s.activeDocId !== activeDoc.id || s.hydratedDocId !== activeDoc.id) {
-        return;
+        return false;
       }
       // A delete claimed this document while we were reading. `deleteDoc` only
       // clears activeDocId/hydratedDocId at the very end (via closeTab), so the
       // two checks above still pass mid-delete — and the write below would put
       // the record straight back after `storage.delete` removed it.
-      if (deletingDocs.has(activeDoc.id)) return;
+      if (deletingDocs.has(activeDoc.id)) return false;
+    }
+
+    // FAIL CLOSED on a storage that did not answer: it cannot prove there is no
+    // newer version (another tab's) and no content to protect, so nothing is
+    // written and autosave retries. A record that is present but CORRUPT is the
+    // one exception — it cannot be anybody's readable work and the editor holds
+    // the only good copy, so a non-blank save may repair it (the blank backstop
+    // below still refuses a blank one).
+    if (storedReadFailed && !storedCorrupt) {
+      set({ saveStatus: "error", saveError: "Couldn't read the saved copy to check it is safe to overwrite" });
+      scheduleReadyReset((fn) => set(fn), "error", 3000, "editing");
+      return false;
     }
 
     set({ saveStatus: "saving" });
@@ -633,7 +1085,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         // "error"), so this can't spin the save loop. A later real edit sets
         // "editing" and normal saving resumes.
         set({ saveStatus: "blocked", saveError: "Refused to overwrite this document with an empty one" });
-        return;
+        return false;
       }
       // Consume the one-shot clear permission whether or not it was needed.
       if (blankAllowedHere) blankSaveAllowedFor = null;
@@ -671,7 +1123,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       syncFieldsToMetadata(updatedDoc);
 
       await storage.save(updatedDoc);
-      const list = await storage.list();
+      // The write has COMMITTED. A listing that fails now must not turn it
+      // into a reported failure (and a retry loop) — keep the last listing.
+      let list = get().documents;
+      try {
+        list = await storage.list();
+      } catch (e) {
+        console.warn("[documentStore] Listing after a save failed:", e);
+      }
 
       // A switch can cache NEWER typing while this write/list is pending.
       // Retire only the draft whose content actually reached storage; an older
@@ -698,16 +1157,22 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       refreshMetrics(set, get);
 
       scheduleReadyReset((fn) => set(fn), "saved", 2000);
+      return true;
     } catch (e) {
       console.warn("[documentStore] Save failed:", e);
+      if (e instanceof StorageQuotaError) {
+        // TERMINAL — see SaveStatus "full". Rethrown so the host's
+        // onStorageQuotaExceeded and the editor's own message can fire.
+        cancelReadyReset();
+        set({ saveStatus: "full", saveError: e.message });
+        throw e;
+      }
       // After showing the transient error, return to "editing" — NOT "ready" —
       // because the content is still unsaved. Downgrading to "ready" here used
       // to disarm the unsaved-changes prompt, silently losing edits on close.
       set({ saveStatus: "error", saveError: e instanceof Error ? e.message : "Save failed" });
       scheduleReadyReset((fn) => set(fn), "error", 3000, "editing");
-      if (e instanceof StorageQuotaError) {
-        throw e;
-      }
+      return false;
     }
   },
 
@@ -722,6 +1187,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   allowBlankSaveOnce: () => {
     // Scoped to the document being cleared — see `blankSaveAllowedFor`.
     blankSaveAllowedFor = get().activeDocId;
+  },
+
+  storageFreed: () => {
+    if (get().saveStatus === "full") set({ saveStatus: "editing" });
   },
 
   // ── Revert ─────────────────────────────────────────────────────────────────
@@ -744,7 +1213,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   // ── Switch ─────────────────────────────────────────────────────────────────
   switchToDoc: async (docId, _tiptapEditor) => {
-    const { activeDocId, activeDoc, hydratedDocId: prevHydrated, saveStatus: prevStatus } = get();
+    const { activeDocId, activeDoc, hydratedDocId: prevHydrated, saveStatus: prevStatus, saveError: prevError } = get();
     if (docId === activeDocId) return null;
 
     const mySeq = ++switchSeq;
@@ -758,7 +1227,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // there (the status bar reads it whenever the doc is dirty).
     set({ activeDocId: docId, saveStatus: "ready", saveError: null, hydratedDocId: null });
 
-    const doc = await storage.get(docId);
+    let doc: DocumentRecord | null = null;
+    try {
+      doc = await storage.get(docId);
+    } catch (e) {
+      // Unreadable is handled like missing: the revert below keeps the user on
+      // the document the editor still shows. (The adapter REJECTS rather than
+      // returning null, so the save path can tell the two apart.)
+      console.warn(`[documentStore] Could not open ${docId}:`, e);
+    }
 
     // Superseded: a newer switch started while our storage read was in flight.
     // Do NOT apply our completion (or revert) — that would clobber the newer
@@ -771,7 +1248,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // another tab, transient storage error). Restoring hydratedDocId matters:
       // the editor still shows the old doc, and leaving it null would poison
       // the rest of the session — every save/draft-cache blocked.
-      set({ activeDocId: activeDoc?.id ?? null, hydratedDocId: prevHydrated, saveStatus: prevStatus });
+      set({ activeDocId: activeDoc?.id ?? null, hydratedDocId: prevHydrated, saveStatus: prevStatus, saveError: prevError });
       return null;
     }
 
@@ -819,6 +1296,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       } else {
         // No document remains — the editor holds nothing meaningful, so the
         // hydration mark must not linger (stale marks are guard landmines).
+        // Claim the switch sequence too (see finalizeDoc): a pending switch
+        // settling after this would re-activate a document nobody hydrates.
+        ++switchSeq;
         set({ activeDoc: null, activeDocId: null, saveStatus: "ready", saveError: null, hydratedDocId: null });
       }
     }
@@ -826,7 +1306,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   // ── Delete ─────────────────────────────────────────────────────────────────
-  deleteDoc: async (docId, tiptapEditor) => {
+  deleteDoc: async (docId, tiptapEditor, opts) => {
     // Claim the deletion up front so an autosave that is already suspended on
     // its own `await storage.get` cannot write this document back after
     // `storage.delete` commits. Cleared in `finally` once the tab is closed.
@@ -834,11 +1314,18 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
     // Snapshot the doc's content BEFORE deleting it, so a deleted document is
     // recoverable from the version-history dialog (restore as a new document).
-    try {
-      const doomed = await storage.get(docId);
-      if (doomed) await snapshotStore.record(docId, doomed.title, doomed.canonical, "pre-delete");
-    } catch { /* best effort — never block a delete on the snapshot net */ }
+    // Unless the user asked for its history to go too: then no copy is kept.
+    if (!opts?.purgeHistory) {
+      try {
+        const doomed = await storage.get(docId);
+        if (doomed) await snapshotStore.record(docId, doomed.title, doomed.canonical, "pre-delete");
+      } catch { /* best effort — never block a delete on the snapshot net */ }
+    }
     await storage.delete(docId);
+    if (opts?.purgeHistory) {
+      try { await snapshotStore.deleteForDoc?.(docId); } catch { /* best effort */ }
+    }
+    get().clearIncompatible(docId);
     // Purge any cached draft for the deleted doc: a later import that reuses
     // the same id (e.g. restoring an exported .json) would otherwise resurrect
     // the dead doc's draft over the freshly imported content.
@@ -846,10 +1333,17 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const list = await storage.list();
     set({ documents: list });
     refreshMetrics(set, get);
+    // The delete freed space: an open document parked on "full" may fit now.
+    get().storageFreed();
     return await get().closeTab(docId, tiptapEditor);
     } finally {
       deletingDocs.delete(docId);
     }
+  },
+
+  purgeDocHistory: async (docId) => {
+    await snapshotStore.deleteForDoc?.(docId);
+    get().storageFreed();
   },
 
   // ── Rename ─────────────────────────────────────────────────────────────────
@@ -859,12 +1353,19 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const target = await storage.get(docId);
     if (!target) return;
 
+    // Another tab wrote this document after the revision this tab's copy is
+    // based on. The rename still lands — a title is not content — but ONLY on
+    // the stored record: merging this tab's live content into it would replace
+    // the other tab's work, and stamping it into the store's activeDoc would
+    // launder the conflict so the next autosave saw no drift at all.
+    const conflicted = isNewerThanBase(target.updated, baseRevisionFor(docId));
+
     // If the live editor currently holds this doc, its on-disk canonical lags the
     // editor by up to one autosave interval. Persist the LIVE content alongside
     // the new title so a rename can never rewind unsaved edits (the "renamed and
     // lost my changes" data-loss class the user hit). liveCanonicalFor refuses a
     // blank, so a rename never wipes content either.
-    const live = liveCanonicalFor(docId);
+    const live = conflicted ? null : liveCanonicalFor(docId);
     if (live) target.canonical = live;
 
     // Store as an explicit user title — this takes priority over content-derived
@@ -884,6 +1385,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const cachedEdit = get().getUnsavedEdit(docId);
     if (live && cachedEdit && JSON.stringify(cachedEdit) === JSON.stringify(live)) {
       get().clearUnsavedEdit(docId);
+    } else if (!conflicted && get()._draftBases.has(docId)) {
+      // A parked draft of a document renamed WITHOUT a conflict is still based
+      // on the same content — the new stamp is this tab's own write. Left on
+      // the old stamp, the draft's next save measured its own rename as
+      // "another tab" and refused.
+      get()._draftBases.set(docId, target.updated);
     }
 
     set((s) => ({
@@ -892,25 +1399,67 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         t.id === docId ? { ...t, title: newTitle } : t
       ),
       // Update activeDoc in-place if this is the currently open doc so the
-      // editor header and tab bar reflect the change without a reload.
+      // editor header and tab bar reflect the change without a reload. In a
+      // conflict only the title moves; the content base stays where it was.
       activeDoc:
-        s.activeDoc?.id === docId
-          ? { ...target }
-          : s.activeDoc,
+        s.activeDoc?.id !== docId
+          ? s.activeDoc
+          : conflicted
+            ? { ...s.activeDoc, title: target.title, userTitle: target.userTitle, titlePinnedByUser: true }
+            : { ...target },
       counts:
-        s.activeDoc?.id === docId ? computeCounts(target.canonical) : s.counts,
+        s.activeDoc?.id === docId && !conflicted ? computeCounts(target.canonical) : s.counts,
     }));
     refreshMetrics(set, get);
   },
 
   // ── Patch by id (non-active safe) ────────────────────────────────────────────
   patchDocById: async (docId, patch) => {
+    // Presentation-only (a card's colour or pin): METADATA onto the freshest
+    // stored copy, with `updated` untouched — nothing else. It used to write
+    // the store's copy of the document (for the active one, with the live
+    // editor content merged in) under the OLD timestamp, which put new content
+    // on disk looking older than it was: another tab's newer version was
+    // overwritten and its conflict check then saw nothing, so two tabs
+    // ping-ponged last-writer-wins.
+    if (patch.touchUpdated === false) {
+      const stored = await storage.get(docId);
+      if (!stored) return null;
+      if (patch.metadata) stored.metadata = { ...stored.metadata, ...patch.metadata };
+      // Tell the adapter's save() to leave `updated` alone — see stampUpdated.
+      (stored as DocumentRecord & { _preserveUpdated?: boolean })._preserveUpdated = true;
+      await storage.save(stored);
+      const list = await storage.list();
+      set((s) => ({
+        documents: list,
+        // The open document picks up the metadata only; its content and the
+        // revision its content is based on are not this patch's business.
+        activeDoc:
+          s.activeDoc?.id === docId && patch.metadata
+            ? { ...s.activeDoc, metadata: { ...s.activeDoc.metadata, ...patch.metadata } }
+            : s.activeDoc,
+      }));
+      refreshMetrics(set, get);
+      return stored;
+    }
+
     // Load from storage so we can patch a doc that isn't currently open. Prefer
     // the live activeDoc copy if it's the target (it may hold unsaved canonical).
     const { activeDoc: liveActive } = get();
-    const target =
-      liveActive?.id === docId ? { ...liveActive } : await storage.get(docId);
+    const stored = await storage.get(docId);
+    const target = liveActive?.id === docId ? { ...liveActive } : stored;
     if (!target) return null;
+
+    // The same multi-tab check saveActiveDoc makes. The base is the OLDEST
+    // revision this write's content derives from: the open document's, a
+    // parked draft's, or the one the caller read it from (a card).
+    const conflicted = !!stored && isNewerThanBase(stored.updated, baseRevisionFor(docId, patch.expectedUpdated));
+    if (conflicted) {
+      // Replacing content would overwrite the other tab's work: refuse.
+      if (patch.canonical !== undefined) throw new ConflictError();
+      // A title is not content: apply it to the stored record only (see renameDoc).
+      return applyTitleOnly(set, get, docId, stored!, patch);
+    }
 
     if (patch.canonical !== undefined) {
       target.canonical = patch.canonical;
@@ -937,15 +1486,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       target.userTitle = resolved.userTitle;
       target.titlePinnedByUser = resolved.titlePinnedByUser;
     }
-    if (patch.touchUpdated !== false) {
-      target.updated = new Date().toISOString();
-    } else {
-      // Tell the adapter's save() to leave `updated` alone. Without this the
-      // adapter stamped "now" anyway, so a presentation-only patch (a card's
-      // colour or pin) still re-sorted the board as if the note had been edited
-      // — exactly what this flag was added to prevent.
-      (target as DocumentRecord & { _preserveUpdated?: boolean })._preserveUpdated = true;
-    }
+    target.updated = new Date().toISOString();
     syncFieldsToMetadata(target);
     // Merged AFTER syncFieldsToMetadata: that call re-spreads metadata with the
     // doc's `:::fields:::` values, so merging earlier would let a same-named
@@ -953,9 +1494,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (patch.metadata) {
       target.metadata = { ...target.metadata, ...patch.metadata };
     }
+    delete (target as { _persistedCanonical?: unknown })._persistedCanonical;
 
     await storage.save(target);
     const list = await storage.list();
+    // A title-only patch of a document with a parked draft moved its stamp by
+    // this tab's own write — rebase the draft, as renameDoc does.
+    if (patch.canonical === undefined && liveActive?.id !== docId && get()._draftBases.has(docId)) {
+      get()._draftBases.set(docId, target.updated);
+    }
     set((s) => ({
       documents: list,
       openTabs: s.openTabs.map((t) =>

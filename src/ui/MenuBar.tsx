@@ -34,11 +34,13 @@ import { useIsMobile } from "../hooks/use-mobile";
 import { COMMON_SHORTCUTS, displayKeys } from "../data/shortcuts";
 import { getStoredPalette, PALETTES, setPalette } from "../theme/palette";
 import { useUIStore } from "../store/uiStore";
+import { adsAvailable } from "../utils/build-gates";
 import { useDialog } from "./DialogProvider";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { TableGridPicker } from "./TableGridPicker";
 import { THEME_OPTIONS, ThemeSwatch } from "./ThemeControls";
 import { selectMenuBody, type MenuPrimitives } from "./SelectMenuContent";
+import { promptImage } from "../formatting/image-insert";
 
 // Primitive family for the shared Select ▸ … renderer (dropdown variant).
 const DROPDOWN_SELECT_PRIMS = {
@@ -276,7 +278,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
       content: (
         <>
           <DropdownMenuItem onClick={() => insertWithPrompt("createLink", "Insert Link", { placeholder: "https://example.com", description: "Enter the URL for the link." })}>Link…<Sc>⌘K</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={() => insertWithPrompt("insertImage", "Insert Image", { placeholder: "https://example.com/image.png", description: "Enter the image URL." })}>Image…</DropdownMenuItem>
+          <DropdownMenuItem onClick={async () => { const img = await promptImage(prompt); if (img) props.dispatch("insertImage", img); }}>Image…</DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Table</DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="p-0">
@@ -346,9 +348,12 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
           <DropdownMenuCheckboxItem checked={focusMode} onCheckedChange={(v) => setFocusMode(!!v)}>
             Focus mode
           </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem checked={showAds} onCheckedChange={(v) => setShowAds(!!v)}>
-            Show ads
-          </DropdownMenuCheckboxItem>
+          {/* Placeholder ad slots are a development-only surface (A078). */}
+          {adsAvailable() && (
+            <DropdownMenuCheckboxItem checked={showAds} onCheckedChange={(v) => setShowAds(!!v)}>
+              Show ads
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Appearance</DropdownMenuSubTrigger>
@@ -653,8 +658,8 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
               <AlertDialogHeader>
                 <AlertDialogTitle>{APP_NAME}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  A dual-pane, client-only Markdown editor. Version {VERSION}. Your documents are stored
-                  locally in this browser — nothing is uploaded.
+                  A dual-pane Markdown editor that runs in your browser. Version {VERSION}. Your documents
+                  are stored locally in this browser, not on a server.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

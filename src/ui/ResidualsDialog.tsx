@@ -41,6 +41,10 @@ export const RESIDUAL_KINDS: Record<string, { title: string; blurb: string }> = 
     title: "May not survive a round-trip",
     blurb: "Kept for now, but not guaranteed through every export format.",
   },
+  "html-comment": {
+    title: "Comments not kept",
+    blurb: "HTML comments (<!-- … -->) have no place in the document, so they were left out.",
+  },
 };
 
 const describe = (r: ResidualItem): string => {

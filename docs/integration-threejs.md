@@ -95,12 +95,12 @@ document.body.appendChild(cssRenderer.domElement);
 
 ### Caveats you must plan for
 
-1. **Portalled UI escapes the 3D panel.** Floating surfaces — the Find/Replace
-   panel, dropdown menus, dialogs/sheets, toasts, context menus — render into
-   `document.body` (this is deliberate: `FindReplace` portals to body precisely
-   *because* a `backdrop-blur` ancestor otherwise becomes a containing block and
-   mispositions it). Inside a `CSS3DObject` they will appear on the **flat page**,
-   not on the 3D plane.
+1. **Portalled UI escapes the 3D panel.** Floating surfaces — dropdown menus,
+   dialogs/sheets, toasts, context menus, and the Find panel's scrollbar match
+   ticks — render into `document.body` (the ticks deliberately: the Find panel's
+   `backdrop-blur` would otherwise become their containing block and misposition
+   them). Inside a `CSS3DObject` they will appear on the **flat page**, not on
+   the 3D plane. The Find/Replace panel itself is `position: fixed` — see (4).
    **Mitigation:** run with `chrome="none"` (or `"minimal"`) and drive those
    features from your own in-scene UI via the imperative handle, rather than
    letting the user open them inside the panel.
@@ -131,14 +131,17 @@ The library externalizes its heavy peers so you control the versions — React,
 `@tiptap/*`, `@codemirror/*`, `lucide-react`, `zustand`, and `next-themes` must
 be installed in the host app. See `peerDependencies` in `package.json`.
 
-### 2. Import the stylesheet
+### 2. Import the stylesheets
 
 ```ts
 import "@perssonify/editor/styles.css";
+import "katex/dist/katex.min.css"; // maths — the library does not bundle KaTeX's CSS
 ```
 
 The library build emits `dist/styles.css` and **does not inject it** — without
-this import the editor renders unstyled.
+this import the editor renders unstyled. Its base reset and design tokens are
+scoped to the editor's own elements, so importing it does not restyle the rest
+of your page. Without the KaTeX stylesheet every formula renders twice, unstyled.
 
 ### 3. Transparent background (composite over the scene)
 
@@ -149,8 +152,11 @@ this import the editor renders unstyled.
 />
 ```
 
-Host-supplied colours are sanitized (`sanitizeCssColor`), so `url(...)`,
-`expression(...)`, `var(...)` and `;{}` are rejected.
+`themeVars` values are applied as given — they come from your own code. The
+colours that can arrive from outside it go through `sanitizeCssColor`: the
+`accentColor` prop, and the iframe embed's `bg` and `accentColor` URL
+parameters, where `url(...)`, `expression(...)`, `var(...)` and `;{}` are
+rejected.
 
 ### 4. Persist into your own save system
 
@@ -166,7 +172,18 @@ game/app state, inject an adapter:
 ```
 
 `onContentChange` is debounced (~300ms) and fires on every edit;
-`onSave` fires only on an explicit user save.
+`onSave` fires only on an explicit user save, and only when that write
+committed. With the built-in storage, a host that has its own user accounts
+should give each user their own `storageConfig.dbName` (it namespaces version
+history and the unload stash too; switching it takes a page load) and call
+`clearLocalData()` on logout on a shared device.
+
+### 5. One editor per page
+
+The editor's stores are module singletons: two `PerssonifyEditorIntegration`
+panels in the same page share the active document and its unsaved drafts. For
+several editors in one scene, give each its own iframe (see
+[the iframe embed](#alternative-the-iframe-embed)).
 
 ---
 
@@ -189,40 +206,53 @@ handle.setAccent("emerald");
 `updateDocument` / `appendToDocument` are the safe write paths: they parse with
 the live editor's schema, persist, and re-hydrate the editor when the target is
 the active document — so a programmatic write can never be silently overwritten
-by the editor's own autosave.
+by the editor's own autosave. A body update to a document that another tab has
+changed since this one read it is refused (the promise rejects with a
+`ConflictError`) rather than overwriting that tab's work.
 
 ---
 
 ## Alternative: the iframe embed
 
 If you want isolation (no peer-dependency coupling, no CSS bleed, its own
-stacking context), use the prebuilt embed instead of the React component. It is
-a normal iframe, so it works as an overlay and inside a `CSS3DObject` — and
-because it has its **own viewport**, `fitParent` is unnecessary and the portal
-caveat disappears (portals go to the iframe's own body).
+stacking context, its own stores), use the prebuilt embed instead of the React
+component. It is a normal iframe, so it works as an overlay and inside a
+`CSS3DObject` — and because it has its **own viewport**, `fitParent` is
+unnecessary and the portal caveat disappears (portals go to the iframe's own
+body).
+
+The embed is **self-hosted**: build it with `bun run build:embed` and serve
+`dist-embed/` from your own app (see
+[integration-guide.md §6](integration-guide.md#6-iframe-embed-build-dist-embed)).
+markdownstudio.com does not serve the embed build: every path there is the
+standalone app, which refuses to be framed everywhere except `/embed.html`.
 
 ```html
 <iframe
-  src="https://markdownstudio.com/embed/?chrome=minimal&bg=transparent&view_mode=html"
+  src="/editor/?chrome=minimal&bg=transparent&view_mode=html"
   style="width:1024px;height:768px;border:0"
   allow="clipboard-write"
 ></iframe>
 ```
 
-Params: `chrome`, `bg`, `view_mode`, `readonly`, `theme`, `accent`.
-Cross-document control uses the `postMessage` bridge
-(`createEditorClient`) — **pass an explicit `allowedOrigins`**, the bridge
-defaults to deny-all.
+Params: `chrome`, `bg`, `view_mode` (or `mode`), `readonly`, `theme`, `accent`,
+`accentColor`, `allowed_origin`. Cross-document control uses the `postMessage`
+bridge: on your side `createEditorClient(iframe)` talks only to the iframe's
+origin. Inside the embed, the bridge answers only the origins it resolves
+([src/integration/embed-origins.ts](../src/integration/embed-origins.ts)) —
+build it with `VITE_EMBED_ALLOWED_ORIGINS` set to your page's origin, or it
+trusts whichever page frames it.
 
 ---
 
 ## Pre-flight checklist
 
 - [ ] `fitParent` set (Strategy A/B) and the container has a definite height
-- [ ] `@perssonify/editor/styles.css` imported
+- [ ] `@perssonify/editor/styles.css` imported (and `katex/dist/katex.min.css` for maths)
 - [ ] All `peerDependencies` installed in the host
 - [ ] `chrome` chosen (`"none"`/`"minimal"` for in-scene panels)
 - [ ] Pointer events reach the editor layer
 - [ ] Persistence decided (IndexedDB vs injected adapter vs `onContentChange`)
-- [ ] `allowedOrigins` passed if using the iframe/postMessage bridge
+- [ ] One editor per page — several in-scene editors each get their own iframe
+- [ ] Iframe embed: served from your own origin, built with `VITE_EMBED_ALLOWED_ORIGINS`
 - [ ] For `CSS3DRenderer`: accepted the portal caveat, authored at ~1:1 scale

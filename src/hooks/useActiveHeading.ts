@@ -117,7 +117,6 @@ export function useActiveHeading({
       ro?.disconnect();
       if (raf) cancelAnimationFrame(raf);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, revision]);
 
   return activeIndex;

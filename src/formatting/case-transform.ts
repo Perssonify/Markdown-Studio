@@ -1,4 +1,6 @@
+import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
+import { fencedLineMask } from "./select-scope";
 
 /**
  * Case transforms (UPPERCASE / lowercase / Title Case) for both panes.
@@ -116,22 +118,37 @@ export function transformCaseMarkdown(src: string, mode: CaseMode, contentOnly: 
   return cased.replace(new RegExp(M0 + "(\\d+)" + M1, "g"), (_m, i) => store[Number(i)] ?? "");
 }
 
-/** Transform the case of the current selection in the markdown pane. */
+/** Transform the case of EVERY selected range in the markdown pane — not just
+ *  the main one: Select ▸ All headings followed by UPPERCASE used to change
+ *  the first heading and ignore the rest. */
 export function transformCaseCM(view: EditorView, mode: CaseMode, contentOnly: boolean): void {
-  const { from, to } = view.state.selection.main;
-  if (from === to) return;
-  const src = view.state.sliceDoc(from, to);
-  const out = transformCaseMarkdown(src, mode, contentOnly);
-  if (out !== src) {
-    view.dispatch({ changes: { from, to, insert: out }, selection: { anchor: from, head: from + out.length } });
-  }
+  const { state } = view;
+  let changed = false;
+  const spec = state.changeByRange((range) => {
+    if (range.empty) return { range };
+    const src = state.sliceDoc(range.from, range.to);
+    const out = transformCaseMarkdown(src, mode, contentOnly);
+    if (out === src) return { range };
+    changed = true;
+    return {
+      changes: { from: range.from, to: range.to, insert: out },
+      range: EditorSelection.range(range.from, range.from + out.length),
+    };
+  });
+  if (changed) view.dispatch(spec);
 }
 
-/** Transform the case of every ATX heading line in the markdown pane. */
+/** Transform the case of every ATX heading line in the markdown pane — not a
+ *  `# comment` inside a fenced code block, which used to be upper-cased along
+ *  with the real headings (see fencedLineMask). */
 export function headingsCaseCM(view: EditorView, mode: CaseMode, contentOnly: boolean): void {
   const doc = view.state.doc;
+  const texts: string[] = [];
+  for (let i = 1; i <= doc.lines; i++) texts.push(doc.line(i).text);
+  const fenced = fencedLineMask(texts);
   const changes: { from: number; to: number; insert: string }[] = [];
   for (let i = 1; i <= doc.lines; i++) {
+    if (fenced[i - 1]) continue;
     const line = doc.line(i);
     const m = line.text.match(/^(#{1,6}\s+)(.*)$/);
     if (!m) continue;
