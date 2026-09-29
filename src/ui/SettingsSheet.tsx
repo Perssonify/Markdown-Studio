@@ -19,6 +19,7 @@ import {
 import { useUIStore } from "../store/uiStore";
 import { MODES } from "../constants";
 import { adminSettingsAvailable, adsAvailable } from "../utils/build-gates";
+import { PrivacySection } from "./SettingsPrivacy";
 import { AccentCircleRow, ThemeCircleRow } from "./ThemeControls";
 
 const FLAVORS: { id: MarkdownFlavor; label: string; desc: string }[] = [
@@ -348,6 +349,10 @@ function SettingsSheetInner({
                 <Switch id="pref-spellcheck" checked={spellcheck} onCheckedChange={setSpellcheck} />
               </div>
             </section>
+
+            <Separator />
+
+            <PrivacySection open={open} />
 
             {/* Admin — debugging / operator modules, separate from everyday
                 settings. Hidden from users (A081): shown in development builds,

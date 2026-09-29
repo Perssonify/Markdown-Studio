@@ -657,8 +657,8 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
               <AlertDialogHeader>
                 <AlertDialogTitle>{APP_NAME}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  A dual-pane, client-only Markdown editor. Version {VERSION}. Your documents are stored
-                  locally in this browser — nothing is uploaded.
+                  A dual-pane Markdown editor that runs in your browser. Version {VERSION}. Your documents
+                  are stored locally in this browser, not on a server.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

@@ -38,8 +38,8 @@ export function AboutPage({ onClose }: AboutPageProps) {
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
             A dual-pane Markdown editor that keeps a raw-Markdown source and a rich-text
             preview perfectly in sync — with math, diagrams, music, tables, folders, a
-            knowledge graph, a card board, and one-click export. It runs entirely in your
-            browser: no account, no server, nothing uploaded.
+            knowledge graph, a card board, and one-click export. It runs in your browser:
+            there is no account, and your documents are stored on your device, not on a server.
           </p>
           <a
             href={APP_URL}
@@ -54,8 +54,9 @@ export function AboutPage({ onClose }: AboutPageProps) {
         {/* Principles */}
         <div className="mt-10 grid gap-3 sm:grid-cols-3">
           <Highlight icon={Shield} title="Private by design">
-            Your documents never leave your device. Everything is stored locally in this
-            browser — there is no account and no server that reads your content.
+            Your documents are stored in this browser. There is no account, and no server
+            stores or reads them. Importing from a URL asks before using our relay, and
+            remote images can be blocked — both in Settings ▸ Privacy.
           </Highlight>
           <Highlight icon={WifiOff} title="Works offline">
             Installable as an app and cached for offline use, so you can keep writing
