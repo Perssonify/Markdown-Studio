@@ -50,9 +50,11 @@
         // then landed on the browser's error page: the caches it deleted were
         // the only copy of the app there was. Evidence is a <script> or <link>
         // that failed to load (a 404, or HTML served where a module was
-        // expected) or an uncaught error before the app booted; the grace period
-        // lets a non-fatal failure (a stylesheet) finish booting anyway.
-        // A sessionStorage stamp prevents any reload loop.
+        // expected) or an uncaught error thrown by the app's OWN bundle (a file
+        // under /assets/) before it booted — never an extension's or an injected
+        // script's error, which says nothing about whether the app can boot.
+        // The grace period lets a non-fatal failure (a stylesheet) finish
+        // booting anyway. A sessionStorage stamp prevents any reload loop.
         (function () {
             var KEY = "pf:boot-recover-at";
             var GRACE_MS = 4000;
@@ -88,7 +90,7 @@
                 if (window.__PF_BOOTED || failed) return;
                 var t = e && e.target;
                 if (t && t !== window && (t.tagName === "SCRIPT" || t.tagName === "LINK")) failed = "failed-to-load:" + t.tagName.toLowerCase();
-                else if (e && (e.error || e.message)) failed = "boot-error";
+                else if (e && (e.error || e.message) && /\/assets\//.test(String(e.filename || ""))) failed = "boot-error";
                 else return;
                 if (!timer) timer = setTimeout(check, GRACE_MS);
             }, true);
