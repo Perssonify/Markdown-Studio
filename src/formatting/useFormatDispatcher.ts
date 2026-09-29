@@ -7,7 +7,8 @@ import { MODES } from "../constants";
 // Starter content for the "Insert" toolbar menu.
 const MERMAID_SAMPLE = "graph TD;\n  A[Start] --> B{Decision};\n  B -->|Yes| C[Do it];\n  B -->|No| D[Skip];";
 const ABC_SAMPLE = "X:1\nT:Ode to Joy\nM:4/4\nL:1/4\nK:C\nE E F G | G F E D | C C D E | E3/2 D/2 D2 |";
-import { clearMdFormatting, isWrapped as _isWrapped, mdWrap as _mdWrap, mdWrapBy } from "./md-format-utils";
+import { clearMdFormatting, isWrapped as _isWrapped, mdLinkDestination, mdWrap as _mdWrap, mdWrapBy } from "./md-format-utils";
+import { mdImage, toImageInsert } from "./image-insert";
 import {
   type CaseMode,
   headingsCaseCM,
@@ -93,16 +94,6 @@ interface FormatState {
  * Find all exist to produce, they formatted the first match and silently
  * ignored every other one.
  */
-/**
- * A URL as a CommonMark link destination. Spaces or parentheses would end a
- * bare destination early, so such a URL is written in angle brackets (with any
- * `<`/`>` inside percent-encoded, which the angle form cannot contain).
- */
-export function mdLinkDestination(url: string): string {
-  const u = url.trim();
-  return /[\s()<>]/.test(u) ? `<${u.replace(/</g, "%3C").replace(/>/g, "%3E")}>` : u;
-}
-
 export function selectedLineNumbers(state: EditorState): number[] {
   const lines = new Set<number>();
   for (const r of state.selection.ranges) {
@@ -285,8 +276,11 @@ export function useFormatDispatcher({
     }
   }
 
-  function mdInsertImage() {
-    cmRef.current?.insertAtCursor("![alt text](image-url)");
+  // Like mdInsertLink, this ignored the URL the prompt collected and wrote a
+  // placeholder; it now writes the image that was asked for, alt text included.
+  function mdInsertImage(value?: unknown) {
+    const img = toImageInsert(value);
+    cmRef.current?.insertAtCursor(img ? mdImage(img) : "![alt text](image-url)");
   }
 
   function mdInsertHr() {
@@ -412,7 +406,9 @@ export function useFormatDispatcher({
       }
       case "unlink": cmd.unsetLink().run(); break;
       case "insertImage": {
-        if (value) cmd.setImage({ src: value }).run();
+        // { src, alt } from the prompts, or a bare URL from the host API (A096).
+        const img = toImageInsert(value);
+        if (img) cmd.setImage({ src: img.src, alt: img.alt }).run();
         break;
       }
       case "insertCallout":
@@ -551,7 +547,7 @@ export function useFormatDispatcher({
       case "unsetHighlight": mdUnwrapInlineStyle("background-color"); break; 
       case "fontFamily": mdWrapInlineStyle("font-family", value); break;
       case "createLink": mdInsertLink(typeof value === "string" ? value : undefined); break;
-      case "insertImage": mdInsertImage(); break;
+      case "insertImage": mdInsertImage(value); break;
       case "insertCallout": cmRef.current?.insertAtCursor(`\n> [!${String(value || "note").toUpperCase()}]\n> \n\n`); break;
       // Single contiguous HTML block (no internal blank lines, which would split
       // the marked HTML block) so it round-trips through the Details/Summary nodes.

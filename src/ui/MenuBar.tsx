@@ -40,6 +40,7 @@ import { ModeSwitcher } from "./ModeSwitcher";
 import { TableGridPicker } from "./TableGridPicker";
 import { THEME_OPTIONS, ThemeSwatch } from "./ThemeControls";
 import { selectMenuBody, type MenuPrimitives } from "./SelectMenuContent";
+import { promptImage } from "../formatting/image-insert";
 
 // Primitive family for the shared Select ▸ … renderer (dropdown variant).
 const DROPDOWN_SELECT_PRIMS = {
@@ -277,7 +278,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
       content: (
         <>
           <DropdownMenuItem onClick={() => insertWithPrompt("createLink", "Insert Link", { placeholder: "https://example.com", description: "Enter the URL for the link." })}>Link…<Sc>⌘K</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={() => insertWithPrompt("insertImage", "Insert Image", { placeholder: "https://example.com/image.png", description: "Enter the image URL." })}>Image…</DropdownMenuItem>
+          <DropdownMenuItem onClick={async () => { const img = await promptImage(prompt); if (img) props.dispatch("insertImage", img); }}>Image…</DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Table</DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="p-0">

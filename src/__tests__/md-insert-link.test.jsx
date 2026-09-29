@@ -9,7 +9,8 @@ import { act, render, renderHook } from "@testing-library/react";
 import { marked } from "marked";
 import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mdLinkDestination, useFormatDispatcher } from "../formatting/useFormatDispatcher";
+import { mdLinkDestination } from "../formatting/md-format-utils";
+import { useFormatDispatcher } from "../formatting/useFormatDispatcher";
 import { useUIStore } from "../store/uiStore";
 import { CodeMirrorPane } from "../ui/CodeMirrorPane";
 

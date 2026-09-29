@@ -54,6 +54,7 @@ import { useUIStore } from '../store/uiStore';
 import { TableGridPicker } from './TableGridPicker';
 import { Icons } from "./Icons";
 import { useRovingFocus } from "./use-roving-focus";
+import { promptImage } from "../formatting/image-insert";
 
 /**
  * Arrow-key order is VISUAL order. Save floats right, so it comes FIRST in the
@@ -582,7 +583,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
 
         <ButtonGroup>
           <TbBtn icon={Link} title={`Link (${displayKeys("⌘K")})`} onClick={async () => { const u = await prompt("Insert Link", { placeholder: "https://example.com", description: "Enter the URL for the link." }); if (u) exec("createLink", u); }} />
-          <TbBtn icon={Image} title="Image" onClick={async () => { const u = await prompt("Insert Image", { placeholder: "https://example.com/image.png", description: "Enter the URL of the image to insert." }); if (u) exec("insertImage", u); }} />
+          <TbBtn icon={Image} title="Image" onClick={async () => { const img = await promptImage(prompt); if (img) exec("insertImage", img); }} />
         </ButtonGroup>
 
         <div className="w-px h-4 bg-border mx-0.5" />
