@@ -8,13 +8,14 @@
  * waiting, onNeedReload when a new worker has taken control).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setupServiceWorkerUpdates } from "../pwa/sw-updates";
+import { UPDATE_CHECK_MS, setupServiceWorkerUpdates } from "../pwa/sw-updates";
 import { _resetDiagnosticsForTests, getDiagnostics } from "../utils/diagnostics";
 
 function harness({ online = true, hidden = false, unsaved = false } = {}) {
   const state = { online, hidden, unsaved };
   const calls = { reload: 0, skipWaiting: 0, notices: [] };
   const timers = [];
+  const intervals = [];
   const chances = [];
   let cb = null;
   const registerSW = (options) => {
@@ -34,14 +35,17 @@ function harness({ online = true, hidden = false, unsaved = false } = {}) {
       return () => {};
     },
     setTimeout: (fn, ms) => timers.push({ fn, ms }),
+    every: (ms, fn) => intervals.push({ fn, ms }),
   };
   const ctl = setupServiceWorkerUpdates(registerSW, env);
   return {
     state,
     calls,
     ctl,
+    intervals,
     waiting: () => cb.onNeedRefresh(),
     tookControl: () => cb.onNeedReload(),
+    registered: (registration) => cb.onRegisteredSW("/sw.js", registration),
     registerError: (e) => cb.onRegisterError(e),
     /** Something changed (visibility, connectivity): re-take waiting decisions. */
     chance: () => chances.forEach((fn) => fn()),
@@ -137,6 +141,45 @@ describe("another tab activated the new version (this tab runs the old build)", 
     expect(h.calls.notices.at(-1)).toBe("activated");
     h.chance(); // unsaved, visible: must not retry on its own
     expect(h.calls.reload).toBe(1);
+  });
+});
+
+describe("a tab that stays open for days still hears about a deploy", () => {
+  it("asks for a new worker every hour — only while online and visible", () => {
+    const h = harness({ online: true, hidden: false });
+    const registration = { update: vi.fn(async () => {}) };
+    h.registered(registration);
+    expect(h.intervals).toHaveLength(1);
+    expect(h.intervals[0].ms).toBe(UPDATE_CHECK_MS);
+    expect(UPDATE_CHECK_MS).toBeLessThanOrEqual(60 * 60 * 1000);
+    const tick = () => h.intervals[0].fn();
+
+    tick();
+    expect(registration.update).toHaveBeenCalledTimes(1);
+    h.state.online = false;
+    tick();
+    h.state.online = true;
+    h.state.hidden = true;
+    tick();
+    expect(registration.update).toHaveBeenCalledTimes(1); // skipped offline and while hidden
+    h.state.hidden = false;
+    tick();
+    expect(registration.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("a failed check is recorded, not thrown", async () => {
+    const h = harness();
+    h.registered({ update: () => Promise.reject(new TypeError("Failed to update a ServiceWorker")) });
+    h.intervals[0].fn();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getDiagnostics().at(-1)).toMatchObject({ kind: "sw", name: "ServiceWorkerUpdateCheck" });
+  });
+
+  it("does nothing when registration failed", () => {
+    const h = harness();
+    h.registered(undefined);
+    expect(h.intervals).toHaveLength(0);
   });
 });
 
