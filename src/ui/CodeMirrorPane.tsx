@@ -329,7 +329,10 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         // Liveness stamp for isComposing() — a composition that is producing
         // input is real; see COMPOSITION_STALL_MS.
         if (update.docChanged && update.view.composing) composeStampRef.current = Date.now();
-        if (update.docChanged && !suppressNextUpdate.current) {
+        // Never report a change while read-only. The editability compartment
+        // is the lock; this is the belt to it: whatever reaches the document
+        // while the session is read-only must not be synced, dirtied or saved.
+        if (update.docChanged && !suppressNextUpdate.current && !readOnlyRef.current) {
           onChangeRef.current?.();
         }
         suppressNextUpdate.current = false;
@@ -395,6 +398,29 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
       });
     }, [spellcheck]);
 
+    /**
+     * Put a freshly `setState`-ed view back under the CURRENT preferences.
+     *
+     * `view.setState` rebuilds everything from the state it is handed, and the
+     * two paths that use it — resetHistory (every cross-document hydration)
+     * and restoreEditorState (the per-document history cache) — hand it
+     * extensions whose compartment contents were captured at MOUNT or at
+     * capture time. So a document switch silently reverted the pane to the
+     * mount-time read-only flag: editable in a read-only session (the audit
+     * watched such edits autosave), or still locked after read-only was turned
+     * off. Reconfiguring from the refs makes the live value win every time.
+     */
+    const reapplyLiveConfig = (view: EditorView) => {
+      view.dispatch({
+        effects: [
+          editableCompartment.current.reconfigure(roExt(readOnlyRef.current)),
+          spellcheckCompartment.current.reconfigure(
+            EditorView.contentAttributes.of({ spellcheck: String(spellcheckRef.current) })
+          ),
+        ],
+      });
+    };
+
     useImperativeHandle(ref, () => ({
       getValue: () => viewRef.current?.state.doc.toString() || "",
 
@@ -426,11 +452,17 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
 
       // Restore a previously captured EditorState. Caller must have validated
       // the cached text matches the current md-pane content (history-cache.ts).
+      //
+      // No `suppressNextUpdate` here or in resetHistory: `view.setState` runs
+      // no update listeners, so a flag armed before it was never consumed by
+      // it — it leaked into the user's NEXT transaction and swallowed that
+      // edit's onChange. The first edit after a document switch (a whole paste,
+      // say) was then never synced, never marked dirty and never saved.
       restoreEditorState: (state: EditorState) => {
         const view = viewRef.current;
         if (!view || !state) return;
-        suppressNextUpdate.current = true;
         view.setState(state);
+        reapplyLiveConfig(view);
       },
 
       // Drop undo/redo history by rebuilding the state around the current doc.
@@ -439,10 +471,10 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
       resetHistory: () => {
         const view = viewRef.current;
         if (!view) return;
-        suppressNextUpdate.current = true;
         view.setState(
           EditorState.create({ doc: view.state.doc.toString(), extensions: extensionsRef.current })
         );
+        reapplyLiveConfig(view);
       },
 
       setValue: (md: string) => {
