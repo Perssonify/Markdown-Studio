@@ -1,6 +1,6 @@
 import { FileText, Heart, Shield, WifiOff } from "lucide-react";
 import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, VERSION } from "../../constants";
-import { CREDITS, LICENSE_SUMMARY } from "../../data/credits";
+import { CREDITS, LICENSE_SUMMARY, THIRD_PARTY_NOTICES_PATH } from "../../data/credits";
 import { PageChrome } from "./PageChrome";
 
 interface AboutPageProps {
@@ -76,6 +76,19 @@ export function AboutPage({ onClose }: AboutPageProps) {
             build was tested against. Licenses in use:{" "}
             <span className="font-medium text-foreground">{LICENSE_SUMMARY.join(" · ")}</span>.
           </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            These are the highlights. The complete list of open-source software in this
+            build, with every licence and notice text, is in the{" "}
+            <a
+              href={THIRD_PARTY_NOTICES_PATH}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary hover:underline"
+            >
+              third-party licences
+            </a>
+            .
+          </p>
 
           <div className="mt-6 space-y-8">
             {CREDITS.map((group) => (
@@ -117,6 +130,11 @@ export function AboutPage({ onClose }: AboutPageProps) {
         <footer className="mt-12 border-t border-border pt-6 text-center text-xs text-muted-foreground">
           © {APP_NAME} · Made with 💗 by Perssonify. All trademarks and licenses belong to
           their respective owners.
+          <span className="mt-2 block">
+            <a href={THIRD_PARTY_NOTICES_PATH} target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
+              Third-party licences
+            </a>
+          </span>
         </footer>
       </div>
     </PageChrome>
