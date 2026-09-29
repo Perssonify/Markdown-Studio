@@ -16,6 +16,7 @@ import { collectUnloadStash, ConflictError, describeUncommittedSave, isBlankCano
 import { snapshotStore } from "./store/snapshot-store";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
+import { canonicalMisfit, CURRENT_SCHEMA_VERSION, isNewerSchema } from "./store/schema-version";
 import { useEditorStore } from "./store/editorStore";
 import type { IDBStorageConfig, StorageMetrics } from "./store/idb-storage-adapter";
 import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, getFileContentAndFormat } from "./store/import-export";
@@ -1255,10 +1256,11 @@ export function PerssonifyEditor({
         ...(patch.title != null ? { title: patch.title, userTitle: patch.title } : {}),
       });
       // Post-await check — a switch during the write must not redirect this
-      // content into whatever document the editor now holds.
+      // content into whatever document the editor now holds. Through the
+      // hydration ritual, so host content that does not fit this build's
+      // schema is shown read-only instead of loading as an empty document.
       if (patched?.canonical && isEditorTargeting(id)) {
-        setCanonical(patched.canonical);
-        useDocumentStore.getState().markHydrated(id);
+        hydrateEditorWithDoc(id, patched.canonical);
       }
       await emitGraphUpdate();
       return { id, updated: !!patched };
@@ -1299,8 +1301,7 @@ export function PerssonifyEditor({
       // Post-await check, for the same reason as updateDocument above.
       if (patched?.canonical && isEditorTargeting(id)) {
         // Same-document content update: keep the user's undo history.
-        setCanonical(patched.canonical, { resetHistory: false });
-        useDocumentStore.getState().markHydrated(id);
+        hydrateEditorWithDoc(id, patched.canonical, { keepHistory: true });
       }
       await emitGraphUpdate();
       return { id, updated: !!patched };
@@ -1314,7 +1315,7 @@ export function PerssonifyEditor({
     // would have written into the newly-active doc.
     openDocument: (id: string) => handleSwitchDoc(id),
     exportAs: async (format: string) => handleAction?.(`export-${format}`),
-  }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical]);
+  }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical, hydrateEditorWithDoc]);
 
   // ── Inject storage adapter before init (runs once, synchronously before engine) ──
   const storageInjectedRef = useRef(false);
@@ -1533,9 +1534,10 @@ export function PerssonifyEditor({
           setEditorReady(true);
           const editor = await waitForEditor();
           if (existingDoc.canonical && editor) {
-            setCanonical(existingDoc.canonical);
-            useDocumentStore.getState().markHydrated(existingDoc.id);
-            handleCanonicalChange(existingDoc.canonical);
+            // The hydration ritual — it also keeps a document from a newer
+            // build (content this schema cannot load) read-only instead of
+            // loading it as an empty editor that the next save would persist.
+            hydrateEditorWithDoc(existingDoc.id, existingDoc.canonical);
           } else if (existingDoc.canonical && !editor) {
             // Editor slow to mount (cold load / slow device). Keep waiting in
             // the background and hydrate when it appears — WITHOUT this, the
@@ -1548,11 +1550,7 @@ export function PerssonifyEditor({
               const doc = s.activeDoc;
               if (!doc?.canonical) return;
               const editorEmpty = (late.getText?.() ?? "").trim().length === 0;
-              if (editorEmpty) {
-                setCanonical(doc.canonical);
-                s.markHydrated(doc.id);
-                handleCanonicalChange(doc.canonical);
-              }
+              if (editorEmpty) hydrateEditorWithDoc(doc.id, doc.canonical);
             });
             if (cmRef.current) {
               const html = existingDoc._ingestHtml || "";
@@ -2023,7 +2021,12 @@ export function PerssonifyEditor({
     }
     if ((type === "export-md" || type === "export-html" || type === "export-json") && activeDoc) {
       const getHtml = () => tiptapRef.current?.getHTML() ?? "";
-      const canonical = getCanonical();
+      // The live editor's content only when it genuinely holds this document —
+      // a document locked read-only (content from a newer build) shows a
+      // display copy, and exporting THAT as the JSON would lose what it lacks.
+      const canonical = useDocumentStore.getState().hydratedDocId === activeDoc.id
+        ? getCanonical()
+        : activeDoc.canonical;
       const docForExport = {
         ...activeDoc,
         canonical,
@@ -2198,6 +2201,9 @@ export function PerssonifyEditor({
             {
               _format: "perssonify-document",
               _version: "1.1.0",
+              // So a build OLDER than the one that wrote this opens it
+              // read-only instead of blank (see schema-version.ts).
+              schemaVersion: Math.max(rec.schemaVersion ?? 0, CURRENT_SCHEMA_VERSION),
               id: rec.id,
               title: resolvedTitle,
               canonical: rec.canonical,
@@ -2497,6 +2503,15 @@ export function PerssonifyEditor({
     if (!editor?.schema) { toast.show("Editor not ready — note not saved", "error"); return; }
     const html = engine?.mdToHtml ? engine.mdToHtml(markdown) : markdown;
     const canonical = htmlToCanonical(html, editor.schema);
+    // A note from a newer build cannot be shown as a card (its source reads
+    // back EMPTY), so saving the card would replace the whole note with only
+    // what was typed. Refuse; keep the typing recoverable.
+    const current = await useDocumentStore.getState().getDocById(id).catch(() => null);
+    if (current && (isNewerSchema(current.schemaVersion) || canonicalMisfit(current.canonical, editor.schema))) {
+      void snapshotStore.record(id, current.title || "Untitled", canonical, "manual").catch(() => {});
+      toast.show("This note was made by a newer version of the app and can't be edited as a card — your typing is kept in Version history.", "warning");
+      return;
+    }
     let patched: DocumentRecord | null;
     try {
       patched = await patchDocById(id, { canonical, expectedUpdated: cardBasesRef.current.get(id) ?? null });
@@ -2522,11 +2537,10 @@ export function PerssonifyEditor({
     // which autosave duly persists under the other document's id. The save-side
     // analogue of `saveActiveDoc`'s post-await hydration re-assert.
     if (patched?.canonical && isEditorTargeting(id)) {
-      setCanonical(patched.canonical);
-      useDocumentStore.getState().markHydrated(id);
+      hydrateEditorWithDoc(id, patched.canonical);
     }
     try { await rebuildLinks(); } catch { /* index refresh is best-effort */ }
-  }, [engine, patchDocById, setCanonical, rebuildLinks, toast, isEditorTargeting]);
+  }, [engine, patchDocById, hydrateEditorWithDoc, rebuildLinks, toast, isEditorTargeting]);
 
   const handleCardMeta = useCallback(
     async (id: string, metadata: Record<string, unknown>) => {

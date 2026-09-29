@@ -233,6 +233,8 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
   /** The browser's last answer to navigator.storage.estimate(), if any. */
   private _estimate: { usage: number; quota: number } | null = null;
   private _estimateAt = 0;
+  /** Closed because another tab is upgrading the database (versionchange). */
+  private _closedForUpgrade = false;
 
   constructor(config?: IDBStorageConfig) {
     this._dbName = config?.dbName ?? DEFAULT_DB_NAME;
@@ -258,6 +260,21 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
         reject(new Error("IndexedDB is not available in this environment"));
         return;
       }
+      const adopt = (db: IDBDatabase) => {
+        // A newer build in another tab wants to UPGRADE this database. An open
+        // connection BLOCKS that upgrade — the new tab hangs on open for as
+        // long as this one lives. Close it; this tab's storage calls then fail
+        // with a clear "reload" message instead of silently wedging the other.
+        db.onversionchange = () => {
+          db.close();
+          if (this._db === db) this._db = null;
+          this._closedForUpgrade = true;
+          console.warn("[IDBStorage] The document database is being upgraded by a newer version in another tab — reload this tab.");
+        };
+        this._db = db;
+        // Recompute metrics after open so first getMetrics() call is accurate
+        Promise.all([this._recomputeMetrics(), this._refreshEstimate(true)]).then(() => resolve(), () => resolve());
+      };
       const req = indexedDB.open(this._dbName, DB_VERSION);
       req.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
@@ -268,12 +285,31 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
           db.createObjectStore(STORE_META); // keyed by string
         }
       };
-      req.onsuccess = (event) => {
-        this._db = (event.target as IDBOpenDBRequest).result;
-        // Recompute metrics after open so first getMetrics() call is accurate
-        Promise.all([this._recomputeMetrics(), this._refreshEstimate(true)]).then(() => resolve(), () => resolve());
+      req.onsuccess = (event) => adopt((event.target as IDBOpenDBRequest).result);
+      req.onblocked = () => {
+        console.warn("[IDBStorage] Opening the document database is waiting for another tab to close it.");
       };
-      req.onerror = () => reject(req.error);
+      req.onerror = () => {
+        // The database is at a HIGHER version than this build knows — a newer
+        // build upgraded it, then this one was served (a rollback, a stale
+        // cached tab). Refusing to open made the whole editor fail to start.
+        // Open it at its own version instead, as long as the stores this build
+        // uses are still there; content from the newer build is protected by
+        // the schema lock (schema-version.ts), not by locking the user out.
+        if (req.error?.name !== "VersionError") { reject(req.error); return; }
+        const fallback = indexedDB.open(this._dbName);
+        fallback.onsuccess = () => {
+          const db = fallback.result;
+          if (db.objectStoreNames.contains(STORE_DOCS) && db.objectStoreNames.contains(STORE_META)) {
+            console.warn(`[IDBStorage] ${this._dbName} is at version ${db.version} (newer than ${DB_VERSION}); opening it as it is.`);
+            adopt(db);
+          } else {
+            db.close();
+            reject(new Error("The document database was changed by a newer version of the app — open it in that version."));
+          }
+        };
+        fallback.onerror = () => reject(fallback.error ?? req.error);
+      };
     });
   }
 
@@ -285,6 +321,9 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
   // ── Internal helpers ────────────────────────────────────────────────────────
 
   private _db_(): IDBDatabase {
+    if (this._closedForUpgrade) {
+      throw new Error("The document database was upgraded by a newer version of the app in another tab — reload this tab.");
+    }
     if (!this._db) throw new Error("IndexedDB not yet open — await isReady() first");
     return this._db;
   }

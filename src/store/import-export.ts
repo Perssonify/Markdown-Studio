@@ -10,6 +10,7 @@ import { ingest, type IngestResult } from "./ingest";
 import { computeFidelity, type FidelityReport } from "./fidelity";
 import type { DocumentRecord } from "./document";
 import { APP_NAME } from "../constants";
+import { CURRENT_SCHEMA_VERSION } from "./schema-version";
 
 // --- Types ---
 
@@ -276,6 +277,9 @@ export function exportAsJson(doc: DocumentRecord): { filename: string } {
   const exported = {
     _format: "perssonify-document",
     _version: "1.1.0",
+    // Read on import: an OLDER build opens content from a newer one read-only
+    // instead of blank (see schema-version.ts).
+    schemaVersion: Math.max(doc.schemaVersion ?? 0, CURRENT_SCHEMA_VERSION),
     id: doc.id,
     title: doc.title,
     canonical: doc.canonical,

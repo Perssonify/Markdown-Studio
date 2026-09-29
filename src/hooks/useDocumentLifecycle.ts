@@ -8,6 +8,7 @@ import { useDocumentStore } from "../store/documentStore";
 import { useUIStore } from "../store/uiStore";
 import { createDocument } from "../store/document";
 import { snapshotStore, type SnapshotMeta } from "../store/snapshot-store";
+import { canonicalMisfit, coerceToSchema, isNewerSchema } from "../store/schema-version";
 import type { UnsavedChangesResult } from "../ui/ConfirmDialog";
 
 interface DocumentLifecycleParams {
@@ -417,6 +418,10 @@ export function useDocumentLifecycle({
     }
   }, [tiptapRef, cmRef]);
 
+  // Read-only that WE switched on for a document from a newer build, and what
+  // it was before — restored when a document that fits is hydrated again.
+  const forcedReadOnlyRef = useRef<{ prev: boolean } | null>(null);
+
   /**
    * THE hydration ritual — the invariant-critical sequence for putting a
    * document's content into the live editor. Every step matters:
@@ -424,21 +429,50 @@ export function useDocumentLifecycle({
    * canonical, restore-or-reset undo history, markHydrated (else saves are
    * blocked), notify. This was previously copy-pasted at 5 call sites; each
    * copy was a chance to forget a step (and one did, historically).
+   *
+   * Content that does not fit the live schema — or claims a NEWER schema
+   * version (see schema-version.ts) — would load as an EMPTY document, and the
+   * next keystroke's autosave would write that over the real one. It is shown
+   * as a best-effort display copy instead, read-only, and the document is NOT
+   * marked hydrated, so no save path can persist the copy.
    */
   const hydrateEditorWithDoc = useCallback((docId: string, canonical: unknown, opts?: { keepHistory?: boolean }) => {
+    const store = useDocumentStore.getState();
+    const schema = tiptapRef.current?.getEditor?.()?.schema;
+    const record = store.activeDoc?.id === docId ? store.activeDoc : null;
+    const misfit = schema ? canonicalMisfit(canonical, schema) : null;
+    const incompatible = !!misfit || isNewerSchema(record?.schemaVersion);
+    const shown = misfit && schema ? coerceToSchema(canonical, schema) : canonical;
+
     resetHashes();
     if (opts?.keepHistory) {
       // Same-document content replacement (e.g. revert): keep undo history.
-      setCanonical(canonical, { resetHistory: false });
+      setCanonical(shown, { resetHistory: false });
     } else {
       // Cross-document hydration: restore the target's cached history when
       // valid, otherwise fresh history.
-      setCanonical(canonical, { resetHistory: false });
+      setCanonical(shown, { resetHistory: false });
       restoreOrResetHistory(docId);
     }
-    useDocumentStore.getState().markHydrated(docId);
-    handleCanonicalChange(canonical);
-  }, [resetHashes, setCanonical, restoreOrResetHistory, handleCanonicalChange]);
+    if (incompatible) {
+      store.markIncompatible(docId, misfit ?? "written by a newer version");
+      const ui = useUIStore.getState();
+      if (!forcedReadOnlyRef.current) forcedReadOnlyRef.current = { prev: ui.readOnly };
+      useUIStore.setState({ readOnly: true }); // session-only, never the persisted pref
+      toast.show(
+        `“${record?.title || "This document"}” was made by a newer version of the app, or holds content this version cannot show. It is open read-only so nothing is lost.`,
+        "warning"
+      );
+    } else {
+      store.clearIncompatible(docId);
+      store.markHydrated(docId);
+      if (forcedReadOnlyRef.current) {
+        useUIStore.setState({ readOnly: forcedReadOnlyRef.current.prev });
+        forcedReadOnlyRef.current = null;
+      }
+    }
+    handleCanonicalChange(shown);
+  }, [resetHashes, setCanonical, restoreOrResetHistory, handleCanonicalChange, tiptapRef, toast]);
 
   /**
    * Claim or merely observe the editor's switch generation.
