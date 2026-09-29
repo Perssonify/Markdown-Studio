@@ -82,6 +82,7 @@ import { TiptapPaneHandle } from "./ui/TiptapPane";
 
 // Lazy-loaded panels (bundle splitting - load only when feature is used)
 import { LazyChunkBoundary } from "./ui/LazyChunkBoundary";
+import { promptImage } from "./formatting/image-insert";
 const FindReplaceBar = React.lazy(() => import("./ui/FindReplace").then((m) => ({ default: m.FindReplaceBar })));
 const GraphView = React.lazy(() => import("./ui/GraphView").then((m) => ({ default: m.GraphView })));
 const CardsView = React.lazy(() => import("./ui/CardsView").then((m) => ({ default: m.CardsView })));
@@ -992,11 +993,8 @@ export function PerssonifyEditor({
       return;
     }
     if (kind === "image") {
-      const url = await promptText("Insert Image", {
-        placeholder: "https://example.com/image.png",
-        description: "Enter the URL of the image to insert.",
-      });
-      if (url) dispatch("insertImage", url);
+      const img = await promptImage(promptText);
+      if (img) dispatch("insertImage", img);
       return;
     }
     const block = kind === "mathBlock";

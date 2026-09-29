@@ -297,3 +297,13 @@ function isSubmarker(
   // run=2 means the single char is part of a ** double marker
   return runBefore === 2 || runAfter === 2;
 }
+
+/**
+ * A URL as a CommonMark link destination. Spaces or parentheses would end a
+ * bare destination early, so such a URL is written in angle brackets (with any
+ * `<`/`>` inside percent-encoded, which the angle form cannot contain).
+ */
+export function mdLinkDestination(url: string): string {
+  const u = url.trim();
+  return /[\s()<>]/.test(u) ? `<${u.replace(/</g, "%3C").replace(/>/g, "%3E")}>` : u;
+}
