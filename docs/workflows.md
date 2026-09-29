@@ -28,7 +28,7 @@
   (`core.autocrlf=true` on Windows) broke `sync-perf.test.js`, which matches call
   sites like `"<MenuBar\n"`. `.gitattributes` pins LF (`* text=auto eol=lf`); an
   older clone may need `git add --renormalize .` or a fresh checkout.
-- **Browser campaign — [e2e/](../e2e/README.md)** (playwright-core + Chromium, no test runner): real IME composition, real IndexedDB, two tabs, quota exhaustion, blocked storage, coarse pointers, the embed bridge from a second origin, the published stylesheet on a host page, **vercel.json's CSP enforced** (`csp`), and **the service worker offline and across an update** (`pwa`). `e2e/README.md` states what it does not cover.
+- **Browser campaign — [e2e/](../e2e/README.md)** (playwright-core; Chromium, with the engine-neutral suites also on Firefox and WebKit via `E2E_BROWSER`; no test runner): real IME composition, real IndexedDB, two tabs, quota exhaustion, blocked storage, coarse pointers, the embed bridge from a second origin, the published stylesheet on a host page, **vercel.json's CSP enforced** (`csp`), and **the service worker offline and across an update** (`pwa`). `e2e/README.md` states what it does not cover.
   ```bash
   bun run build:app && bun run e2e      # every suite except perf
   node e2e/run.mjs csp pwa              # selected suites
@@ -40,7 +40,8 @@
 
 - **CI: GitHub Actions** — [.github/workflows/ci.yml](../.github/workflows/ci.yml), on every PR to `main` and every push to it. Bun is pinned (`BUN_VERSION`, the version that produced `bun.lock`), every action is pinned to a commit SHA, and the workflow only has `contents: read`.
   - job **`verify`**: `bun install --frozen-lockfile` → `bun run lint` → `bunx tsc --noEmit` → `bun run test` → `build:app` (which also writes the third-party licence notice from the build's hidden sourcemaps) → the CSP-hash test again against the BUILT `index.html` → strip sourcemaps (kept as a 90-day artifact on pushes) → library build → embed build.
-  - job **`e2e`**: the three builds, Chromium, then harness → surfaces → deep → dataloss → library → bridge → journeys → faults → **csp** → **pwa** (and stress on pushes).
+  - job **`e2e`**: the three builds, Chromium, then harness → surfaces → deep → dataloss → **floor** → library → bridge → journeys → faults → **csp** → **pwa** (and stress on pushes).
+  - job **`e2e-engines`** (A100): a Firefox + WebKit matrix running harness → surfaces → deep → dataloss → floor on each, the suites `e2e/run.mjs` lists for all three engines (`ops-release-config.test.js` keeps the two in step). Checks an engine cannot run print SKIP; checks failing for a reported app defect print XFAIL — see [e2e/README.md](../e2e/README.md#engines).
   - [dependabot.yml](../.github/dependabot.yml): weekly grouped PRs for the Bun lockfile and the pinned actions.
   - [uptime.yml](../.github/workflows/uptime.yml): every 30 minutes, checks that markdownstudio.com serves the app shell and its entry script.
 - **CD: Vercel**, driven by [vercel.json](../vercel.json):

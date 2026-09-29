@@ -1,7 +1,7 @@
 // Tier 4 — fault injection. Break the environment underneath a working app and
 // assert the two things that must always hold: the document on screen is never
 // destroyed, and a failure the user needs to know about is visible.
-import { serve, open, boot, seed, mdText, richText, storedDoc, canonicalText, runCase, until, APP_DIR } from "../lib.mjs";
+import { serve, open, boot, seed, mdText, richText, storedDoc, canonicalText, runCase, until, requireChromium, APP_DIR } from "../lib.mjs";
 import { proseDoc } from "../docs.mjs";
 
 const SENT = "FAULTMARK typed under duress. ";
@@ -171,6 +171,8 @@ runCase("faults", async (rep, onClose) => {
   // ── a slow device ───────────────────────────────────────────────────────
   // The scheduler adapts to what a projection COSTS here. On a 6× throttled
   // CPU it must still converge — degrading to slower, never to never.
+  // (The last block: on an engine without CPU throttling it ends the case.)
+  if (!requireChromium(rep, "6× CPU throttle: the panes still converge", "CPU throttling")) return;
   {
     const srv = await serve(APP_DIR);
     const { browser, page: pg } = await open(srv.port, { label: "6x CPU throttle", throttle: 6 });

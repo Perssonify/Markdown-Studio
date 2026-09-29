@@ -32,6 +32,9 @@ bun run e2e:bridge         # the embed's host bridge from a second origin (needs
 bun run e2e:csp            # vercel.json's CSP ENFORCED while every renderer runs
 bun run e2e:pwa            # offline after one visit; updates that never force-reload a tab
 bun run e2e:perf           # measurement only, never asserted in CI
+node e2e/run.mjs floor     # the browser floor: below it a message, no app code, nothing touched
+
+E2E_BROWSER=firefox node e2e/run.mjs surfaces   # any suite on Firefox or WebKit — see "Engines"
 ```
 
 `run.mjs` refuses to start without `dist-app/index.html`. `library` and
@@ -39,22 +42,76 @@ bun run e2e:perf           # measurement only, never asserted in CI
 checks and exit green — build first, and read the output.
 
 CI (`.github/workflows/ci.yml`) builds all three outputs and runs harness,
-smoke, deep, dataloss, library, bridge, journeys, faults, csp and pwa, one
-after another, on every pull request and push to `main`; stress runs on pushes
-to `main` only; perf never runs in CI.
+smoke, deep, dataloss, floor, library, bridge, journeys, faults, csp and pwa on
+Chromium, one after another, on every pull request and push to `main`; stress
+runs on pushes to `main` only; perf never runs in CI. A second job,
+`e2e-engines`, runs the cross-engine suites (harness, surfaces, surfaces-deep,
+dataloss, floor) again on Firefox and on WebKit.
 
-Chromium comes from `playwright-core`. `bunx playwright-core install chromium`
-if you do not have one; `E2E_CHROME=/path/to/chrome` overrides.
+The browsers come from `playwright-core`: `bunx playwright-core install
+chromium` (add `firefox webkit` for the other engines) if you do not have them;
+`E2E_CHROME=/path/to/chrome` overrides Chromium.
+
+## Engines
+
+`E2E_BROWSER=chromium|firefox|webkit` picks the engine (Chromium by default).
+`run.mjs` lists, per suite, the engines it has been RUN green on; asked to run
+a suite on any other engine, it prints `SKIP <suite> [engine] — reason` rather
+than running it, because a failure there would say more about the harness than
+about the app. Today harness, surfaces, surfaces-deep, dataloss and floor run on
+all three; journeys needs Chromium (its real IME composition is Chromium's
+DevTools protocol), and the rest have simply not been run elsewhere yet.
+
+Inside a suite an engine difference is handled one of three ways, never by
+quietly weakening a check:
+
+- **A harness fix** — the same assertion, reached another way. Firefox leaves a
+  synthetic `ClipboardEvent`'s `clipboardData` empty (0 bytes where Chromium and
+  WebKit carry the text), so pastes go through `pasteText`. Reduced motion is
+  `page.emulateMedia({ reducedMotion })`, not a raw CDP call. WebKit leaves links
+  out of the Tab order by default (Safari's "Press Tab to highlight each item";
+  Playwright's WebKit reaches them with neither Tab nor Alt+Tab), so there the
+  skip-link case asserts what the link is for — first in the focus order, and
+  it lands in the editor — instead of "the first Tab stop".
+- **`rep.skip(name, reason)`** — the engine lacks the capability: the memory
+  sheet's heap gauge reads `performance.memory`, which only Chromium has.
+  `requireChromium()` does the same for blocks that need CDP, and `open({ cdp })`
+  or `open({ throttle })` throws on another engine, so a forgotten guard fails
+  loudly instead of passing without the thing it was testing.
+- **`rep.xfail(name, ok, reason)`** — a check that fails for a REPORTED app
+  defect. It prints XFAIL and does not count as a failure, and it FAILS the
+  moment it passes, so the marker goes out with the fix. One today: under forced
+  colours, the focus ring on Firefox and WebKit is not Highlight, because
+  `styles.css`'s forced-colours `outline-color: Highlight` restatement is
+  `(0,1,0)` against ring rules of `(0,2,0)` and never applies (Chromium forces
+  ring colours on its own). Measured in `probes/forced-colors-ring.mjs`.
+
+Console messages an engine prints that are not defects are listed, exactly, in
+`ENGINE_NOISE` (`lib.mjs`), each with its reason: Firefox reports a font load a
+navigation cancelled; WebKit reports the viewport meta's deliberate
+`interactive-widget` key, and a service-worker registration cancelled by
+leaving the page.
+
+`seed` writes from a blank page on the app's origin (`BLANK_PATH`), never from
+the app's own page: from there it raced the app's first boot, which could seed
+the starter documents around the case's own (on Chromium the seed usually
+landed first; on Firefox the app usually did). Leaving a booting app was worse on Firefox: it rejects
+the page's in-flight lazy imports, and the app takes that for a stale deploy and
+RELOADS, cancelling the navigation — an app defect, measured in
+`probes/leave-during-lazy-chunk.mjs` (6 of 12 navigations away in the first
+~0.7 s after `load` on Firefox, none on Chromium or WebKit). The cross-engine
+suites therefore never boot the app before seeding.
 
 ## Layout
 
 | File | What it is |
 |---|---|
-| `lib.mjs` | the rig: static server, page, seeding, pane accessors, CDP composition helpers, reporter |
+| `lib.mjs` | the rig: the engine (`E2E_BROWSER`), static server, page, seeding, pane accessors, `pasteText`, CDP composition helpers, reporter (`check`, `skip`, `xfail`) |
 | `docs.mjs` | canonical (ProseMirror JSON) builders for the stress shapes |
 | `run.mjs` | runs each suite in its own process so one crash cannot take the rest down |
 | `cases/surfaces.mjs` | tier 1 — blast radius |
 | `cases/surfaces-deep.mjs` | the surfaces no other suite opens: Settings, Version history, the bottom tray, `/about` and `/help`, the guided tour, the Outline tab |
+| `cases/floor.mjs` | the browser floor (A097) in a real parser: with `CSS.registerProperty` removed before any page script runs, the message shows, the module script is swallowed as text and never runs, the boot watchdog does nothing, and the stored document, the caches and the service worker survive; back at the floor, the app opens that document. The embed half needs `dist-embed/` |
 | `cases/dataloss.mjs` | the data-loss sequences with two real tabs and real IndexedDB — picks up where `faults.mjs`'s multi-tab case stops: the conflicted-draft rebase (F003), closing a conflicted document (F001) and reloading after a conflict (A018) |
 | `cases/stress.mjs` | tier 2 — scale and duration |
 | `cases/journeys.mjs` | tier 3 — user simulation |
@@ -67,7 +124,7 @@ if you do not have one; `E2E_CHROME=/path/to/chrome` overrides.
 | `cases/csp.mjs` | the production build served with vercel.json's headers, the report-only CSP switched to ENFORCING; KaTeX, Mermaid, abcjs, a data: image, Find, the map, Cards, Word export and /help must raise zero violations |
 | `cases/pwa.mjs` | the service worker: one online visit, then the network is killed and every lazy feature is used for the first time offline; then a byte-changed `sw.js` — the prompt appears, nothing reloads by itself, a dirty second tab is told rather than reloaded |
 | `renderers.mjs` | the probe document and actions `csp` and `pwa` share (a helper, not a case) |
-| `probes/` | one-off diagnostics kept because they are the evidence behind a fix. None is wired into `run.mjs` or CI; run one by hand with `node e2e/probes/<name>.mjs` against a production build (`bun run build:app` first; `embed-boot.mjs` needs `build:embed`). Two cover the audit fixes: `g2-audit-fixes.mjs` (AltGr typing in both panes, ⌘B in the Cards composer, broken-link marking, the Find regex Worker timing out, map wheel-zoom on a later open, Escape on a card's delete confirmation) and `g4-durability-trust.mjs` (the wiped-library boot path, the "Not saving" banner, the Version history delete confirm, the backup record, remote images and Referer under the image CSP, the relay consent prompt, the old-origin banner, no Admin/ads in production, the licence notice) |
+| `probes/` | one-off diagnostics kept because they are the evidence behind a fix (or, like `forced-colors-ring.mjs` and `leave-during-lazy-chunk.mjs`, behind a reported defect). None is wired into `run.mjs` or CI; run one by hand with `node e2e/probes/<name>.mjs` against a production build (`bun run build:app` first; `embed-boot.mjs` needs `build:embed`). Two cover the audit fixes: `g2-audit-fixes.mjs` (AltGr typing in both panes, ⌘B in the Cards composer, broken-link marking, the Find regex Worker timing out, map wheel-zoom on a later open, Escape on a card's delete confirmation) and `g4-durability-trust.mjs` (the wiped-library boot path, the "Not saving" banner, the Version history delete confirm, the backup record, remote images and Referer under the image CSP, the relay consent prompt, the old-origin banner, no Admin/ads in production, the licence notice) |
 
 ## What this campaign does NOT cover
 
@@ -117,11 +174,14 @@ several were in the plan this campaign was built from and were not written.
   asserts the collapsed tray is `inert`. Each was mutation-tested against a
   build with its fix reverted.
 
-**Still Chromium only.** CI and this container install Chromium alone; Firefox
-and WebKit tiers need those browsers and a CI job that does not exist yet
-(A100, partial). So nothing iOS/Safari-specific (the `pagehide` stash, safe
-areas, storage eviction and the seven-day cap, the install tip) or
-Firefox-specific is exercised by a real engine.
+**Firefox and WebKit — five suites, not a device.** Harness, surfaces,
+surfaces-deep, dataloss and floor run on all three engines (CI: `e2e-engines`).
+Journeys (real IME composition is Chromium's DevTools protocol), faults,
+stress, library, bridge, csp and pwa run on Chromium only. And WebKit here is
+Playwright's build on a desktop, not Safari on an iPhone: the iOS-specific paths
+(the `pagehide` stash when a tab is swiped away, safe areas on a notched device,
+storage eviction and the seven-day cap, the install tip) still have no
+real-device proof.
 
 **Hand-run only.** The two audit probes in `probes/` cover behaviour that no
 suite asserts. Nothing runs them automatically, so a regression there shows up
@@ -210,7 +270,10 @@ only when someone runs them.
   than 50% run to run. `perf.mjs` compares two builds under identical
   conditions; it is not a gate.
 - **Console errors are failures.** Every case asserts `errors` stayed empty, so
-  a regression in an unrelated surface still fails the run.
+  a regression in an unrelated surface still fails the run. The only exceptions
+  are `ENGINE_NOISE`'s exact, justified patterns.
+- **An engine difference is a harness fix, a SKIP or an XFAIL** (see
+  "Engines") — never a check quietly loosened until it passes.
 - `probes/` is where a hypothesis is tested before it becomes a case. Keep the
   probe when it is the evidence for a fix, and name it where the fix is
   documented — most of the 28 are not named anywhere else yet.

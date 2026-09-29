@@ -59,6 +59,7 @@ import { TiptapPaneHandle } from "./ui/TiptapPane";
 
 // Lazy-loaded panels (bundle splitting - load only when feature is used)
 import { LazyChunkBoundary } from "./ui/LazyChunkBoundary";
+import { OneEditorPerPage } from "./ui/OneEditorPerPage";
 const FindReplaceBar = React.lazy(() => import("./ui/FindReplace").then((m) => ({ default: m.FindReplaceBar })));
 const GraphView = React.lazy(() => import("./ui/GraphView").then((m) => ({ default: m.GraphView })));
 const CardsView = React.lazy(() => import("./ui/CardsView").then((m) => ({ default: m.CardsView })));
@@ -68,12 +69,17 @@ const WorkspacePanel = React.lazy(() => import("./ui/WorkspacePanel").then((m) =
  * The dual-pane Markdown editor.
  *
  * ONE PER PAGE: its stores are module singletons (see `useDocumentStore`), so
- * two instances in the same page share the active document and storage. Use
- * one instance per page or per iframe (the embed build). Unmounting and
+ * a second instance mounted while one is running refuses to start and shows a
+ * message instead (OneEditorPerPage, A106). Use one instance per page or per
+ * iframe (the embed build). Unmounting and
  * remounting a single instance is supported; switching `storageAdapter` /
  * `storageConfig` needs a page load — use `clearLocalData()` for a logout.
  */
-export function PerssonifyEditor({
+export function PerssonifyEditor(props: PerssonifyEditorProps) {
+  return <OneEditorPerPage><PerssonifyEditorInstance {...props} /></OneEditorPerPage>;
+}
+
+function PerssonifyEditorInstance({
   _integrationRef,
   _onIntegrationChange,
   _onIntegrationLinkClick,

@@ -10,7 +10,7 @@
 // So the reader is measured against a document whose every line is known
 // (`LINE0001` …). "Did it recover the whole document, exactly once each" is
 // then decidable, which is the only way the tiers above it mean anything.
-import { serve, open, boot, seed, mdText, richText, runCase, APP_DIR } from "../lib.mjs";
+import { serve, open, boot, seed, mdText, richText, runCase, APP_DIR, BLANK_PATH } from "../lib.mjs";
 import { numberedDoc } from "../docs.mjs";
 
 const LINES = 400;
@@ -19,7 +19,7 @@ runCase("harness", async (rep, onClose) => {
   const srv = await serve(APP_DIR);
   const { browser, page: pg } = await open(srv.port, { label: "harness" });
   onClose(async () => { await browser.close(); srv.close(); });
-  await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
+  await pg.goto(`http://127.0.0.1:${srv.port}${BLANK_PATH}`);
   await seed(pg, [numberedDoc("h1", "Numbered doc", LINES)]);
   await boot(pg, srv.port, { mode: "Split", settle: 9000 });
   await pg.locator("text=Numbered doc").first().click({ timeout: 15000 }).catch(() => {});
