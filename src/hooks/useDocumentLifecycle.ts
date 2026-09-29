@@ -30,7 +30,8 @@ interface DocumentLifecycleParams {
   deleteDoc: (docId: string, editor?: any) => Promise<any>;
   finalizeDoc: (doc: any, editor: Editor | null, skipPersist?: boolean) => Promise<any>;
   revertActiveDoc: () => Promise<any>;
-  saveActiveDoc: (editor: any) => Promise<void>;
+  /** Resolves true only when the write committed (see documentStore). */
+  saveActiveDoc: (editor: any) => Promise<boolean | void>;
   setDirty: () => void;
   handleCanonicalChange: (canonical: any) => void;
   pasteStyled: boolean;
@@ -589,8 +590,10 @@ export function useDocumentLifecycle({
             myGen = claimEditorGeneration(true);
             hydrateEditorWithDoc(docId, cachedEdit);
             try {
-              await saveActiveDoc(freshEditor);
-              toast.show("Saved", "success");
+              // Resolution is not a commit (see saveActiveDoc) — only say
+              // "Saved" when the write landed.
+              const committed = await saveActiveDoc(freshEditor);
+              toast.show(committed ? "Saved" : "Not saved — the draft is still open", committed ? "success" : "warning");
             } catch (e) {
               console.warn("[handleCloseTab] Background save failed:", e);
               toast.show("Save failed", "error");

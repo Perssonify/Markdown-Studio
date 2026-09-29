@@ -69,6 +69,31 @@ export const CONFLICT_MESSAGE =
   "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload.";
 
 /**
+ * What an explicit save should tell the user when `saveActiveDoc` resolved
+ * WITHOUT committing. ⌘S used to say "Changes saved" (and fire the host's
+ * onSave) for every resolution — a refused blank write, a save aborted by a
+ * document switch, a swallowed write error — none of which put anything on disk.
+ */
+export function describeUncommittedSave(
+  s: Pick<DocumentState, "saveStatus" | "saveError">
+): { message: string; type: "warning" | "error" } {
+  switch (s.saveStatus) {
+    case "blocked":
+      return {
+        message: "Not saved — the editor is empty but the stored document is not. Undo to restore it, or use Clear document if you meant to empty it.",
+        type: "warning",
+      };
+    case "conflict":
+      return { message: CONFLICT_MESSAGE, type: "warning" };
+    case "error":
+      return { message: s.saveError ? `Save failed — ${s.saveError}` : "Save failed", type: "error" };
+    default:
+      // An ownership abort: the document changed under the save.
+      return { message: "Save did not complete — try again", type: "warning" };
+  }
+}
+
+/**
  * What the unload handler stashes (see crash-recovery.ts), as a pure function
  * of the store state and the live editor canonical, so the exact set a reload
  * will adopt can be tested without a page to unload.
@@ -232,7 +257,15 @@ interface DocumentState {
     opts?: Parameters<typeof ingest>[3]
   ) => DocumentWithIngestHtml | null;
   finalizeDoc: (doc: DocumentRecord, tiptapEditor: TiptapEditorLike | null, skipPersist?: boolean) => Promise<DocumentRecord>;
-  saveActiveDoc: (tiptapEditor: TiptapEditorLike | null) => Promise<void>;
+  /**
+   * Persist the live editor's content for the active document. Resolves
+   * `true` ONLY when the write committed. Resolution is not a commit: the
+   * blank-over-content refusal, an ownership abort (a switch or delete landed
+   * during the pre-save read) and a caught non-quota write error all resolve
+   * `false` — callers that report success (⌘S, a host's onSave) must check.
+   * A multi-tab conflict and a quota error reject.
+   */
+  saveActiveDoc: (tiptapEditor: TiptapEditorLike | null) => Promise<boolean>;
   setDirty: () => void;
   /** Permit the NEXT save to persist a blank canonical over a non-empty stored
    *  doc (one-shot). Used only by the explicit "Clear document" command so the
@@ -656,7 +689,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ── Save ───────────────────────────────────────────────────────────────────
   saveActiveDoc: async (tiptapEditor) => {
     const { activeDoc, hydratedDocId } = get();
-    if (!activeDoc || !tiptapEditor) return;
+    if (!activeDoc || !tiptapEditor) return false;
 
     // Data-integrity chokepoint: the editor's content must belong to the
     // active document. If a code path switched documents without hydrating
@@ -705,13 +738,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     {
       const s = get();
       if (s.activeDocId !== activeDoc.id || s.hydratedDocId !== activeDoc.id) {
-        return;
+        return false;
       }
       // A delete claimed this document while we were reading. `deleteDoc` only
       // clears activeDocId/hydratedDocId at the very end (via closeTab), so the
       // two checks above still pass mid-delete — and the write below would put
       // the record straight back after `storage.delete` removed it.
-      if (deletingDocs.has(activeDoc.id)) return;
+      if (deletingDocs.has(activeDoc.id)) return false;
     }
 
     set({ saveStatus: "saving" });
@@ -737,7 +770,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         // "error"), so this can't spin the save loop. A later real edit sets
         // "editing" and normal saving resumes.
         set({ saveStatus: "blocked", saveError: "Refused to overwrite this document with an empty one" });
-        return;
+        return false;
       }
       // Consume the one-shot clear permission whether or not it was needed.
       if (blankAllowedHere) blankSaveAllowedFor = null;
@@ -802,6 +835,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       refreshMetrics(set, get);
 
       scheduleReadyReset((fn) => set(fn), "saved", 2000);
+      return true;
     } catch (e) {
       console.warn("[documentStore] Save failed:", e);
       // After showing the transient error, return to "editing" — NOT "ready" —
@@ -812,6 +846,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (e instanceof StorageQuotaError) {
         throw e;
       }
+      return false;
     }
   },
 
