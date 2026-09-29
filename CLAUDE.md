@@ -35,7 +35,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   ON PURPOSE: with a single document the relationship map opened on one unconnected dot
   with nothing to explore, and the folder gives it a labelled cluster too. Seeded via PE's
   **`starterDocuments`** prop — standalone app ONLY (`App.tsx`); an embedder's
-  `initialDocument` stays exactly one document. They are seeded through the ordinary
+  `initialDocument` stays exactly one document. They are seeded by the boot sequence
+  (`useEditorBoot`, `src/editor/useEditorBoot.ts`) through the ordinary
   `importItems` path AFTER the initial doc is live — so they convert against the
   mounted editor's schema; `importItems` never activates anything, so Welcome stays
   open — and failures are caught so startup can't break. Seeding happens only when
@@ -164,7 +165,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   - **The rail is the whole information layer.** With a node selected: title,
     folder/state tags, three stat cells (links in · out · headings), Open/Focus/
     Isolate, then the document's **headings** (`headingsFor`, capped at 10 — click
-    one to open the doc there via `onOpenHeading` → PE's `scrollToHeading`), BOTH
+    one to open the doc there via `onOpenHeading` → `scrollToHeading` in
+    `src/editor/useHeadingNavigation.ts`), BOTH
     link directions as clickable documents (`Links out`/`Links in`, from
     `graph.edges` — clicking a row moves the map's selection, the arrow opens it)
     and that note's broken links. Counts alone said a relationship existed but not
@@ -226,7 +228,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`PageChrome`), which additionally take focus and restore it. Do NOT add a Tab
   trap: the switcher outside is meant to be reachable.
 - **Workspace views are ONE exclusive selection** (`workspaceView: "editor"|"map"|
-  "cards"` in `PerssonifyEditor`). Cards and the map are PEERS — full-canvas views of
+  "cards"` from `useWorkspaceViews`, `src/editor/useWorkspaceViews.ts`, which also holds
+  the overlay's focus/inert effect `useOverlayInert`). Cards and the map are PEERS — full-canvas views of
   the whole library, each an overlay over `<main>` with the editor still mounted — so
   they are derived from one value and rendered through **one overlay shell**, not two
   independent booleans. They WERE two booleans, and both could mount at once: two
@@ -242,7 +245,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   entered through read as an escape hatch. So the switcher buttons SELECT
   (`setWorkspaceView(x)`) while the **keyboard shortcuts stay toggles**
   (`toggleWorkspaceView`, so ⌘⇧K twice returns). Choosing a LAYOUT (MD/Rich/Split)
-  routes through PE's `handleSetMode`, which also returns to the editor — those panes
+  routes through `handleSetMode` (`useWorkspaceViews`), which also returns to the editor — those panes
   are invisible under an overlay, so it would otherwise be a control that silently does
   nothing. Same reason the heading/anchor navigation paths call `setWorkspaceView("editor")`
   rather than just `setGraphVisible(false)`. The switcher stays visible because the
@@ -365,7 +368,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `docs.list`, `doc.outline` (`extractHeadings`), `doc.links`
   (`getBacklinks`/`getForwardLinks`), `graph.stats` (`exportGraph`). It is **NOT an
   `eval` REPL** and exposes no arbitrary property access: PE injects a typed
-  read-only `ConsoleContext` of getters (no write path); adding a capability means
+  read-only `ConsoleContext` of getters (`useConsoleContext`,
+  `src/editor/useBottomTray.tsx`; no write path); adding a capability means
   adding a vetted entry, never a general escape hatch. `console-commands.ts` is PURE
   (tests inject a fake context). If a mutating command is ever added it MUST route
   through `dispatch`/`patchDocById` and honor read-only — never a raw storage write.
@@ -391,7 +395,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   graph tab** — an earlier "Map" tab (a horizontal `DocumentGraph`, then a vertical
   `StructureMap`) was tried and REMOVED: the outline covers document navigation, and
   the knowledge graph is the full-screen **relationship-map overlay** toggled from
-  the View menu / graph button (PE `graphVisible`, `src/ui/GraphView.tsx`) — do not
+  the View menu / graph button (`graphVisible` from `useWorkspaceViews`,
+  `src/ui/GraphView.tsx`) — do not
   re-add a graph into the narrow dock. `StructureMap.tsx` was deleted; a persisted
   `pf:workspace-tab==="map"` migrates to `"outline"` in `uiStore`. This **replaced
   the shadcn Sidebar + DocNavPanel + the old `docNav` "closed|toc|split|full" expand
@@ -444,8 +449,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   would steal the click). `cardPreview` (plain text, `{ skipTasks: true }`) stays for
   the empty-check, the a11y label and the unfiltered search `haystack`. **The opened
   card is a Preview·Split·Write surface** (`CardEditor`, persisted `pf:card-view`,
-  default `preview` on narrow / `split` on wide): the rendered side reuses PE's
-  `cardRenderMarkdown` = `sanitizeForIngest(engine.mdToHtml(md))` so a card renders
+  default `preview` on narrow / `split` on wide): the rendered side reuses
+  `cardRenderMarkdown` (`src/editor/useCardHandlers.ts`) = `sanitizeForIngest(engine.mdToHtml(md))` so a card renders
   IDENTICALLY to the main preview and reflects unsaved edits; links inside it are
   `preventDefault`-ed (reading, not navigation — real nav is Open in editor). No
   `renderMarkdown` prop ⇒ write-only fallback. Editing still hands MARKDOWN to
@@ -492,7 +497,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`ConsolePanel`) appears as a second tab only when the admin `consoleEnabled`
   flag is on (spread into the `tabs` array). Toggled by the status-bar links chip
   and the primary **far-left "Panel" chevron** on the status bar; state
-  (`trayOpen`/`trayTab`) lives in PE. Replaced the old always-on backlinks strip +
+  (`trayOpen`/`trayTab`) lives in `useBottomTray` (`src/editor/useBottomTray.tsx`). Replaced the old always-on backlinks strip +
   the floating links popover. **Collapsed, it stays mounted (it animates to 0fr) and
   is therefore `inert`**, set imperatively in a layout effect — `aria-hidden` alone
   left its tabs and chevron in the Tab order; collapsing around focus hands focus
@@ -672,7 +677,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   per primitive — extend the shared body. A folder dropped on a document row lands
   in that document's folder (`docRowDrop`) — the drop used to bubble to the root
   handler and move it to the top level (A066). **Per-document export** (`onExportDoc` →
-  `handleExportDoc(docId, "md"|"html"|"docx"|"json")` in PE) derives every format
+  `handleExportDoc(docId, "md"|"html"|"docx"|"json")` in `src/editor/useExportActions.ts`) derives every format
   from the STORED canonical via `canonicalToHtml`/`canonicalToMarkdown`
   (`serialize-doc.ts`) + `exportAs*`, so it works on ANY list item without that doc
   being loaded in the editor (it prefers the LIVE canonical when `hydratedDocId`
@@ -788,7 +793,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   central-directory (fallback: local-header) general-purpose bit 0 with NO dependency;
   `extractArchive` throws `ArchiveEncryptedError` when encrypted+no password, and
   decrypts via a **lazy** `@zip.js/zip.js` import when a `password` option is given
-  (wrong password → `ArchiveWrongPasswordError`). File import (PE) and URL import
+  (wrong password → `ArchiveWrongPasswordError`). File import (`collectImportItems`,
+  `src/editor/useImportPipeline.ts`) and URL import
   (`fetchImportResource` + `UrlImportDialog`) prompt for a masked password (the shared
   `useDialog().prompt` gained a `type: "password"`) and retry.
 - **Archive path safety**: `normalizeArchivePath(path)` in `store/archive.ts` strips
@@ -910,11 +916,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   digits, so it can't collide with numbers in the document.
 - **Archive imports wrap loose root files in a folder named after the archive** via
   `archiveEntriesToItems(entries, zipBaseName)` in `store/archive.ts` (used by both the
-  file-upload and URL-import sites in PE). A single top-level folder is kept as-is; a
+  file-upload and URL-import sites in `src/editor/useImportPipeline.ts`). A single top-level folder is kept as-is; a
   lone file imports at root.
 - **DOCX import** (`store/docx-import.ts` `convertDocxToHtml`): a `.docx` upload can't take
-  the text path (`getFileContentAndFormat` reads text → binary garbage), so PE's import loop
-  branches on `.docx` BEFORE that call and routes through **lazy** `mammoth` (`await import`,
+  the text path (`getFileContentAndFormat` reads text → binary garbage), so the import loop
+  (`collectImportItems`) branches on `.docx` BEFORE that call and routes through **lazy** `mammoth` (`await import`,
   own chunk — never in the main bundle) → HTML → the existing `format:"html"` ingest branch
   (`sanitizeForIngest` keeps inlined `data:` raster images, strips scripts; `analyzeHtml`
   reports residuals). Best-effort/lossy: headings/bold/italic/lists/tables/raster images
@@ -936,7 +942,40 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - Interior pages/graph are wired through PE via optional props (`onAbout`,
   `onHelp`, `onStartTour`, `graphOpen`/`onGraphOpenChange`); omitted by the
   library/iframe embed, which keep the built-in dialogs + internal graph toggle.
-- `src/PerssonifyEditor.tsx` — the orchestrator wiring stores, engine, panes.
+- `src/PerssonifyEditor.tsx` — the orchestrator: reads the stores, owns the refs and
+  engines, calls the hooks below, and renders. **Where PerssonifyEditor's parts live**
+  (`src/editor/`, A110 — each hook takes its dependencies explicitly; `types.ts`
+  names them by the hook or store that produces them):
+  - `props.ts` — `PerssonifyEditorProps`.
+  - `useWorkspaceViews.ts` — the editor/map/cards selection, the switcher and shortcut
+    handlers, `handleSetMode`; `useOverlayInert` (the overlay's focus/inert effect).
+  - `useEditorBoot.ts` — `usePersistPreferences` (preferences written back after boot)
+    and `useEditorBoot` (first-render storage injection; the init effect: preferences,
+    library, hydration or first-run seeding, the wiped-library check; metrics feed).
+  - `useChangeNotifications.ts` — `useCanonicalChangeHandler` (the sync engine's
+    STABLE `onCanonicalChange`) and `useContentChangeEmitter` (debounced `onContentChange`).
+  - `useHeadingNavigation.ts` — `scrollToHeading`, `scrollToHeadingByAnchor`; `useOutline`.
+  - `usePaneCommands.ts` — the context-menu API, clipboard, heading-anchor insertion,
+    insert prompts, and the pane focus handlers with `lastFocusedPaneRef`.
+  - `useBottomTray.tsx` — tray state and the height-guarded toggles; `useConsoleContext`;
+    `useTrayTabs`.
+  - `useImportPipeline.ts` — `importItems`, `handleImportUrl`, `activateAndCapture`,
+    `isEditorTargeting`, `waitForEditor`; `collectImportItems` (file expansion).
+  - `useAutosave.ts` — ⌘S, the idle autosave and its re-arm, the surface-open flush,
+    the unload safety net (`beforeunload`/`pagehide` + the synchronous stash).
+  - `useEditorActions.ts` — `handleAction` (the menu dispatcher), file drop, "Back up now".
+  - `useExportActions.ts` — per-document / folder / selection ZIP exports, and the
+    File-menu export helpers `handleAction` calls (incl. the recorded full backup).
+  - `useLibraryQueries.ts` — search, the Files body filter, the map rail's headings.
+  - `useCardHandlers.ts` — the Cards board's load / save / create / metadata handlers.
+  - `useHostApi.ts` — the imperative handle the integration wrapper and the iframe
+    bridge drive (`useImperativeHandle`, `addDocuments`, `updateDocument`, …).
+  Still in PE itself: the store selectors and refs, `registerLiveCanonical`, the
+  `releaseEditor` layout cleanup, the markdown-feature re-sync, the format dispatcher,
+  the keyboard-shortcut wiring and the whole render. **Hook call order is effect
+  order**: each hook is called where its block stood, so effects run exactly as they
+  did in one file — keep it that way when adding to them. Source-pin tests read the
+  module that holds their subject, and pin the editor's wiring separately.
 - `src/engine/` — markdown conversion + sync. `useSyncEngine.ts` (hash-gated bidi
   sync), `useMarkdownEngine.ts` (a thin hook over the PURE `createMarkdownEngine`,
   which `src/__tests__/converter-harness.js` drives with the real schema), `build-marked.ts`
@@ -1109,7 +1148,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   document, a switch reports it could not be opened, the link index skips it. The
   ONLY sanctioned blank persist is the explicit **Clear document**
   command, which calls `allowBlankSaveOnce()` (a one-shot module flag) to bypass
-  the backstop; PE toasts "Document is empty — not saved…" when a blank is blocked.
+  the backstop; the autosave (`useAutosave`) toasts "Document is empty — not saved…" when a blank is blocked.
   **Do NOT re-add a focus-based ("is the rich editor focused?") heuristic inside
   `syncHtmlToMd`** — it was tried and removed because it silently REVERTED genuine
   deletions when the user blurred the rich pane before the debounce fired. The sync
@@ -1271,7 +1310,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   already refused to overwrite a stored doc a DIFFERENT tab wrote (its `updated`
   drifted >2s ahead of what this tab loaded). It now parks a **terminal
   `"conflict"` saveStatus** (set before it throws) — like `"blocked"`, it must
-  NOT re-arm autosave. PE's autosave catch detects the conflict error and RETURNS
+  NOT re-arm autosave. The autosave catch (`useAutosave`) detects the conflict error and RETURNS
   without the error→editing re-arm (re-arming would just re-detect the conflict
   every few seconds — a toast/status loop); a later real edit (`setDirty` →
   `"editing"`) resumes saving. Surfaced in the StatusBar ("Changed in another tab
@@ -1322,11 +1361,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   document), and none of them claimed a generation at all —
   `restoreSnapshotAsNew` bumped it to invalidate others and then never checked
   its own. `composition-guards.test.js` pins that set behaviourally and by
-  source. PerssonifyEditor's own hydration sites — boot, the bridge's
-  update/append, card save, `activateAndCapture`, the no-editor import branch —
-  re-check `activeDocId` after their awaits instead (`isEditorTargeting`, below);
-  the source pin names the hook's functions only, so a new PE site must be
-  checked by hand.
+  source. The editor's own hydration sites — boot (`useEditorBoot`), the bridge's
+  update/append (`useHostApi`), card save (`useCardHandlers`),
+  `activateAndCapture` and the no-editor import branch (`useImportPipeline`), all in
+  `src/editor/` — re-check `activeDocId` after their awaits instead
+  (`isEditorTargeting`, below); the source pin names the lifecycle hook's functions
+  only, so a new site in `src/editor/` must be checked by hand.
 - **Recoverable snapshot net (`store/snapshot-store.ts`).** The LAST line of
   defence: a SIDECAR IndexedDB (`perssonify-snapshots`, its own DB — independent
   of the injected StorageAdapter, must survive reloads) keeps a bounded, per-doc
@@ -1419,7 +1459,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   residual list. `clean-vs-styled.test.js` measures the real turndown output for
   every claim the Help page and README make about the two modes.
 
-- **Post-await ownership check (`isEditorTargeting`, PerssonifyEditor).** Any
+- **Post-await ownership check (`isEditorTargeting`, `src/editor/useImportPipeline.ts`).** Any
   path that writes a document and THEN pushes content into the live editor must
   re-check ownership AFTER the await, never capture it before. Persisting goes
   through IndexedDB, which is slow enough that a doc switch lands mid-write
@@ -1510,7 +1550,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   snapshots nothing could read back. Every accessor unions both.
 
 - **A file dropped on the editor must not navigate the tab away**
-  (`EditorLayout`'s `onDragOver`/`onDrop` → PE's `handleFileDropImport`). There
+  (`EditorLayout`'s `onDragOver`/`onDrop` → `handleFileDropImport`, `src/editor/useEditorActions.ts`). There
   was no drop handler anywhere in `src/`, so a file dropped on either pane got
   the browser default: the tab navigates to the file and everything typed since
   the last autosave is gone — the one gesture that leaves no draft, no undo and
@@ -1521,7 +1561,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   can't import this". Pinned by `editor-file-drop.test.js`.
 
 - **Every path that creates AND opens a document outside import uses
-  `activateAndCapture`** (PerssonifyEditor: the bridge's `addDocuments` and
+  `activateAndCapture`** (`src/editor/useImportPipeline.ts`: the bridge's `addDocuments` and
   `importContent`, Cards quick-capture). It converts headlessly FIRST — no yield
   between conversion and persistence — then persists and activates (`finalizeDoc`),
   and hydrates through the ritual only if, after the awaits, the store is still on
@@ -1709,7 +1749,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   a full rebuild after a content edit") — if incremental ever diverges from full,
   the classification is wrong; widen what routes to `rebuildLinks`.
 - **Heading anchors resolve in ONE place** — `scrollToHeadingByAnchor`
-  (PerssonifyEditor) calls `findHeadingByAnchor` with THE normaliser,
+  (`src/editor/useHeadingNavigation.ts`) calls `findHeadingByAnchor` with THE normaliser,
   `normalizeHeadingAnchor` (`store/doc-outline.ts`: NFKC, lowercase, keeps
   `\p{L}\p{N}\p{M}`, collapses the rest); generation sites carry the raw heading
   text. The old `[^a-z0-9]` key turned every Cyrillic/CJK/Arabic heading into "", so
