@@ -11,6 +11,7 @@ import {
 import { LinkBuilder } from "../LinkBuilder";
 import { HELP_SECTIONS, type HelpBlock, SHORTCUT_GROUPS } from "./help-content";
 import { PageChrome } from "./PageChrome";
+import { scrollBehavior } from "../../utils/reduced-motion";
 
 interface HelpPageProps {
   onClose: () => void;
@@ -55,7 +56,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
   const [active, setActive] = useState<string>(HELP_SECTIONS[0]!.id);
   const go = (id: string) => {
     setActive(id);
-    document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   };
 
   const noResults = q && sections.length === 0 && !showShortcuts;

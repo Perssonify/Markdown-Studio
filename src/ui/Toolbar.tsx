@@ -53,6 +53,17 @@ import { useEditorStore } from '../store/editorStore';
 import { useUIStore } from '../store/uiStore';
 import { TableGridPicker } from './TableGridPicker';
 import { Icons } from "./Icons";
+import { useRovingFocus } from "./use-roving-focus";
+
+/**
+ * Arrow-key order is VISUAL order. Save floats right, so it comes FIRST in the
+ * DOM (the float needs that) but sits LAST on screen; walking the DOM would
+ * put it between nothing and "Search".
+ */
+function rightControlsLast(items: HTMLElement[]): HTMLElement[] {
+  const right = items.filter((el) => el.closest("#toolbar-right-controls"));
+  return right.length ? [...items.filter((el) => !right.includes(el)), ...right] : items;
+}
 
 // --- Types ---
 
@@ -337,6 +348,10 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
 
   const { prompt, equation } = useDialog();
 
+  // A094: one tab stop for the whole bar (WAI-ARIA toolbar pattern) instead of
+  // ~40 — the document used to be forty Tab presses away.
+  useRovingFocus(rootRef, { orderItems: rightControlsLast });
+
   // Compact is decided by the toolbar's OWN width, not the window's: the full
   // control set needs ~TOOLBAR_COMPACT_BP px and used to wrap into a ragged,
   // mostly empty second row across the whole laptop range. Below the threshold
@@ -440,7 +455,9 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const blockDropdown = (
     <DropdownMenu>
       <DropdownMenuTrigger render={
-        <Button variant="outline" size="sm" className="h-8 min-w-[108px] justify-between gap-1 px-2 font-normal">
+        // The visible text is the CURRENT block type; the name keeps it (label
+        // in name) and says what the control is.
+        <Button variant="outline" size="sm" aria-label={`Block type: ${blockOptions.find((o) => o.value === blockFmt)?.label ?? "Paragraph"}`} className="h-8 min-w-[108px] justify-between gap-1 px-2 font-normal">
           {blockOptions.find((o) => o.value === blockFmt)?.label ?? "Paragraph"}
           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -465,7 +482,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const fontDropdown = (
     <DropdownMenu>
       <DropdownMenuTrigger render={
-        <Button variant="outline" size="sm" className="h-8 min-w-[84px] justify-between gap-1 px-2 font-normal">
+        <Button variant="outline" size="sm" aria-label={`Font: ${fontOptions.find((o) => o.value === fontName)?.label ?? fontName}`} className="h-8 min-w-[84px] justify-between gap-1 px-2 font-normal">
           {fontOptions.find((o) => o.value === fontName)?.label ?? fontName}
           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -631,7 +648,14 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
 
   return (
     <>
-      <div ref={rootRef} data-tour="toolbar" className="bg-card/80 border-b border-border transition-all duration-300 px-4 pt-1.5 pb-0">
+      <div
+        ref={rootRef}
+        data-tour="toolbar"
+        data-print-hide
+        role="toolbar"
+        aria-label="Formatting"
+        className="bg-card/80 border-b border-border transition-all duration-300 px-4 pt-1.5 pb-0"
+      >
 
         {/* 1. RIGHT CONTROLS (Floated Right)
         Must come first in the DOM. This pins it to the top right, allowing 
@@ -639,11 +663,13 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
       */}
         <div id="toolbar-right-controls" className="float-right ml-2 mb-1.5 flex items-center gap-2">
           {/* Clear / Revert now live in the Edit and File menus; Save stays here
-              (high-frequency) alongside Undo/Redo in the compact controls. */}
+              (high-frequency) alongside Undo/Redo in the compact controls.
+              Named explicitly: below `sm` the "Save" text is display:none,
+              which left an icon-only button with no name at all. */}
           <ButtonGroup>
             <Tooltip>
               <TooltipTrigger render={
-                <Button variant="ghost" onClick={onSave} disabled={!isDirty} className="h-8 hover:bg-card">
+                <Button variant="ghost" onClick={onSave} disabled={!isDirty} aria-label="Save" className="h-8 hover:bg-card">
                   <Save className="text-success" />
                   <span className="hidden sm:inline-block">Save</span>
                 </Button>

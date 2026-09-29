@@ -17,9 +17,20 @@ interface ModeSwitcherProps {
  */
 const modes = [
   { id: MODES.MD, icon: FileCode2, label: "Markdown", short: "MD" },
-  { id: MODES.HTML, icon: Icons.HTML, label: "HTML Text", short: "HTML" },
-  { id: MODES.SPLIT, icon: Columns, label: "Split View", short: "Split" },
+  // "Rich text", the name the status bar and Settings already use for this mode.
+  { id: MODES.HTML, icon: Icons.HTML, label: "Rich text", short: "HTML" },
+  { id: MODES.SPLIT, icon: Columns, label: "Split view", short: "Split" },
 ];
+
+/**
+ * A096 / WCAG 2.5.3 (label in name). The buttons SHOW "MD" / "HTML" / "Split"
+ * but were NAMED "Markdown" / "HTML Text" / "Split View" — a speech-input user
+ * saying "click MD" matched nothing. The name must contain the visible text;
+ * the long form rides along after it.
+ */
+export function modeAccessibleName(short: string, label: string): string {
+  return label.toLowerCase().includes(short.toLowerCase()) ? label : `${short} (${label})`;
+}
 export function ModeSwitcher({ mode, setMode }: ModeSwitcherProps) {
   // Read-only locks the view: the mode is fixed to whatever was imposed so a
   // shared read-only link shows exactly the intended view. Turn read-only off
@@ -29,7 +40,7 @@ export function ModeSwitcher({ mode, setMode }: ModeSwitcherProps) {
   return <ButtonGroup>
     {modes.map(({ id, icon: Icon, short, label }) => {
       return (
-        <Button data-slot="mode-switcher-button" key={id} variant={mode === id ? "default" : "outline"} onClick={() => setMode(id)} disabled={readOnly} title={readOnly ? "View locked in read-only mode" : `${label} (${short})`} aria-label={label} aria-pressed={mode === id} className="pointer-coarse:min-h-9 pointer-coarse:min-w-9">
+        <Button data-slot="mode-switcher-button" key={id} variant={mode === id ? "default" : "outline"} onClick={() => setMode(id)} disabled={readOnly} title={readOnly ? "View locked in read-only mode" : `${label} (${short})`} aria-label={modeAccessibleName(short, label)} aria-pressed={mode === id} className="pointer-coarse:min-h-9 pointer-coarse:min-w-9">
           <Icon className="size-3.5" />
           <span className={cn("text-xs tracking-tight whitespace-nowrap hidden sm:inline-block", mode === id ? "inline-block" : "")}>{short}</span>
         </Button>
