@@ -29,13 +29,16 @@ the live site or a current `main` build before reporting.
 **Please do not open a public issue for a security problem, and please do not
 post a working exploit in a pull request.**
 
-Report privately through GitHub's private vulnerability reporting:
+Report privately by e-mail:
 
-- <https://github.com/SolutionPath/markdown-studio/security/advisories/new>
+- **<security@markdownstudio.com>**
 
-(If that page is not available to you, open a public issue that says only
-"security report, requesting a private channel" — with **no** details — and a
-maintainer will open an advisory and invite you to it.)
+The same address is published at
+<https://markdownstudio.com/.well-known/security.txt> (RFC 9116). The source
+repository is private, so GitHub's private vulnerability reporting is not
+available to outside reporters; e-mail is the channel. If you want to encrypt
+your report, say so in a first short message and we will agree a way to
+exchange it.
 
 A useful report includes:
 
