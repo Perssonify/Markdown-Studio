@@ -12,7 +12,8 @@ import { buildContextPrompt } from "./integration/prompt-builder";
 import type { DocumentRecord } from "./store/document";
 import { extractText, resolveDocTitle } from "./store/document";
 import { AUTOSAVE_MS } from "./constants";
-import { collectUnloadStash, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "./store/documentStore";
+import { collectUnloadStash, ConflictError, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "./store/documentStore";
+import { snapshotStore } from "./store/snapshot-store";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { useEditorStore } from "./store/editorStore";
@@ -1217,20 +1218,13 @@ export function PerssonifyEditor({
       const hasBody = patch.markdown != null || patch.canonical != null;
       if (!hasBody) {
         if (patch.title != null) {
-          // A title-only update must NOT let patchDocById persist the store's
-          // `activeDoc.canonical`, which lags the live editor by up to one
-          // autosave interval — doing so would overwrite the user's unsaved
-          // keystrokes. For the ACTIVE, hydrated doc, pin the live editor JSON
-          // (mirrors appendToDocument's base-selection).
-          const { activeDocId: curId, hydratedDocId: hydId } = useDocumentStore.getState();
-          const liveEditor = tiptapRef.current?.getEditor();
-          const liveCanonical =
-            curId === id && hydId === id && liveEditor ? liveEditor.getJSON() : undefined;
-          await patchDocById(id, {
-            title: patch.title,
-            userTitle: patch.title,
-            ...(liveCanonical ? { canonical: liveCanonical } : {}),
-          });
+          // A title-only update must not persist the store's lagging
+          // `activeDoc.canonical`. patchDocById already merges the LIVE editor
+          // content for the open document (liveCanonicalFor) — and, unlike a
+          // canonical passed from here, it knows a title is not content: when
+          // another tab has overtaken the document it renames the stored
+          // record without writing this tab's content over that tab's work.
+          await patchDocById(id, { title: patch.title, userTitle: patch.title });
           await emitGraphUpdate();
         }
         return { id, updated: true };
@@ -1876,7 +1870,9 @@ export function PerssonifyEditor({
       for (const entry of stash) {
         if (entry.docId === s.activeDocId) continue;
         // Parked drafts are also written directly (best effort; the stash is
-        // the copy that survives when this write does not land).
+        // the copy that survives when this write does not land). patchDocById
+        // measures drift against the draft's own base, so a draft another tab
+        // has since overtaken is refused here rather than written over it.
         s.patchDocById(entry.docId, { canonical: entry.canonical as DocumentRecord["canonical"] }).catch(() => {});
       }
       stashUnsaved(stash);
@@ -2412,10 +2408,16 @@ export function PerssonifyEditor({
   // the live editor's schema, persist via patchDocById, and re-hydrate the live
   // editor when the edited doc is the active one — otherwise the editor would
   // keep (and later autosave) the pre-edit content over the change.
+  // The revision each opened card was read from. A card edit is saved later,
+  // after the board has closed it; if another tab wrote the note in between,
+  // replacing the whole document with the card's text would overwrite that
+  // tab's work — patchDocById refuses when the stored copy is newer than this.
+  const cardBasesRef = useRef(new Map<string, string>());
   const cardLoadDoc = useCallback(async (id: string) => {
     const store = useDocumentStore.getState();
     const rec = await store.getDocById(id);
     if (!rec) return null;
+    cardBasesRef.current.set(id, rec.updated);
     // Prefer the LIVE editor canonical for the document the editor currently
     // holds. Reading the stored copy meant a card opened during the autosave
     // window was seeded with pre-edit text, and saving that card wrote it back
@@ -2480,7 +2482,24 @@ export function PerssonifyEditor({
     if (!editor?.schema) { toast.show("Editor not ready — note not saved", "error"); return; }
     const html = engine?.mdToHtml ? engine.mdToHtml(markdown) : markdown;
     const canonical = htmlToCanonical(html, editor.schema);
-    const patched = await patchDocById(id, { canonical });
+    let patched: DocumentRecord | null;
+    try {
+      patched = await patchDocById(id, { canonical, expectedUpdated: cardBasesRef.current.get(id) ?? null });
+    } catch (e) {
+      // Refused (another tab wrote this note after the card was opened) or the
+      // write failed. The board has already closed the card, so its text exists
+      // nowhere else: keep it recoverable in Version history, never drop it.
+      const title = useDocumentStore.getState().documents.find((d) => d.id === id)?.title ?? "Untitled";
+      void snapshotStore.record(id, title, canonical, "manual").catch(() => {});
+      toast.show(
+        e instanceof ConflictError
+          ? "This note was changed in another tab — your card edit was not saved over it. It is kept in Version history."
+          : "The note could not be saved — your card edit is kept in Version history.",
+        "warning",
+      );
+      return;
+    }
+    if (patched) cardBasesRef.current.set(id, patched.updated);
     // Re-check AFTER the await, never before it. `patchDocById` writes to
     // IndexedDB, which is slow enough that a document switch routinely lands
     // during it — and a pre-await "is this the active doc?" snapshot would then
@@ -2497,8 +2516,13 @@ export function PerssonifyEditor({
   const handleCardMeta = useCallback(
     async (id: string, metadata: Record<string, unknown>) => {
       // Presentation-only: don't bump `updated`, or pinning a note would
-      // re-sort the board as if it had been edited.
-      await patchDocById(id, { metadata, touchUpdated: false });
+      // re-sort the board as if it had been edited. touchUpdated:false writes
+      // the metadata ONLY, onto the freshest stored copy.
+      try {
+        await patchDocById(id, { metadata, touchUpdated: false });
+      } catch {
+        toastRef.current.show("That change to the card could not be saved", "error");
+      }
     },
     [patchDocById]
   );
