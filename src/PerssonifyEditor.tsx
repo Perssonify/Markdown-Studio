@@ -2641,7 +2641,7 @@ export function PerssonifyEditor({
         )}
 
 
-        <div ref={trayRegionRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div ref={trayRegionRef} className="pf-tray-region relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <SettingsSheet open={showSettings} onOpenChange={setShowSettings} />
             <MemorySheet open={showMemory} onOpenChange={setShowMemory} />
             <VersionHistorySheet
@@ -2669,7 +2669,7 @@ export function PerssonifyEditor({
               onClose={closeSearchPanel}
             />
 
-            <div className="relative flex min-h-[10rem] flex-1 flex-row">
+            <div className="pf-editor-row relative flex min-h-[10rem] flex-1 flex-row">
             <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
 
               {activeDocId ? (

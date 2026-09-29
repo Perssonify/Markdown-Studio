@@ -139,12 +139,15 @@ export function App() {
           {/* Viewport-locked shell: header + editor must sum to exactly 100dvh.
               Without this the editor alone was viewport-height, the page gained
               a scrollbar of exactly the header height, and any caret scroll
-              drifted the whole chrome off-screen (clipped header/status bar). */}
-          <div className="pf-safe-x flex h-dvh flex-col overflow-hidden">
-            <div className="shrink-0">
+              drifted the whole chrome off-screen (clipped header/status bar).
+              EXCEPT below ~450px of viewport height (400% zoom, a landscape
+              phone), where the lock left the editor zero pixels: `pf-shell`
+              lets the page scroll there instead (A091, styles.css). */}
+          <div className="pf-shell pf-safe-x flex h-dvh flex-col overflow-hidden">
+            <div className="shrink-0" data-print-hide>
                 <EditorHeader />
             </div>
-            <div className="min-h-0 flex-1">
+            <div className="pf-shell-editor min-h-0 flex-1">
             <PerssonifyEditor
                 fitParent
                 initialMode="split"

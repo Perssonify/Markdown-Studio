@@ -12,6 +12,7 @@ import { Icons } from "./Icons";
 import { TiptapPane } from "./TiptapPane";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
 import { markdownHeadings } from "./scroll-anchors";
+import { currentSplitShouldStack } from "./split-layout";
 
 interface PaneHeaderProps {
   /** Only the topmost header sits under the floating workspace trigger. */
@@ -340,15 +341,19 @@ function EditorLayoutInner({
   }, [mode, readOnly, focusMode]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    // Stack the split panes below 768px — the same breakpoint at which the menu
-    // bar collapses to ☰. Two side-by-side editor panes (each with a full
-    // header of toggles) at ~300px are too cramped to edit in.
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsNarrow(mq.matches);
+    if (typeof window === "undefined") return;
+    // Stack the split panes below 768px — the breakpoint at which the menu bar
+    // collapses to ☰ — but only when there is HEIGHT for two panes. A landscape
+    // phone stacked them into 37-69px editors apiece (A100); see split-layout.ts
+    // for why an upright phone ignores the keyboard-shrunk height.
+    const update = () => setIsNarrow(currentSplitShouldStack(window));
     update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
   }, []);
 
   const onDividerMove = useCallback((e: PointerEvent) => {
@@ -609,7 +614,10 @@ function EditorLayoutInner({
   "--reading-width": readingWidth ? `${readingWidth}ch` : "none",
       } as React.CSSProperties}
     >
+      {/* data-print-pane: printing prints the RICH pane, whatever the view
+          (styles.css @media print) — both panes are always mounted. */}
       <div
+        data-print-pane="md"
         className={cn("flex min-h-0 min-w-0 flex-col", !isSplit && "flex-1 w-full", !showMd && "hidden")}
         style={mdStyle}
       >
@@ -629,6 +637,7 @@ function EditorLayoutInner({
       {isSplit && showMd && showHtml && (
         <div
           role="separator"
+          data-print-hide
           aria-orientation={isNarrow ? "horizontal" : "vertical"}
           aria-label="Resize panes"
           // A separator that reports no value is not operable by assistive tech
@@ -658,6 +667,7 @@ function EditorLayoutInner({
       )}
 
       <div
+        data-print-pane="rich"
         className={cn("flex min-h-0 min-w-0 flex-col", isSplit ? "flex-1" : "flex-1 w-full", !showHtml && "hidden")}
       >
         <HtmlPane
