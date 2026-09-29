@@ -57,9 +57,11 @@ jobs:
         run: bun run build:app
 
       # The CSP in vercel.json allows the inline scripts by hash; this re-runs
-      # the hash check against the BUILT index.html, which only exists now.
-      - name: CSP hashes match the built app
-        run: bunx vitest run src/__tests__/ops-vercel-headers.test.js
+      # the hash check against the BUILT index.html, which only exists now —
+      # and the browser-floor check that the floor still runs before the entry
+      # script, stylesheets and preloads Vite injected (A097).
+      - name: Inline scripts in the built app (CSP hashes, browser floor)
+        run: bunx vitest run src/__tests__/ops-vercel-headers.test.js src/__tests__/ops-browser-floor.test.js
 
       # What Vercel runs last: sourcemaps are built but never deployed.
       - name: Keep sourcemaps out of the deploy
@@ -128,6 +130,10 @@ jobs:
       - name: Data-loss sequences in a real browser
         run: bun run e2e:dataloss
 
+      # Below the browser floor: a message, no app code, nothing touched.
+      - name: Browser floor
+        run: node e2e/run.mjs floor
+
       - name: Published library on a host page
         run: bun run e2e:library
 
@@ -163,6 +169,67 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-failure
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            e2e/*.json
+            e2e/artifacts/**
+
+  # The same app on Firefox and WebKit (A100). The suites that are
+  # engine-neutral run again here — the ones e2e/run.mjs lists for all three
+  # engines. A check that needs Chromium's DevTools protocol (real IME
+  # composition, CPU throttling) or a Chromium-only API reports SKIP with its
+  # reason, and a check that fails for a REPORTED app defect reports XFAIL;
+  # neither is ever counted as a pass.
+  e2e-engines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [firefox, webkit]
+    env:
+      E2E_BROWSER: ${{ matrix.engine }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build (app)
+        run: bun run build:app
+
+      - name: Build (embed)
+        run: bun run build:embed
+
+      - name: Install ${{ matrix.engine }}
+        run: bunx playwright-core install --with-deps ${{ matrix.engine }}
+
+      - name: Harness self-test
+        run: node e2e/run.mjs harness
+
+      - name: Blast radius (tier 1)
+        run: node e2e/run.mjs surfaces
+
+      - name: The surfaces nothing else opens
+        run: node e2e/run.mjs surfaces-deep
+
+      - name: Data-loss sequences in a real browser
+        run: node e2e/run.mjs dataloss
+
+      - name: Browser floor
+        run: node e2e/run.mjs floor
+
+      - name: Upload failure artefacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-failure-${{ matrix.engine }}
           if-no-files-found: ignore
           retention-days: 7
           path: |
