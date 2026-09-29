@@ -349,7 +349,10 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
 function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplace, toggleFindReplace, saveStatus, onSave, mode }: EditorToolbarProps) {
   const st = useEditorStore((s) => s.activeFormats);
   const syncMode = useUIStore((s) => s.syncMode);
-  const isDirty = saveStatus === "editing" || saveStatus === "error";
+  // "full" (storage quota reached, A086) is terminal for AUTOSAVE, but a manual
+  // save is exactly how a user retries after freeing space. "conflict" and
+  // "blocked" stay disabled: saving them again would only be refused again.
+  const isDirty = saveStatus === "editing" || saveStatus === "error" || saveStatus === "full";
   const [isCompact, setIsCompact] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(false);
