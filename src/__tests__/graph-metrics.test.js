@@ -16,6 +16,10 @@ import {
   labelWidth,
   stepsPerFrame,
   isLargeMap,
+  planFrame,
+  PAINT_EVERY_MS,
+  SLICE_MS,
+  CAMERA_HOLD_MS,
   LARGE_MAP_MIN,
   BoxGrid,
 } from "../store/graph-metrics";
@@ -538,6 +542,43 @@ describe("folderRects at scale", () => {
       const withChips = folderRects(scene).map(({ chip: _chip, ...rest }) => rest);
       expect(folderBounds(scene)).toEqual(withChips);
     }
+  });
+});
+
+describe("large-map frame plan", () => {
+  const plan = (o) => planFrame({ large: true, running: true, now: 10000, holdUntil: 0, lastPaint: 0, ...o });
+
+  it("never changes a small map: every frame steps (and paints)", () => {
+    for (const o of [{ holdUntil: 20000 }, { lastPaint: 0 }, { lastPaint: 9999 }]) {
+      expect(plan({ ...o, large: false })).toBe("step");
+    }
+  });
+
+  it("holds the layout while the user moves the camera or points", () => {
+    expect(plan({ holdUntil: 10000 + 1 })).toBe("hold");
+    // Even when a paint is overdue: the user's own render comes first.
+    expect(plan({ holdUntil: 10000 + 1, lastPaint: 0 })).toBe("hold");
+    expect(plan({ holdUntil: 10000, lastPaint: 10000 - 10 })).toBe("step");
+  });
+
+  it("paints a few times a second, in a frame with no step", () => {
+    // A frame carrying a step AND the paint measured 300-440ms at 2,000 notes
+    // under 4× throttling; either alone stayed under 200ms.
+    expect(plan({ lastPaint: 10000 - PAINT_EVERY_MS })).toBe("paint");
+    expect(plan({ lastPaint: 10000 - PAINT_EVERY_MS + 1 })).toBe("step");
+    expect(PAINT_EVERY_MS).toBeGreaterThanOrEqual(100);
+  });
+
+  it("does nothing special once the loop has stopped", () => {
+    expect(plan({ running: false, holdUntil: 20000 })).toBe("step");
+  });
+
+  it("keeps the step budget and the hold short enough to stay responsive", () => {
+    // One step always runs, so SLICE_MS bounds the EXTRA steps a frame may
+    // take; the hold must end soon after the user stops.
+    expect(SLICE_MS).toBeLessThanOrEqual(16);
+    expect(CAMERA_HOLD_MS).toBeGreaterThanOrEqual(PAINT_EVERY_MS);
+    expect(CAMERA_HOLD_MS).toBeLessThanOrEqual(500);
   });
 });
 
