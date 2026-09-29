@@ -14,7 +14,7 @@ export { useMarkdownEngine } from "./engine/useMarkdownEngine";
 export { useSyncEngine } from "./engine/useSyncEngine";
 export { createAssociationStore, createEditorClient, createHostBridge, formatDocumentForPrompt, formatDocumentsForPrompt, mergeGraphWithAssociations, PerssonifyEditorIntegration } from "./integration/index";
 export { PerssonifyEditor } from "./PerssonifyEditor";
-export { computeFidelity, createDocument, createStorageAdapter, ingest, useDocumentStore } from "./store/index";
+export { clearLocalData, computeFidelity, createDocument, createStorageAdapter, ingest, useDocumentStore } from "./store/index";
 export { createTheme } from "./theme/index";
 
 // These three are exported for compatibility only. The editor never registers

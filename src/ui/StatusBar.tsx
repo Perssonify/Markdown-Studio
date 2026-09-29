@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MODES } from "../constants";
-import { useDocumentStore } from "../store/documentStore";
+import { SCHEMA_LOCK_ERROR, useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 import { formatEstBytes, historyCache } from "../store/history-cache";
 import { useUIStore } from "../store/uiStore";
@@ -249,7 +249,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <span>Save failed</span>
           </div>
         )}
-        {saveStatus === "blocked" && (
+        {saveStatus === "blocked" && saveError !== SCHEMA_LOCK_ERROR && (
           // TERMINAL: the data-loss backstop refused to write a blank editor
           // over a document that has content. Autosave deliberately does not
           // re-arm, so without a branch here the state was invisible except for
@@ -261,6 +261,30 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <AlertTriangle className="size-3 shrink-0" />
             <span className="hidden sm:inline">Empty editor — not saving</span>
             <span className="sm:hidden">Not saving</span>
+          </div>
+        )}
+        {saveStatus === "blocked" && saveError === SCHEMA_LOCK_ERROR && (
+          // TERMINAL: a document from a newer build, shown read-only as a
+          // best-effort copy. Saving it would replace the real content.
+          <div
+            className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
+            title="This document was made by a newer version of the app. It is shown read-only so its content cannot be overwritten — open it in the newer version to edit it."
+          >
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="hidden sm:inline">Newer version — read-only</span>
+            <span className="sm:hidden">Read-only</span>
+          </div>
+        )}
+        {saveStatus === "full" && (
+          // TERMINAL: storage is out of room. The old "Save failed — retrying"
+          // retried forever and said nothing about what would help.
+          <div
+            className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
+            title="Storage is full, so your latest changes are not saved. Delete documents or old versions (Version history) to free space, then keep typing to retry."
+          >
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="hidden sm:inline">Storage full — not saving</span>
+            <span className="sm:hidden">Storage full</span>
           </div>
         )}
         {saveStatus === "conflict" && (

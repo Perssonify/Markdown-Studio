@@ -99,7 +99,9 @@ export function useLinkIndex({
       const summaries = await storage.list();
       const fullDocs: DocRecord[] = [];
       for (const s of summaries as { id: string }[]) {
-        const doc = await storage.get(s.id);
+        // Adapters REJECT an unreadable record (they used to return null); one
+        // damaged document must not take the whole link index down with it.
+        const doc = await storage.get(s.id).catch(() => null);
         if (doc) fullDocs.push(doc);
       }
       fullDocsRef.current = fullDocs;

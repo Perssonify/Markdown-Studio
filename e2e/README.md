@@ -115,6 +115,11 @@ areas, storage eviction) or Firefox-specific is exercised by a real engine.
   ASKS. Mutation-tested against a deliberately reverted build, where
   `TAB-B-EDIT-AFTER-RETURN` really is written over the other tab's text and the
   close prompt never appears.
+- The **reload after a conflict** (audit A018): the conflicted tab reloads, as
+  the conflict message tells it to, and `cases/dataloss.mjs` asserts its own
+  text survives on screen while the other tab's work stays on disk and the
+  conflict is still reported. Mutation-tested against a build with the stash's
+  base-revision restore removed: `TAB-B-EDIT` replaces the other tab's text.
 - **NOT reproduced here: the draft-retirement race (F002).** It needs a save
   whose `storage.list()` is still pending while a switch caches a newer draft,
   and holding an IndexedDB call open from outside the page would make it a test

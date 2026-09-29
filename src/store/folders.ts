@@ -324,6 +324,13 @@ export const useFolderStore = create<FolderState>((set, get) => ({
 
   pruneOrphans: (existingDocIds) =>
     set((s) => {
+      // An EMPTY library listing while the tree still files documents is far
+      // more likely a listing that failed (an unreadable document list, a
+      // storage hiccup, a boot race) than every document deleted at once — and
+      // pruning on it discarded every folder membership permanently, persisted
+      // via the prefs. Keep the tree; stale entries for documents that really
+      // are gone are harmless and are pruned by the next non-empty listing.
+      if (existingDocIds.size === 0 && Object.keys(s.docParents).length > 0) return s;
       const docParents: Record<string, string> = {};
       for (const [docId, folderId] of Object.entries(s.docParents)) {
         if (existingDocIds.has(docId) && s.folders.some((f) => f.id === folderId)) {

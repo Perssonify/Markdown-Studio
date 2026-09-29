@@ -10,6 +10,7 @@
 
 import { sanitizeCanonicalNode } from "./canonical-sanitize";
 import type { ResidualItem } from "./ingest";
+import { CURRENT_SCHEMA_VERSION } from "./schema-version";
 
 // --- Types ---
 
@@ -54,6 +55,9 @@ export interface DocumentRecord {
   tags: string[];
   created: string;
   updated: string;
+  /** The canonical format version the content was written in (see
+   *  schema-version.ts). Absent on records older than the field. */
+  schemaVersion?: number;
 }
 
 export interface CreateDocumentOpts {
@@ -73,6 +77,7 @@ export interface CreateDocumentOpts {
   tags?: string[];
   created?: string;
   updated?: string;
+  schemaVersion?: number;
 }
 
 export interface DocumentSummary {
@@ -161,6 +166,7 @@ export function createDocument(opts: CreateDocumentOpts = {}): DocumentRecord {
     tags: opts.tags ?? [],
     created: opts.created ?? now,
     updated: opts.updated ?? now,
+    ...(typeof opts.schemaVersion === "number" ? { schemaVersion: opts.schemaVersion } : {}),
   };
 }
 
@@ -318,6 +324,10 @@ export function serializeForStorage(doc: DocumentRecord): string {
     tags: doc.tags,
     created: doc.created,
     updated: doc.updated,
+    // Never DOWNGRADE the stamp: a record written by a newer build is only
+    // ever re-serialized here for a rename or a metadata change (its content
+    // is locked read-only), and its content is still the newer format.
+    schemaVersion: Math.max(doc.schemaVersion ?? 0, CURRENT_SCHEMA_VERSION),
     // Caches are excluded — regenerated on load
   });
 }
