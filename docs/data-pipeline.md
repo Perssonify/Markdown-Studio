@@ -101,7 +101,7 @@ flowchart TD
 
 ### Stage 4 — Persist (canonical → IndexedDB)
 
-- **Code:** `useDocumentStore.saveActiveDoc` ([src/store/documentStore.ts:969](../src/store/documentStore.ts#L969)) → storage adapter `save()` → [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts).
+- **Code:** `useDocumentStore.saveActiveDoc` ([src/store/documentStore.ts:981](../src/store/documentStore.ts#L981)) → storage adapter `save()` → [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts).
 - **Input:** the active `DocumentRecord` with fresh canonical JSON.
 - **What happens:** the save refuses to write when:
   - another tab wrote a revision newer than the one this tab's content is based on (the multi-tab guard, 2 s tolerance) → terminal `conflict`, "Changed in another tab — not saving";
@@ -124,7 +124,7 @@ flowchart TD
 
 ### Stage 5 — Readers (canonical → outputs)
 
-- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:283](../src/store/import-export.ts#L283)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
+- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:290](../src/store/import-export.ts#L290)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
 - **Knowledge graph:** `exportGraph` ([src/store/link-index.ts:411](../src/store/link-index.ts#L411)); every link is resolved by the one wiki-link resolver, `createWikiResolver` ([:193](../src/store/link-index.ts#L193)), which the click handler and the broken-link decoration use too (A059).
 - **Copy as Prompt:** `buildContextPrompt` ([src/integration/prompt-builder.ts:232](../src/integration/prompt-builder.ts#L232)).
 - All readers derive from canonical; none mutate it.
@@ -155,7 +155,7 @@ flowchart LR
 2. With Paste Styled on (the default), `sanitizePastedHtml()` ([src/engine/html-cleaner.ts:165](../src/engine/html-cleaner.ts#L165)) strips Office junk and keeps only allow-listed CSS; with it off (or ⇧ held), `cleanPasteHtml()` ([:244](../src/engine/html-cleaner.ts#L244)) also converts `font-weight:700` → `<strong>`.
 3. Cleaned HTML is inserted into Tiptap; the editor normalizes it to canonical PM JSON.
 4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:108](../src/engine/useSyncEngine.ts#L108)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
-5. `onCanonicalChange` fires → `updateDerived` ([src/store/documentStore.ts:1567](../src/store/documentStore.ts#L1567)) computes the fidelity report and the word/character counts in one walk (`computeCanonicalStats`, [src/store/fidelity.ts:239](../src/store/fidelity.ts#L239)) and publishes them only when they change; if styling can't be represented in the chosen markdown mode, the report records the loss and the StatusBar shows a fidelity badge.
+5. `onCanonicalChange` fires → `updateDerived` ([src/store/documentStore.ts:1579](../src/store/documentStore.ts#L1579)) computes the fidelity report and the word/character counts in one walk (`computeCanonicalStats`, [src/store/fidelity.ts:239](../src/store/fidelity.ts#L239)) and publishes them only when they change; if styling can't be represented in the chosen markdown mode, the report records the loss and the StatusBar shows a fidelity badge.
 6. Autosave (≤5s later) → `saveActiveDoc` (after its pre-save checks) → `serializeForStorage` → IndexedDB `documents` store; `__manifest` updated in the same transaction.
 
 That's the full life of one paste: untrusted HTML → sanitized → canonical → projected to markdown → fidelity-checked → persisted.

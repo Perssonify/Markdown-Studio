@@ -87,3 +87,16 @@ describe("the command-line entry point", () => {
     expect(r.stdout).toMatch(/\d+ anchors checked/);
   });
 });
+
+describe("--fix keeps the definition the author chose", () => {
+  it("re-points a drifted anchor at the NEAREST definition, not the first", async () => {
+    const { mkdtempSync, writeFileSync } = await import("fs");
+    const { tmpdir } = await import("os");
+    const { nearestDefinition } = await import("../../scripts/doc-anchors.mjs");
+    const file = join(mkdtempSync(join(tmpdir(), "anchors-")), "store.ts");
+    // A store action is defined twice: its interface member and its body.
+    writeFileSync(file, ["interface S {", "  saveDoc: () => void;", "}", "", "", "", "", "", "const store = {", "  saveDoc: () => {},", "};"].join("\n"));
+    expect(nearestDefinition(file, "saveDoc", 12)).toBe(10); // was at the body: stays with the body
+    expect(nearestDefinition(file, "saveDoc", 1)).toBe(2);   // was at the declaration: stays there
+  });
+});

@@ -6,7 +6,7 @@ Plain-language definitions of the vocabulary you'll hit reading this codebase, e
 An **external** (non-wiki) link edge between documents, supplied by an embedding host rather than parsed from `[[…]]` content. Stored separately and merged into the graph. → [src/integration/associations.ts](../src/integration/associations.ts), `mergeGraphWithAssociations` ([:171](../src/integration/associations.ts#L171)). Contrast with [Wiki link](#wiki-link).
 
 ### Autosave
-Trailing-timer save of the active document to IndexedDB, `AUTOSAVE_MS` (5000 ms, [src/constants.ts:63](../src/constants.ts#L63)). → `saveActiveDoc` ([src/store/documentStore.ts:312](../src/store/documentStore.ts#L312)), which resolves `true` only when the write committed. Three save statuses are terminal — autosave does not re-arm on them: `blocked` (a blank editor over stored content, or a document from a newer build), `conflict` (another tab saved newer content) and `full` (the browser's storage quota is exhausted).
+Trailing-timer save of the active document to IndexedDB, `AUTOSAVE_MS` (5000 ms, [src/constants.ts:63](../src/constants.ts#L63)). → `saveActiveDoc` ([src/store/documentStore.ts:321](../src/store/documentStore.ts#L321)), which resolves `true` only when the write committed. Three save statuses are terminal — autosave does not re-arm on them: `blocked` (a blank editor over stored content, or a document from a newer build), `conflict` (another tab saved newer content) and `full` (the browser's storage quota is exhausted).
 
 ### Backlink
 The reverse of a wiki link: documents that link **to** the current one. Stored in the link index's `reverse` map. → [src/store/link-index.ts:250](../src/store/link-index.ts#L250), surfaced in [src/ui/BacklinksPanel.tsx](../src/ui/BacklinksPanel.tsx).
