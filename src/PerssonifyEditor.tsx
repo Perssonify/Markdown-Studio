@@ -17,6 +17,7 @@ import { snapshotStore } from "./store/snapshot-store";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { captureIngestHeadless } from "./store/headless-ingest";
+import { carryBlockAttrs } from "./store/card-save";
 import { canonicalMisfit, CURRENT_SCHEMA_VERSION, isNewerSchema } from "./store/schema-version";
 import { computeFidelity } from "./store/fidelity";
 import { useEditorStore } from "./store/editorStore";
@@ -2427,9 +2428,17 @@ export function PerssonifyEditor({
     };
   }, [getCanonical]);
 
+  // The card's editable source. STYLED, never Clean: a card save replaces the
+  // whole note with what this source parses back to, and the Clean converter
+  // has no carrier for colour, highlight or font — one card edit stripped them
+  // from the entire document (reproduced by the audit). Styled keeps them as
+  // inline `<span style>`, which parses back to the same marks. Alignment has
+  // no carrier in either; handleCardSave restores it on unchanged blocks.
   const cardToMarkdown = useCallback(
-    (canonical: unknown) =>
-      (engine?.htmlToCleanMd ? canonicalToMarkdown(canonical, engine.htmlToCleanMd) : null) ?? "",
+    (canonical: unknown) => {
+      const convert = engine?.htmlToMd ?? engine?.htmlToCleanMd;
+      return (convert ? canonicalToMarkdown(canonical, convert) : null) ?? "";
+    },
     [engine]
   );
 
@@ -2481,9 +2490,24 @@ export function PerssonifyEditor({
       toast.show("This note was made by a newer version of the app and can't be edited as a card — your typing is kept in Version history.", "warning");
       return;
     }
+    // What this edit REPLACES — the live editor's copy when it holds the note.
+    // Alignment cannot survive the markdown round trip, so carry it over onto
+    // every block the edit left unchanged; and when the note holds anything the
+    // round trip cannot carry, keep the version being replaced recoverable.
+    const replaced = useDocumentStore.getState().hydratedDocId === id ? getCanonical() : current?.canonical;
+    let carried = { doc: canonical as unknown, lost: 0 };
+    if (replaced) {
+      carried = carryBlockAttrs(replaced, canonical);
+      if (!computeFidelity(replaced as DocumentRecord["canonical"], "styled").lossless) {
+        void snapshotStore.record(id, current?.title || "Untitled", replaced, "autosave").catch(() => {});
+      }
+    }
     let patched: DocumentRecord | null;
     try {
-      patched = await patchDocById(id, { canonical, expectedUpdated: cardBasesRef.current.get(id) ?? null });
+      patched = await patchDocById(id, {
+        canonical: carried.doc as DocumentRecord["canonical"],
+        expectedUpdated: cardBasesRef.current.get(id) ?? null,
+      });
     } catch (e) {
       // Refused (another tab wrote this note after the card was opened) or the
       // write failed. The board has already closed the card, so its text exists
@@ -2499,6 +2523,9 @@ export function PerssonifyEditor({
       return;
     }
     if (patched) cardBasesRef.current.set(id, patched.updated);
+    if (carried.lost > 0) {
+      toast.show("Alignment on the paragraphs you changed can't be kept in a card edit — the previous version is in Version history.", "info");
+    }
     // Re-check AFTER the await, never before it. `patchDocById` writes to
     // IndexedDB, which is slow enough that a document switch routinely lands
     // during it — and a pre-await "is this the active doc?" snapshot would then
@@ -2509,7 +2536,7 @@ export function PerssonifyEditor({
       hydrateEditorWithDoc(id, patched.canonical);
     }
     try { await rebuildLinks(); } catch { /* index refresh is best-effort */ }
-  }, [engine, patchDocById, hydrateEditorWithDoc, rebuildLinks, toast, isEditorTargeting]);
+  }, [engine, patchDocById, hydrateEditorWithDoc, rebuildLinks, toast, isEditorTargeting, getCanonical]);
 
   const handleCardMeta = useCallback(
     async (id: string, metadata: Record<string, unknown>) => {
