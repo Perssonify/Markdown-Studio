@@ -102,8 +102,22 @@ export function cleanHtmlForTurndown(html: string): string {
       }
     }
 
-    // Collapse multiple <br> to single
-    body.querySelectorAll("br + br").forEach((br) => br.remove());
+    // Collapse a RUN of <br> (nothing but whitespace between them) to one.
+    //
+    // This was `querySelectorAll("br + br")`, and a CSS sibling combinator
+    // looks at ELEMENT siblings only — text nodes are invisible to it. So in
+    // `a<br>b<br>c` the second <br> "follows" the first, and every break after
+    // the first in a paragraph was deleted: an address, a poem or a verse
+    // collapsed onto two lines on every rich→markdown projection, including the
+    // one each document open runs. Walk the real node siblings instead.
+    // (ASCII whitespace only: an &nbsp; between two breaks is content.)
+    for (const br of Array.from(body.querySelectorAll("br"))) {
+      let prev = br.previousSibling;
+      while (prev && prev.nodeType === 3 && /^[ \t\n\r\f]*$/.test(prev.textContent ?? "")) {
+        prev = prev.previousSibling;
+      }
+      if (prev && prev.nodeName === "BR") br.remove();
+    }
 
     // Remove trailing <br> before block-close
     body.querySelectorAll("p > br:last-child, div > br:last-child").forEach(
