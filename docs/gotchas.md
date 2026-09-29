@@ -133,30 +133,20 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **If you optimise further:** the remaining win is in the DOM, not the maths — fewer per-frame attribute writes (memoising the rail, or mutating node transforms imperatively instead of through React) beats Barnes-Hut here. Profile before you start; this entry exists because the obvious answer was the wrong one.
 - **Related:** [features.md#17-knowledge-graph-the-relationship-map](features.md#17-knowledge-graph-the-relationship-map).
 
-## Tabs inside a fenced code block become four spaces
+## Tabs inside a fenced code block became four spaces (fixed by marked 14.1.1)
 
-- **Symptom:** paste a Go function, a Makefile recipe, or any tab-indented
-  snippet into a fenced block; after the first markdown → rich → markdown round
-  trip the tabs are four spaces each. For a Makefile that is not cosmetic — make
-  requires a literal tab.
-- **Cause:** marked expands leading tabs across the WHOLE source before it
-  tokenises. `Lexer.blockTokens` runs
-  `src.replace(/^( *)(\t+)/gm, (_, lead, tabs) => lead + "    ".repeat(tabs.length))`
-  unconditionally — not only under `pedantic` — so fence CONTENT is expanded
-  along with block-structure indentation. CommonMark preserves tabs in code
-  content, so this is a marked deviation, not the spec.
-- **Fix/Workaround:** not fixed. `preprocessMarkdown` masks fenced code (found by
-  `findFencedCodeRanges`) for its own passes, but it restores the code BEFORE
-  marked runs, so marked still sees the tabs. The fix is to carry a mask across
-  marked itself — stash fence bodies in `hooks.preprocess` and restore them,
-  HTML-escaped, in `hooks.postprocess`, both configured in `build-marked.ts`. That
-  is a change to the whole md→html path and wants its own verification pass. Pinned
-  in `fenced-code-roundtrip.test.js` by a case that asserts today's behaviour (a
-  tab comes back as four spaces), so it fails — and names the reason — the moment
-  the behaviour changes. (It used to be an `it.fails`, which vitest would have
-  reported as a failure on the day someone fixed the bug.)
+- **Symptom (marked 12):** paste a Go function, a Makefile recipe, or any
+  tab-indented snippet into a fenced block; after the first markdown → rich →
+  markdown round trip the tabs were four spaces each. For a Makefile that is not
+  cosmetic — make requires a literal tab.
+- **Cause:** marked up to 14.1.0 expanded leading tabs across the WHOLE source
+  before it tokenised, fence content included. CommonMark preserves tabs in code
+  content, so this was a marked deviation, not the spec.
+- **Fix:** marked 14.1.1 stopped doing it, and the move to marked 18 (A113) took
+  the fix. `fenced-code-roundtrip.test.js` now pins tabs byte for byte (a Makefile
+  recipe, tabs inside a line); both cases fail on marked 12. It used to pin the
+  deviation, so that the day it changed the suite would say why.
 - **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
-  [src/engine/preprocessor.ts](../src/engine/preprocessor.ts),
   [src/__tests__/fenced-code-roundtrip.test.js](../src/__tests__/fenced-code-roundtrip.test.js).
 
 ## Reading CodeMirror's text with `innerText` double-counts blank lines
