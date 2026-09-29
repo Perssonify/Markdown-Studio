@@ -319,8 +319,8 @@ Tools, frameworks, and experiments from the workshop. The Labs principle is
 that a tool you can open and use right now teaches you more than a demo: use
 them today, scale them tomorrow.
 
-**Markdown Studio is a Labs product.** It is client-only — every document lives in
-your browser and nothing is uploaded — and it ships both as a standalone app
+**Markdown Studio is a Labs product.** It runs in the browser — every document lives
+there, with no account and no server holding your work — and it ships both as a standalone app
 and as an embeddable library. That combination is the Labs pattern: something
 genuinely useful on its own, which also drops into a larger system.
 

@@ -28,7 +28,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Getting started",
     blocks: [
       {
-        p: "Markdown Studio is a dual-pane Markdown editor. The left pane holds raw Markdown; the right pane is a rich-text preview you can also type into. Edit either side and the other updates instantly — they are always two views of the same document. It runs entirely in your browser: no account, no server, and nothing you write is uploaded.",
+        p: "Markdown Studio is a dual-pane Markdown editor. The left pane holds raw Markdown; the right pane is a rich-text preview you can also type into. Edit either side and the other updates instantly — they are always two views of the same document. It runs in your browser: there is no account, and your documents are stored in this browser rather than on a server (see “Offline & privacy” for the two features that do go online).",
       },
       {
         list: [
@@ -164,13 +164,13 @@ export const HELP_SECTIONS: HelpSection[] = [
         p: "Shareable import links — any page URL can carry an ?import_url=<link> parameter; opening it opens the importer with that link already filled in (top-level documents only). Nothing is fetched until you press Fetch, so a link someone sends you can never make your browser call out on its own. The Share / embed builder (see “Sharing & embedding”) can generate one, and the Import-from-URL dialog offers a “Copy share link” for the source you just imported.",
       },
       {
-        p: "Password-protected archives — importing an encrypted .zip (by file or by URL) is detected automatically; you’re prompted for the password, and the archive is decrypted and opened in the browser (nothing is uploaded). A wrong password just asks again.",
+        p: "Password-protected archives — importing an encrypted .zip (by file or by URL) is detected automatically; you’re prompted for the password, and the archive is decrypted and opened in the browser (the password never leaves it). A wrong password just asks again.",
       },
       {
         p: "Version history (recover earlier content) — Tools ▸ Version history keeps automatic snapshots of a document before content is overwritten, cleared, or deleted, and these survive reloads. If something ever looks lost, open it and Restore an earlier version in place (your current content is snapshotted first, so a restore is itself reversible) or restore it as a new document — which is also how you recover a deleted document.",
       },
       { tip: "Your work autosaves as you type, and is kept safe in three more ways: closing or reloading the tab saves what you have just typed (the browser's database is too slow to finish during a reload, so a copy is written the moment you leave and picked up next time); the editor refuses to overwrite a document with an empty editor, so an accidental blank never wipes a saved file; and if a save is failing, the status bar says so for as long as it is true rather than reading “Unsaved changes”. Version history is the net beneath all of that." },
-      { tip: "If a URL import is blocked by the source site, download the file and drop it onto the editor (or the workspace panel's Files tab) instead." },
+      { tip: "If a URL import is blocked by the source site, the app offers to fetch it through its own server (it asks once — see “Offline & privacy”). Or download the file and drop it onto the editor (or the workspace panel's Files tab) instead." },
     ],
   },
   {
@@ -244,13 +244,14 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Offline & privacy",
     blocks: [
       {
-        p: "The editor is completely client-side. Your documents are stored locally in this browser and are never uploaded — there is no backend that can read them.",
+        p: "Your documents are stored in this browser, on this device. There is no account, and Markdown Studio has no server that stores or reads your documents. Two features do reach the network, and both are under your control:",
       },
       {
         list: [
+          "Import from URL fetches the link you enter. If that site blocks browsers from reading it, the app can fetch it through its own server instead — it asks you first and remembers the answer (change it in Settings → Privacy). The server receives the address, downloads the file and passes it straight back without keeping a copy; like any web request, the address may appear in our hosting provider's logs, so avoid importing links that carry secrets.",
+          "Images in a document load from wherever they are hosted, which lets that site see when the document is opened. Settings → Privacy → Block remote images stops that; blocked images show as their description, and the setting applies the next time the app loads.",
           "Install it as an app (from your browser’s install/Add-to-Home-Screen option) to work offline.",
-          "Clearing your browser’s site data will remove your documents, so export anything important.",
-          "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write. Preferences fall back to their defaults and documents cannot be saved between visits, so export before you close the tab.",
+          "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write, but nothing is saved between visits. Export before you close the tab.",
         ],
       },
     ],

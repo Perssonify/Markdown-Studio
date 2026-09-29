@@ -14,6 +14,10 @@
          editor. No maximum-scale — pinch-zoom stays available for accessibility. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0a0a0a" />
+    <!-- Images in a document load from wherever they are hosted; without this
+         each request also told that host which page asked. (Settings ▸ Privacy
+         ▸ Block remote images stops the requests themselves.) -->
+    <meta name="referrer" content="no-referrer" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

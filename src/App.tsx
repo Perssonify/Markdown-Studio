@@ -9,6 +9,13 @@ import { EditorHeader } from "./EditorHeader";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
 import { sessionAdsFromParam } from "./utils/build-gates";
+import { installRemoteImagePolicy } from "./utils/remote-images";
+
+// Settings ▸ Privacy ▸ "Block remote images" is enforced as an img-src policy
+// for THIS page, and must be in force before any document renders — hence
+// module scope, not an effect. The app shell owns its document; the library
+// never does this (it must not restrict its host page).
+installRemoteImagePolicy();
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
 const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
