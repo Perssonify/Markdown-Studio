@@ -467,7 +467,7 @@ editorRef.current.getGraph()              // Link graph (wiki + associations)
 editorRef.current.getDocuments() / .getActiveDocument() / .getAssociations(docId?)
 editorRef.current.importContent(content, format) / .setDocuments(docs)
 editorRef.current.setTheme('dark'|'light'|bool) / .setMode('split'|'md'|'html') / .setAccent(id)
-editorRef.current.setFieldSchemas(...) / .setAssociations(...)
+editorRef.current.setAssociations(...)
 editorRef.current.exportAs(format) / .copyAsPrompt(opts)
 ```
 
@@ -523,10 +523,23 @@ The scoping is applied by the library build only, and is pinned by
 | `onStorageMetricsChange` / `onStorageQuotaExceeded` | callbacks | Storage usage / quota |
 | `onChange` | `(data) => void` | Canonical-change event (fires on every edit) |
 | `onLinkClick` | `(e) => boolean\|void` | All link activations (`{kind:"doc"\|"external"}`); return `true` to handle deep links yourself |
-| `onGraphUpdate` / `onFieldChange` / `onExport` | callbacks | Graph / field / export events |
+| `onGraphUpdate` | `(graph) => void` | The link graph changed |
 | `onReady` | `(handle) => void` | Receives the imperative handle |
-| `fieldSchemas` / `associations` / `linkResolver` | data / fn | Field defs / external edges / outbound link resolution |
+| `associations` | data | External edges merged into `getGraph()` |
 | `allowedOrigins` | `string[]` | postMessage origins for iframe embeds (default `[]` = deny all cross-origin host messages) |
+
+#### Deprecated — accepted, but they do nothing
+
+Kept so existing hosts still compile; each logs one console warning in development
+builds when used, and will be removed in a future major version.
+
+| API | Status |
+|-----|--------|
+| `fieldSchemas` prop, `setFieldSchemas()` | No effect — the editor has no field-schema feature. |
+| `linkResolver` prop | Never called — wiki links resolve against the editor's own documents. Map a link into your app from `onLinkClick` (`kind: "doc"` carries the target title and id). |
+| `onFieldChange`, `onExport` props | Never fired. `exportAs()` resolves when its download has been triggered. |
+| `documents` prop | Never read — seed documents with `addDocuments()`. |
+| `BlockId`, `FieldBlock`, `TransclusionBlock` exports | Not registered by the editor, and block ids do not survive a Markdown round trip. They still work in a Tiptap editor of your own. |
 
 For the iframe `postMessage` bridge (`createHostBridge` / `createEditorClient`), see [src/integration/host-bridge.ts](src/integration/host-bridge.ts), [docs/integration-guide.md](docs/integration-guide.md#cross-origin-iframe-embeds), and [docs/architecture.md](docs/architecture.md#embedding--integration).
 
