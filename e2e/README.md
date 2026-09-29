@@ -89,6 +89,23 @@ several were in the plan this campaign was built from and were not written.
   and positioned by its parent, so a cx/cy sample would compare "0,0" with
   "0,0" and pass whatever the simulation did.
 
+- **Keyboard and assistive-tech plumbing** (`cases/surfaces.mjs`, the
+  A090-A100 block): the skip link is the first Tab stop and lands in the
+  editor; the toolbar and the folder tree are each ONE tab stop and walk on the
+  arrows; the library precedes `<main>` in the DOM; a keyboard-focused control
+  shows the 2px `--focus-ring` outline (read AFTER the Button's
+  `transition-all` settles — `probes/focus-ring-transition.mjs` is why);
+  forced colours keep the pressed state and the ring; print hides the chrome
+  and prints the rich pane unclipped; a 342×192 viewport (1366×768 at 400%)
+  gives the editor a full viewport and scrolls to the status bar; a 667×375
+  landscape phone keeps the panes side by side. `cases/surfaces-deep.mjs` also
+  asserts the collapsed tray is `inert`. Each was mutation-tested against a
+  build with its fix reverted.
+
+**Still Chromium only.** Firefox and WebKit are not installed for
+`playwright-core` here, so nothing iOS-specific (the `pagehide` stash, safe
+areas, storage eviction) or Firefox-specific is exercised by a real engine.
+
 **Now reproduced in a browser that previously was not**
 - The **conflicted-draft rebase** and the **silent close of a conflicted
   document** (both fixed in 1.77.0). `faults.mjs` drove two tabs into a conflict

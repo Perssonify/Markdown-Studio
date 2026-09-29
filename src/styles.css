@@ -26,13 +26,30 @@
   /* Accent tuned for use as TEXT/ICON color. Bright fills (var(--primary)) fail
      contrast as small text on light backgrounds (amber ~1.8:1), so foreground
      usages read this instead: darkened for light mode, bright in dark mode.
-     Derived from --primary so it tracks every palette automatically. */
-  --primary-strong: color-mix(in srgb, var(--primary) 58%, #000);
+     Each palette supplies its own tuned values (--accent-text-light/-dark,
+     below); without a palette (the library build) it derives from --primary —
+     at 50% black, because 58% measured 4.3:1 on --muted in amber. */
+  --primary-strong: var(--accent-text-light, color-mix(in srgb, var(--primary) 50%, #000));
 }
 
+/*
+ * WHY the theme blocks, not the palette blocks, set --primary-strong (A092).
+ * The panes carry their OWN `data-theme` attribute (the markdown pane's wrapper
+ * and the ProseMirror element), so the block below re-runs on those subtrees —
+ * where the palette attribute (on <html>) no longer matches. When the palettes
+ * set --primary-strong directly, every link and inline-code span inside the
+ * rich pane fell back to the generic derivation, and in dark mode to the raw
+ * bright accent: violet 3.1:1, rose 3.8:1. Palettes now only DECLARE tuned
+ * values, which inherit into those subtrees; the theme picks between them.
+ * Every token pair is measured in a11y-contrast.test.js.
+ */
 :root,
 [data-theme="light"] {
-  --primary-strong: color-mix(in srgb, var(--primary) 58%, #000);
+  --primary-strong: var(--accent-text-light, color-mix(in srgb, var(--primary) 50%, #000));
+  /* The keyboard focus ring (A090): the text-tuned accent clears 3:1 against
+     every surface in both themes, which the old 30% `ring-ring/30` (1.75:1 in
+     amber) did not. */
+  --focus-ring: var(--primary-strong);
   --background: hsl(40, 30%, 96%);
   --foreground: hsl(0deg 0% 9.8%);
 
@@ -50,11 +67,16 @@
   --tertiary-foreground: hsl(0deg 0% 92.16%);
 
   --muted: hsl(0, 0%, 92%);
-  --muted-foreground: hsl(220 8.9% 46.1%);
+  /* A095: 46.1% measured 4.04:1 on --muted and 4.25:1 on the status bar — and
+     the library's 10px metadata then applied a further 60-75% alpha (2.3-3.0:1).
+     40% clears 4.5:1 on every light surface at full opacity. */
+  --muted-foreground: hsl(220 8.9% 40%);
 
   --accent: hsl(344.79deg 33.25% 96.34%);
   --accent-foreground: hsl(220.9 39.3% 11%);
-  --destructive: hsl(0 84.2% 60.2%);
+  /* 60.2% lightness was 3.3:1 as the status bar's "Save failed" — the one
+     message a user most needs to read. */
+  --destructive: hsl(0 72% 45%);
   --destructive-foreground: hsl(0deg 0% 92.16%);
 
   /* proposed */
@@ -104,9 +126,11 @@
 .dark,
 [data-pf-theme="dark"],
 [data-theme="dark"] {
-  /* On dark backgrounds the bright accent already has good contrast — use it
-     directly for text/icons (don't darken). */
-  --primary-strong: var(--primary);
+  /* On dark backgrounds the bright accent has good contrast for most palettes —
+     use it directly for text/icons. Violet and rose do NOT (3.1 / 3.8:1 on the
+     card surface), so they declare a lighter --accent-text-dark. */
+  --primary-strong: var(--accent-text-dark, var(--primary));
+  --focus-ring: var(--primary-strong);
   --background: hsl(0deg 0% 7.06%);
   --foreground: hsl(0deg 0% 92.16%);
 
@@ -125,8 +149,12 @@
 
   --accent: hsl(240 3.7% 15.9%);
   --accent-foreground: hsl(0, 0%, 61%);
-  --destructive: hsl(0 72% 58%);
-  --destructive-foreground: hsl(0 0% 98%);
+  /* 58% measured 4.3:1 on the card surface. As TEXT it has to be lighter in the
+     dark theme, so text ON a solid destructive fill turns dark to match (the
+     toolbar's Clear hover reads --destructive-foreground; the memory bar has
+     no text). */
+  --destructive: hsl(0 91% 71%);
+  --destructive-foreground: hsl(0 0% 9%);
   --noise-bg: linear-gradient(#393737, #1b1b1b);
 
 
@@ -165,53 +193,57 @@
  * light/dark blocks so equal-specificity attribute selectors win by source order.
  */
 /*
- * Each palette sets --primary (the bright fill) and an explicit --primary-strong
- * tuned for TEXT/ICON use in LIGHT mode, hitting WCAG AA (≥4.5:1) on the light
- * background — a uniform color-mix could not push amber far enough without
- * over-darkening the others. Dark mode reasserts the bright accent below.
+ * Each palette sets --primary (the bright fill), the text colour that sits ON
+ * it (--primary-foreground), and --accent-text-light: the accent tuned for
+ * TEXT/ICON use in light mode, ≥4.5:1 on every light surface — a uniform
+ * color-mix could not push amber far enough without over-darkening the others.
+ * A palette whose bright fill is too dark to read on the dark surfaces also
+ * sets --accent-text-dark. The theme blocks above turn these into
+ * --primary-strong (see the note there for why the palettes no longer set it).
+ *
+ * --primary-foreground (A095): white on the blue and emerald fills measured
+ * 3.04 and 2.59:1 — the active mode button, every default button. Those two
+ * take the same near-black ink amber always had (5.78 / 6.78:1).
  */
 [data-palette="amber"] {
   --primary: hsl(44, 98%, 48%);
   --primary-foreground: hsl(0deg 0% 9.8%);
-  --primary-strong: hsl(38, 100%, 27%);
+  --accent-text-light: hsl(38, 100%, 27%);
 }
 [data-palette="blue"] {
   --primary: hsl(201, 90%, 48%);
-  --primary-foreground: hsl(0, 0%, 100%);
-  --primary-strong: hsl(201, 92%, 33%);
+  --primary-foreground: hsl(0deg 0% 9.8%);
+  --accent-text-light: hsl(201, 92%, 33%);
 }
 [data-palette="violet"] {
   --primary: hsl(262, 83%, 58%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --primary-strong: hsl(262, 74%, 48%);
+  --accent-text-light: hsl(262, 74%, 48%);
+  --accent-text-dark: hsl(262, 83%, 72%);
 }
 [data-palette="emerald"] {
   --primary: hsl(160, 84%, 39%);
-  --primary-foreground: hsl(0, 0%, 100%);
-  --primary-strong: hsl(162, 90%, 24%);
+  --primary-foreground: hsl(0deg 0% 9.8%);
+  --accent-text-light: hsl(162, 90%, 24%);
 }
 [data-palette="rose"] {
   --primary: hsl(347, 77%, 50%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --primary-strong: hsl(347, 77%, 42%);
+  --accent-text-light: hsl(347, 77%, 42%);
+  --accent-text-dark: hsl(347, 77%, 66%);
 }
 /* Mono: black accent in light mode, white accent in dark mode. */
 [data-palette="mono"] {
   --primary: hsl(0, 0%, 12%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --primary-strong: hsl(0, 0%, 12%);
+  --accent-text-light: hsl(0, 0%, 12%);
 }
-/* Reassert the bright accent for text/icons in dark mode across every palette
-   (palette blocks above would otherwise leave the darkened light value). */
-.dark[data-palette="amber"], [data-theme="dark"][data-palette="amber"], [data-pf-theme="dark"][data-palette="amber"],
-.dark[data-palette="blue"], [data-theme="dark"][data-palette="blue"], [data-pf-theme="dark"][data-palette="blue"],
-.dark[data-palette="violet"], [data-theme="dark"][data-palette="violet"], [data-pf-theme="dark"][data-palette="violet"],
-.dark[data-palette="emerald"], [data-theme="dark"][data-palette="emerald"], [data-pf-theme="dark"][data-palette="emerald"],
-.dark[data-palette="rose"], [data-theme="dark"][data-palette="rose"] {
-  --primary-strong: var(--primary);
-}
+/* Dark mono flips the fill to white. It used to leave --primary-strong at the
+   light theme's 12% grey — 1.13:1 on the dark background, so every link and
+   inline-code span in the rich pane was effectively invisible. */
 .dark[data-palette="mono"],
-[data-theme="dark"][data-palette="mono"] {
+[data-theme="dark"][data-palette="mono"],
+[data-pf-theme="dark"][data-palette="mono"] {
   --primary: hsl(0, 0%, 98%);
   --primary-foreground: hsl(0, 0%, 10%);
 }
@@ -569,10 +601,10 @@ body.pf-app {
    no-tint, which is correct; forcing them to a solid fill would be wrong. */
 @supports not (background-color: color-mix(in oklab, red, red)) {
   /* Accent-for-text token is color-mix-derived on the bare/light default — give
-     it a static value (the palette blocks already set static hsl values). */
+     it a static fallback (the palettes' --accent-text-light are static hsl). */
   :root,
   [data-theme="light"] {
-    --primary-strong: hsl(38 100% 27%);
+    --primary-strong: var(--accent-text-light, hsl(38 100% 27%));
   }
 
   .bg-background\/50,
@@ -1321,7 +1353,8 @@ img[src$="#gh-light-mode-only"] { display: revert; }
   opacity: 0;
 }
 [data-pane-header][data-pane-focused] [data-pane-label] {
-  color: var(--primary);
+  /* Text: the text-tuned accent (the bright fill is 1.9:1 in amber). */
+  color: var(--primary-strong);
 }
 [data-pane-header][data-pane-focused] [data-pane-dot] {
   opacity: 1;
@@ -1561,6 +1594,230 @@ img[src$="#gh-light-mode-only"] { display: revert; }
   /* 20 + 3 + 3 = 26px each way. */
   inset: -3px;
   border-radius: inherit;
+}
+
+/* ── Keyboard focus indicator (A090) ────────────────────────────────────────
+   The primitives' own indicator is a 1px border plus a 30% ring in the accent
+   — 1.75:1 in the default amber theme — and the ring is a box-shadow, which
+   forced-colors mode deletes outright. This is a real 2px outline in
+   --focus-ring (the text-tuned accent: ≥3:1 against every surface, in every
+   palette and both themes, measured in a11y-contrast.test.js).
+
+   UNLAYERED on purpose. The generated Button carries `outline-none`, a
+   utility, and utilities sit in a later cascade layer than anything in `base`
+   — a base-layer outline would lose to it on every button, and only an
+   `!important` war would win it back. An unlayered rule outranks every layered
+   one, so no utility can switch the indicator off by accident. Being
+   unlayered it is also untouched by the library build's base-layer scoping
+   (build/scope-css.mjs), so it is scoped BY HAND to the same roots: a host
+   page's own focus styles are not ours to repaint.
+
+   Excluded: the two editing surfaces (the caret is their indicator; a ring
+   round the whole document is noise) and tabindex=-1 containers that are
+   focused programmatically (dialog popups, the overlay region, the tour card).
+   Roving-tabindex items are focused at tabindex=0, so they keep it. */
+:where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :focus-visible:not(.cm-content, .ProseMirror, [tabindex="-1"]) {
+  outline: 2px solid var(--focus-ring, var(--primary-strong));
+  outline-offset: 2px;
+}
+/* Rows inside a clipping scroller (menu items, library rows, listbox options,
+   tabs): a ring OUTSIDE the row is cut off by the scroller's overflow, so it is
+   drawn just inside it instead. Same specificity as the rule above and later,
+   so it wins for these. */
+:where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :is([role^="menuitem"], [role="option"], [role="treeitem"], [role="tab"]):focus-visible {
+  outline: 2px solid var(--focus-ring, var(--primary-strong));
+  outline-offset: -2px;
+}
+
+/* ── Forced colors / Windows High Contrast (A095) ───────────────────────────
+   Forced colours repaint every author colour from the system palette and drop
+   box-shadows. That erased the focus ring and every state the app draws with a
+   background alone: the pressed mode and format buttons, the selected tab, the
+   open document's row, the highlighted menu item, both halves of a switch.
+   Each is restated in system colours; `forced-color-adjust: none` is what lets
+   a system-colour background survive on these few elements. */
+@media (forced-colors: active) {
+  /* Measured: Chromium already paints a forced-colours outline in Highlight.
+     Restated for engines that pick a different system colour. The part that
+     matters everywhere is that the indicator is an OUTLINE at all. */
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :focus-visible {
+    outline-color: Highlight;
+  }
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :is([aria-pressed="true"], [aria-selected="true"], [aria-current="true"], [data-highlighted]) {
+    forced-color-adjust: none;
+    background-color: Highlight;
+    border-color: Highlight;
+    color: HighlightText;
+  }
+  /* Children opted out with their parent; their utility colours (muted
+     metadata, the accent icon) must not land on Highlight. Unlayered, so this
+     beats the utilities without !important. */
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :is([aria-pressed="true"], [aria-selected="true"], [aria-current="true"], [data-highlighted]) * {
+    color: inherit;
+  }
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal]) [data-slot="switch"] {
+    forced-color-adjust: none;
+    background-color: Canvas;
+    border: 1px solid CanvasText;
+  }
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal]) [data-slot="switch"][data-checked] {
+    background-color: Highlight;
+    border-color: Highlight;
+  }
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal]) [data-slot="switch-thumb"] {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal]) [data-slot="switch"][data-checked] [data-slot="switch-thumb"] {
+    background-color: HighlightText;
+  }
+  /* The active-pane dot and the resize separators are background-only. */
+  [data-pane-header][data-pane-focused] [data-pane-dot],
+  :where(.pf-app, .perssonify-editor) [role="separator"][aria-orientation] {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+}
+
+/* ── Context-menu rows on touch (A100) ──────────────────────────────────────
+   The dropdown primitive grows its rows to 44px on coarse pointers; the
+   generated context-menu primitive never did, so the long-press menu on a
+   library row was 28px rows under a thumb. Restated here rather than by
+   editing the generated file (src/components/ui is regenerated, not edited).
+   Scoped to `.pf-app` (the app and embed pages): unlayered, it would
+   otherwise also resize a library HOST's own shadcn context menus, which
+   carry the same data-slot names. */
+@media (pointer: coarse) {
+  :where(.pf-app) [data-base-ui-portal] :is([data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]) {
+    min-height: 2.75rem;
+    gap: 0.625rem;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* ── Short viewports, including 400% zoom (A091) ────────────────────────────
+   The standalone shell is viewport-locked (h-dvh, overflow hidden) so caret
+   scrolling cannot drift the chrome off-screen. Below ~450px of HEIGHT that
+   lock is the defect: at 1366×768 and 400% zoom the viewport is 192 CSS px
+   tall and the chrome alone is ~206px, so the editor got ZERO height and the
+   status bar and Settings were clipped out of reach (WCAG 1.4.10).
+
+   Collapsing the chrome cannot fix that — the menu bar plus a one-line status
+   bar still leaves ~120px — and hiding toolbar controls removes function. So
+   below that height the page SCROLLS: the chrome keeps its natural height, the
+   editor row gets one full viewport of its own (scroll down and it fills the
+   screen), and the tray and status bar follow it, all reachable. The
+   workspace panel stays inside that row, so a long library scrolls in its own
+   list rather than making the page thousands of pixels tall.
+
+   Scoped to `.pf-shell`, the standalone app's shell: an embed or a library
+   mount keeps the height its host gives it. The hooks (`pf-tray-region`,
+   `pf-editor-row`) are the two PerssonifyEditor containers between the shell
+   and the editor. Unlayered, so these beat the h-full / flex-1 /
+   overflow-hidden utilities they override. */
+@media (max-height: 449px) {
+  .pf-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .pf-shell-editor,
+  .pf-shell .pf-tray-region {
+    flex: none;
+    overflow: visible;
+  }
+  .pf-shell .perssonify-editor {
+    height: auto;
+    overflow: visible;
+  }
+  .pf-shell .pf-editor-row {
+    flex: none;
+    height: 100dvh;
+  }
+  /* The page scrolls now; show that it does. */
+  html.pf-app {
+    scrollbar-width: thin;
+  }
+  html.pf-app::-webkit-scrollbar {
+    display: block;
+  }
+}
+
+/* ── Print (A100) ───────────────────────────────────────────────────────────
+   Ctrl+P printed the application: menu bar, toolbar, both panes clipped to one
+   screen, the status bar. A print is of the DOCUMENT. The chrome is hidden, the
+   viewport lock is released so the text flows across pages, and the RICH pane
+   is what prints — it is the rendered document — even in Markdown-only view:
+   both panes stay mounted by design, so it is always current.
+
+   Every selector is under `.pf-app`, which only the app and embed pages
+   carry: those own their page. A library HOST owns its page and its print
+   styles, and these (unlayered, !important) would otherwise hide the host's
+   own dialogs and portals when IT printed. */
+@media print {
+  .pf-app [data-print-hide],
+  .pf-app [data-tour="menubar"],
+  .pf-app [data-pane-header],
+  .pf-app [data-workspace-overlay],
+  .pf-app [data-sonner-toaster],
+  .pf-app [data-base-ui-portal],
+  .pf-app [data-pf-portal],
+  .pf-app [role="dialog"],
+  .pf-app [role="alertdialog"],
+  .pf-app [data-print-pane="md"] {
+    display: none !important;
+  }
+  .pf-app .pf-shell,
+  .pf-app .pf-shell-editor,
+  .pf-app .perssonify-editor,
+  .pf-app .pf-tray-region,
+  .pf-app .pf-editor-row,
+  .pf-app .pf-editor-row > main,
+  .pf-app [data-tour="editor"],
+  .pf-app [data-print-pane="rich"],
+  .pf-app [data-print-pane="rich"] > *,
+  .pf-app .tiptap-preview,
+  .pf-app .tiptap-preview > * {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+  /* Ink for paper whatever the theme. Browsers drop backgrounds when printing
+     by default, so a dark theme printed light-grey text on white. (html
+     carries both .pf-app and .dark; `html.pf-app` outranks `.dark`.) */
+  html.pf-app,
+  .pf-app [data-theme="dark"],
+  .pf-app [data-pf-theme="dark"],
+  .pf-app [data-theme="light"] {
+    color-scheme: light;
+    --background: #fff;
+    --foreground: #111;
+    --card: #fff;
+    --muted-foreground: #444;
+    --border: #bbb;
+    --primary-strong: var(--accent-text-light, color-mix(in srgb, var(--primary) 50%, #000));
+  }
+  .pf-app .ProseMirror {
+    max-width: none !important;
+    padding: 0 !important;
+    color: var(--foreground);
+  }
+  .pf-app .ProseMirror pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .pf-app .ProseMirror :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+  }
+  .pf-app .ProseMirror :is(pre, table, blockquote, img, figure, [data-type="callout"]) {
+    break-inside: avoid;
+  }
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────────

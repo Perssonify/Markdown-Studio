@@ -48,7 +48,7 @@ function BacklinksPanelComponent({
     <div className="px-2 pb-3">
       <div className="flex gap-1 px-2 mb-2 border-b border-border">
         {[
-          { key: "back" as const, label: `Backlinks (${backlinks.length})`, icon: ArrowDownLeft, color: "text-primary" },
+          { key: "back" as const, label: `Backlinks (${backlinks.length})`, icon: ArrowDownLeft, color: "text-primary-strong" },
           { key: "forward" as const, label: `Outgoing (${forwardLinks.length})`, icon: ArrowUpRight, color: "text-blue-500" },
           ...(unresolved.length > 0 ? [{ key: "unresolved" as const, label: `Broken (${unresolved.length})`, icon: AlertTriangle, color: "text-destructive" }] : []),
         ].map(t => (
@@ -81,7 +81,7 @@ function BacklinksPanelComponent({
                 onClick={() => onNavigate(bl.docId)}
                 className="w-full text-left px-3 py-2 rounded-md transition-colors hover:bg-accent hover:text-accent-foreground group border border-transparent hover:border-border"
               >
-                <div className="flex items-center gap-2 text-[13px] font-medium text-foreground group-hover:text-primary transition-colors">
+                <div className="flex items-center gap-2 text-[13px] font-medium text-foreground group-hover:text-primary-strong transition-colors">
                   <ArrowDownLeft className="w-3.5 h-3.5 opacity-50" />
                   <span className="truncate">{bl.title}</span>
                 </div>
@@ -152,7 +152,7 @@ function BacklinksPanelComponent({
           />
           <span className="uppercase tracking-wider">Document Links</span>
           <div className="flex items-center gap-2 ml-2 font-medium">
-            <span className="flex items-center gap-0.5 text-primary/80 bg-primary/10 px-1.5 py-0.5 rounded-sm">
+            <span className="flex items-center gap-0.5 text-primary-strong bg-primary/10 px-1.5 py-0.5 rounded-sm">
               <ArrowDownLeft className="w-3 h-3" /> {backlinks.length}
             </span>
             <span className="flex items-center gap-0.5 text-blue-500/80 bg-blue-500/10 px-1.5 py-0.5 rounded-sm">

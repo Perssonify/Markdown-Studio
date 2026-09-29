@@ -440,6 +440,163 @@ runCase("surfaces", async (rep, onClose) => {
       !!hit && hit.touchAction === "none", JSON.stringify(hit));
   }
 
+  // ── keyboard, focus, forced colours, print, 400% zoom (A090-A100) ───────
+  // Each of these is invisible to jsdom: `:focus-visible`, a media query, a
+  // computed system colour, real layout at a 192px-tall viewport.
+  {
+    const k = await open(srv.port, { viewport: { width: 1280, height: 800 } });
+    onClose(async () => { await k.browser.close(); });
+    const kp = k.page;
+    await boot(kp, srv.port, { mode: "Split", settle: 6000 });
+
+    // A094: the skip link is the first stop and lands IN the editor. From a
+    // FRESH load: boot() clicked the mode switcher, and blur() does not reset
+    // the browser's sequential-navigation start point.
+    await kp.reload({ waitUntil: "networkidle" });
+    await until(async () => (await kp.locator(".ProseMirror").count()) > 0, { timeout: 20000 });
+    await kp.waitForTimeout(1500);
+    await kp.keyboard.press("Tab");
+    const firstStop = await kp.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
+    rep.check("A094: the first Tab stop is 'Skip to editor'", firstStop === "Skip to editor", firstStop);
+    await kp.keyboard.press("Enter");
+    const landed = await kp.evaluate(() => document.activeElement?.className ?? "");
+    rep.check("A094: …and Enter lands in the editor", /cm-content|ProseMirror/.test(String(landed)), String(landed));
+
+    // A094 + A090: the toolbar is ONE stop, arrows move along it, and the
+    // keyboard-focused control shows a 2px ring in the focus token. (A key
+    // press first, so Chrome treats the programmatic focus as keyboard focus.)
+    await kp.keyboard.press("Shift");
+    await kp.evaluate(() => {
+      const bar = document.querySelector('[role="toolbar"]');
+      [...bar.querySelectorAll("button")].find((b) => b.tabIndex >= 0 && !b.disabled)?.focus();
+    });
+    // The generated Button has `transition-all`, so the outline's width and
+    // colour ANIMATE in from their initial values (medium / currentColor):
+    // read after the transition, or the first frame is what gets measured.
+    await kp.waitForTimeout(500);
+    const ring = await kp.evaluate(() => {
+      const bar = document.querySelector('[role="toolbar"]');
+      const stops = [...bar.querySelectorAll("button")].filter((b) => b.tabIndex >= 0 && !b.disabled);
+      const b = document.activeElement;
+      const cs = getComputedStyle(b);
+      const probe = document.createElement("div");
+      probe.style.color = "var(--focus-ring)";
+      document.body.append(probe);
+      const want = getComputedStyle(probe).color;
+      probe.remove();
+      return { stops: stops.length, visible: b.matches(":focus-visible"), style: cs.outlineStyle,
+        width: cs.outlineWidth, color: cs.outlineColor, want };
+    });
+    rep.check("A094: the formatting toolbar is ONE tab stop", ring.stops === 1, JSON.stringify(ring));
+    rep.check("A090: keyboard focus shows a 2px solid ring in --focus-ring (beats `outline-none`)",
+      ring.visible && ring.style === "solid" && ring.width === "2px" && ring.color === ring.want, JSON.stringify(ring));
+    const before = await kp.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+    await kp.keyboard.press("ArrowRight");
+    const after = await kp.evaluate(() => ({ label: document.activeElement?.getAttribute("aria-label"),
+      inBar: !!document.activeElement?.closest('[role="toolbar"]'), tab: document.activeElement?.tabIndex }));
+    rep.check("A094: ArrowRight moves along the toolbar and takes the tab stop with it",
+      after.inBar && after.label !== before && after.tab === 0, JSON.stringify({ before, after }));
+
+    // A094: DOM order now matches visual order.
+    const order = await kp.evaluate(() => {
+      const a = document.querySelector('aside[aria-label="Workspace"]');
+      const m = document.querySelector("main");
+      if (!a || !m) return null;
+      return { first: !!(a.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING),
+        left: a.getBoundingClientRect().right <= m.getBoundingClientRect().left + 1 };
+    });
+    rep.check("A094: the library precedes <main> in the DOM and still sits to its left",
+      !!order && order.first && order.left, JSON.stringify(order));
+
+    // A094: the folder tree's arrow keys.
+    const tree = await kp.evaluate(() => {
+      const items = [...document.querySelectorAll('[role="tree"] [role="treeitem"]')];
+      return { count: items.length, stops: items.filter((i) => i.tabIndex === 0).length };
+    });
+    rep.check("A094: the folder tree is one tab stop", tree.count > 1 && tree.stops === 1, JSON.stringify(tree));
+    await kp.keyboard.press("Shift");
+    await kp.evaluate(() => document.querySelector('[role="tree"] [role="treeitem"][tabindex="0"]')?.focus());
+    const k0 = await kp.evaluate(() => document.activeElement?.getAttribute("data-key"));
+    await kp.keyboard.press("Home");
+    await kp.keyboard.press("ArrowDown");
+    const k1 = await kp.evaluate(() => document.activeElement?.getAttribute("data-key"));
+    const firstKey = await kp.evaluate(() => document.querySelector('[role="tree"] [role="treeitem"]')?.getAttribute("data-key"));
+    rep.check("A094: Home then ArrowDown walks the tree", !!k1 && k1 !== firstKey, JSON.stringify({ k0, firstKey, k1 }));
+
+    // A095: forced colours keep the pressed state and the focus ring. (After
+    // the buttons' transition-all settles, as above.)
+    await kp.mouse.move(1, 1);
+    await kp.emulateMedia({ forcedColors: "active" });
+    await kp.waitForTimeout(500);
+    const fc = await kp.evaluate(() => {
+      const pressed = document.querySelector('[data-slot="mode-switcher-button"][aria-pressed="true"]');
+      const probe = document.createElement("div");
+      probe.style.backgroundColor = "Highlight";
+      document.body.append(probe);
+      const hl = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      const focused = getComputedStyle(document.activeElement);
+      return { forced: matchMedia("(forced-colors: active)").matches,
+        bg: pressed ? getComputedStyle(pressed).backgroundColor : null, hl,
+        ring: focused.outlineStyle, ringColor: focused.outlineColor };
+    });
+    rep.check("A095: forced colours paint the pressed view button in Highlight",
+      fc.forced && fc.bg === fc.hl, JSON.stringify(fc));
+    // What this guards is that the indicator is an OUTLINE, which forced
+    // colours keeps, not the box-shadow ring it deletes. Measured by mutation:
+    // Chromium paints a forced-colours outline in Highlight on its own, so the
+    // stylesheet's `outline-color: Highlight` restatement is not what makes
+    // this pass (it is there for engines that do not).
+    rep.check("A095: …and the focus ring survives, in the system Highlight colour",
+      fc.ring === "solid" && fc.ringColor === fc.hl, JSON.stringify(fc));
+    await kp.emulateMedia({ forcedColors: "none" });
+
+    // A100: print prints the document, not the app.
+    await kp.emulateMedia({ media: "print" });
+    const pr = await kp.evaluate(() => {
+      const shown = (sel) => { const el = document.querySelector(sel); return !!el && getComputedStyle(el).display !== "none"; };
+      const pm = document.querySelector('[data-print-pane="rich"] .ProseMirror');
+      return { menubar: shown('[data-tour="menubar"]'), toolbar: shown('[data-tour="toolbar"]'),
+        footer: shown(".perssonify-editor footer"), library: shown('aside[aria-label="Workspace"]'),
+        md: shown('[data-print-pane="md"]'), rich: shown('[data-print-pane="rich"]'),
+        pmH: pm ? Math.round(pm.getBoundingClientRect().height) : 0,
+        shell: getComputedStyle(document.querySelector(".pf-shell")).overflow };
+    });
+    rep.check("A100: print hides the chrome", !pr.menubar && !pr.toolbar && !pr.footer && !pr.library && !pr.md, JSON.stringify(pr));
+    rep.check("A100: print shows the rendered document, unclipped", pr.rich && pr.pmH > 0 && pr.shell === "visible", JSON.stringify(pr));
+    await kp.emulateMedia({ media: "screen" });
+
+    // A091: 1366×768 at 400% zoom is a 342×192 CSS viewport.
+    await kp.setViewportSize({ width: 342, height: 192 });
+    await kp.waitForTimeout(800);
+    const z = await kp.evaluate(() => {
+      const row = document.querySelector(".pf-editor-row")?.getBoundingClientRect();
+      const footer = document.querySelector(".perssonify-editor footer");
+      // "instant": html.pf-app has scroll-behavior:smooth, so a default
+      // scrollIntoView would still be gliding when this reads the rect.
+      footer?.scrollIntoView({ behavior: "instant", block: "end" });
+      const f = footer?.getBoundingClientRect();
+      return { rowH: row ? Math.round(row.height) : 0, vh: innerHeight,
+        docH: document.documentElement.scrollHeight,
+        footerOnScreen: !!f && f.top >= 0 && f.bottom <= innerHeight + 1 && f.height > 0 };
+    });
+    rep.check("A091: at 400% zoom the editor row gets a full viewport (it had zero)", z.rowH >= z.vh - 1, JSON.stringify(z));
+    rep.check("A091: …and the page scrolls to a reachable status bar", z.docH > z.vh && z.footerOnScreen, JSON.stringify(z));
+
+    // A100: a landscape phone keeps the panes side by side.
+    await kp.evaluate(() => window.scrollTo(0, 0));
+    await kp.setViewportSize({ width: 667, height: 375 });
+    await kp.waitForTimeout(800);
+    const lp = await kp.evaluate(() => ({
+      orientation: document.querySelector('[role="separator"][aria-label="Resize panes"]')?.getAttribute("aria-orientation") ?? null,
+      cm: Math.round(document.querySelector(".cm-editor")?.getBoundingClientRect().height ?? 0),
+      pm: Math.round(document.querySelector(".tiptap-preview")?.getBoundingClientRect().height ?? 0),
+    }));
+    rep.check("A100: a landscape phone (667×375) keeps split panes side by side", lp.orientation === "vertical", JSON.stringify(lp));
+    rep.check("A100: …so each editor keeps a usable height (was 37-69px stacked)", lp.cm > 150 && lp.pm > 150, JSON.stringify(lp));
+    await kp.setViewportSize({ width: 1280, height: 800 });
+  }
+
   // ── reduced motion ──────────────────────────────────────────────────────
   // The graph's force simulation animates node positions from rAF, which no
   // stylesheet can reach — so this is the one piece of motion in the app that

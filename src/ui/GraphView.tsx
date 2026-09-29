@@ -1638,7 +1638,7 @@ function HealthChip({
           : active
             ? warn
               ? "border-amber-500/50 bg-amber-500/15 text-amber-600"
-              : "border-primary/50 bg-primary/15 text-primary"
+              : "border-primary/50 bg-primary/15 text-primary-strong"
             : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
       )}
     >
@@ -1682,7 +1682,7 @@ function RailTag({ children, tone }: { children: React.ReactNode; tone?: "primar
     <span
       className={cn(
         "rounded px-1.5 py-0.5 text-[10px] font-medium",
-        tone === "primary" ? "bg-primary/15 text-primary"
+        tone === "primary" ? "bg-primary/15 text-primary-strong"
           : tone === "warn" ? "bg-amber-500/15 text-amber-600"
           : "bg-foreground/10 text-foreground/70"
       )}

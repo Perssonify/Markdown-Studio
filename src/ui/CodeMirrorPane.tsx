@@ -365,6 +365,13 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         spellcheckCompartment.current.of(
           EditorView.contentAttributes.of({ spellcheck: String(spellcheckRef.current) })
         ),
+        // A089: CodeMirror gives its content role="textbox" but no name, so a
+        // screen reader could not tell the two panes apart. The description
+        // documents the Tab capture that `indentWithTab` imposes.
+        EditorView.contentAttributes.of({
+          "aria-label": "Markdown source",
+          "aria-description": "Tab indents. Press Escape, then Tab, to move focus out of the editor.",
+        }),
         updateListener,
       ];
       const state = EditorState.create({

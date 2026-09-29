@@ -51,6 +51,7 @@ import { StatusBar } from "./ui/StatusBar";
 import { ToastType, useToast } from "./ui/Toast";
 import { EditorToolbar } from "./ui/Toolbar";
 import { diagError } from "./utils/diag";
+import { scrollBehavior } from "./utils/reduced-motion";
 
 // Handle types for the sub-panes
 import { FileTextIcon, Link as LinkIcon, TerminalSquare } from "lucide-react";
@@ -655,7 +656,7 @@ export function PerssonifyEditor({
         const dom = editor?.view?.dom as HTMLElement | undefined;
         const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
         const el = headings?.[index] as HTMLElement | undefined;
-        if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+        if (el) { el.scrollIntoView({ behavior: scrollBehavior(), block: "start" }); return; }
       }
       if (tries > 0) setTimeout(() => attempt(tries - 1), 200);
     };
@@ -682,7 +683,7 @@ export function PerssonifyEditor({
         if (headings) {
           for (const h of Array.from(headings)) {
             if (norm(h.textContent || "") === wanted) {
-              (h as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" });
+              (h as HTMLElement).scrollIntoView({ behavior: scrollBehavior(), block: "start" });
               return;
             }
           }
@@ -2586,6 +2587,14 @@ export function PerssonifyEditor({
     };
   }, [anyOverlayOpen, setWorkspaceView]);
 
+  // A082. Without a `dir` prop, sonner's <Toaster> reads
+  // getComputedStyle(document.documentElement).direction on EVERY render — and
+  // it re-renders with this shell on every autosave, forcing a synchronous
+  // style recalculation of the whole page each time. Read it once.
+  const [toasterDir] = useState<"ltr" | "rtl">(() =>
+    typeof document !== "undefined" && getComputedStyle(document.documentElement).direction === "rtl" ? "rtl" : "ltr"
+  );
+
   if (!engineReady || !editorReady) {
     return (
       <div className={`flex ${fitParent ? "h-full" : "h-dvh"} flex-col items-center justify-center gap-4 bg-background`}>
@@ -2667,7 +2676,7 @@ export function PerssonifyEditor({
         )}
 
 
-        <div ref={trayRegionRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div ref={trayRegionRef} className="pf-tray-region relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <SettingsSheet open={showSettings} onOpenChange={setShowSettings} onBackup={handleBackupNow} />
             <MemorySheet open={showMemory} onOpenChange={setShowMemory} />
             <VersionHistorySheet
@@ -2695,7 +2704,52 @@ export function PerssonifyEditor({
               onClose={closeSearchPanel}
             />
 
-            <div className="relative flex min-h-[10rem] flex-1 flex-row">
+            <div className="pf-editor-row relative flex min-h-[10rem] flex-1 flex-row">
+            {/* The workspace panel comes BEFORE <main> in the DOM (A094). It used to
+                render after it and be pulled left with md:order-first, so visual
+                order and tab order disagreed: the library was reached only after
+                the toolbar and BOTH editors. The docked column is a plain flex
+                item now; the phone drawer is absolutely positioned either way. */}
+            {!chromeMinimal && showSidebar && (
+              <React.Suspense
+                fallback={<div className="hidden border-r border-border md:block md:w-[var(--ws-w)] md:shrink-0" style={{ ["--ws-w" as string]: `${docNavWidth}px` }} aria-hidden />}
+              >
+                <WorkspacePanel
+                  tab={workspaceTab}
+                  onTabChange={setWorkspaceTab}
+                  onClose={closeWorkspacePanel}
+                  onOpenCards={showCardsView}
+                  width={docNavWidth}
+                  onResize={setDocNavWidth}
+                  onSelect={handleSelectDocFromPanel}
+                  onNew={handleNewDoc}
+                  onDelete={handleDeleteDoc}
+                  onRename={handleRenameFromPanel}
+                  onDuplicate={handleDuplicateFromPanel}
+                  onFileDrop={handleFileDropImport}
+                  onExportFolder={handleExportFolder}
+                  onExportDocs={handleExportDocs}
+                  onExportDoc={handleExportDoc}
+                  onSearchBody={searchDocBody}
+                  headings={docNavHeadings}
+                  activeIndex={activeHeadingIndex}
+                  onNavigateHeading={handleNavigateHeading}
+                />
+              </React.Suspense>
+            )}
+            {/* Reopen affordance when the panel is collapsed. */}
+            {!chromeMinimal && !showSidebar && (
+              <button
+                type="button"
+                onClick={openWorkspacePanel}
+                title="Open workspace panel"
+                data-print-hide
+                aria-label="Open workspace panel"
+                className="absolute left-1 top-1 z-10 flex size-8 items-center justify-center rounded-md border border-border bg-card/80 text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+              >
+                <PanelLeft className="size-4" />
+              </button>
+            )}
             <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
 
               {activeDocId ? (
@@ -2782,45 +2836,6 @@ export function PerssonifyEditor({
                 </div>
               )}
             </main>
-            {!chromeMinimal && showSidebar && (
-              <React.Suspense
-                fallback={<div className="hidden border-r border-border md:order-first md:block md:w-[var(--ws-w)] md:shrink-0" style={{ ["--ws-w" as string]: `${docNavWidth}px` }} aria-hidden />}
-              >
-                <WorkspacePanel
-                  tab={workspaceTab}
-                  onTabChange={setWorkspaceTab}
-                  onClose={closeWorkspacePanel}
-                  onOpenCards={showCardsView}
-                  width={docNavWidth}
-                  onResize={setDocNavWidth}
-                  onSelect={handleSelectDocFromPanel}
-                  onNew={handleNewDoc}
-                  onDelete={handleDeleteDoc}
-                  onRename={handleRenameFromPanel}
-                  onDuplicate={handleDuplicateFromPanel}
-                  onFileDrop={handleFileDropImport}
-                  onExportFolder={handleExportFolder}
-                  onExportDocs={handleExportDocs}
-                  onExportDoc={handleExportDoc}
-                  onSearchBody={searchDocBody}
-                  headings={docNavHeadings}
-                  activeIndex={activeHeadingIndex}
-                  onNavigateHeading={handleNavigateHeading}
-                />
-              </React.Suspense>
-            )}
-            {/* Reopen affordance when the panel is collapsed. */}
-            {!chromeMinimal && !showSidebar && (
-              <button
-                type="button"
-                onClick={openWorkspacePanel}
-                title="Open workspace panel"
-                aria-label="Open workspace panel"
-                className="absolute left-1 top-1 z-10 flex size-8 items-center justify-center rounded-md border border-border bg-card/80 text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
-              >
-                <PanelLeft className="size-4" />
-              </button>
-            )}
             </div>
 
             {/* Storage-durability notices (A017/A022/A004): one slim strip in
@@ -2864,7 +2879,7 @@ export function PerssonifyEditor({
                 offset puts a bottom-right toast straight over it — worst on a
                 phone, where the bar is exactly where the save state and the
                 fidelity warning live. Clear the bar's height plus a margin. */}
-            <Toaster position="bottom-right" offset={48} expand={false} richColors closeButton />
+            <Toaster position="bottom-right" offset={48} expand={false} richColors closeButton dir={toasterDir} />
             {ConfirmDialog}
             {UnsavedChangesDialog}
             <PromptDialog

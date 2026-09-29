@@ -7,6 +7,7 @@ import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
+import { SkipToEditor } from "./ui/SkipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
@@ -146,15 +147,21 @@ export function App() {
 
     return (
         <ErrorBoundary isDark={isDark}>
+          {/* First stop on the page (A094): past the header, menus, toolbar
+              and library straight into the document. */}
+          <SkipToEditor />
           {/* Viewport-locked shell: header + editor must sum to exactly 100dvh.
               Without this the editor alone was viewport-height, the page gained
               a scrollbar of exactly the header height, and any caret scroll
-              drifted the whole chrome off-screen (clipped header/status bar). */}
-          <div className="pf-safe-x flex h-dvh flex-col overflow-hidden">
-            <div className="shrink-0">
+              drifted the whole chrome off-screen (clipped header/status bar).
+              EXCEPT below ~450px of viewport height (400% zoom, a landscape
+              phone), where the lock left the editor zero pixels: `pf-shell`
+              lets the page scroll there instead (A091, styles.css). */}
+          <div className="pf-shell pf-safe-x flex h-dvh flex-col overflow-hidden">
+            <div className="shrink-0" data-print-hide>
                 <EditorHeader />
             </div>
-            <div className="min-h-0 flex-1">
+            <div className="pf-shell-editor min-h-0 flex-1">
             <PerssonifyEditor
                 fitParent
                 initialMode="split"

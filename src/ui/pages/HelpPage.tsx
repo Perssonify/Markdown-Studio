@@ -11,6 +11,7 @@ import {
 import { LinkBuilder } from "../LinkBuilder";
 import { HELP_SECTIONS, type HelpBlock, SHORTCUT_GROUPS } from "./help-content";
 import { PageChrome } from "./PageChrome";
+import { scrollBehavior } from "../../utils/reduced-motion";
 
 interface HelpPageProps {
   onClose: () => void;
@@ -55,7 +56,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
   const [active, setActive] = useState<string>(HELP_SECTIONS[0]!.id);
   const go = (id: string) => {
     setActive(id);
-    document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   };
 
   const noResults = q && sections.length === 0 && !showShortcuts;
@@ -166,7 +167,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
                   if (b.tip)
                     return (
                       <p key={i} className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm leading-relaxed text-foreground">
-                        <span className="font-semibold text-primary">Tip · </span>
+                        <span className="font-semibold text-primary-strong">Tip · </span>
                         {b.tip}
                       </p>
                     );
