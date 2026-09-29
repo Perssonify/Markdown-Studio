@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bun run build:app",
+  "buildCommand": "bun run build:app && node scripts/strip-sourcemaps.mjs",
   "outputDirectory": "dist-app",
   "framework": "vite",
   "installCommand": "bun install --frozen-lockfile",

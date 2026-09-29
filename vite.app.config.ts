@@ -1,51 +1,12 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from '@vitejs/plugin-react';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'fs';
+import { readFileSync } from 'fs';
 import path from 'path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { manualChunks } from './vite.chunks';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
-
-const OUT_DIR = 'dist-app';
-/** Where the app's sourcemaps go instead of the deploy (CI keeps them as an artifact). */
-const SOURCEMAP_DIR = 'dist-app-sourcemaps';
-
-/**
- * Sourcemaps are built ('hidden': no sourceMappingURL comment) but must not be
- * DEPLOYED: dist-app used to ship ~130 .map files (25 MB of 35 MB), i.e. the
- * whole readable source to anyone who guessed a URL. They move to
- * SOURCEMAP_DIR, outside the output directory Vercel publishes, where they can
- * still symbolicate a stack from "Copy diagnostics".
- */
-function keepSourcemapsOutOfDeploy(): Plugin {
-  const outDir = path.resolve(__dirname, OUT_DIR);
-  const mapDir = path.resolve(__dirname, SOURCEMAP_DIR);
-  const walk = (dir: string): string[] =>
-    readdirSync(dir).flatMap((name) => {
-      const p = path.join(dir, name);
-      return statSync(p).isDirectory() ? walk(p) : [p];
-    });
-  return {
-    name: 'pf-keep-sourcemaps-out-of-deploy',
-    apply: 'build',
-    enforce: 'post',
-    closeBundle: {
-      order: 'post',
-      handler() {
-        if (!existsSync(outDir)) return;
-        rmSync(mapDir, { recursive: true, force: true });
-        for (const file of walk(outDir)) {
-          if (!file.endsWith('.map')) continue;
-          const dest = path.join(mapDir, path.relative(outDir, file));
-          mkdirSync(path.dirname(dest), { recursive: true });
-          renameSync(file, dest);
-        }
-      },
-    },
-  };
-}
 
 export default defineConfig({
   define: {
@@ -118,8 +79,6 @@ export default defineConfig({
         // serves that session's lazy chunks too.
         skipWaiting: false,
         clientsClaim: true,
-        // The worker's own sourcemap is not deployed either.
-        sourcemap: false,
         runtimeCaching: [
           {
             // Navigations: sw-recover.js owns them (network first, 3 s budget,
@@ -163,11 +122,14 @@ export default defineConfig({
         ],
       },
     }),
-    keepSourcemapsOutOfDeploy(),
   ],
   build: {
-    outDir: OUT_DIR,
+    outDir: 'dist-app',
     target: 'es2020',
+    // 'hidden': maps are emitted (the third-party licence scan reads them, and
+    // they symbolicate a stack from "Copy diagnostics") but no chunk points at
+    // them. They are NOT deployed: scripts/strip-sourcemaps.mjs moves them out
+    // of dist-app after the build (vercel.json's buildCommand runs it).
     sourcemap: 'hidden',
     rollupOptions: {
       input: 'index.html',

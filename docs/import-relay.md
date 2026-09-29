@@ -14,7 +14,7 @@
 | What | File | Notes |
 |------|------|-------|
 | **The relay itself** | [`api/import.js`](../api/import.js) | Vercel Serverless Function, Node runtime. Default export is the handler; `isGlobalUnicast`, `isBlockedIp`, `assertPublicUrl`, `MAX_BYTES` and `TOO_LARGE_MESSAGE` are exported for tests. |
-| **The client that calls it** | [`src/store/url-import.ts`](../src/store/url-import.ts) | `fetchDirectOrProxy` — tries a direct browser fetch first, falls back to the relay. `IMPORT_RELAY = "/api/import?url="`. A relay `413` is shown to the user as the relay's own message; any other non-2xx falls through to the download-and-drop guidance. |
+| **The client that calls it** | [`src/store/url-import.ts`](../src/store/url-import.ts) | `fetchDirectOrProxy` — tries a direct browser fetch first, falls back to the relay only with the visitor's consent (`pf:import-relay`, asked once via `relayConsentPrompt`, changeable in Settings ▸ Privacy). `IMPORT_RELAY = "/api/import?url="`. A relay `413` is shown to the user as the relay's own message; any other non-2xx falls through to the download-and-drop guidance. |
 | **Provider URL rewriting** | [`src/store/import-url-normalize.ts`](../src/store/import-url-normalize.ts) | Turns share links into raw-download links *before* either fetch path runs. |
 | **The UI** | [`src/ui/UrlImportDialog.tsx`](../src/ui/UrlImportDialog.tsx) | Discloses to the user when the relay was used ("first-party — not a third-party proxy"). |
 | **Tests** | [`src/__tests__/import-relay.test.js`](../src/__tests__/import-relay.test.js), [`src/__tests__/ops-relay-client.test.js`](../src/__tests__/ops-relay-client.test.js) | The global-unicast allowlist (incl. the IPv4-in-IPv6, Teredo, 6to4, multicast/reserved and decimal/octal forms), `assertPublicUrl`, the `Sec-Fetch-Site` gate, response hardening, the port allowlist, the 4 MB cap, the log line, CORS pinning; and the client's handling of a `413`. |
@@ -33,16 +33,24 @@ Drive**, which sends no `Access-Control-Allow-Origin` header to a real browser a
 all. Without a server hop, "Import from URL" simply cannot work for those hosts.
 
 The alternative — routing through a public CORS proxy — was rejected: it hands a
-third party the URL, the bytes, and the user's IP, for a product whose entire
-privacy story is "your documents never leave your browser." A first-party relay on
-the app's own origin keeps the request inside the deployment.
+third party the URL, the bytes, and the user's IP. A first-party relay on the app's
+own origin keeps the request inside this deployment. It does not make the request
+invisible: the relay receives the address being imported (share links often carry
+tokens), fetches the file, and passes it back through our server — and, like any
+request, the address can land in the hosting provider's request logs. That is why
+it is opt-in (below).
 
-**The relay is a fallback, not the default path.** `fetchDirectOrProxy` attempts a
-direct browser fetch first, and only retries through `/api/import` when that throws
-(CORS or network error). Hosts the browser can already read — GitHub raw, Dropbox,
-anything that sets the CORS header — never touch the relay at all. A direct
-*timeout* is surfaced as a timeout and is **not** retried, because a slow origin
-does not get faster through an extra hop.
+**The relay is a fallback, not the default path, and it needs the visitor's
+consent.** `fetchDirectOrProxy` attempts a direct browser fetch first. Only when
+that throws (CORS or network error) does it consider the relay, and only if the
+visitor has agreed: the first time, the importer asks ("Fetch this link through our
+server?", `relayConsentPrompt`), and the answer is remembered in `pf:import-relay`
+(`getRelayConsent` / `setRelayConsent`) and can be changed any time in **Settings ▸
+Privacy**. Without an "allow" the relay is never contacted and the user gets the
+download-and-drop guidance instead. Hosts the browser can already read — GitHub
+raw, Dropbox, anything that sets the CORS header — never touch the relay at all. A
+direct *timeout* is surfaced as a timeout and is **not** retried, because a slow
+origin does not get faster through an extra hop.
 
 ---
 
@@ -63,6 +71,9 @@ fetch(url)  ── succeeds ──▶   bytes ──▶ ingest
       └─ throws (CORS/network)
              │
              ▼
+      consent? (pf:import-relay; asked once, Settings ▸ Privacy)
+             │  "deny" / never asked with no UI ──▶ download-and-drop guidance
+             ▼  "allow"
       fetch("/api/import?url=…")        ← the relay, same origin
              │
              ▼
