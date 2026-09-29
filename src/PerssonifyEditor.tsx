@@ -1944,6 +1944,9 @@ export function PerssonifyEditor({
     toggleGraph: toggleGraphCb,
     toggleCards: toggleCardsCb,
     cancelPendingSync, tiptapRef,
+    // Formatting chords need the caret in one of these panes AND the editor on
+    // screen — typing ⌘B in the Cards composer used to bold the hidden doc.
+    cmRef, workspaceView,
     // ⌘K now uses the styled prompt dialog instead of native window.prompt.
     promptLink: promptLinkCb,
   });
