@@ -124,9 +124,13 @@ describe('resolveTarget', () => {
     expect(resolveTarget('BETA NOTES', docs)).toBe('def');
   });
 
-  it('resolves by partial title match', () => {
-    expect(resolveTarget('Alpha', docs)).toBe('abc');
-    expect(resolveTarget('Beta', docs)).toBe('def');
+  // A059: this used to assert the opposite. Partial (`includes`) matching sent
+  // `[[C# Tips]]` to "Changelog" in the graph and backlinks — the first title
+  // containing "c" — while a click on the same link said "Document not found".
+  // A link names ONE document; a fragment of a title names none.
+  it('does NOT resolve a partial title (A059)', () => {
+    expect(resolveTarget('Alpha', docs)).toBeNull();
+    expect(resolveTarget('Beta', docs)).toBeNull();
   });
 
   it('returns null for unresolvable target', () => {

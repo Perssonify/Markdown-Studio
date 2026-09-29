@@ -1362,8 +1362,8 @@ img[src$="#gh-light-mode-only"] { display: revert; }
 
 /* Wiki links. A `[[link]]` pointing at a document that does not exist used to
    render identically to one that works, so the only way to find a broken link
-   was to click it. The unresolved ones are marked by `useLinkIndex` with
-   `data-unresolved` (in the DOM, not the mark — the answer depends on OTHER
+   was to click it. The unresolved ones are marked by a ProseMirror decoration
+   (extensions/UnresolvedWikiLinks — not the mark: the answer depends on OTHER
    documents, so it must not become part of this one's stored content). Dashed
    and muted rather than red: a link you have not written the target for yet is
    a normal state in note-taking, not an error. */
@@ -1376,6 +1376,18 @@ img[src$="#gh-light-mode-only"] { display: revert; }
   color: var(--muted-foreground);
   text-decoration-style: dashed;
   text-decoration-color: currentColor;
+}
+/* In the rich pane the state is a ProseMirror DECORATION (see
+   extensions/UnresolvedWikiLinks), which PM renders as a span INSIDE the link. The underline belongs to the <a>, so it is styled through
+   :has() — in a rule of its own, because an engine without :has() drops every
+   selector in a list that contains it. The span's colour is the fallback. */
+.ProseMirror a.wiki-link:has(.wiki-link-unresolved) {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
+  text-decoration-color: currentColor;
+}
+.ProseMirror .wiki-link-unresolved {
+  color: var(--muted-foreground);
 }
 
 /* Images — no border-radius: rounding clips the image's corner pixels, which

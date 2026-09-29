@@ -31,7 +31,7 @@ import { exportGraph } from "./store/link-index";
 import type { StorageAdapter } from "./store/storage-adapter";
 import { StorageQuotaError } from "./store/storage-adapter";
 import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
-import { extractHeadings } from "./store/doc-outline";
+import { extractHeadings, findHeadingByAnchor } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
@@ -382,11 +382,10 @@ export function PerssonifyEditor({
     setWorkspaceView("editor");
   }, [setMode, setWorkspaceView]);
 
-  // Shared overlay shell for the graph / cards boards. Takes focus on mount,
-  // keeps Tab inside, closes on Escape at the CAPTURE phase (ProseMirror marks
-  // Escape defaultPrevented before it bubbles, which is why a plain bubble
-  // listener never fired), and marks the editor behind it inert so its controls
-  // are neither tabbable nor clickable while covered.
+  // Shared overlay shell for the graph / cards boards. Takes focus on mount and
+  // marks the editor behind it inert so its controls are neither tabbable nor
+  // clickable while covered. Escape is each surface's own (bubble phase, and
+  // only when pressed inside it — see ui/overlay-escape.ts).
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
 
@@ -726,8 +725,6 @@ export function PerssonifyEditor({
   const scrollToHeadingByAnchor = useCallback(async (docId: string | null, anchorText: string) => {
     const targetId = docId ?? useDocumentStore.getState().activeDocId;
     if (!targetId) return;
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const wanted = norm(anchorText);
     if (targetId !== useDocumentStore.getState().activeDocId) await handleSwitchDoc(targetId);
     setWorkspaceView("editor");
     if (mode === "md") setMode("split");
@@ -737,11 +734,13 @@ export function PerssonifyEditor({
         const dom = tiptapRef.current?.getEditor()?.view?.dom as HTMLElement | undefined;
         const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
         if (headings) {
-          for (const h of Array.from(headings)) {
-            if (norm(h.textContent || "") === wanted) {
-              (h as HTMLElement).scrollIntoView({ behavior: scrollBehavior(), block: "start" });
-              return;
-            }
+          // The ONE anchor matcher (doc-outline). Its old inline normaliser,
+          // `[^a-z0-9]`, erased every non-Latin heading to "", so an anchor to
+          // any of them jumped to the FIRST non-Latin heading in the document.
+          const i = findHeadingByAnchor(Array.from(headings, (h) => h.textContent || ""), anchorText);
+          if (i >= 0) {
+            (headings[i] as HTMLElement).scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+            return;
           }
           if (headings.length) { toast.show(`Heading not found: "${anchorText}"`, "info"); return; }
         }
@@ -1970,6 +1969,9 @@ export function PerssonifyEditor({
     toggleGraph: toggleGraphCb,
     toggleCards: toggleCardsCb,
     cancelPendingSync, tiptapRef,
+    // Formatting chords need the caret in one of these panes AND the editor on
+    // screen — typing ⌘B in the Cards composer used to bold the hidden doc.
+    cmRef, workspaceView,
     // ⌘K now uses the styled prompt dialog instead of native window.prompt.
     promptLink: promptLinkCb,
   });
@@ -2644,24 +2646,18 @@ export function PerssonifyEditor({
       }
     }
 
-    const onKeyCapture = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Capture phase: ProseMirror would otherwise mark this defaultPrevented.
-      const inOverlay = !!node && node.contains(document.activeElement);
-      // Let the overlay's own Escape ladder (clear search first) run when focus
-      // is genuinely inside it; only force-close when it can't hear the key.
-      if (inOverlay) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setWorkspaceView("editor");
-    };
-    document.addEventListener("keydown", onKeyCapture, true);
+    // No Escape listener here any more (A057). This used to force-close the
+    // overlay from a CAPTURE-phase document listener whenever focus was
+    // outside it — which is exactly where the delete-confirmation dialog, the
+    // library's rename box and every menu live, so their Escape closed the
+    // overlay instead (and the rename box's blur then committed the rename
+    // being cancelled). Cards and the map each close themselves on an Escape
+    // pressed inside them or with nothing focused (overlayShouldHandleEscape).
     return () => {
-      document.removeEventListener("keydown", onKeyCapture, true);
       for (const child of covered) child.removeAttribute("inert");
       if (restoreTo && document.body.contains(restoreTo)) restoreTo.focus?.();
     };
-  }, [anyOverlayOpen, setWorkspaceView]);
+  }, [anyOverlayOpen]);
 
   // A082. Without a `dir` prop, sonner's <Toaster> reads
   // getComputedStyle(document.documentElement).direction on EVERY render — and

@@ -29,6 +29,34 @@ function richPaneRef(container) {
   return { current: { getEditor: () => ({ view: { dom } }) } };
 }
 
+/**
+ * The markdown-pane twin of richPaneRef: a CodeMirror-shaped view whose
+ * content DOM holds focus. These cases used to run with focus on <body> and
+ * call that "the markdown pane" — which A025 made untrue on purpose: a
+ * formatting chord now needs the caret in the document, not merely focus
+ * somewhere near it.
+ */
+function markdownPaneRef(container) {
+  const dom = document.createElement("div");
+  dom.className = "cm-editor";
+  const contentDOM = document.createElement("div");
+  contentDOM.className = "cm-content";
+  contentDOM.tabIndex = -1;
+  dom.appendChild(contentDOM);
+  container.appendChild(dom);
+  contentDOM.focus();
+  return { current: { getView: () => ({ dom, contentDOM }) } };
+}
+
+/** A plain text box inside the editor container — the Cards composer, a
+ *  library rename box, the map's search: focus that is NOT in the document. */
+function focusTextBox(container, tag = "textarea") {
+  const box = document.createElement(tag);
+  container.appendChild(box);
+  box.focus();
+  return box;
+}
+
 /** Containers are appended to <body>; a leaked one keeps FOCUS, and the
  *  listener is scoped to "focus is in this editor, or nowhere". Without this
  *  cleanup a markdown-pane test running after a rich-pane one saw
@@ -101,7 +129,7 @@ function noopCalls() {
   };
 }
 
-function setup({ richFocus = false } = {}) {
+function setup({ richFocus = false, mdFocus = false, workspaceView = "editor" } = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   mounted.push(container);
@@ -121,10 +149,13 @@ function setup({ richFocus = false } = {}) {
     toast: { show: vi.fn() },
   };
   const tiptapRef = richFocus ? richPaneRef(container) : { current: null };
-  renderHook(() =>
-    useKeyboardShortcuts({ current: container }, { ...calls, tiptapRef })
+  const cmRef = mdFocus ? markdownPaneRef(container) : { current: null };
+  const view = renderHook(
+    ({ workspaceView: wv }) =>
+      useKeyboardShortcuts({ current: container }, { ...calls, tiptapRef, cmRef, workspaceView: wv }),
+    { initialProps: { workspaceView } }
   );
-  return { container, calls };
+  return { container, calls, view };
 }
 
 /** Dispatch a keydown the way a real browser would, including `code`. */
@@ -224,7 +255,7 @@ describe("formatting chords reach BOTH panes", () => {
   for (const [name, keyOpts, expected] of CASES) {
     for (const richFocus of [false, true]) {
       it(`${name} — ${richFocus ? "rich" : "markdown"} pane`, () => {
-        const { container, calls } = setup({ richFocus });
+        const { container, calls } = setup({ richFocus, mdFocus: !richFocus });
         const e = press(container, keyOpts.key, { shift: keyOpts.shift, code: keyOpts.code });
         expect(calls.dispatch).toHaveBeenCalledWith(...expected);
         // preventDefault matters in the rich pane: without it TipTap's own
@@ -232,6 +263,104 @@ describe("formatting chords reach BOTH panes", () => {
         expect(e.defaultPrevented).toBe(true);
       });
     }
+  }
+});
+
+/**
+ * A025. The listener admits any focus inside the editor container, and that
+ * container holds far more than the document: the Cards composer and card
+ * editor, the library's search and rename boxes, the map's search, the Find
+ * panel. ⌘B / ⌘I / ⌘K typed in any of them formatted the document hidden
+ * under the overlay and autosaved it.
+ */
+describe("document chords need the caret in the document (A025)", () => {
+  beforeEach(() => { useUIStore.setState({ keyboardShortcutsEnabled: true }); });
+
+  const DOC_CHORDS = [
+    ["⌘B", { key: "b", code: "KeyB" }],
+    ["⌘I", { key: "i", code: "KeyI" }],
+    ["⌘⇧X", { key: "x", shift: true, code: "KeyX" }],
+    ["⌘⇧2", { key: "@", shift: true, code: "Digit2" }],
+    ["⌘]", { key: "]", code: "BracketRight" }],
+  ];
+
+  for (const [name, k] of DOC_CHORDS) {
+    it(`${name} typed in a text box inside the container leaves the document alone`, () => {
+      const { container, calls } = setup({ mdFocus: true });
+      const box = focusTextBox(container);
+      const e = press(box, k.key, { shift: k.shift, code: k.code });
+      expect(calls.dispatch).not.toHaveBeenCalled();
+      // …and the key is left to the text box, not swallowed.
+      expect(e.defaultPrevented).toBe(false);
+    });
+  }
+
+  it("⌘K in a text box does not open the link prompt for the hidden document", () => {
+    const { container, calls } = setup({ richFocus: true });
+    const box = focusTextBox(container, "input");
+    press(box, "k");
+    expect(calls.promptLink).not.toHaveBeenCalled();
+    expect(calls.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("⌘Z in a text box does not cancel the document's pending projection", () => {
+    const { container, calls } = setup({ mdFocus: true });
+    const box = focusTextBox(container);
+    press(box, "z");
+    expect(calls.cancelPendingSync).not.toHaveBeenCalled();
+  });
+
+  it("⌘Z in the markdown pane still cancels it (the undo it exists for)", () => {
+    const { container, calls } = setup({ mdFocus: true });
+    press(container.querySelector(".cm-content"), "z");
+    expect(calls.cancelPendingSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing with no focus at all — there is no caret to format at", () => {
+    const { calls } = setup();
+    press(document, "b");
+    expect(calls.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("acts on neither pane while the map or Cards is the surface on screen", () => {
+    // In a real browser the covered editor is `inert` and cannot hold focus;
+    // jsdom does not implement inert, which is what makes this observable here.
+    for (const workspaceView of ["cards", "map"]) {
+      for (const pane of ["md", "rich"]) {
+        const { container, calls } = setup({ mdFocus: pane === "md", richFocus: pane === "rich", workspaceView });
+        const e = press(document.activeElement ?? container, "b", { code: "KeyB" });
+        expect(calls.dispatch, `${workspaceView}/${pane}`).not.toHaveBeenCalled();
+        expect(e.defaultPrevented).toBe(false);
+        mounted.pop().remove();
+      }
+    }
+  });
+
+  it("picks up a surface change without re-subscribing (the view is read at event time)", () => {
+    const { container, calls, view } = setup({ mdFocus: true, workspaceView: "cards" });
+    const content = container.querySelector(".cm-content");
+    press(content, "b", { code: "KeyB" });
+    expect(calls.dispatch).not.toHaveBeenCalled();
+    view.rerender({ workspaceView: "editor" });
+    press(content, "b", { code: "KeyB" });
+    expect(calls.dispatch).toHaveBeenCalledWith("bold");
+  });
+
+  const GLOBAL_CHORDS = [
+    ["⌘⇧K cards", { key: "k", shift: true, code: "KeyK" }, "toggleCards"],
+    ["⌘⇧G map", { key: "g", shift: true, code: "KeyG" }, "toggleGraph"],
+    ["⌘⇧D workspace panel", { key: "d", shift: true, code: "KeyD" }, "toggleSidebar"],
+    ["⌘F find", { key: "f", code: "KeyF" }, "toggleFind"],
+    ["⌘S save", { key: "s", code: "KeyS" }, "save"],
+  ];
+  for (const [name, k, fn] of GLOBAL_CHORDS) {
+    it(`${name} still works from a text box inside the container`, () => {
+      const { container, calls } = setup({ workspaceView: "cards" });
+      const box = focusTextBox(container, "input");
+      const e = press(box, k.key, { shift: k.shift, code: k.code });
+      expect(calls[fn]).toHaveBeenCalledTimes(1);
+      expect(e.defaultPrevented).toBe(true);
+    });
   }
 });
 
