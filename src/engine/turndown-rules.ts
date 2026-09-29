@@ -1,5 +1,7 @@
 // Turndown configuration rules
 import TurndownService from "turndown";
+import { matchBlockMath, matchInlineDisplay, matchInlineMath } from "./math-marked";
+import { isCurlyGroup } from "./preprocessor";
 
 // Minimal interface for TurndownService (package has no types)
 interface TurndownInstance {
@@ -54,23 +56,144 @@ function wikiLinkMarkdown(content: string, el: Element): string {
   return `[[${ref}|${content.trim()}]]`;
 }
 
+/**
+ * What gives a character meaning on the way back in. Turndown's own escaper
+ * knows CommonMark's core punctuation only; these are the constructs THIS
+ * engine adds, each escaped only while its feature is on, so that ordinary
+ * prose does not fill up with backslashes.
+ */
+export interface EscapeOptions {
+  /** `$…$` / `$$…$$` is maths (the math feature). */
+  math?: boolean;
+  /** `~~…~~` is strikethrough (GFM + the strikethrough feature). */
+  strikethrough?: boolean;
+  /** `{key=val}…{/key}` is formatting (the curly-brace feature). */
+  curly?: boolean;
+}
+
+const turndownEscape = (TurndownService.prototype as unknown as { escape(s: string): string }).escape;
+
+/**
+ * Where marked would open maths in this text, reading it left to right the
+ * way its inline lexer does (a backslash escape consumes two characters; a
+ * mid-line `$$…$$` is consumed whole as literal text), or -1.
+ */
+function firstMathOpener(s: string): number {
+  for (let p = 0; p < s.length; p++) {
+    const c = s[p];
+    if (c === "\\") { p++; continue; }
+    if (c !== "$") continue;
+    const rest = s.slice(p);
+    // Block maths needs a line start; the start of this text may be one.
+    if ((p === 0 || s[p - 1] === "\n") && matchBlockMath(rest)) return p;
+    const display = matchInlineDisplay(rest);
+    if (display) { p += display.length - 1; continue; }
+    if (matchInlineMath(rest)) return p;
+  }
+  return -1;
+}
+
+/**
+ * Escape the dollars that would open maths, using the tokenizers' own rules.
+ * Iterated to a fixpoint on the ESCAPED text: deciding each `$` independently
+ * is unsound, because a backslash inserted before one `$` can let an earlier
+ * one open a formula (`$$a$ b` escaped as `$\$a$ b` reads as maths `\$a`).
+ * The fixpoint is what guarantees no maths remains; escaping the whole run of
+ * dollars at once only keeps a pair readable (`\$\$`, not `$\$`).
+ */
+function escapeMathDollars(s: string): string {
+  for (let guard = 0; guard < 256; guard++) {
+    const p = firstMathOpener(s);
+    if (p < 0) return s;
+    let end = p;
+    while (s[end] === "$") end++;
+    let start = p;
+    while (start > 0 && s[start - 1] === "$") start--;
+    s = s.slice(0, start) + "\\$".repeat(end - start) + s.slice(end);
+  }
+  return s;
+}
+
+/**
+ * Turndown's escaper plus what it does not cover. A text node reaches this
+ * function holding LITERAL text; anything that would become markup when the
+ * markdown is read back is escaped, or the next projection turns the text into
+ * that markup: `Use &lt;br&gt;` came back as a real line break, text about
+ * the `<details>` element became a Details node, `\$x\$` became a formula and
+ * `1\) text` an ordered list. Only characters that would actually start a
+ * construct are touched: `a < b`, `Tom & Jerry` and `$5` stay as typed.
+ *
+ * Like turndown's own `^` escapes, the line-start ones apply at the start of
+ * the text node, which is where a line of a paragraph begins in practice.
+ * (Known limit: a `$…$` or `~~…~~` pair split across two text nodes — one
+ * dollar in plain text, the other after a bold word — is not seen as a pair.)
+ */
+export function escapeMarkdownText(text: string, opts: EscapeOptions = {}): string {
+  let s = turndownEscape(text);
+  // `<` that could open a tag, closing tag, comment or autolink.
+  if (s.indexOf("<") !== -1) s = s.replace(/<(?=[A-Za-z/!?])/g, "\\<");
+  // `&` that spells a character reference (`&lt;`, `&#60;`, `&#x3c;`).
+  if (s.indexOf("&") !== -1) {
+    s = s.replace(/&(?=#\d{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]{1,31};)/g, "\\&");
+  }
+  // `1)` opens an ordered list exactly as `1.` does; turndown escapes only the dot.
+  s = s.replace(/^(\d{1,9})\)(?=[ \t]|$)/, "$1\\)");
+  if (opts.strikethrough && s.indexOf("~~") !== -1) {
+    s = s.replace(/~{2,}/g, (run) => "\\~".repeat(run.length));
+  }
+  if (opts.math && s.indexOf("$") !== -1) s = escapeMathDollars(s);
+  if (opts.curly && s.indexOf("{") !== -1) {
+    s = s.replace(/\{([^{}\n]+)\}/g, (group: string, inner: string) => (isCurlyGroup(inner) ? "\\" + group : group));
+  }
+  return s;
+}
+
+/** Install the engine's escaper; options are read per call (settings can change). */
+export function installEscape(td: TurndownInstance, getOptions: () => EscapeOptions): TurndownInstance {
+  (td as unknown as { escape(s: string): string }).escape = (s: string) => escapeMarkdownText(s, getOptions());
+  return td;
+}
+
 export function addBaseRules(td: TurndownInstance): TurndownInstance {
   // Math: <span data-math-inline="x"> → $x$ ; <div data-math-block="x"> → $$x$$.
+  // What is written must parse back as maths under math-marked's rules:
+  // inline maths may not open or close on a space, a block may not contain a
+  // blank line, and an empty formula is no formula at all.
   td.addRule("mathInline", {
     filter: (node) => {
       const el = node as Element;
       return el.nodeName === "SPAN" && el.getAttribute?.("data-math-inline") !== null;
     },
-    replacement: (_content: string, node?: Node): string =>
-      `$${(node as Element).getAttribute("data-math-inline") ?? ""}$`,
+    replacement: (_content: string, node?: Node): string => {
+      const latex = ((node as Element).getAttribute("data-math-inline") ?? "").replace(/\s*\n\s*/g, " ").trim();
+      if (!latex) return "";
+      // `$2x$1` is refused as money (see matchInlineMath); an empty comment
+      // keeps the formula a formula without changing a visible character.
+      const next = (node as Element).nextSibling?.textContent ?? "";
+      return `$${latex}$` + (/^\d/.test(latex) && /^\d/.test(next) ? "<!---->" : "");
+    },
   });
   td.addRule("mathBlock", {
     filter: (node) => {
       const el = node as Element;
       return el.nodeName === "DIV" && el.getAttribute?.("data-math-block") !== null;
     },
-    replacement: (_content: string, node?: Node): string =>
-      `\n\n$$${(node as Element).getAttribute("data-math-block") ?? ""}$$\n\n`,
+    replacement: (_content: string, node?: Node): string => {
+      const latex = ((node as Element).getAttribute("data-math-block") ?? "").replace(/\n[ \t]*(?=\n)/g, "").trim();
+      return latex ? `\n\n$$${latex}$$\n\n` : "";
+    },
+  });
+  // ATX headings, as turndown writes them — except that a heading whose text
+  // ENDS in ` #` must escape it: CommonMark reads a trailing `#` run after a
+  // space as the optional closing sequence and drops it, so `C #` came back
+  // as `C`.
+  td.addRule("atxHeading", {
+    filter: ["h1", "h2", "h3", "h4", "h5", "h6"],
+    replacement: (content: string, node?: Node): string => {
+      const level = Number((node as Element).nodeName.charAt(1));
+      const text = content.replace(/(^|[ \t])#(#*[ \t]*)$/, "$1\\#$2");
+      return `\n\n${"#".repeat(level)} ${text}\n\n`;
+    },
   });
   // Emoji: <span data-emoji="name">😄</span> → :name: (round-trips the shortcode).
   td.addRule("emoji", {
@@ -89,8 +212,16 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
     filter: (node) => (node as Element).nodeName === "PICTURE",
     replacement: (_content: string, node?: Node): string => {
       const el = node as Element;
-      // Normalize onto its own lines so marked treats it as an HTML block.
-      return `\n\n${el.outerHTML}\n\n`;
+      // A picture that shares its paragraph with other content is INLINE (the
+      // themeImage node is an inline atom) and is written in place — putting it
+      // on its own lines split the paragraph in three on every projection.
+      // Alone in its paragraph, it goes on its own lines.
+      const parent = el.parentNode as Element | null;
+      const shared =
+        !!parent &&
+        parent.nodeName === "P" &&
+        Array.from(parent.childNodes).some((n) => n !== el && (n.nodeType !== 3 || /\S/.test(n.textContent ?? "")));
+      return shared ? el.outerHTML : `\n\n${el.outerHTML}\n\n`;
     },
   });
   // Sized images keep their dimensions by serializing to an <img> HTML tag
@@ -290,11 +421,17 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
   // Details/Summary nodes re-parse it. We emit the element's outerHTML verbatim
   // (like the <picture>/sized-image rules) so the disclosure structure + open
   // state survive losslessly; the MD pane shows the raw HTML for this block.
+  //
+  // A blank line ENDS an HTML block in markdown, so a blank line anywhere in
+  // that outerHTML — typically inside a code block in the body — cut the block
+  // short and the rest was read as markdown. A newline that starts a blank line
+  // is written as `&#10;`: the same character once parsed (inside <pre> it is
+  // still a newline; elsewhere it is whitespace), but no longer a blank line.
   td.addRule("detailsBlock", {
     filter: "details",
     replacement: (_content: string, node?: Node): string => {
       const el = node as Element;
-      const html = el.outerHTML || "";
+      const html = (el.outerHTML || "").replace(/\n(?=[ \t]*\n)/g, "&#10;");
       return `\n\n${html}\n\n`;
     },
   });
@@ -417,81 +554,24 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
     );
   };
 
-  const escPipe = (s: string): string =>
-    s.replace(/\|/g, "\\|").replace(/\n+/g, " ").trim();
-
-  let miniTd: TurndownInstance | null = null;
-  const cellToMd = (html: string): string => {
-    try {
-      if (!miniTd) {
-        miniTd = new TurndownService({
-          headingStyle: "atx",
-          emDelimiter: "*",
-        }) as unknown as TurndownInstance;
-        miniTd.addRule("underline", {
-          filter: "u",
-          replacement: (c) => `<u>${c}</u>`,
-        });
-        miniTd.addRule("styledSpan", {
-          filter: (node) => {
-            const el = node as Element;
-            return Boolean(
-              (el.nodeName === "SPAN" || el.nodeName === "DIV") &&
-              el.getAttribute?.("style")
-            );
-          },
-          replacement: (content: string, node?: Node): string => {
-            const el = node as Element;
-            const tag = el.nodeName.toLowerCase();
-            const style = el.getAttribute("style") ?? "";
-            if (tag === "div")
-              return `<div style="${style}">${content}</div>`;
-            return `<span style="${style}">${content}</span>`;
-          },
-        });
-        // Math / emoji inside table cells must round-trip too.
-        miniTd.addRule("mathInline", {
-          filter: (node) => {
-            const el = node as Element;
-            return el.nodeName === "SPAN" && el.getAttribute?.("data-math-inline") !== null;
-          },
-          replacement: (_c: string, node?: Node): string =>
-            `$${(node as Element).getAttribute("data-math-inline") ?? ""}$`,
-        });
-        miniTd.addRule("emoji", {
-          filter: (node) => {
-            const el = node as Element;
-            return el.nodeName === "SPAN" && Boolean(el.getAttribute?.("data-emoji"));
-          },
-          replacement: (_c: string, node?: Node): string =>
-            `:${(node as Element).getAttribute("data-emoji")}:`,
-        });
-        // Sub/superscript round-trip as HTML (mirrors the main ruleset) so a
-        // table cell like H<sub>2</sub>O isn't flattened to H2O.
-        miniTd.addRule("subscript", { filter: "sub", replacement: (c) => `<sub>${c}</sub>` });
-        miniTd.addRule("superscript", { filter: "sup", replacement: (c) => `<sup>${c}</sup>` });
-        // Wiki links inside cells → [[target]] / [[target|text]] (else they'd
-        // serialize as a broken [text](#) ordinary link).
-        miniTd.addRule("wikiLink", {
-          filter: (node) => {
-            const el = node as Element;
-            return el.nodeName === "A" && (el.hasAttribute("data-doc-link") || el.hasAttribute("data-anchor"));
-          },
-          replacement: (content: string, node?: Node): string => {
-            const el = node as Element;
-            const target = el.getAttribute("data-doc-link") ?? "";
-            const anchor = el.getAttribute("data-anchor") ?? "";
-            const ref = anchor ? `${target}#${anchor}` : target;
-            const display = content.trim();
-            return display === ref ? `[[${ref}]]` : `[[${ref}|${display}]]`;
-          },
-        });
-      }
-      return escPipe(miniTd.turndown(html));
-    } catch {
-      return escPipe(html.replace(/<[^>]+>/g, ""));
-    }
-  };
+  // A cell's markdown is the one THIS conversion already produced for it (the
+  // `gfmTableCell` rule below records it), so a cell gets every rule the rest
+  // of the document gets — strikethrough, sized images, maths, wiki links, the
+  // escaper, and the styled-span rule only in Styled mode. Cells used to be
+  // re-converted by a separate, smaller rule set that silently dropped
+  // strikethrough and image sizes (and kept colour spans even in Clean mode)
+  // while fidelity reported the table lossless.
+  const cellMarkdown = new WeakMap<Node, string>();
+  const cellLine = (cell: Element): string =>
+    (cellMarkdown.get(cell) ?? cell.textContent ?? "")
+      .trim()
+      // A GFM cell is one line: hard breaks and paragraph breaks become <br>,
+      // which reads back as a hard break inside the cell.
+      .replace(/ {2}\n/g, "\n")
+      .replace(/\n+/g, "<br>")
+      // Every pipe, including one inside a wiki-link alias or a code span: GFM
+      // splits cells before it reads any inline syntax.
+      .replace(/\|/g, "\\|");
 
   td.addRule("gfmTable", {
     filter: "table",
@@ -500,10 +580,12 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
       const rows: string[][] = [];
       const alignments: string[] = [];
 
-      table.querySelectorAll("tr").forEach((tr, ri) => {
+      // `rows` / `cells`, not querySelectorAll: a nested table's rows are not
+      // this table's rows.
+      Array.from(table.rows ?? table.querySelectorAll("tr")).forEach((tr, ri) => {
         const cells: string[] = [];
-        tr.querySelectorAll("th, td").forEach((cell, ci) => {
-          cells.push(cellToMd(cell.innerHTML));
+        Array.from((tr as HTMLTableRowElement).cells ?? tr.querySelectorAll("th, td")).forEach((cell, ci) => {
+          cells.push(cellLine(cell));
           if (ri === 0) alignments[ci] = getCellAlign(cell);
         });
         if (cells.length) rows.push(cells);
@@ -528,6 +610,8 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
         const w = widths[i];
         if (a === "center") return ":" + "-".repeat(Math.max(1, w - 2)) + ":";
         if (a === "right") return "-".repeat(Math.max(1, w - 1)) + ":";
+        // Explicit left (`:--`) is not the same source as no alignment (`---`).
+        if (a === "left") return ":" + "-".repeat(Math.max(1, w - 1));
         return "-".repeat(w);
       });
 
@@ -550,9 +634,28 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
     replacement: (c) => c,
   });
   td.addRule("gfmTableRow", { filter: "tr", replacement: () => "" });
-  td.addRule("gfmTableCell", { filter: ["th", "td"], replacement: () => "" });
+  td.addRule("gfmTableCell", {
+    filter: ["th", "td"],
+    replacement: (content: string, node?: Node): string => {
+      if (node) cellMarkdown.set(node, content);
+      return "";
+    },
+  });
 
   return td;
+}
+
+/**
+ * A style value, ready for a double-quoted attribute. The CSSOM serializes a
+ * font name with DOUBLE quotes — `font-family: "Courier New", monospace`, the
+ * toolbar's own Mono font — and interpolating that raw closed the attribute
+ * early: the next pass showed the rest of the tag as text and the font was
+ * gone. Inner double quotes become single quotes (the same CSS, and readable
+ * in the markdown pane); `&quot;` only when the value already holds a `'`.
+ */
+export function styleAttrValue(style: string): string {
+  const s = style.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return s.includes("'") ? s.replace(/"/g, "&quot;") : s.replace(/"/g, "'");
 }
 
 export function addInlineStyleRule(td: TurndownInstance): TurndownInstance {
@@ -567,7 +670,7 @@ export function addInlineStyleRule(td: TurndownInstance): TurndownInstance {
     replacement: (content: string, node?: Node): string => {
       const el = node as Element;
       const tag = el.nodeName.toLowerCase();
-      const style = el.getAttribute("style") ?? "";
+      const style = styleAttrValue(el.getAttribute("style") ?? "");
       if (tag === "div")
         return `<div style="${style}">\n${content}\n</div>\n`;
       return `<span style="${style}">${content}</span>`;

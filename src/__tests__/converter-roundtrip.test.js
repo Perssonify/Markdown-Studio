@@ -14,8 +14,11 @@
  * production-readiness audit (IDs in the describe titles). Each was
  * mutation-tested: with the fix reverted, the case fails.
  */
+import { readFileSync } from "fs";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
+import { computeFidelity } from "../store/fidelity";
 import { htmlRoundTrip, roundTrip } from "./converter-harness";
 
 /** Assert the input survives two trips unchanged. */
@@ -111,5 +114,94 @@ describe("A041 — list items keep their blank lines", () => {
   it("keeps a loose nested item's blank lines when its parent is tight", () => {
     // The parent's own separator is the only blank line it may remove.
     expectFixedPoint("- outer\n  - inner para\n\n    ```\n    x\n\n    y\n    ```");
+  });
+});
+
+describe("A044 — tables keep alignment and in-cell formatting", () => {
+  it("keeps every column alignment, including an explicit left", () => {
+    const md = "| a   | b   | c   | d   |\n| :-- | :-: | --: | --- |\n| 1   | 2   | 3   | 4   |";
+    const r = expectFixedPoint(md);
+    const header = r.json2.content[0].content[0].content;
+    expect(header.map((c) => c.attrs.align)).toEqual(["left", "center", "right", null]);
+    // …and shows it: the attribute renders as an inline text-align.
+    expect(r.rich2).toMatch(/<th style="text-align: center;?"/);
+  });
+
+  it("keeps strikethrough and a sized image inside a cell", () => {
+    const r = roundTrip('| a | b |\n| --- | --- |\n| ~~x~~ | <img src="a.png" width="20"> |');
+    expect(r.md1).toContain("~~x~~");
+    expect(r.md1).toContain('width="20"');
+    const cells = r.json2.content[0].content[1].content;
+    expect(cells[0].content[0].content[0].marks.map((m) => m.type)).toEqual(["strike"]);
+    expect(cells[1].content[0].content[0].attrs.width).toBe("20");
+    expect(r.md2).toBe(r.md1);
+  });
+
+  it("keeps a hard break inside a cell as a break", () => {
+    const r = roundTrip("| h |\n| --- |\n| one<br>two |");
+    const para = r.json2.content[0].content[1].content[0].content[0];
+    expect(para.content.map((n) => n.type)).toEqual(["text", "hardBreak", "text"]);
+    expect(r.md2).toBe(r.md1);
+  });
+
+  it("gives a cell the Clean/Styled treatment the rest of the document gets", () => {
+    const html =
+      '<table><tbody><tr><th><p>h</p></th></tr><tr><td><p><span style="color: #ff0000">red</span></p></td></tr></tbody></table>';
+    expect(htmlRoundTrip(html, { mode: "clean" }).md1).not.toContain("<span");
+    // (the colour comes back CSSOM-normalised, e.g. rgb(255, 0, 0))
+    expect(htmlRoundTrip(html, { mode: "styled" }).md1).toMatch(/<span style="color: [^"]+">red<\/span>/);
+  });
+
+  it("reports what a markdown table cannot carry", () => {
+    const cell = (content, attrs = {}) => ({ type: "tableCell", attrs: { colspan: 1, rowspan: 1, ...attrs }, content });
+    const p = (text) => ({ type: "paragraph", content: [{ type: "text", text }] });
+    const table = (cells) => ({ type: "doc", content: [{ type: "table", content: [{ type: "tableRow", content: cells }] }] });
+    expect(computeFidelity(table([cell([p("a")])])).lossless).toBe(true);
+    expect(computeFidelity(table([cell([p("a"), p("b")])])).lossless).toBe(false);
+    expect(computeFidelity(table([cell([p("a")], { colspan: 2 })])).lossless).toBe(false);
+  });
+
+  it("is registered in BOTH schemas (the headless export mirrors the live editor)", () => {
+    const pane = readFileSync(join(process.cwd(), "src/ui/TiptapPane.tsx"), "utf8");
+    const headless = readFileSync(join(process.cwd(), "src/engine/serialize-doc.ts"), "utf8");
+    expect(pane).toMatch(/TableHeader, TableCellAlign/);
+    expect(headless).toMatch(/\n\s+TableCellAlign,\r?\n/);
+  });
+});
+
+describe("A051 — assorted drift", () => {
+  it("keeps a heading that ends in ` #`", () => {
+    const r = htmlRoundTrip("<h2>Learn C #</h2>");
+    expect(r.md1).toBe("## Learn C \\#");
+    expect(r.json2.content[0].content[0].text).toBe("Learn C #");
+    expect(r.md2).toBe(r.md1);
+  });
+
+  it("keeps a <details> whose code has blank lines in one block", () => {
+    const html = "<details open><summary>More</summary><pre><code>a\n\n\nb</code></pre><p>after</p></details>";
+    const r = htmlRoundTrip(html);
+    const details = r.json2.content[0];
+    expect(details.type).toBe("details");
+    expect(details.content.map((n) => n.type)).toEqual(["summary", "codeBlock", "paragraph"]);
+    expect(details.content[1].content[0].text).toBe("a\n\n\nb");
+    expect(r.md2).toBe(r.md1);
+  });
+
+  it("keeps an inline theme image inside its paragraph", () => {
+    const md =
+      'Logo <picture><source media="(prefers-color-scheme: dark)" srcset="d.png"><img src="l.png" alt="x"></picture> inline text.';
+    const r = roundTrip(md);
+    expect(r.json1.content).toHaveLength(1);
+    expect(r.json2.content).toHaveLength(1);
+    expect(r.json2.content[0].content.map((n) => n.type)).toEqual(["text", "themeImage", "text"]);
+    expect(r.md2).toBe(r.md1);
+  });
+
+  it("still writes a picture that is alone in its paragraph on its own lines", () => {
+    const r = roundTrip(
+      '<picture><source media="(prefers-color-scheme: dark)" srcset="d.png"><img src="l.png" alt="x"></picture>\n\nText'
+    );
+    expect(r.md1.startsWith("<picture>")).toBe(true);
+    expect(r.md1).toContain("</picture>\n\nText");
   });
 });

@@ -118,6 +118,18 @@ function collectLosses(
       const align = attrs["textAlign"];
       if (align && align !== "left") addAttrLoss(losses, node.type, "textAlign", align);
     }
+    // A GFM table cell is one line of inline content. Merged cells, and any
+    // block structure inside a cell (a list, a second paragraph, a code block)
+    // are flattened by the table serializer — text kept, structure not.
+    if (node.type === "tableCell" || node.type === "tableHeader") {
+      if (Number(attrs["colspan"] ?? 1) > 1 || Number(attrs["rowspan"] ?? 1) > 1) {
+        addAttrLoss(losses, node.type, "span", "merged");
+      }
+      const blocks = node.content ?? [];
+      if (blocks.length > 1 || blocks.some((b) => b.type !== "paragraph")) {
+        addAttrLoss(losses, node.type, "blocks", "structure");
+      }
+    }
   }
 
   const content = node.content;
