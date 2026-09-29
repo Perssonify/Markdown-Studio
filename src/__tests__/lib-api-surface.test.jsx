@@ -100,6 +100,13 @@ describe("deprecated integration API", () => {
     ref.current.setFieldSchemas([{ name: "x" }]);
     expect(warnings().some((m) => m.includes("`setFieldSchemas()`"))).toBe(true);
   });
+
+  it("exposes clearLocalData() for a host's logout (A103)", async () => {
+    // The core editor handle had it; the integration wrapper did not forward it.
+    const ref = createRef();
+    await act(async () => { render(<PerssonifyEditorIntegration ref={ref} />); });
+    expect(typeof ref.current.clearLocalData).toBe("function");
+  });
 });
 
 describe("deprecated extension exports", () => {

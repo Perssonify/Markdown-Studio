@@ -545,8 +545,11 @@ export function configureLocalStores(
  *  (not preferences), and so must go with it. `pf:library-canary` records how
  *  many documents this origin had, so a later boot can tell "the browser wiped
  *  the library" from a first run; left behind by a deliberate erase it would
- *  report exactly that — falsely — and suppress the starter documents. */
-const LIBRARY_KEYS = ["pf:library-canary"];
+ *  report exactly that — falsely — and suppress the starter documents.
+ *  `pf:card-draft` is the Cards composer's unsaved note (CardsView) — the
+ *  user's own words, so an erase that kept it (it went only with
+ *  `preferences: true`) left a note behind on a shared device. */
+export const LIBRARY_KEYS = ["pf:library-canary", "pf:card-draft"];
 
 /**
  * Erase everything this editor keeps in the browser: every document (with the

@@ -9,6 +9,7 @@ import { createHostBridge } from "./host-bridge";
 import { formatDocumentsForPrompt, linkedPromptItems, PromptFormat } from "./prompt-builder";
 import { sanitizeCssColor } from "../theme/palette";
 import { warnDeprecated } from "./deprecation";
+import { clearLocalData } from "../store/documentStore";
 
 /** Rich payload for a link activation inside the editor. Lets a host resolve
  *  deep links (custom scheme / relative path) into its own app while external
@@ -154,6 +155,10 @@ export interface EditorHandle {
   getAssociations: (docId?: string) => any;
   copyAsPrompt: (opts?: CopyPromptOptions) => Promise<string>;
   exportAs: (format: string) => Promise<any>;
+  /** Erase everything the editor keeps in this browser — documents, version
+   *  history, the crash stash, drafts; `preferences: true` also removes its
+   *  `pf:` settings. For a logout on a shared device (A103). */
+  clearLocalData: (opts?: { preferences?: boolean }) => Promise<void>;
 }
 
 /** Props kept for API compatibility that have no effect, and what to do instead. */
@@ -340,6 +345,12 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
           }
 
           return prompt;
+        },
+
+        clearLocalData(opts?: { preferences?: boolean }) {
+          // The core handle has it; this wrapper did not forward it, so a host
+          // using the integration had no logout path at all.
+          return clearLocalData(opts);
         },
 
         async openDocument(docId: string) {
