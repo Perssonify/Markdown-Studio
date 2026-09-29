@@ -23,3 +23,17 @@ export function prefersReducedMotion(): boolean {
     return false;
   }
 }
+
+/**
+ * The `behavior` for a programmatic scroll: smooth, unless the user asked for
+ * reduced motion.
+ *
+ * The stylesheet's `scroll-behavior: auto !important` guard does NOT reach
+ * these. It only decides what `behavior: "auto"` means; a script that passes
+ * `behavior: "smooth"` explicitly animates whatever the CSS says, which is how
+ * the outline/heading jumps and the Help page's section links kept gliding for
+ * users who had switched motion off (A096).
+ */
+export function scrollBehavior(): ScrollBehavior {
+  return prefersReducedMotion() ? "auto" : "smooth";
+}

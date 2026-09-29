@@ -49,6 +49,7 @@ import { StatusBar } from "./ui/StatusBar";
 import { ToastType, useToast } from "./ui/Toast";
 import { EditorToolbar } from "./ui/Toolbar";
 import { diagError } from "./utils/diag";
+import { scrollBehavior } from "./utils/reduced-motion";
 
 // Handle types for the sub-panes
 import { FileTextIcon, Link as LinkIcon, TerminalSquare } from "lucide-react";
@@ -644,7 +645,7 @@ export function PerssonifyEditor({
         const dom = editor?.view?.dom as HTMLElement | undefined;
         const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
         const el = headings?.[index] as HTMLElement | undefined;
-        if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+        if (el) { el.scrollIntoView({ behavior: scrollBehavior(), block: "start" }); return; }
       }
       if (tries > 0) setTimeout(() => attempt(tries - 1), 200);
     };
@@ -671,7 +672,7 @@ export function PerssonifyEditor({
         if (headings) {
           for (const h of Array.from(headings)) {
             if (norm(h.textContent || "") === wanted) {
-              (h as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" });
+              (h as HTMLElement).scrollIntoView({ behavior: scrollBehavior(), block: "start" });
               return;
             }
           }
