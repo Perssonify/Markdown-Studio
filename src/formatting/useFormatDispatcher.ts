@@ -93,6 +93,16 @@ interface FormatState {
  * Find all exist to produce, they formatted the first match and silently
  * ignored every other one.
  */
+/**
+ * A URL as a CommonMark link destination. Spaces or parentheses would end a
+ * bare destination early, so such a URL is written in angle brackets (with any
+ * `<`/`>` inside percent-encoded, which the angle form cannot contain).
+ */
+export function mdLinkDestination(url: string): string {
+  const u = url.trim();
+  return /[\s()<>]/.test(u) ? `<${u.replace(/</g, "%3C").replace(/>/g, "%3E")}>` : u;
+}
+
 export function selectedLineNumbers(state: EditorState): number[] {
   const lines = new Set<number>();
   for (const r of state.selection.ranges) {
@@ -260,14 +270,18 @@ export function useFormatDispatcher({
     cm.insertAtCursor("\n" + header + "\n" + sep + "\n" + body + "\n");
   }
 
-  function mdInsertLink() {
+  // The URL the user typed into the Link prompt. It used to be dropped: every
+  // caller prompts for it and passes it, but the markdown side always wrote a
+  // literal "(url)" placeholder, so ⌘K in this pane never linked anything.
+  function mdInsertLink(url?: string) {
     const cm = cmRef.current;
     if (!cm) return;
+    const dest = url ? mdLinkDestination(url) : "url";
     const { text } = cm.getSelection();
     if (text) {
-      cm.wrapSelection("[", "](url)");
+      cm.wrapSelection("[", `](${dest})`);
     } else {
-      cm.insertAtCursor("[link text](url)");
+      cm.insertAtCursor(`[link text](${dest})`);
     }
   }
 
@@ -536,7 +550,7 @@ export function useFormatDispatcher({
       case "hiliteColor": mdWrapInlineStyle("background-color", value); break;
       case "unsetHighlight": mdUnwrapInlineStyle("background-color"); break; 
       case "fontFamily": mdWrapInlineStyle("font-family", value); break;
-      case "createLink": mdInsertLink(); break;
+      case "createLink": mdInsertLink(typeof value === "string" ? value : undefined); break;
       case "insertImage": mdInsertImage(); break;
       case "insertCallout": cmRef.current?.insertAtCursor(`\n> [!${String(value || "note").toUpperCase()}]\n> \n\n`); break;
       // Single contiguous HTML block (no internal blank lines, which would split
