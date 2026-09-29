@@ -83,7 +83,7 @@ export function AboutPage({ onClose }: AboutPageProps) {
               href={THIRD_PARTY_NOTICES_PATH}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-primary hover:underline"
+              className="font-medium text-primary-strong hover:underline"
             >
               third-party licences
             </a>

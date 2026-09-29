@@ -56,7 +56,7 @@ const TONE: Record<Tone, string> = {
 const ICON_TONE: Record<Tone, string> = {
   critical: "text-destructive",
   warning: "text-amber-600 dark:text-amber-400",
-  info: "text-primary",
+  info: "text-primary-strong",
 };
 
 /** One slim strip in the flow above the status bar — never a modal, never over the text. */
