@@ -7,7 +7,7 @@
     "api/import.js": { "maxDuration": 25 }
   },
   "rewrites": [
-    { "source": "/((?!api/|assets/|\\.well-known/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|\\.well-known/|embed\\.html).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
