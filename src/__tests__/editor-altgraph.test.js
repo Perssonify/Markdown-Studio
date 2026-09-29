@@ -2,11 +2,15 @@ import { defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/command
 import { searchKeymap } from "@codemirror/search";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { render, renderHook } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
+import { Editor } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
 import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { CodeMirrorPane } from "../ui/CodeMirrorPane";
+import { TiptapPane } from "../ui/TiptapPane";
 import { useUIStore } from "../store/uiStore";
 import { dropAltGraphChords, isAltGraphInput } from "../utils/alt-graph";
 
@@ -181,6 +185,34 @@ describe("the markdown pane's keymap has no Ctrl+Alt+<character> bindings", () =
   it("lets AltGr type a backslash (the unfiltered keymap consumed it)", () => {
     expect(backslashKeydown(PANE_KEYMAP).defaultPrevented).toBe(true);
     expect(backslashKeydown(dropAltGraphChords(PANE_KEYMAP, false)).defaultPrevented).toBe(false);
+  });
+
+  it("the MOUNTED rich pane lets AltGr type a digit instead of making a heading", async () => {
+    // TipTap binds Mod-Alt-1…6 (headings): on a layout with digits on its
+    // AltGr level, AltGr+1 turned the paragraph into an <h1> (measured).
+    const ref = createRef();
+    let view;
+    await act(async () => { view = render(createElement(TiptapPane, { ref, isDark: false, defaultValue: "<p>x</p>" })); });
+    const editor = ref.current.getEditor();
+    editor.commands.focus("end");
+    const e = key({ key: "1", code: "Digit1", ctrlKey: true, altKey: true });
+    editor.view.dom.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+    expect(editor.getHTML()).toBe("<p>x</p>");
+    view.unmount();
+  });
+
+  it("the passthrough is AltGr-only: an ordinary chord still reaches the keymap", () => {
+    const editor = new Editor({ extensions: [StarterKit, AltGraphPassthrough], content: "<p>word</p>" });
+    editor.commands.setTextSelection({ from: 1, to: 5 });
+    const altGr = key({ key: "1", code: "Digit1", ctrlKey: true, altKey: true });
+    editor.view.dom.dispatchEvent(altGr);
+    expect(editor.getHTML()).toBe("<p>word</p>");
+    const bold = key({ key: "b", code: "KeyB", ctrlKey: true });
+    editor.view.dom.dispatchEvent(bold);
+    expect(bold.defaultPrevented).toBe(true);
+    expect(editor.getHTML()).toBe("<p><strong>word</strong></p>");
+    editor.destroy();
   });
 
   it("the MOUNTED markdown pane lets AltGr type a backslash", () => {
