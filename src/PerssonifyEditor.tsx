@@ -1589,7 +1589,7 @@ export function PerssonifyEditor({
           toastSonner.success("Restored: " + existingDoc.title, { id: loadingId, duration: 3000 });
         } else if (initialDocument && !libraryWiped) {
           // No stored documents — seed with the provided initial document.
-          let doc = createDoc(initialDocument.content, "markdown", "api", { mdToHtml: engine.mdToHtml });
+          const doc = createDoc(initialDocument.content, "markdown", "api", { mdToHtml: engine.mdToHtml });
           if (doc) {
             if (initialDocument.title) {
               // F4. `title` is the NAME TO FALL BACK TO, not a rename. Setting
@@ -1612,7 +1612,7 @@ export function PerssonifyEditor({
             
             // Now wait for Tiptap to be ready with more generous timeout
             await new Promise((r) => setTimeout(r, 100)); // Give UI time to mount
-            let editor = await waitForEditor(3000);
+            const editor = await waitForEditor(3000);
 
             // If we have an editor and HTML content, sync it in and persist
             if (editor && doc._ingestHtml) {
