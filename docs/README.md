@@ -84,6 +84,7 @@ Full annotated tree and a "where does X live?" table: [codebase-tour.md](codebas
 | [runbooks/](runbooks/) | When things break: documents vanished, sync loop, quota exceeded |
 | [audit-2026-09.md](audit-2026-09.md) | **What remains before launch** — the September 2026 production-readiness audit: all 114 findings with their status, the owner actions (accounts, settings, legal) and the deferred engineering work |
 | [deployment.md](deployment.md) | What the repository does for a release, and what an owner must switch on (domain, CI gate, npm, CSP) |
+| [deployment-todo.md](deployment-todo.md) | The launch checklist: what to switch on, in order, and what to check after every deploy |
 | [decisions.md](decisions.md) | Recorded product and architecture decisions, and why |
 | [backlog.md](backlog.md) | Planned features and the earlier audits' findings |
 | [contributing.md](contributing.md) | How to propose changes |

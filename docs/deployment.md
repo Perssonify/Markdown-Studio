@@ -7,6 +7,8 @@
 
 ---
 
+**Doing it?** Work through the checklist in [deployment-todo.md](deployment-todo.md); this file explains each step.
+
 ## At a glance
 
 | Area | In the repository | Owner action still needed |
