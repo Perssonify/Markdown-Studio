@@ -218,6 +218,22 @@ describe("Escape belongs to what it was pressed in (A057)", () => {
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
+  it("a popup that is mounted but HIDDEN does not hold Escape (the emoji suggestion list)", async () => {
+    // Found in a real browser: the editor's emoji suggestion box is a
+    // role="listbox" parked on <body> with display:none; counted as an open
+    // popup, it made the board ignore every Escape.
+    const { props } = rig();
+    const { shell } = inOverlay(<CardsView {...props} />);
+    await settle();
+    const box = document.createElement("div");
+    box.setAttribute("role", "listbox");
+    box.style.display = "none";
+    document.body.appendChild(box);
+    shell.focus();
+    escape(shell);
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("Escape inside the board (or on its shell, or with nothing focused) closes it", async () => {
     const { props } = rig();
     const { shell } = inOverlay(<CardsView {...props} />);
