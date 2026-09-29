@@ -163,6 +163,9 @@ describe("library stylesheet — design tokens and page-level rules", () => {
       .toBe("html.pf-app::-webkit-scrollbar,.no-scrollbar::-webkit-scrollbar{display:none}");
     expect(scopeTokens("html,.no-scrollbar{scrollbar-width:none}"))
       .toBe("html.pf-app,.no-scrollbar{scrollbar-width:none}");
+    // A page style on its own has a token-shaped selector but is not a token:
+    // it must not land on the editor's roots.
+    expect(scopeTokens("html{scrollbar-width:none}")).toBe("html.pf-app{scrollbar-width:none}");
   });
 
   it("leaves keyframes, utilities, the base layer and hand-scoped rules alone", () => {
