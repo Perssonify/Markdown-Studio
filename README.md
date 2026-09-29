@@ -57,7 +57,7 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 | Persistence | IndexedDB in the browser (no account, no server copy) |
 | UI primitives | Base UI (menus, dialogs, popovers) |
 | Build Tool | Vite 8 (Rolldown) + vite-plugin-pwa (service worker) |
-| Test Framework | Vitest 4 + Testing Library; Playwright-driven Chromium for `e2e/` |
+| Test Framework | Vitest 4 + Testing Library; Playwright-driven Chromium, Firefox and WebKit for `e2e/` |
 | Lint | ESLint 10 + typescript-eslint + React hook rules |
 | Package Manager | Bun 1.4.0 (pinned by `packageManager`) |
 | Deployment | Vercel (static SPA + one serverless function, the import relay) |

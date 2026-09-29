@@ -10,7 +10,7 @@
 // tabs into a conflict, asserts the second parks a terminal status, and ends.
 // Everything below is what happens NEXT.
 import {
-  serve, open, boot, seed, storedDoc, canonicalText, richText, runCase, until, APP_DIR,
+  serve, open, boot, seed, storedDoc, canonicalText, richText, runCase, until, APP_DIR, BLANK_PATH,
 } from "../lib.mjs";
 import { proseDoc } from "../docs.mjs";
 
@@ -19,7 +19,7 @@ async function twoTabsInConflict(rep, onClose, { docs, editIn = "aaa" }) {
   const srv = await serve(APP_DIR);
   const a = await open(srv.port, { label: "dataloss" });
   onClose(async () => { await a.browser.close(); srv.close(); });
-  await a.page.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
+  await a.page.goto(`http://127.0.0.1:${srv.port}${BLANK_PATH}`);
   await seed(a.page, docs);
   await boot(a.page, srv.port, { mode: "Split", settle: 6000 });
 
