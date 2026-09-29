@@ -50,7 +50,7 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 | UI Framework | React 18 |
 | Markdown editor | CodeMirror 6 |
 | Rich Text Editor | Tiptap 3.31 (ProseMirror) — every `@tiptap/*` package at one version |
-| Markdown Parser | marked 12 |
+| Markdown Parser | marked 18 |
 | HTML-to-Markdown | Turndown 7 |
 | State | Zustand 5 |
 | Persistence | IndexedDB in the browser (no account, no server copy) |

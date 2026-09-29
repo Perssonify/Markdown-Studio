@@ -12,8 +12,17 @@
  * (same fidelity ceiling as the other text exports).
  */
 
-import { marked, type Token, type Tokens } from "marked";
+import { Marked, type Token, type Tokens } from "marked";
+import { emStrongMaskFix } from "../engine/marked-emphasis-mask";
 import { downloadBlob, sanitizeFilename } from "./import-export";
+
+// Our own instance rather than marked's shared default: in the library build
+// marked is the HOST's copy, and anything the host registered on the default
+// instance would otherwise change what this exporter reads. Plain GFM, as the
+// default instance is, plus the same emphasis correction the editor applies.
+let docxMarked: Marked | null = null;
+const lexMarkdown = (markdown: string): Token[] =>
+  (docxMarked ??= new Marked({ tokenizer: emStrongMaskFix })).lexer(markdown);
 
 // docx types are only referenced via the dynamic import; keep this module light.
 type DocxModule = typeof import("docx");
@@ -67,6 +76,10 @@ function inlineRuns(
       }
       case "image":
         runs.push(new TextRun({ text: (t as Tokens.Image).text || (t as Tokens.Image).href, italics: true }));
+        break;
+      case "checkbox":
+        // A task item's box has been a token since marked 17 — inside the
+        // item's first paragraph when the list is loose. It carries no text.
         break;
       default: {
         const raw = (t as { raw?: string; text?: string }).text ?? (t as { raw?: string }).raw;
@@ -223,7 +236,7 @@ export async function exportAsDocx(title: string, markdown: string): Promise<str
   const D = await import("docx");
   const { Document, Packer, LevelFormat, AlignmentType } = D;
 
-  const tokens = marked.lexer(markdown ?? "");
+  const tokens = lexMarkdown(markdown ?? "");
   const children = blocksFromTokens(D, tokens);
 
   const doc = new Document({

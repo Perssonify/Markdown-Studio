@@ -55,7 +55,7 @@ On top of editing, it provides:
 | UI runtime | React, React DOM | dev `^18.3.1`, peer `^18.0.0` | 18.3.1 | `@types/react` / `@types/react-dom` are `^18.3.0` (18.3.31 / 18.3.7), matching the runtime. |
 | Rich-text engine | TipTap 3 (ProseMirror via `@tiptap/pm`) | every `@tiptap/*` package at `3.31.3` (dev), peer `^3.31.3` | 3.31.3 | One version across the set, pinned by `pkg-lockfile.test.js`. `@tiptap/extension-list` is declared. |
 | Markdown pane | CodeMirror 6, `@lezer/highlight` | view `^6.39.14`, state `^6.5.4`, lang-markdown `^6.5.0`, commands, search, language | 6.39.14, 6.5.4, 6.5.0 | Peers of the library. |
-| Markdown → HTML | marked, marked-emoji, marked-footnote | `^12.0.2`, `^2.0.3`, `^1.4.0` | 12.0.2, 2.0.3, 1.4.0 | Configured per instance in `src/engine/build-marked.ts`. Wiki links are a marked inline extension (`src/engine/wiki-link-marked.ts`). `breaks: true` is always on. |
+| Markdown → HTML | marked, marked-emoji, marked-footnote | `^18.0.14`, `^2.0.3`, `^1.4.0` | 18.0.14, 2.0.3, 1.4.0 | Configured per instance in `src/engine/build-marked.ts`. Wiki links are a marked inline extension (`src/engine/wiki-link-marked.ts`). `breaks: true` is always on. |
 | HTML → Markdown | Turndown | `7.2.4` | 7.2.4 | GFM rules are hand-written in `src/engine/turndown-rules.ts`; `turndown-plugin-gfm` is not used. The engine adds an escaper and a linear-time top-level conversion (`turndownLinear`). |
 | State | Zustand | peer `^5.0.0`, dev `^5.0.12` | 5.0.12 | |
 | UI kit | Tailwind CSS v4, shadcn/ui (`base-mira`) on Base UI, lucide-react, sonner, next-themes, cva, clsx, tailwind-merge, tw-animate-css | tailwind `4.3.3`, base-ui `^1.3.0`, lucide `^0.577.0` (peer `^0.577.0 \|\| ^1.0.0`), sonner `^2.0.7`, next-themes `^0.4.6` (peer `^0.4.0`) | 4.3.3, 1.3.0, 0.577.0, 2.0.7, 0.4.6 | Generated primitives live in `src/components/ui/`. The library bundles Base UI and sonner on purpose. |
@@ -884,7 +884,6 @@ Drift in the Markdown docs themselves (README, `docs/`, `CLAUDE.md` and the rest
 - No live cross-tab sync. Another tab's save leaves this tab on a terminal `conflict`, and a reload keeps it there.
 - Heading-anchor links resolve by heading text (NFKC-normalised, keeping letters, numbers and marks).
 - Footnotes round-trip, but the rich pane has no footnote node: it shows the rendered reference, heading and list.
-- marked expands tabs inside fenced code; this is pinned as current behaviour (`src/__tests__/fenced-code-roundtrip.test.js:84-87`).
 - Very large documents are still converted in full on every projection. Rich→Markdown is linear-time now, but a 1.6 MB document takes seconds (A083).
 - Browser storage eviction. Persistent storage is now requested, backups are nudged and a wiped library is detected (`docs/runbooks/documents-disappeared.md`).
 
