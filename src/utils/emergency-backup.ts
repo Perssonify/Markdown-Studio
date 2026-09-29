@@ -1,0 +1,113 @@
+/**
+ * "Export my documents" for the crash screen.
+ *
+ * The library's own backup export lives inside PerssonifyEditor (a hook
+ * closure over the live editor), which is exactly what is gone when the crash
+ * screen is showing. This builds the same archive — a `perssonify-backup` ZIP of
+ * `perssonify-document` envelopes in their folders, which Import restores
+ * verbatim — from the storage adapter and the store's parked drafts alone. No
+ * React, no editor, no engine.
+ *
+ * What it can NOT include: text typed into the editor after its last autosave.
+ * That lived in the editor instance the crash destroyed.
+ */
+import { buildZip } from "../store/archive";
+import { resolveDocTitle, type DocumentRecord } from "../store/document";
+import { isBlankCanonical, useDocumentStore } from "../store/documentStore";
+import { useFolderStore } from "../store/folders";
+import { downloadBlob, exportTimestamp } from "../store/import-export";
+
+export interface BackupSources {
+  storage: {
+    list(): Promise<Array<{ id: string }>>;
+    get(id: string): Promise<DocumentRecord | null>;
+  };
+  /** Unsaved edits parked by document switches (docId → canonical). */
+  drafts: ReadonlyMap<string, unknown>;
+  folders: ReadonlyArray<{ id: string; name: string; parentId: string | null }>;
+  docParents: Readonly<Record<string, string>>;
+}
+
+function liveSources(): BackupSources {
+  const docs = useDocumentStore.getState();
+  const { folders, docParents } = useFolderStore.getState();
+  return { storage: docs.getStorage(), drafts: docs._unsavedEdits, folders, docParents };
+}
+
+const sanitize = (s: string) => s.replace(/[/\\:*?"<>|]+/g, "_").trim() || "untitled";
+
+/** path → JSON text, one envelope per stored document. */
+export async function buildBackupFiles(src: BackupSources): Promise<Record<string, string>> {
+  const byId = new Map(src.folders.map((f) => [f.id, f]));
+  const dirOf = (docId: string): string => {
+    const segs: string[] = [];
+    const seen = new Set<string>();
+    let cur: string | null | undefined = src.docParents[docId];
+    while (cur && !seen.has(cur)) {
+      seen.add(cur); // a corrupt parent cycle must not hang the escape hatch
+      const f = byId.get(cur);
+      if (!f) break;
+      segs.unshift(sanitize(f.name));
+      cur = f.parentId;
+    }
+    return segs.join("/");
+  };
+
+  const files: Record<string, string> = {};
+  const used = new Set<string>();
+  for (const { id } of await src.storage.list()) {
+    let rec: DocumentRecord | null = null;
+    try {
+      rec = await src.storage.get(id);
+    } catch {
+      rec = null; // one unreadable record must not cost the user the rest
+    }
+    if (!rec) continue;
+    // A parked draft is newer than the stored copy — unless it is blank over
+    // real content, which the save path itself refuses to persist.
+    const draft = src.drafts.get(id);
+    const useDraft = draft != null && !(isBlankCanonical(draft) && !isBlankCanonical(rec.canonical));
+    const canonical = (useDraft ? draft : rec.canonical) as DocumentRecord["canonical"];
+    const title = resolveDocTitle(rec, canonical).title;
+    const dir = dirOf(id);
+    const base = (dir ? dir + "/" : "") + sanitize(title || "untitled");
+    let path = `${base}.json`;
+    for (let i = 1; used.has(path); i++) path = `${base} (${i}).json`;
+    used.add(path);
+    files[path] = JSON.stringify(
+      {
+        _format: "perssonify-document",
+        _version: "1.1.0",
+        id: rec.id,
+        title,
+        canonical,
+        origin: rec.origin,
+        residuals: rec.residuals,
+        ingestReport: rec.ingestReport,
+        metadata: rec.metadata,
+        tags: rec.tags,
+        created: rec.created,
+        updated: useDraft ? new Date().toISOString() : rec.updated,
+      },
+      null,
+      2,
+    );
+  }
+  return files;
+}
+
+/**
+ * Build the backup and hand it to the browser as a download. Returns how many
+ * documents it contains (0 → nothing was downloaded).
+ */
+export async function exportEmergencyBackup(
+  src: BackupSources = liveSources(),
+  download: (blob: Blob, filename: string) => void = downloadBlob,
+): Promise<number> {
+  const files = await buildBackupFiles(src);
+  const count = Object.keys(files).length;
+  if (!count) return 0;
+  const zip = buildZip(files);
+  download(new Blob([zip as BlobPart], { type: "application/zip" }), `perssonify-backup-${exportTimestamp()}.zip`);
+  return count;
+}

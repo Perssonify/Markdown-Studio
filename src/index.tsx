@@ -3,6 +3,8 @@
 // does NOT auto-inject it — consumers import "@perssonify/editor/styles.css".
 import "./styles.css";
 export { ErrorBoundary } from "./ui/ErrorBoundary";
+// Privacy-safe crash diagnostics: subscribe a host reporter, or read the ring.
+export { buildDiagnosticsReport, getDiagnostics, setErrorReporter, type DiagnosticEntry, type ErrorReporter } from "./utils/diagnostics";
 
 export { useMarkdownEngine } from "./engine/useMarkdownEngine";
 export { useSyncEngine } from "./engine/useSyncEngine";
