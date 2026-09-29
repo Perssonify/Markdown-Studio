@@ -78,13 +78,22 @@ describe("heading anchors in every script (A098)", () => {
 
   it("is the matcher the editor's anchor navigation actually uses", () => {
     // Source pin: PerssonifyEditor cannot be mounted in a unit test, and the
-    // defect was a SECOND, private normaliser living there.
-    const pe = readFileSync(join(process.cwd(), "src/PerssonifyEditor.tsx"), "utf8")
+    // defect was a SECOND, private normaliser living there. The navigation now
+    // lives in src/editor/useHeadingNavigation.ts.
+    const codeOnly = (p) => readFileSync(join(process.cwd(), p), "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/^\s*\/\/.*$/gm, ""); // code only — a comment may quote the old regex
-    const nav = pe.slice(pe.indexOf("const scrollToHeadingByAnchor"), pe.indexOf("const handleMdChange"));
+    const src = codeOnly("src/editor/useHeadingNavigation.ts");
+    const start = src.indexOf("const scrollToHeadingByAnchor");
+    const nav = src.slice(start, src.indexOf("const handleNavigateHeading", start));
+    expect(start).toBeGreaterThan(-1);
     expect(nav).toContain("findHeadingByAnchor(");
     expect(nav).not.toMatch(/\[\^a-z0-9\]/);
+    // …and it is what the editor's anchor links actually navigate with.
+    const pe = codeOnly("src/PerssonifyEditor.tsx");
+    expect(pe).toMatch(/scrollToHeadingByAnchor[^}]*\} = useHeadingNavigation\(/);
+    expect(pe).toContain("onAnchorNavigate: scrollToHeadingByAnchor,");
+    expect(pe).not.toMatch(/\[\^a-z0-9\]/);
   });
 });
 
