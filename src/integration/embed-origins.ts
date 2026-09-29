@@ -1,3 +1,6 @@
+import { APP_HOSTS } from "../constants";
+import type { IDBStorageConfig } from "../store/idb-storage-adapter";
+
 /**
  * Which host origin(s) the iframe embed's bridge will talk to — pure, so the
  * rules can be tested without an iframe.
@@ -88,4 +91,27 @@ export function resolveEmbedAllowedOrigins({ params, referrer, ancestorOrigins, 
   if (deployAllowlist && deployAllowlist.trim()) requested = requested.filter((o) => allow.includes(o));
 
   return requested;
+}
+
+/** The embed's database on the app's own hosts. Never rename: on-disk contract. */
+export const EMBED_APP_HOST_DB = "perssonify-embed-docs";
+
+/**
+ * Where the iframe embed keeps its documents, for the host it is served from
+ * (A072).
+ *
+ * On one of the APP's own hosts (APP_HOSTS) it gets a database of its own. The
+ * app's library lives in `perssonify-docs` there, and anything that shares that
+ * database with the embed is reachable by whichever page frames the embed —
+ * the bridge can read and overwrite every document the embed sees. Version
+ * history and the crash stash follow the name (`configureLocalStores`), so
+ * they stay apart too.
+ *
+ * Anywhere else — a self-hosted embed — it returns undefined: the default
+ * `perssonify-docs`, the name every existing embed user's documents are in.
+ * Renaming it there would open those embeds on an empty library.
+ */
+export function embedStorageConfig(hostname: string): IDBStorageConfig | undefined {
+  const host = hostname.trim().toLowerCase().replace(/\.+$/, "");
+  return APP_HOSTS.includes(host) ? { dbName: EMBED_APP_HOST_DB } : undefined;
 }

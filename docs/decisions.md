@@ -6,7 +6,38 @@ what was decided, what was rejected, and what it costs.
 
 ---
 
+## 2026-09-30 — On the app's own hosts, the embed keeps its own database (A072)
+
+**Decision:** when the embed build is served from one of the app's own hosts
+(`APP_HOSTS` in `src/constants.ts`: markdownstudio.com, www.markdownstudio.com,
+markdownstudio.perssonify.com, the legacy markdowneditor.perssonify.com, and
+localhost / 127.0.0.1 in development), it stores its documents in
+`perssonify-embed-docs`, and its version history and crash stash follow that
+name (`perssonify-snapshots:perssonify-embed-docs`,
+`pf:recovery:perssonify-embed-docs`). On any other host — a self-hosted embed —
+it keeps `perssonify-docs`.
+
+**Why:** on an app host the app's library is in `perssonify-docs`, and the
+embed's bridge can read and overwrite every document the embed sees, so any
+page that framed the embed there could reach the whole library. The entry
+below kept one name everywhere so that no embed user's documents were
+orphaned; that still holds where it matters (self-hosted embeds keep their
+users' documents under the old name), and the exposure is gone where the app
+lives. This answers that entry's "Revisit if".
+
+**Cost:** an embed that was ever served from an app host opens there on an
+empty library; its earlier documents stay in `perssonify-docs`, where the app
+on the same host shows them. None is served from one today (the production
+deploy does not ship the embed). Code: `embedStorageConfig`
+(`src/integration/embed-origins.ts`), called from `src/embed.tsx`; test:
+`embed-storage.test.js`.
+
+---
+
 ## 2026-09-29 — The iframe embed keeps its database name (A072)
+
+*Refined on 2026-09-30 (above): on the app's own hosts the embed now keeps a
+database of its own. Everywhere else this entry stands.*
 
 **Decision:** the embed keeps storing documents in the default IndexedDB
 database (`perssonify-docs`); it does not get a database of its own.

@@ -1,7 +1,7 @@
 // Tier 1 — blast radius. Every surface the sync work could have touched, driven
 // once on a production build. This is the CI smoke suite: it asserts the app
 // still behaves, not how fast it is.
-import { serve, open, boot, mdText, richText, richHtml, runCase, until, APP_DIR, EMBED_DIR } from "../lib.mjs";
+import { serve, open, boot, mdText, richText, richHtml, pasteText, runCase, until, APP_DIR, EMBED_DIR, ENGINE } from "../lib.mjs";
 import fs from "node:fs";
 
 const BOLD = 'button[aria-label*="Bold" i], button[title*="Bold" i]';
@@ -47,12 +47,7 @@ runCase("surfaces", async (rep, onClose) => {
   ].join("\n");
   await pg.locator(".cm-content").first().click();
   await pg.keyboard.press("Control+End");
-  await pg.evaluate((text) => {
-    const dt = new DataTransfer();
-    dt.setData("text/plain", "\n\n" + text + "\n");
-    document.querySelector(".cm-content").dispatchEvent(
-      new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-  }, SAMPLE);
+  await pasteText(pg, ".cm-content", "\n\n" + SAMPLE + "\n");
   await until(async () => (await richText(pg)).includes("const b = 2;"));
   const html = await richHtml(pg), text = await richText(pg);
   rep.check("round trip: bullet list survives", /<ul[^>]*>[\s\S]*alpha/.test(html));
@@ -112,7 +107,13 @@ runCase("surfaces", async (rep, onClose) => {
   // open is the fix; this is the behavioural proof.
   await pg.keyboard.press("Escape");
   const opened = await openMenuItem(pg, "Memory");
-  if (opened) {
+  const heapApi = await pg.evaluate(() => !!(performance.memory && performance.memory.usedJSHeapSize));
+  if (opened && !heapApi) {
+    // The gauge reads `performance.memory`, which only Chromium exposes; on
+    // the other engines the sheet has no heap reading to keep live.
+    rep.skip("memory sheet takes a live reading while open", `performance.memory does not exist in ${ENGINE}`);
+    await pg.keyboard.press("Escape"); await pg.waitForTimeout(600);
+  } else if (opened) {
     const readings = new Set();
     for (let i = 0; i < 4; i++) {
       readings.add(await pg.evaluate(() => {
@@ -455,9 +456,23 @@ runCase("surfaces", async (rep, onClose) => {
     await kp.reload({ waitUntil: "networkidle" });
     await until(async () => (await kp.locator(".ProseMirror").count()) > 0, { timeout: 20000 });
     await kp.waitForTimeout(1500);
-    await kp.keyboard.press("Tab");
-    const firstStop = await kp.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
-    rep.check("A094: the first Tab stop is 'Skip to editor'", firstStop === "Skip to editor", firstStop);
+    if (ENGINE === "webkit") {
+      // WebKit leaves links out of the Tab order unless Safari's "Press Tab to
+      // highlight each item" is on (Option+Tab reaches them; Playwright's
+      // WebKit reaches them with neither), so there the first TAB stop is the
+      // first button by definition. What the skip link is for is checked
+      // instead: it is first in the focus order, and it lands in the editor.
+      const first = await kp.evaluate(() => [...document.querySelectorAll("a[href], button, input, select, textarea, [tabindex]")]
+        .find((el) => el.tabIndex >= 0 && !el.disabled && !el.closest("[inert]"))?.textContent?.trim() ?? "");
+      rep.check("A094: 'Skip to editor' is first in the focus order (WebKit: links are not Tab stops by default)",
+        first === "Skip to editor", first);
+      await kp.keyboard.press("Shift");
+      await kp.evaluate(() => [...document.querySelectorAll("a")].find((a) => a.textContent.trim() === "Skip to editor")?.focus());
+    } else {
+      await kp.keyboard.press("Tab");
+      const firstStop = await kp.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
+      rep.check("A094: the first Tab stop is 'Skip to editor'", firstStop === "Skip to editor", firstStop);
+    }
     await kp.keyboard.press("Enter");
     const landed = await kp.evaluate(() => document.activeElement?.className ?? "");
     rep.check("A094: …and Enter lands in the editor", /cm-content|ProseMirror/.test(String(landed)), String(landed));
@@ -547,8 +562,20 @@ runCase("surfaces", async (rep, onClose) => {
     // Chromium paints a forced-colours outline in Highlight on its own, so the
     // stylesheet's `outline-color: Highlight` restatement is not what makes
     // this pass (it is there for engines that do not).
-    rep.check("A095: …and the focus ring survives, in the system Highlight colour",
-      fc.ring === "solid" && fc.ringColor === fc.hl, JSON.stringify(fc));
+    if (ENGINE === "chromium") {
+      rep.check("A095: …and the focus ring survives, in the system Highlight colour",
+        fc.ring === "solid" && fc.ringColor === fc.hl, JSON.stringify(fc));
+    } else {
+      rep.check("A095: …and the focus ring survives (an outline, which forced colours keep)",
+        fc.ring === "solid", JSON.stringify(fc));
+      // Chromium forces a ring to Highlight on its own; here it relies on the
+      // stylesheet's restatement, which is dead: `:where(…) :focus-visible`
+      // (0,1,0) under ring rules of (0,2,0). Firefox paints CanvasText and
+      // WebKit, which only emulates the media query, the author colour.
+      // Measured in e2e/probes/forced-colors-ring.mjs; reported, not fixed here.
+      rep.xfail("A095: …in the system Highlight colour", fc.ring === "solid" && fc.ringColor === fc.hl,
+        "styles.css's forced-colours `outline-color: Highlight` never applies (specificity) — see e2e/probes/forced-colors-ring.mjs");
+    }
     await kp.emulateMedia({ forcedColors: "none" });
 
     // A100: print prints the document, not the app.
@@ -603,11 +630,11 @@ runCase("surfaces", async (rep, onClose) => {
   // the global CSS guard does NOT cover, and the only way to see it is to
   // emulate the preference in a real browser.
   {
-    const r = await open(srv.port, { cdp: true, viewport: { width: 1280, height: 800 } });
+    const r = await open(srv.port, { viewport: { width: 1280, height: 800 } });
     onClose(async () => { await r.browser.close(); });
-    await r.cdp.send("Emulation.setEmulatedMedia", {
-      features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-    });
+    // Playwright emulates the preference on every engine (it was a raw CDP
+    // call, which made this block Chromium-only).
+    await r.page.emulateMedia({ reducedMotion: "reduce" });
     await boot(r.page, srv.port, { settle: 6000 });
     rep.check("reduced motion is actually emulated",
       await r.page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches));

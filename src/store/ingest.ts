@@ -261,9 +261,11 @@ function analyzeHtml(html: string): AnalysisResult {
   let match;
 
   while ((match = tagRegex.exec(html)) !== null) {
-    const [, isClose, tag, attrStr] = match;
+    // All three groups take part in every match (group 3's `?` is inside it),
+    // so neither `tag` nor `attrStr` is ever really undefined.
+    const [, isClose, tag, attrStr = ""] = match;
     if (isClose) continue;
-    const tagLower = tag.toLowerCase();
+    const tagLower = tag!.toLowerCase();
     totalElements++;
 
     processed[tagLower] = (processed[tagLower] ?? 0) + 1;
@@ -283,7 +285,7 @@ function analyzeHtml(html: string): AnalysisResult {
       const attrRegex = /(\w[\w-]*)=(?:"([^"]*)"|'([^']*)')/g;
       let a;
       while ((a = attrRegex.exec(attrStr)) !== null) {
-        attrs[a[1]] = a[2] ?? a[3] ?? "";
+        attrs[a[1]!] = a[2] ?? a[3] ?? "";
       }
       residuals.push({
         type: "unknown-element",

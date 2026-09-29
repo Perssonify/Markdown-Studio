@@ -49,6 +49,39 @@ describe("CI is reproducible (A014)", () => {
   });
 });
 
+describe("the browser campaign runs on Firefox and WebKit too (A100)", () => {
+  const ci = read(`${GH}/workflows/ci.yml`);
+  const run = read("e2e/run.mjs");
+  /** The suites e2e/run.mjs lists as run green on every engine. */
+  const crossEngine = [...run.matchAll(/^ {2}"?([a-z-]+)"?: \[".*", ALL\],$/gm)].map((m) => m[1]);
+  const enginesJob = ci.slice(ci.indexOf("\n  e2e-engines:"));
+  const chromiumJob = ci.slice(ci.indexOf("\n  e2e:"), ci.indexOf("\n  e2e-engines:"));
+
+  it("run.mjs names its cross-engine suites", () => {
+    expect(crossEngine).toEqual(expect.arrayContaining(["harness", "surfaces", "surfaces-deep", "dataloss", "floor"]));
+  });
+
+  it("a Firefox + WebKit matrix job installs its own engine and selects it", () => {
+    expect(ci).toMatch(/\n {2}e2e-engines:\n/);
+    expect(enginesJob).toMatch(/engine: \[firefox, webkit\]/);
+    // One engine's failure must not cancel the other's evidence.
+    expect(enginesJob).toMatch(/fail-fast: false/);
+    expect(enginesJob).toMatch(/E2E_BROWSER: \$\{\{ matrix\.engine \}\}/);
+    expect(enginesJob).toMatch(/bunx playwright-core install --with-deps \$\{\{ matrix\.engine \}\}/);
+    expect(enginesJob).toMatch(/timeout-minutes: \d+/);
+    expect(enginesJob).toMatch(/name: e2e-failure-\$\{\{ matrix\.engine \}\}/);
+  });
+
+  it("…and runs exactly the cross-engine suites, nothing it would only report as skipped", () => {
+    const ranThere = [...enginesJob.matchAll(/run: node e2e\/run\.mjs ([a-z-]+)\n/g)].map((m) => m[1]);
+    expect([...ranThere].sort()).toEqual([...crossEngine].sort());
+  });
+
+  it("the Chromium job runs the browser-floor suite as well", () => {
+    expect(chromiumJob).toMatch(/node e2e\/run\.mjs floor/);
+  });
+});
+
 describe("npm publishing happens from CI, with provenance (A006)", () => {
   const pub = read(`${GH}/workflows/publish.yml`);
   it("runs on version tags only, behind a protected environment", () => {
