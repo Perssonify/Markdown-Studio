@@ -13,6 +13,7 @@ import {
 } from "./search-colors";
 import { COMPOSITION_STALL_MS } from "../constants";
 import { useUIStore } from "../store/uiStore";
+import { dropAltGraphChords } from "../utils/alt-graph";
 
 /** Read-only extension pair for the editability compartment. */
 const roExt = (ro: boolean): Extension[] => [EditorState.readOnly.of(ro), EditorView.editable.of(!ro)];
@@ -341,7 +342,9 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
       // re-initialises the history field) around the current document.
       extensionsRef.current = [
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+        // Minus the Ctrl+Alt+<character> bindings: off the Mac those ARE AltGr
+        // typing (`Mod-Alt-\` ate the backslash on most European layouts).
+        keymap.of(dropAltGraphChords([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab])),
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         syntaxHighlighting(perssonifyHighlight),
