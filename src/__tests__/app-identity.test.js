@@ -94,7 +94,8 @@ describe("data identifiers survive the rename", () => {
   });
 
   it("keeps the full-backup archive name", () => {
-    expect(read("src/PerssonifyEditor.tsx")).toContain('"perssonify-backup"');
+    // Written by the editor's export module (exportFullBackup).
+    expect(read("src/editor/useExportActions.ts")).toContain('"perssonify-backup"');
   });
 
   it("keeps the snapshot database name", () => {

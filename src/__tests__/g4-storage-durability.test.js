@@ -138,11 +138,17 @@ describe("the backup reminder", () => {
   });
 
   it("the full-backup export records it — only when something was written", () => {
-    const pe = read("src/PerssonifyEditor.tsx").replace(/\r\n/g, "\n");
-    const branch = pe.slice(pe.indexOf('if (type === "export-backup-zip")'));
-    const body = branch.slice(0, branch.indexOf("return;"));
+    // The backup is exportFullBackup (src/editor/useExportActions.ts)…
+    const exp = read("src/editor/useExportActions.ts").replace(/\r\n/g, "\n");
+    const start = exp.indexOf("export function exportFullBackup(");
+    expect(start).toBeGreaterThan(-1);
+    const body = exp.slice(start, exp.indexOf("\n}\n", start));
     expect(body).toMatch(/"perssonify-backup", \{ canonical: true \}/);
     expect(body).toMatch(/count > 0\) recordFullBackup\(\)/);
+    // …and it is what the File menu's full-backup action runs.
+    const pe = read("src/PerssonifyEditor.tsx").replace(/\r\n/g, "\n");
+    const branch = pe.slice(pe.indexOf('if (type === "export-backup-zip")'));
+    expect(branch.slice(0, branch.indexOf("return;"))).toContain("exportFullBackup(exportDocsRef);");
   });
 });
 
