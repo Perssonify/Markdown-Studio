@@ -168,7 +168,7 @@ describe("library stylesheet — design tokens and page-level rules", () => {
   it("leaves keyframes, utilities, the base layer and hand-scoped rules alone", () => {
     for (const css of [
       "@keyframes spin{from{opacity:0}to{opacity:1}}",
-      ".dark\:bg-card:where(.dark *){color:red}",
+      String.raw`.dark\:bg-card:where(.dark *){color:red}`, // Tailwind's escaped `dark:` class
       "@layer base{html{line-height:1.5}}",
       ".pf-app body,body.pf-app{margin:0}",
     ]) {
