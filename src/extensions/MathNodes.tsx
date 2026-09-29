@@ -40,8 +40,15 @@ function MathView({
     if (editing) return; // don't re-render KaTeX while the source input is open
     let cancelled = false;
     (async () => {
-      const katex = await getKatex();
+      // A failed chunk load (offline, a purged deploy) shows the LaTeX source
+      // instead of surfacing as an unhandled rejection; the memo forgets the
+      // failure, so the next render tries again.
+      const katex = await getKatex().catch(() => null);
       if (cancelled || !ref.current) return;
+      if (!katex) {
+        ref.current.textContent = latex;
+        return;
+      }
       try {
         katex.render(latex || "", ref.current, {
           throwOnError: false,
