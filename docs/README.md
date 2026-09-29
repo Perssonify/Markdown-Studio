@@ -5,7 +5,7 @@
 
 ## What this is, in one paragraph
 
-Markdown Studio is a **browser-only** markdown editor that runs two editing surfaces side by side: a raw-markdown pane (CodeMirror 6) and a rich-text pane (Tiptap 3 / ProseMirror). Edits in either pane sync to the other in real time, with the **canonical source of truth being ProseMirror JSON** — not the markdown text, not the HTML. It stores documents locally in **IndexedDB** (there is no server, no login, no database to provision), supports many documents in nested folders, wiki-style `[[links]]` between documents, a force-directed knowledge graph, and import/export across Markdown, HTML, and ProseMirror JSON. The same code ships two ways: as a **standalone web app** (deployed to Vercel) and as an **embeddable npm library** (`@perssonify/editor`).
+Markdown Studio is a **browser-based** markdown editor that runs two editing surfaces side by side: a raw-markdown pane (CodeMirror 6) and a rich-text pane (Tiptap 3 / ProseMirror). Edits in either pane sync to the other in real time, with the **canonical source of truth being ProseMirror JSON** — not the markdown text, not the HTML. It stores documents locally in **IndexedDB** (no account, no login, no database to provision, and no server copy — the only server code is an opt-in relay for importing from a URL), supports many documents in nested folders, wiki-style `[[links]]` between documents, a force-directed knowledge graph, and import/export across Markdown, HTML, and ProseMirror JSON. The same code ships two ways: as a **standalone web app** (deployed to Vercel) and as an **embeddable npm library** (`@perssonify/editor`).
 
 ## What it does for a user (concrete)
 
@@ -96,4 +96,4 @@ Full annotated tree and a "where does X live?" table: [codebase-tour.md](codebas
   rebuilding or extending the app.
 
 The app has **no authentication** by design (a former Vercel edge-middleware password gate was
-removed — see [auth.md](auth.md)); it is a client-only, browser-storage app.
+removed — see [auth.md](auth.md)); its documents live in the visitor's browser storage.

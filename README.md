@@ -33,7 +33,7 @@
 
 ## Overview
 
-Markdown Studio is a **browser-only** markdown editor that runs two editing engines side by side: **CodeMirror 6** for raw markdown and **Tiptap 3** (ProseMirror) for rich text. Edits in either pane are synchronized bidirectionally through a canonical ProseMirror JSON layer, with content hashing to prevent echo loops.
+Markdown Studio is a **browser-based** markdown editor that runs two editing engines side by side: **CodeMirror 6** for raw markdown and **Tiptap 3** (ProseMirror) for rich text. Edits in either pane are synchronized bidirectionally through a canonical ProseMirror JSON layer, with content hashing to prevent echo loops.
 
 The editor supports multi-document management with **nested folders**, wiki-style inter-document linking, a force-directed knowledge graph, selectable **Markdown flavors** (CommonMark/GFM/Markdown Extra), **LaTeX math (KaTeX)**, **Mermaid diagrams**, **ABC music**, emoji, a **theme/accent selector**, and import/export across markdown, HTML, JSON, and **ZIP/TAR archives**. Documents are persisted in the browser's IndexedDB — there is no account and no server copy; the only server code is an opt-in relay for "Import from URL" ([below](#the-import-relay)). After one online visit the app works offline. It ships two ways: as a standalone web app and as an embeddable npm library (`@perssonify/editor`). See [docs/extended-features.md](docs/extended-features.md) for the 2026 additions.
 
@@ -149,7 +149,7 @@ See [docs/architecture.md](docs/architecture.md) for the full mental model, comp
 - **Bidirectional sync** uses content hashing (`quickHash()`) to detect changes and prevent loops
 - **Adaptive projection** — the other pane updates *while* you type, on delays derived from what a projection measurably costs on your device
 - **Three-layer document model** separates origin, canonical, and residuals
-- **Local-first** — all data in IndexedDB; no backend, no auth
+- **Local-first** — documents in IndexedDB; no account, no server copy (the only server code is the opt-in import relay)
 
 ---
 

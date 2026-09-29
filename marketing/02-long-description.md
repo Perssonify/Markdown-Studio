@@ -4,7 +4,7 @@ Three lengths of the full story. Use the one that fits, or lift sections.
 
 ---
 
-## The full version (~900 words)
+## The full version (~1,000 words)
 
 ### Markdown on the left. Rich text on the right.
 
@@ -27,8 +27,8 @@ is.
 
 The rich-text side is a real editor, not a preview. Tables have a grid picker
 and per-cell formatting. Task lists have tick-boxes you can actually tick. Code
-blocks are syntax-highlighted. Images can be resized by dragging. Everything you
-do there comes back as clean, portable Markdown.
+blocks carry their language tag and a copy button. Formulas and diagrams are
+edited in place. Everything you do there comes back as clean, portable Markdown.
 
 The Markdown side is a real editor too, with syntax highlighting, list-aware
 wrapping, multi-cursor selection and a Find & Replace that can scope itself to
@@ -55,8 +55,8 @@ trick.
 
 ### Notes that know about each other
 
-Type `[[` and link to another document. Type `[[Doc#Heading]]` and link to a
-specific section. Every document shows what links to it, and the **relationship
+Type `[[Document title]]` to link to another document. Type `[[Doc#Heading]]`
+and link to a specific section. Every document shows what links to it, and the **relationship
 map** draws your whole library as a graph: documents as nodes, links as edges,
 folders as labelled clusters. Select any note and you see its headings, every
 note it links out to, and every note that links in — click through and keep
@@ -66,22 +66,33 @@ There's a **Cards board** too, for the other half of note-taking: a
 Google-Keep-style wall of every note, with one-tap capture, checklists, colours
 and pinning, for the times when you want to jot rather than compose.
 
-### It stays in your browser
+### Your documents stay in your browser
 
-No account. No server. No sync service. Every document lives in your browser's
-own storage, and nothing you write is uploaded anywhere — not for processing,
-not for backup, not for analytics on your content. Install it to your home
-screen and it works with the network off.
+No account. No sync service. No copy of your documents on a server. Every
+document lives in your browser's own storage, and no server stores or reads
+it — not for processing, not for backup. There are no analytics, tracking or
+telemetry at all. After your first visit the whole app is cached, so it opens
+and keeps working with the network off, installed or not.
+
+Two features do use the network, and both are yours to control. Importing from
+a link fetches that link; if the site won't let a browser read it, the app asks
+before fetching it through its own server, which passes the file straight back
+without keeping a copy. And images in a document load from wherever they are
+hosted, which lets that host see when the document is opened — Settings ▸
+Privacy can block them.
 
 This is a real trade-off and worth being clear about: your documents live on the
-device you wrote them on. That is the point — but it means you own the backups.
-The app makes that easy with a one-click full-library export that restores
-exactly as it was.
+device you wrote them on. That is the point — but it means you own the backups,
+and a browser can clear a site's storage (Safari does after seven days without
+a visit, unless the app is on your Home Screen or Dock). The app asks the
+browser to keep your library, reminds you when your last full backup is more
+than a week old, and makes that backup a one-click export that restores the
+whole library, folders included.
 
 ### Your work is hard to lose
 
-For a tool that keeps everything locally, "don't lose the work" is the whole
-job. Markdown Studio takes it seriously:
+For a tool that keeps your documents locally, "don't lose the work" is the
+whole job. Markdown Studio takes it seriously:
 
 - **Autosave** as you write.
 - **A blank-document backstop** that refuses to overwrite a document that has
@@ -92,6 +103,9 @@ job. Markdown Studio takes it seriously:
   you can roll back a document even after saving over it.
 - **Multi-tab conflict detection**, so two windows can't quietly overwrite each
   other.
+- **A guard against browser clean-ups** — the app asks the browser to keep your
+  library, and if it ever comes back empty, says so instead of quietly starting
+  over.
 
 ### It leaves as easily as it arrives
 
@@ -130,7 +144,7 @@ asterisks appear in the Markdown. Two views, one document, always in sync — no
 preview button, no mode switching.
 
 Both panes are real editors. The rich side has table grids, tickable task lists,
-resizable images and syntax-highlighted code. The Markdown side has syntax
+and formulas and diagrams you edit in place. The Markdown side has syntax
 highlighting, multi-cursor editing and a Find & Replace that can target only
 headings, or only code. Underneath is a structured document model both agree on,
 which is why the round-trip actually holds.
@@ -144,10 +158,10 @@ your whole library as a graph you can explore: select a note to see its
 headings and every link in and out. A Cards board gives you a Keep-style wall
 for quick capture when you want to jot rather than compose.
 
-Everything runs in your browser. No account, no server, nothing uploaded, works
-offline. Your work is protected by autosave, per-document undo history,
-recoverable version snapshots and a backstop that won't let a blank document
-overwrite a full one.
+Your documents stay in your browser: no account, no server copy, no analytics,
+and after your first visit it works offline. Your work is
+protected by autosave, per-document undo history, recoverable version snapshots
+and a backstop that won't let a blank document overwrite a full one.
 
 Export to Markdown, HTML, Word, PDF or JSON — or your whole library as a ZIP
 that re-imports intact. The same editor is also available as an embeddable
@@ -168,5 +182,5 @@ It includes LaTeX math, Mermaid diagrams, tables, task lists, callouts, and
 `[[wiki links]]` with a relationship map of your whole library. Export to
 Markdown, HTML, Word, PDF or JSON.
 
-Everything runs in your browser — no account, no server, nothing uploaded, works
+Your documents stay in your browser — no account, no server copy, and it works
 offline. Free, at [markdownstudio.com](https://markdownstudio.com).

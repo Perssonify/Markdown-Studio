@@ -26,8 +26,8 @@ appear; it's a coordinate, not a brand, and never belongs in consumer copy.
 
 1. **Two panes, one document, always in sync.** The whole product in one line,
    understandable with no prior knowledge, visible in a single screenshot.
-2. **It runs entirely in your browser.** No account, no server, nothing
-   uploaded, works offline.
+2. **Your documents stay in your browser.** No account, no server that stores
+   or reads them, no analytics, and it works offline after the first visit.
 3. **Everything round-trips.** Math, diagrams, tables and callouts all return to
    clean Markdown — the reason to trust the rich pane.
 4. **Notes link, and the links are visible.** Wiki links, backlinks, the map.
@@ -65,10 +65,11 @@ accurately is more persuasive than selling it.
 | Claim | Why it's true |
 | --- | --- |
 | "Always in sync" | Both panes are views of one ProseMirror document; the Markdown is a projection of it |
-| "Nothing is uploaded" | No backend for documents; storage is IndexedDB in the browser |
-| "Works offline" | Service worker; installable as an app |
+| "Your documents stay in your browser" / "No server stores or reads your documents" | No backend stores or reads documents; they live in IndexedDB in the browser. The only server code is the URL-import relay, used only with the user's consent, which fetches a link and passes the file straight back without keeping it |
+| "No analytics or tracking" | There is no analytics, tracking or telemetry code; error diagnostics stay on the device until the user copies them |
+| "Works offline" | The service worker caches the whole app on the first online visit, installed or not — tested in CI. Import from URL and images hosted elsewhere still need a connection |
 | "Everything round-trips" | Math, Mermaid, tables, task lists, callouts, footnotes, sized and theme-aware images all have serializer coverage, pinned by tests |
-| "Hard to lose work" | Autosave, blank-save backstop, per-document undo, snapshot version history, multi-tab conflict detection |
+| "Hard to lose work" | Autosave, blank-save backstop, per-document undo, snapshot version history, multi-tab conflict detection, a persistent-storage request and a backup reminder |
 | "Export anywhere" | Markdown, HTML, DOCX, PDF, JSON per document; full-library ZIP that re-imports intact |
 | "Embeddable" | React component and iframe embed with a postMessage bridge; pluggable storage |
 
@@ -78,9 +79,20 @@ accurately is more persuasive than selling it.
 - Cloud sync, cross-device continuity, "access anywhere"
 - AI writing, summarising or autocomplete
 - Encryption of stored documents (they are stored in ordinary browser storage)
-- "Your data never leaves your device" *if* the reader has used the URL importer
-  — that feature fetches through a relay. Prefer "nothing you write is
-  uploaded", which is precise.
+- Absolutes about the network: "your data never leaves your device", "nothing
+  leaves your browser", "nothing is uploaded", "nothing you write is uploaded",
+  "runs entirely in your browser", "100% client-side", "no network calls",
+  "never phones home". Importing from a URL can go through our server when a
+  site blocks browsers (the user is asked first), images in a document load
+  from wherever they are hosted unless the user blocks them, and the app checks
+  for updates. Say "your documents stay in your browser" or "no server stores or
+  reads your documents" — both are precise, and they are the app's own wording.
+- "Works offline" with no qualification in long copy — it needs one online
+  visit first. (In a tagline, "works offline" is fine.)
+- Permanence: "forever", "your work can never be lost". Browsers can clear a
+  site's storage (Safari after seven days without a visit, unless the app is
+  installed). The true claim is the protection: the app asks the browser to
+  keep the library and reminds the user to back up.
 
 ---
 

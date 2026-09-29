@@ -8,8 +8,12 @@ and the issue templates, but creating it is an owner action
 until it exists, a report sent there reaches no one (A007).
 
 ## What there is to compromise
-- **No server-side user data.** Documents live in each visitor's browser
-  (IndexedDB / localStorage on the app's origin). The realistic high-impact bug
+- **No documents on a server.** Documents live in each visitor's browser
+  (IndexedDB / localStorage on the app's origin). The server side holds only
+  what hosting keeps anyway: request logs with visitor IP addresses — including
+  the full address of any relayed import, query string and all, in the
+  platform's own logs (the relay's own log line records the host only). The
+  realistic high-impact bug
   is therefore **script execution on markdownstudio.com** (it can read every
   stored document of every visitor who runs it) — through imported content, the
   embed's bridge, a dependency, or the deploy pipeline.
