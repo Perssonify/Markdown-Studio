@@ -569,6 +569,16 @@ describe("large-map frame plan", () => {
     expect(PAINT_EVERY_MS).toBeGreaterThanOrEqual(100);
   });
 
+  it("takes no step in the frame that shows a paint", () => {
+    // That frame restyles and paints the new paths; with a step in it too its
+    // task measured 170-190ms, and a zoom arriving then waited for all of it.
+    expect(plan({ afterPaint: true, lastPaint: 10000 - 16 })).toBe("hold");
+    // Not even when another paint would be due.
+    expect(plan({ afterPaint: true, lastPaint: 0 })).toBe("hold");
+    expect(plan({ afterPaint: false, lastPaint: 10000 - 16 })).toBe("step");
+    expect(plan({ afterPaint: true, large: false })).toBe("step");
+  });
+
   it("does nothing special once the loop has stopped", () => {
     expect(plan({ running: false, holdUntil: 20000 })).toBe("step");
   });

@@ -376,6 +376,8 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
 
   const framesRef = useRef(0);
   const lastPaintRef = useRef(0);
+  /** The previous frame painted a large map (the next one only shows it). */
+  const paintedRef = useRef(false);
   /** Until when a large map's layout holds still for the camera (CAMERA_HOLD_MS). */
   const cameraHoldRef = useRef(0);
   const loop = useCallback(() => {
@@ -386,17 +388,21 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     const plan = planFrame({
       large, running: runningRef.current, now: performance.now(),
       holdUntil: cameraHoldRef.current, lastPaint: lastPaintRef.current,
+      afterPaint: paintedRef.current,
     });
+    paintedRef.current = false;
     if (plan === "hold") {
-      // The user is moving the camera or pointing: no step this frame (nothing
-      // decays and nothing is spent from the step budget — the layout waits).
+      // The user is moving the camera or pointing, or this frame shows the
+      // last paint: no step (nothing decays and nothing is spent from the step
+      // budget — the layout waits).
       rafRef.current = requestAnimationFrame(loop);
       return;
     }
     if (plan === "paint") {
       // A large map's paint and its steps go in DIFFERENT frames (planFrame).
-      // The steps are not lost; they run next frame.
+      // The steps are not lost; they run in the frames that follow.
       lastPaintRef.current = performance.now();
+      paintedRef.current = true;
       recenter(false);
       render();
       rafRef.current = requestAnimationFrame(loop);

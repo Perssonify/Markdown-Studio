@@ -664,10 +664,17 @@ export const CAMERA_HOLD_MS = 300;
  * layout, if one is due; or step it. Never a step and a paint in the same
  * frame: measured at 2,000 notes under 4× CPU throttling, a frame carrying both
  * ran 300-440ms where either alone stayed under 200ms.
+ *
+ * Nor a step in the frame AFTER a paint (`afterPaint`): React commits the
+ * paint in a task of its own, and the next frame is the one that restyles,
+ * lays out and paints the new paths — with a step in it too, that frame's task
+ * measured 170-190ms, and a zoom arriving just then waited for all of it.
  */
-export function planFrame(o: { large: boolean; running: boolean; now: number; holdUntil: number; lastPaint: number }): "hold" | "paint" | "step" {
+export function planFrame(o: {
+  large: boolean; running: boolean; now: number; holdUntil: number; lastPaint: number; afterPaint?: boolean;
+}): "hold" | "paint" | "step" {
   if (!o.large || !o.running) return "step";
-  if (o.now < o.holdUntil) return "hold";
+  if (o.now < o.holdUntil || o.afterPaint) return "hold";
   if (o.now - o.lastPaint >= PAINT_EVERY_MS) return "paint";
   return "step";
 }
