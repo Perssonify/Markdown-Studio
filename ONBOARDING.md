@@ -935,7 +935,7 @@ Drift in the Markdown docs themselves (README, `docs/`, `CLAUDE.md` and the rest
 5. **Hidden settings.** `docs/deployment.md` lists branch protection, Vercel Deployment Checks and Vercel's Bun version as owner settings (A005, A014); `docs/import-relay.md` adds the function's Node version. Whether any of them is set cannot be seen from the repo.
 6. **History claims.** This repository's history starts at the 1.77.0 import (`0fed016`). The commits the docs cite (`84d7099` auth removal, `41e831e…` import point, `2e29275`) belong to the predecessor repository and can't be checked here.
 7. **Missing doc.** Where did `docs/migration-markdown-studio.md` go (`.gitignore:11-12`), and how is the marketing-kit zip regenerated?
-8. **Browser support.** The entry chunk no longer contains a regex lookbehind (A097), but the lazily loaded Find & Replace chunk still does (`src/ui/FindReplace.tsx:132`), so Find fails to load on Safari below 16.4. What is the supported floor? Tailwind v4 already needs Safari 16.4.
+8. **Browser support.** Answered (A097): the floor is Safari/iOS 16.4, Chrome/Edge 111 and Firefox 128, which is what Tailwind v4 needed anyway. Below it `index.html` and `embed.html` show a message instead of loading the app, so the lookbehind still in the lazily loaded Find & Replace chunk (`src/ui/FindReplace.tsx:132`) is above the floor.
 9. **Editor settings.** Is the `js/ts.tsdk.path` key in `.vscode/settings.json` intended? The long-standing key is `typescript.tsdk`.
 
 Answered since 1.77.0:
