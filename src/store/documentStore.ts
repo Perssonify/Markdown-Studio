@@ -1648,3 +1648,41 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     };
   },
 }));
+
+// ─── One editor per page (A106) ──────────────────────────────────────────────
+
+/**
+ * Which mounted editor owns this page's stores. Everything above is a module
+ * singleton, so a SECOND editor mounted while one is running would share the
+ * active document, the hydration mark, parked drafts and the injected storage
+ * — typing in one could be saved as the other's document. Rather than
+ * half-work, a second editor is refused (ui/OneEditorPerPage.tsx): the editor
+ * claims this slot before it touches any store and releases it on unmount, so
+ * unmounting and mounting again (A024) still works.
+ *
+ * `token` is any object that identifies one mounted editor. Claiming again
+ * with the owner's own token succeeds, which is what React StrictMode's
+ * mount → unmount → mount of the same component needs.
+ */
+let editorOwner: object | null = null;
+const editorReleaseListeners = new Set<() => void>();
+
+/** Take the page's editor slot. False when another editor holds it. */
+export function claimEditorInstance(token: object): boolean {
+  if (editorOwner !== null && editorOwner !== token) return false;
+  editorOwner = token;
+  return true;
+}
+
+/** Give the slot back (a no-op for anyone but the owner), then tell waiters. */
+export function releaseEditorInstance(token: object): void {
+  if (editorOwner !== token) return;
+  editorOwner = null;
+  for (const listener of [...editorReleaseListeners]) listener();
+}
+
+/** Be told when the slot frees up, so a refused editor can take over. */
+export function onEditorInstanceReleased(listener: () => void): () => void {
+  editorReleaseListeners.add(listener);
+  return () => { editorReleaseListeners.delete(listener); };
+}
