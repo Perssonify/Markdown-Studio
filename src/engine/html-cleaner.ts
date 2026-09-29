@@ -176,8 +176,9 @@ export function sanitizePastedHtml(html: string): string {
     .replace(/class="[^"]*"/gi, "") // class attributes
     .replace(/id="[^"]*"/gi, "") // id attributes
     .replace(/data-[a-z-]+="[^"]*"/gi, "") // data attributes
-    .replace(/lang="[^"]*"/gi, "") // lang attributes
-    .replace(/dir="[^"]*"/gi, "") // dir attributes
+    // `lang` and `dir` are KEPT: they are how a pasted page says a passage is
+    // Arabic or Hebrew (right-to-left) or in another language. Stripping them
+    // is part of why right-to-left text rendered left-to-right.
     .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "") // on* handlers (double-quoted)
     .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "") // on* handlers (single-quoted)
     .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "") // on* handlers (unquoted)

@@ -12,6 +12,7 @@ import {
   REPLACE_OLD_STYLE,
 } from "./search-colors";
 import { COMPOSITION_STALL_MS } from "../constants";
+import { perLineTextDirection } from "../extensions/cm-bidi";
 import { useUIStore } from "../store/uiStore";
 
 /** Read-only extension pair for the editability compartment. */
@@ -348,6 +349,7 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         lineNumbers(),
         EditorView.lineWrapping,
         listHangingIndent, // wrapped list lines hang-indent under the item text
+        perLineTextDirection, // right-to-left lines read right-to-left (A099)
         EditorState.allowMultipleSelections.of(true), // Find ▸ Find all selects every match
         // REQUIRED for multi-range selections to be VISIBLE: the native DOM
         // selection can only render one contiguous range, so without drawSelection
