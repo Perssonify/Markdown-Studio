@@ -2,12 +2,14 @@
 //
 // `dist/` ships a stylesheet a consumer imports into an app that already has
 // styles, and the claim in CLAUDE.md is that doing so does not restyle their
-// page. `scope-css.test.js` pins the TRANSFORM — that the base layer comes out
-// wrapped in `:where(.pf-app, …)`. Nothing loaded the built file into a real
-// host document and measured it, which is the claim a consumer actually cares
-// about, and the one that breaks if the build wiring is ever changed (the scope
-// step is wired into `vite.config.ts` ONLY, so a copy-paste into another config
-// or a refactor of the plugin list silently un-scopes the published CSS).
+// page. `scope-css.test.js` pins the TRANSFORM — the base layer wrapped in
+// `:where(.pf-app, …)`, the design tokens defined on the editor's roots instead
+// of `:root`, page-level rules confined to `.pf-app`. This loads the BUILT file
+// into a real host document and measures it, which is the claim a consumer
+// actually cares about, and the one that breaks if the build wiring is ever
+// changed (the scope step, `scopeLibraryStylesheet`, is wired into
+// `vite.config.ts` ONLY, so a copy-paste into another config or a refactor of
+// the plugin list silently un-scopes the published CSS).
 import fs from "node:fs";
 import path from "node:path";
 import { serve, open, runCase, ROOT } from "../lib.mjs";
@@ -91,15 +93,39 @@ runCase("library", async (rep, onClose) => {
     "nothing inside .pf-app changed — the base layer may have been dropped rather than scoped");
   rep.note(`inside .pf-app: ${reached.length} reset property changes`);
 
-  // The theme layer is deliberately NOT scoped: portalled menus, dialogs and
-  // toasts render outside the editor container and resolve their tokens from
-  // :root. If that ever gets scoped too, every one of them renders unthemed.
-  const tokens = await pg.evaluate(() => {
-    const cs = getComputedStyle(document.documentElement);
-    return ["--background", "--foreground", "--border", "--primary"]
-      .map((v) => [v, cs.getPropertyValue(v).trim()])
-      .filter(([, val]) => val !== "");
-  });
-  rep.check("theme tokens are defined on :root, not scoped away",
-    tokens.length >= 3, JSON.stringify(tokens));
+  // ── the design tokens ───────────────────────────────────────────────────
+  // They used to be written on :root and .dark — the names a shadcn/Tailwind
+  // host uses for its own design system — so importing the stylesheet
+  // recoloured the host page. They are now DEFINED on the editor's roots
+  // (build/scope-css.mjs), and the host's are left alone.
+  rep.check("the host's own tokens on :root / .dark are not overwritten",
+    JSON.stringify(after.tokens.root) === JSON.stringify(before.tokens.root),
+    `${JSON.stringify(before.tokens.root)} → ${JSON.stringify(after.tokens.root)}`);
+  rep.check("the host page keeps its scrollbar",
+    after.htmlScrollbar === before.htmlScrollbar, `${before.htmlScrollbar} → ${after.htmlScrollbar}`);
+
+  // …while everything of ours still resolves them. The editor inside the
+  // integration wrapper must get the EDITOR's radius and background (not the
+  // host's 3px / rgb), and still the wrapper's inline accent: a nested root
+  // re-declaring the defaults would swallow `accentColor`.
+  const { editor, menu, root } = after.tokens;
+  rep.check("the editor subtree resolves the editor's tokens, not the host's",
+    editor["--radius"] !== "" && editor["--radius"] !== root["--radius"] &&
+      editor["--background"] !== "" && editor["--background"] !== root["--background"],
+    JSON.stringify({ editor, root }));
+  rep.check("the integration wrapper's inline accent still reaches the editor",
+    editor["--primary"] === "rgb(11, 22, 33)", JSON.stringify(editor));
+  // Portalled menus, dialogs and toasts render on <body>, outside every editor
+  // container. They are roots too — if they lost the tokens, every one of them
+  // would render unthemed.
+  rep.check("a portalled surface outside the editor still resolves the tokens",
+    menu["--border"] !== "" && menu["--background"] !== "" && menu["--background"] !== root["--background"],
+    JSON.stringify(menu));
+  // The fixture's host is `<html class="dark">` and the wrapper is
+  // `data-theme="light"`: the editor must follow its own wrapper (light), the
+  // portal the only switch it has (the host's dark). Equal backgrounds would
+  // mean an ancestor's switch beat the closer one.
+  rep.check("the theme switch closest to the editor wins",
+    editor["--background"] !== menu["--background"],
+    JSON.stringify({ editor: editor["--background"], menu: menu["--background"] }));
 });

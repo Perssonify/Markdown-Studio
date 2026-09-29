@@ -66,6 +66,12 @@ describe("the library build config", () => {
     expect(build.rolldownOptions?.external).toBeUndefined();
   });
 
+  it("scopes the published stylesheet (base layer, tokens, page-level rules)", () => {
+    // Wired into this config ONLY — the app and embed own their page. A refactor
+    // of the plugin list here would silently ship a stylesheet that restyles hosts.
+    expect(pluginNames).toContain("pf-scope-library-stylesheet");
+  });
+
   it("lets Vite name chunks per format (.js for ES, .cjs for CJS)", () => {
     expect(build.rollupOptions?.output?.chunkFileNames).toBeUndefined();
   });

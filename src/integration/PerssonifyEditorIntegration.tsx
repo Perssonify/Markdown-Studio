@@ -412,17 +412,23 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
         enableSystem={false}
         enableColorScheme={false}
       >
-        <ErrorBoundary isDark={isDark}>
-          {/* Scope accent/theme overrides to the editor subtree so they never
-              leak into the host page. data-palette + data-theme on the same
-              element satisfy the palette's (light and dark) attribute selectors;
-              inline CSS vars (accentColor/themeVars) take highest precedence.
-              `display: contents` keeps the wrapper out of the layout. */}
-          <div
-            style={{ display: "contents", ...themeStyle }}
-            {...(accentState ? { "data-palette": accentState } : {})}
-            data-theme={isDark ? "dark" : "light"}
-          >
+        {/* Scope accent/theme overrides to the editor subtree so they never
+            leak into the host page. data-palette + data-theme on the same
+            element satisfy the palette's (light and dark) attribute selectors;
+            inline CSS vars (accentColor/themeVars) take highest precedence.
+            `display: contents` keeps the wrapper out of the layout.
+            `data-pf-root` makes it the element the published stylesheet DEFINES
+            the design tokens on for this subtree (they are no longer written
+            on the host's :root — see build/scope-css.mjs). It sits OUTSIDE the
+            error boundary so the crash card, which is styled with the same
+            tokens, still gets them. */}
+        <div
+          data-pf-root=""
+          style={{ display: "contents", ...themeStyle }}
+          {...(accentState ? { "data-palette": accentState } : {})}
+          data-theme={isDark ? "dark" : "light"}
+        >
+          <ErrorBoundary isDark={isDark}>
             <PerssonifyEditor
             _integrationRef={internalRef}
             storageAdapter={storageAdapter}
@@ -455,8 +461,8 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
               emitToHost("onGraphUpdate", data);
             }}
             />
-          </div>
-        </ErrorBoundary>
+          </ErrorBoundary>
+        </div>
       </ThemeProvider>
     );
   }
