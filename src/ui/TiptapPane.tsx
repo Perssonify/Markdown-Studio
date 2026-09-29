@@ -23,6 +23,7 @@ import { COMPOSITION_STALL_MS } from "../constants";
 import { useUIStore } from "../store/uiStore";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";
+import { BidiAuto } from "../extensions/BidiAuto";
 import { EmojiNode } from "../extensions/EmojiNode";
 import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
 import { Callout } from "../extensions/Callout";
@@ -310,6 +311,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         Table.configure({ resizable: false }),
         TableRow, TableCell, TableHeader, TableCellAlign,
         SearchHighlightExtension,
+        BidiAuto, // dir="auto" per text block — view-only, not in the schema
       ],
       content: defaultValue || "",
       editorProps: {
