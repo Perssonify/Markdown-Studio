@@ -51,7 +51,7 @@ On top of editing, it provides:
 
 | Area | Technology | Declared (`package.json`) | Resolved (`bun.lock`) | Notes |
 |---|---|---|---|---|
-| Language | TypeScript, strict mode | `^5.9.3` | 5.9.3 | Only `src/` is type-checked (`tsconfig.json:39`). Tests, e2e, `api/`, `build/` and `scripts/` are plain JS. `noImplicitAny` is off. |
+| Language | TypeScript, strict mode | `^5.9.3` | 5.9.3 | Only `src/` is type-checked (`tsconfig.json:39`). Tests, e2e, `api/`, `build/` and `scripts/` are plain JS. `noImplicitAny` is on; `src/types/` holds declarations for untyped packages (turndown). |
 | UI runtime | React, React DOM | dev `^18.3.1`, peer `^18.0.0` | 18.3.1 | `@types/react` / `@types/react-dom` are `^18.3.0` (18.3.31 / 18.3.7), matching the runtime. |
 | Rich-text engine | TipTap 3 (ProseMirror via `@tiptap/pm`) | every `@tiptap/*` package at `3.31.3` (dev), peer `^3.31.3` | 3.31.3 | One version across the set, pinned by `pkg-lockfile.test.js`. `@tiptap/extension-list` is declared. |
 | Markdown pane | CodeMirror 6, `@lezer/highlight` | view `^6.39.14`, state `^6.5.4`, lang-markdown `^6.5.0`, commands, search, language | 6.39.14, 6.5.4, 6.5.0 | Peers of the library. |

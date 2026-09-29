@@ -37,7 +37,7 @@
 
 ## Coding standards
 
-- **TypeScript strict** is on ([tsconfig.json](../tsconfig.json)) — but note `noImplicitAny: false`, so `any` is tolerated (the linter counts explicit ones as warnings); prefer real types in new code anyway.
+- **TypeScript strict** is on ([tsconfig.json](../tsconfig.json)), including `noImplicitAny`: an untyped parameter or an untyped import fails the type gate. A package that ships no types gets a small declaration in `src/types/` (see `turndown.d.ts`) rather than a new `@types/` dependency. Explicit `any` is still tolerated (the linter counts it as a warning); prefer real types in new code.
 - **Lint** ([eslint.config.js](../eslint.config.js)): the stock `@eslint/js` + `typescript-eslint` recommended sets, with `react-hooks/rules-of-hooks` as an error and `exhaustive-deps` as a warning — hook dependencies are where this codebase's worst bugs lived (see the sync-engine landmine in [gotchas.md](gotchas.md)). A deliberately omitted dependency gets an `eslint-disable-next-line` with a comment saying why. The bar is: zero lint errors, type-checks clean, tests pass, matches existing style.
 - **Path alias:** import from `@/…` (maps to `src/`).
 - **State goes through stores**, not component-local globals — use `documentStore` / `uiStore` / `editorStore`.
