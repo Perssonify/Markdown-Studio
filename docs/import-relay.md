@@ -13,12 +13,12 @@
 
 | What | File | Notes |
 |------|------|-------|
-| **The relay itself** | [`api/import.js`](../api/import.js) | Vercel Serverless Function, Node runtime. Default export is the handler; `isBlockedIp` and `assertPublicUrl` are exported for tests. |
-| **The client that calls it** | [`src/store/url-import.ts`](../src/store/url-import.ts) | `fetchDirectOrProxy` — tries a direct browser fetch first, falls back to the relay. `IMPORT_RELAY = "/api/import?url="`. |
+| **The relay itself** | [`api/import.js`](../api/import.js) | Vercel Serverless Function, Node runtime. Default export is the handler; `isGlobalUnicast`, `isBlockedIp`, `assertPublicUrl`, `MAX_BYTES` and `TOO_LARGE_MESSAGE` are exported for tests. |
+| **The client that calls it** | [`src/store/url-import.ts`](../src/store/url-import.ts) | `fetchDirectOrProxy` — tries a direct browser fetch first, falls back to the relay. `IMPORT_RELAY = "/api/import?url="`. A relay `413` is shown to the user as the relay's own message; any other non-2xx falls through to the download-and-drop guidance. |
 | **Provider URL rewriting** | [`src/store/import-url-normalize.ts`](../src/store/import-url-normalize.ts) | Turns share links into raw-download links *before* either fetch path runs. |
 | **The UI** | [`src/ui/UrlImportDialog.tsx`](../src/ui/UrlImportDialog.tsx) | Discloses to the user when the relay was used ("first-party — not a third-party proxy"). |
-| **Tests** | [`src/__tests__/import-relay.test.js`](../src/__tests__/import-relay.test.js) | SSRF blocklist, `assertPublicUrl`, the `Sec-Fetch-Site` gate, response hardening, the port allowlist. |
-| **Routing** | [`vercel.json`](../vercel.json) | The SPA rewrite is `/((?!api/).*)` — the `api/` exclusion is what keeps this function reachable. Delete it and every relay call returns `index.html`. |
+| **Tests** | [`src/__tests__/import-relay.test.js`](../src/__tests__/import-relay.test.js), [`src/__tests__/ops-relay-client.test.js`](../src/__tests__/ops-relay-client.test.js) | The global-unicast allowlist (incl. the IPv4-in-IPv6, Teredo, 6to4, multicast/reserved and decimal/octal forms), `assertPublicUrl`, the `Sec-Fetch-Site` gate, response hardening, the port allowlist, the 4 MB cap, the log line, CORS pinning; and the client's handling of a `413`. |
+| **Routing** | [`vercel.json`](../vercel.json) | The SPA rewrite is `/((?!api/\|assets/).*)` — the `api/` exclusion is what keeps this function reachable. Delete it and every relay call returns `index.html`. `functions["api/import.js"].maxDuration` caps what one slow upstream can cost. |
 
 There is **no other server code in the repo.** If you are looking for a backend, this is it.
 
@@ -74,11 +74,13 @@ fetch(url)  ── succeeds ──▶   bytes ──▶ ingest
       │  4. per-IP rate limit                       │
       │  5. parse url param; port ∈ {80,443}        │
       │  6. safeFetch: for each hop (≤5)            │
-      │       assertPublicUrl → DNS → IP blocklist  │
+      │       assertPublicUrl → DNS →               │
+      │         global-unicast ALLOWLIST            │
       │       pin those IPs to the connection       │
       │       fetch with redirect:"manual"          │
-      │  7. readCapped: 25 MB hard ceiling          │
+      │  7. readCapped: 4 MB hard ceiling (413)     │
       │  8. respond octet-stream + attachment + CSP │
+      │  9. ONE JSON log line (every path)          │
       └─────────────────────────────────────────────┘
              │
              ▼
@@ -89,13 +91,14 @@ fetch(url)  ── succeeds ──▶   bytes ──▶ ingest
 
 | Knob | Value | Where |
 |------|-------|-------|
-| Max response size | 25 MB (`MAX_BYTES`) | `api/import.js` — headroom over the client's 20 MB archive ceiling |
+| Max response size | 4 MB (`MAX_BYTES`) → `413` + `TOO_LARGE_MESSAGE` | `api/import.js` — a Vercel Function cannot return a body much over 4.5 MB, so this is the real ceiling for every relayed import (Google Drive always goes through the relay) |
+| Function wall clock | 25 s (`maxDuration`) | `vercel.json` — the platform backstop above the 20 s upstream timeout |
 | Upstream timeout | 20 s (`TIMEOUT_MS`) | `api/import.js` |
 | Client timeout | 15 s (`URL_TIMEOUT_MS`) | `src/store/url-import.ts` — so the client gives up first |
 | Redirect hops | 5 (`MAX_HOPS`) | `api/import.js` |
-| Rate limit | 40 req / 60 s per IP (`RATE_MAX`) | `api/import.js` — in-memory, **per warm instance** |
-| Client text cap | 5 MB (`MAX_URL_BYTES`) | `src/store/url-import.ts` |
-| Client archive cap | 20 MB (`MAX_ARCHIVE_BYTES`) | `src/store/url-import.ts` |
+| Rate limit | 40 req / 60 s per IP (`RATE_MAX`) | `api/import.js` — in-memory, **per warm instance**; see [Operating it](#operating-it-owner-setup) for the real one |
+| Client text cap | 5 MB (`MAX_URL_BYTES`) | `src/store/url-import.ts` — reachable only on a DIRECT fetch; through the relay the 4 MB cap wins |
+| Client archive cap | 20 MB (`MAX_ARCHIVE_BYTES`) | `src/store/url-import.ts` — likewise direct-fetch only |
 
 ---
 
@@ -110,17 +113,30 @@ vector. Each control below exists because of one of those.
 The attack is `?url=http://169.254.169.254/latest/meta-data/` (cloud credentials),
 or any address on the deployment's internal network.
 
-- **`isBlockedIp`** refuses loopback, `0/8`, `10/8`, `172.16/12`, `192.168/16`,
-  link-local `169.254/16` (which is also the cloud-metadata address), and CGNAT
-  `100.64/10`. On the IPv6 side: `::`, `::1`, `fe80::/10` link-local, `fc00::/7`
-  unique-local — **and the IPv4-embedded forms**, which are the classic bypass:
-  `::ffff:127.0.0.1` (mapped), `64:ff9b::/96` (NAT64) and `2002::/16` (6to4) are
-  unwrapped to their underlying IPv4 and re-checked.
+- **`isGlobalUnicast` is an ALLOWLIST.** An address is fetchable only when it is
+  positively identified as global unicast; `isBlockedIp` is simply its
+  complement. It replaced a blocklist that had to name every special range and
+  did not — `::127.0.0.1` (IPv4-compatible), `::ffff:0:127.0.0.1` (IPv4-translated),
+  Teredo, multicast and reserved space all passed it.
+  - **IPv4:** everything except the IANA special-purpose blocks that are not
+    globally reachable (`0/8`, `10/8`, `100.64/10` CGNAT, `127/8`, `169.254/16`
+    link-local — also the cloud-metadata address — `172.16/12`, `192.0.0/24`,
+    the three TEST-NETs, `192.88.99/24`, `192.168/16`, `198.18/15`), multicast
+    `224/4` and reserved `240/4` (incl. `255.255.255.255`).
+  - **IPv6:** only `2000::/3`, minus `2001::/23` (IETF assignments, incl. Teredo
+    `2001::/32`), `2001:db8::/32` and `3fff::/20` (documentation) and `2002::/16`
+    (6to4 — a tunnel, not a destination). Everything outside `2000::/3` — `::`,
+    `::1`, NAT64, ULA, link-local, multicast, and every IPv4-in-IPv6 wrapper —
+    is refused by that one test. The single exception is the plain mapped form
+    `::ffff:a.b.c.d`, which is unwrapped and judged as the IPv4 it spells.
+  - **Numeric host spellings** (`2130706433`, `0177.0.0.1`, `0x7f.1`, `127.1`)
+    need no special case: the WHATWG URL parser normalises them to dotted-quad
+    before the relay sees the hostname. The tests pin that too.
 - **Checked after DNS resolution, not on the string.** `assertPublicUrl` resolves
   the hostname with `dns.lookup(..., {all:true})` and rejects if *any* returned
-  address is blocked. A hostname that resolves to `127.0.0.1` is refused.
-- **Unparseable input fails closed** — `isBlockedIp` returns `true` for anything
-  that is not a valid IP.
+  address is not global unicast. A hostname that resolves to `127.0.0.1` is refused.
+- **Unparseable input fails closed** — anything that is not a valid IP literal is
+  not global unicast.
 
 ### 2. DNS rebinding — the TOCTOU on top of the SSRF check
 
@@ -137,19 +153,29 @@ public URL that 302s to `http://169.254.169.254/` is caught on hop 2. The port
 allowlist lives inside `assertPublicUrl` for the same reason — put it only on the
 initial URL and a redirect to `http://host:6379` walks straight through.
 
-### 4. Open proxy — "use their server to fetch my traffic"
+### 4. Proxy abuse — "use their server to fetch my traffic"
+
+**Be precise about what this section claims.** The relay is *not* closed to
+non-browser clients: `curl -H 'sec-fetch-site: none' …/api/import?url=…` gets a
+`200` for any public URL. Earlier versions of this page, and of `SECURITY.md`,
+said the `Sec-Fetch-Site` check made it "not an open proxy"; that was wrong.
+What the controls actually buy:
 
 - **`Sec-Fetch-Site` must be `same-origin` or `none`.** It is a forbidden header,
-  so page JavaScript cannot spoof it; the app's own fetch sends `same-origin`, a
-  direct navigation sends `none`. **An absent header is rejected** — that is the
-  signature of a non-browser client (curl, another server), which is exactly the
-  abuse path.
-- **Ports 80 and 443 only.** A relay that connects to any port is a port scanner
-  even against public hosts.
-- **Per-IP rate limit**, best-effort (see Limitations).
-- **`Access-Control-Allow-Origin` is echoed only for matching origins**, from a
-  regex that **requires a hyphen** before any suffix — `markdown-studioevil.vercel.app`
-  does not match, while real preview URLs (`markdown-studio-git-…`) do.
+  so *page JavaScript* cannot set it. That stops a cross-site page from using a
+  visitor's browser to drive the relay — nothing more. An absent header is
+  rejected, which filters careless scripts, not deliberate ones.
+- **What a determined client gets is a bounded proxy:** public (global-unicast)
+  destinations only, ports 80/443 only, ≤ 4 MB per response, ≤ 20 s upstream,
+  ≤ 5 redirects, and a best-effort 40 req/min per IP *per warm instance*.
+- **The real rate limit and cost control live in the platform**, not in this
+  file — see [Operating it](#operating-it-owner-setup). Until those are set up,
+  treat the relay as a small, bounded open proxy.
+- **`Access-Control-Allow-Origin` is echoed only for the two production
+  origins, exactly** (`https://markdownstudio.com`, `https://www.markdownstudio.com`).
+  A preview deployment calls its own relay same-origin and needs no grant; the
+  old `markdown-studio-*.vercel.app` pattern bought nothing, and
+  `markdown-studio.vercel.app` itself belongs to a different product.
 
 ### 5. XSS via reflected content type — the one that was a real bug
 
@@ -188,11 +214,12 @@ the relay cannot be used to read a response it just refused to hand over.
 bun run test src/__tests__/import-relay.test.js
 ```
 
-They import `isBlockedIp`, `assertPublicUrl` and the handler directly and drive the
-handler with fake `req`/`res` objects — **no network, no Vercel**. That is why the
-suite covers the address classifier, the `Sec-Fetch-Site` gate, response hardening
-and the port allowlist, and does *not* cover redirect-chain behaviour end to end
-(see Limitations).
+They import `isGlobalUnicast`, `isBlockedIp`, `assertPublicUrl` and the handler
+directly and drive the handler with fake `req`/`res` objects — **no network, no
+Vercel**. That is why the suite covers the address allowlist, the `Sec-Fetch-Site`
+gate, response hardening, the port allowlist, the 4 MB cap (buffered AND streamed
+bodies), the log line and CORS pinning, and does *not* cover redirect-chain
+behaviour end to end (see Limitations).
 
 ### Locally
 
@@ -209,11 +236,13 @@ npx vercel dev
 bun run test src/__tests__/import-relay.test.js
 ```
 
-Against a deployment, the endpoint is reachable only as a first-party request —
-`curl https://…/api/import?url=…` is **supposed** to return `403`, because curl
-sends no `Sec-Fetch-Site`. To test by hand, open the deployed app and use
-**Tools ▸ Import from URL** with a CORS-blocked host (a Google Drive share link is
-the canonical case), then confirm the dialog shows the "server relay" disclosure.
+Against a deployment, `curl https://…/api/import?url=…` returns `403` because curl
+sends no `Sec-Fetch-Site` — but `curl -H 'sec-fetch-site: none' …` returns the
+file. That is expected (see §4); it is why the platform rate limit matters. To
+test by hand, open the deployed app and use **Tools ▸ Import from URL** with a
+CORS-blocked host (a Google Drive share link is the canonical case), then confirm
+the dialog shows the "server relay" disclosure and that the request produced one
+`"evt":"import_relay"` line in the deployment's logs.
 
 ### Adding a control
 
@@ -225,6 +254,56 @@ the canonical case), then confirm the dialog shows the "server relay" disclosure
    hop 0.
 3. Add the test to `import-relay.test.js`, then **break the control and confirm the
    test fails.** A guard with a test that passes either way is not a guard.
+4. Give every new refusal a `reason` code, so it shows up in the log line.
+
+---
+
+## Operating it (owner setup)
+
+The code bounds what ONE request can cost. Nothing in a stateless function can
+bound what a million of them cost, so these steps are part of running the relay,
+not optional polish. None of them needs a code change; they are Vercel project
+settings an owner has to make once.
+
+1. **Firewall rate limit (do this first).** Vercel dashboard → the project →
+   **Firewall → Configure → Add rule**. Condition: *Request Path* **starts with**
+   `/api/import`. Action: **Rate Limit**, fixed window **60 s**, **20 requests**,
+   keyed on **IP**, then **Deny (429)**. It runs at the edge, before the function
+   is invoked, so it is also the only limit that saves money. (Rate-limit rules
+   depend on the plan; if the project's plan lacks them, use the kill switch in
+   step 5 as the incident response and move the counter into code — step 2.)
+2. **A shared counter, if the platform rule is not available.** The in-memory
+   `rateBuckets` resets per instance. A real quota needs shared state — Upstash
+   Redis from the Vercel Marketplace with a sliding-window limiter is the usual
+   shape. That is a new dependency, so it is a decision for the owner (and G6's
+   dependency policy), not something to slip in: key it on IP **and** add a
+   coarse global ceiling, and fail OPEN to the in-memory limiter if the store is
+   unreachable, so a Redis outage does not take imports down.
+3. **Spend management.** Team **Settings → Billing → Spend Management**: set a
+   monthly budget with notifications at 50 / 75 / 100 %. Decide deliberately
+   whether hitting it should pause production — that pauses the whole app, not
+   just the relay. Add usage alerts for **Function invocations** and **Fast Data
+   Transfer**, the two meters relay abuse moves.
+4. **Watch the log line.** Every request writes one JSON line:
+   `{"evt":"import_relay","method","sfs","host","finalHost","hops","status","bytes","ms","reason"}`
+   — hosts only, never a path or query, and no client IP (the platform's own
+   request log already has it). Search the deployment logs for
+   `"evt":"import_relay"`, or add a Log Drain to wherever alerts live. Signs of
+   abuse: a burst of `rate_limited`; `blocked_address` / `blocked_host` (SSRF
+   probing); a high share of `sfs:"none"` (a browser only sends that on a direct
+   navigation, which the app never does — it is almost always a script); many
+   different `host`s at a steady rate.
+5. **Kill switch.** If the relay is being abused faster than you can tune a rule,
+   add a Firewall rule that **denies** `/api/import` outright. It takes effect
+   without a deploy, and the app degrades exactly as it does on a static host:
+   direct imports keep working, CORS-blocked hosts get the download-and-drop
+   guidance.
+6. **Runtime.** `api/import.js` imports `undici` at runtime, so it must be a
+   production dependency, and the project's Node.js version should be pinned
+   (Project Settings → Node.js Version, matching `engines.node`) so a platform
+   default change cannot move it underneath the pinned-dispatcher code.
+
+The incident procedure is [runbooks/relay-abuse.md](runbooks/relay-abuse.md).
 
 ---
 
@@ -234,7 +313,10 @@ Stated plainly, because the next person will hit them:
 
 - **The rate limit is per warm instance, in memory.** `rateBuckets` is a `Map` in
   a serverless function. Scale out, or get a cold start, and the counter resets.
-  It raises the cost of casual abuse; it is not a real quota.
+  It raises the cost of casual abuse; it is not a real quota — the Firewall rule
+  in [Operating it](#operating-it-owner-setup) is.
+- **It is usable as a (bounded) proxy by any HTTP client.** See §4: the
+  `Sec-Fetch-Site` gate only constrains browsers.
 - **`x-forwarded-for` is trusted for the client IP.** Behind Vercel that is set by
   the platform, but the code does not verify the hop count. On a different host,
   or behind an extra proxy, it is spoofable — and the rate limit is the only thing
@@ -248,7 +330,12 @@ Stated plainly, because the next person will hit them:
 - **No response-content validation.** The relay returns bytes; deciding whether
   they are a document is entirely the client's ingest pipeline
   ([`src/store/ingest.ts`](../src/store/ingest.ts)). The relay will happily fetch
-  25 MB of anything.
+  4 MB of anything.
+- **4 MB is the ceiling for every relayed import**, including Google Drive, which
+  always goes through the relay. The client's 20 MB archive and 5 MB text caps
+  only apply to hosts the browser can fetch directly. Raising it is not a code
+  change: a Vercel Function cannot return a body much over 4.5 MB, buffered or
+  streamed through the standard response.
 - **Redirect handling is not covered end to end by tests.** `assertPublicUrl` is
   tested directly and is called per hop, but there is no test that drives
   `safeFetch` through an actual redirect chain with a stubbed `fetch`.
@@ -256,9 +343,11 @@ Stated plainly, because the next person will hit them:
   plain static host means `/api/import` 404s; the client falls through to the
   download-and-drag guidance. The npm library has no relay either — a host app
   embedding the editor would need to provide its own.
-- **The `ALLOWED_ORIGIN` regex is hardcoded to this project's domains.** Fork the
-  repo, deploy to your own domain, and relayed responses become unreadable
-  cross-origin until you edit that constant. Same-origin requests are unaffected.
+- **`ALLOWED_ORIGIN` names this project's two production origins exactly.** A
+  fork on its own domain works same-origin without touching it; only a
+  deliberately CROSS-origin reader would need an edit — and such a request is
+  refused by the `Sec-Fetch-Site` gate first, so today the grant is defence in
+  depth, not a working path.
 - **Timeouts are wall-clock, not byte-rate.** A host that trickles bytes for 19.9
   seconds holds a connection the whole time. There is no slow-loris guard beyond
   the total timeout.
@@ -274,10 +363,10 @@ Roughly in order of value per unit of work.
 1. **Cover the redirect chain with tests.** Inject `fetch` into `safeFetch`, drive
    a chain that ends on a blocked address, and assert it is refused at the hop it
    should be. This is the highest-risk uncovered path in the file.
-2. **Stream instead of buffering.** `readCapped` accumulates the whole body in
-   memory before responding. Piping the upstream stream to the response (still
-   counting bytes against the cap) would cut memory and time-to-first-byte, and
-   make the 25 MB ceiling much cheaper to raise.
+2. **Stream instead of buffering.** `readCapped` accumulates the (≤ 4 MB) body in
+   memory before responding. Piping the upstream stream to the response, still
+   counting bytes, would cut time-to-first-byte — it would not lift the
+   platform's response-size ceiling.
 3. **Conditional requests.** Forward `If-None-Match`/`If-Modified-Since` and honour
    `304`, so re-importing an unchanged document is nearly free.
 4. **Better format hints.** The client already sniffs; forwarding
@@ -300,11 +389,12 @@ Roughly in order of value per unit of work.
 9. **Cap total egress per instance** (a rolling byte counter), so the relay cannot
    be used as a bandwidth amplifier even within the request-count limit.
 10. **Make `ALLOWED_ORIGIN` configurable** via an environment variable with the
-    current regex as the default, so a fork does not have to patch source. This is
-    the only place the relay knows the deployment's identity.
-11. **Structured refusal logging.** Today a refusal returns a status and vanishes.
-    Emitting a one-line structured log per refusal (reason, host, IP) makes abuse
-    visible; without it, nobody will ever know the relay is being probed.
+    two production origins as the default, if a cross-origin reader ever becomes
+    a real use case. This is the only place the relay knows the deployment's
+    identity.
+11. ~~Structured refusal logging.~~ Done: one JSON line per request, every path
+    (see [Operating it](#operating-it-owner-setup)). What is still missing is an
+    alert on top of it, which is a platform setting.
 
 **Replacing it**
 
@@ -314,7 +404,9 @@ and worth preserving exactly:
 - `GET /api/import?url=<encoded absolute URL>`
 - `200` with the **raw bytes** and a non-renderable content type
 - the upstream type in `X-Upstream-Content-Type`
-- any non-`2xx` means "fall through to the download-and-drag guidance"
+- `413` with `{ "error": "<message for the user>" }` means "too large for the
+  relay" — the client shows that message
+- any other non-`2xx` means "fall through to the download-and-drag guidance"
 
 Everything else in `api/import.js` is implementation.
 

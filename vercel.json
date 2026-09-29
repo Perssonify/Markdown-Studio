@@ -3,6 +3,9 @@
   "outputDirectory": "dist-app",
   "framework": "vite",
   "installCommand": "bun install",
+  "functions": {
+    "api/import.js": { "maxDuration": 25 }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],

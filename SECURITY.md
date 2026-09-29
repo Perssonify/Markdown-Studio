@@ -66,9 +66,11 @@ no bug bounty.
 hardened; anything that gets past one of these controls is a valid report:
 
 - **SSRF.** `http(s)` only; `localhost`, `*.local` and `*.internal` refused;
-  private, loopback, link-local, CGNAT and cloud-metadata addresses refused
-  *after* DNS resolution, including IPv6 loopback/ULA/link-local and the
-  IPv4-in-IPv6 forms (mapped, NAT64, 6to4).
+  the resolved address must be **global unicast** — an allowlist, checked
+  *after* DNS resolution, so private, loopback, link-local, CGNAT,
+  cloud-metadata, multicast, reserved and documentation space are refused in
+  both families, as is every IPv4-in-IPv6 wrapper except the plain
+  `::ffff:a.b.c.d` mapping (which is judged as the IPv4 it spells).
 - **Per-hop revalidation.** Redirects are followed manually and every hop is
   re-validated (scheme, port, host, resolved addresses).
 - **DNS rebinding.** The vetted IPs are pinned to the connection through an
@@ -76,17 +78,22 @@ hardened; anything that gets past one of these controls is a valid report:
   between validation and connect (TOCTOU).
 - **Port allowlist.** Only ports 80 and 443, on the initial URL *and* on every
   redirect hop.
-- **First-party gate.** `Sec-Fetch-Site` must be `same-origin` or `none`; an
-  absent header (non-browser client) is refused, so the relay is not an open
-  proxy. Reads are CORS-restricted to this project's own origins.
+- **First-party gate.** `Sec-Fetch-Site` must be `same-origin` or `none`, so a
+  cross-site page cannot use a visitor's browser to drive the relay, and reads
+  are CORS-restricted to the two production origins exactly. This does **not**
+  stop a non-browser client, which can send any header it likes: to a script
+  the relay is a bounded proxy (public destinations, ports 80/443, ≤ 4 MB,
+  ≤ 20 s), and volume is limited at the platform. Using it as that bounded proxy
+  is known and not a finding; getting it to exceed one of those bounds is.
 - **Response neutralisation.** The upstream `Content-Type`/`Content-Disposition`
   are never reflected; responses are forced to
   `application/octet-stream` + `Content-Disposition: attachment` +
   `Content-Security-Policy: default-src 'none'; sandbox` + `nosniff`, so a
   same-origin navigation to `/api/import?url=…` cannot render attacker HTML on
   our origin.
-- **Resource bounds.** Hard byte cap, request timeout, redirect-hop cap and a
-  best-effort per-IP rate limit.
+- **Resource bounds.** A 4 MB response cap, request timeout, redirect-hop cap and
+  a best-effort per-IP rate limit, with the durable rate limit in the platform
+  firewall.
 
 **The import / ingest path (client side).** Content arriving from a file, an
 archive, a URL import or a paste is untrusted:
