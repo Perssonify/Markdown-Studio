@@ -7,6 +7,7 @@ import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
+import { SkipToEditor } from "./ui/SkipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
@@ -136,6 +137,9 @@ export function App() {
 
     return (
         <ErrorBoundary isDark={isDark}>
+          {/* First stop on the page (A094): past the header, menus, toolbar
+              and library straight into the document. */}
+          <SkipToEditor />
           {/* Viewport-locked shell: header + editor must sum to exactly 100dvh.
               Without this the editor alone was viewport-height, the page gained
               a scrollbar of exactly the header height, and any caret scroll
