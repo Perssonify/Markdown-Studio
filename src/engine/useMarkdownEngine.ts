@@ -173,11 +173,17 @@ export function createMarkdownEngine(
     return cached;
   });
 
-  const tdInline = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*" });
+  // `hr: "---"`: turndown's default `* * *` rewrote every thematic break the
+  // user typed on the first rich-pane edit. Its rule always emits the break
+  // between blank lines, so `---` cannot read as a setext underline or open
+  // front matter.
+  const options = { headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*", hr: "---" } as const;
+
+  const tdInline = new TurndownService(options);
   addBaseRules(tdInline);
   addInlineStyleRule(tdInline);
 
-  const tdClean = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*" });
+  const tdClean = new TurndownService(options);
   addBaseRules(tdClean);
 
   return {
@@ -187,13 +193,12 @@ export function createMarkdownEngine(
         preprocessMarkdown(md, {
           taskLists: features.taskLists,
           frontmatter: true,
-          // Internal links are a core feature of this editor, but the
-          // renderer had never enabled them — so [[Doc]] / [[Doc#Heading]]
-          // showed as plain text in the rich pane (no styling, no click
-          // target). Turn them on so wiki links and heading anchors
-          // actually render and are clickable; the turndown wikiLink rule
-          // round-trips them back to source.
-          wikiLinks: true,
+          // Wiki links / heading anchors are rendered by the marked extension
+          // in build-marked.ts (so they can never land inside code); this
+          // pass only protects an alias's `|` from GFM table cell splitting.
+          wikiLinkTablePipes: true,
+          // Undocumented and opt-in: see PreprocessFeatures.
+          curlyBraceFormatting: features.curlyBraceFormatting === true,
         }),
         { async: false }
       ) as string;

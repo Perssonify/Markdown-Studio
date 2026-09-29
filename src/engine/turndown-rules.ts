@@ -35,6 +35,25 @@ export const BLOCK_ELEMENTS = new Set([
 const isBlockElement = (el: Element): boolean =>
   BLOCK_ELEMENTS.has(el.nodeName) || el.nodeName === "DETAILS";
 
+/**
+ * `<a data-doc-link data-anchor>` → `[[target#anchor]]` / `[[target|alias]]`.
+ *
+ * Compares the link's TEXT with the reference, not turndown's escaped markdown
+ * for it: `My_Doc` comes out of the escaper as `My\_Doc`, which never equals
+ * the reference, so every such link was rewritten into the alias form
+ * `[[My_Doc|My\_Doc]]`. A bare reference is shown verbatim by the wiki-link
+ * extension, so it is written raw; an alias keeps its markdown (formatting
+ * inside the link text survives that way).
+ */
+function wikiLinkMarkdown(content: string, el: Element): string {
+  const target = el.getAttribute("data-doc-link") ?? "";
+  const anchor = el.getAttribute("data-anchor") ?? "";
+  const ref = anchor ? `${target}#${anchor}` : target;
+  const text = (el.textContent ?? "").trim();
+  if (text === ref && !el.querySelector("*")) return `[[${ref}]]`;
+  return `[[${ref}|${content.trim()}]]`;
+}
+
 export function addBaseRules(td: TurndownInstance): TurndownInstance {
   // Math: <span data-math-inline="x"> → $x$ ; <div data-math-block="x"> → $$x$$.
   td.addRule("mathInline", {
@@ -301,16 +320,7 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
       // data-doc-link="" (empty target), which is falsy but still a wiki link.
       return el.nodeName === "A" && (el.hasAttribute("data-doc-link") || el.hasAttribute("data-anchor"));
     },
-    replacement: (content: string, node?: Node): string => {
-      const el = node as Element;
-      const target = el.getAttribute("data-doc-link") ?? "";
-      const anchor = el.getAttribute("data-anchor") ?? "";
-      // Reference reconstructs [[target#anchor]] / [[#anchor]] / [[target]].
-      const ref = anchor ? `${target}#${anchor}` : target;
-      const display = content.trim();
-      if (display === ref) return `[[${ref}]]`;
-      return `[[${ref}|${display}]]`;
-    },
+    replacement: (content: string, node?: Node): string => wikiLinkMarkdown(content, node as Element),
   });
 
   // Front matter: <div data-type="frontmatter" data-frontmatter="<json>"> → ---\n…\n---

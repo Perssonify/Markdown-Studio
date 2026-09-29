@@ -38,6 +38,9 @@ export interface MarkdownFeatureSettings {
   callouts: boolean;
   /** Collapsible `<details><summary>` disclosure blocks. */
   details: boolean;
+  /** `{color=red}text{/color}` formatting. Undocumented and off by default —
+   *  braces in ordinary prose must survive as written (preprocessor.ts). */
+  curlyBraceFormatting?: boolean;
 }
 
 /** Feature defaults implied by each flavor preset. */
@@ -80,6 +83,7 @@ export const DEFAULT_MARKDOWN_FEATURES: MarkdownFeatureSettings = {
   emoji: true,
   callouts: true,
   details: true,
+  curlyBraceFormatting: false,
 };
 
 /** Apply a flavor preset over the current settings (keeps rich-renderer flags). */

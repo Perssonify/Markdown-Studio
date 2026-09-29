@@ -552,7 +552,9 @@ describe("guarded whole-document passes are equivalent", () => {
 
   it("preprocessMarkdown leaves brace-free markdown alone and still handles braces", () => {
     const plain = "# Heading\n\nSome *text* here.\n";
-    const withBrace = "# Heading {.lead}\n";
+    // A key the syntax recognises: `{.lead}` is NOT one, and since A039 an
+    // unrecognised group is left exactly as written instead of being consumed.
+    const withBrace = "# Heading {color=red}\n";
     const opts = { curlyBraceFormatting: true };
     expect(preprocessMarkdown(plain, opts)).toBe(preprocessMarkdown(plain, opts));
     expect(preprocessMarkdown(plain, opts)).not.toContain("{");
