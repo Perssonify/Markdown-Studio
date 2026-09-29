@@ -95,6 +95,8 @@ export function describeUncommittedSave(
       };
     case "conflict":
       return { message: CONFLICT_MESSAGE, type: "warning" };
+    case "full":
+      return { message: "Not saved — storage is full. Delete documents or old versions to free space.", type: "error" };
     case "error":
       return { message: s.saveError ? `Save failed — ${s.saveError}` : "Save failed", type: "error" };
     default:
@@ -173,7 +175,12 @@ export interface DocumentCounts {
 // the active doc, so this tab refused to save (last-writer-wins would clobber
 // that tab's work). It must NOT re-arm autosave either (the conflict would just
 // re-fire); a later real edit resumes saving (the user chose to keep editing).
-export type SaveStatus = "ready" | "editing" | "saving" | "saved" | "error" | "blocked" | "conflict";
+// "full" is TERMINAL too: storage is out of room. Re-arming autosave against a
+// full store just failed again every few seconds — the status bar read "Save
+// failed — retrying" forever, with nothing telling the user what would help.
+// Freeing space (a delete, erasing history or local data) or a real edit
+// retries.
+export type SaveStatus = "ready" | "editing" | "saving" | "saved" | "error" | "blocked" | "conflict" | "full";
 
 export interface DocumentWithIngestHtml extends DocumentRecord {
   _ingestHtml: string;
@@ -281,6 +288,9 @@ interface DocumentState {
    *  doc (one-shot). Used only by the explicit "Clear document" command so the
    *  data-loss backstop doesn't block a deliberate clear. */
   allowBlankSaveOnce: () => void;
+  /** Space was freed (a delete, erased history): a save parked on "full" may
+   *  succeed now, so resume autosave. A no-op in any other status. */
+  storageFreed: () => void;
   revertActiveDoc: () => Promise<DocumentRecord | null>;
   switchToDoc: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
   closeTab: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
@@ -464,7 +474,8 @@ export function sameMetrics(a: StorageMetrics | null, b: StorageMetrics | null):
     a.maxBytes === b.maxBytes &&
     a.pct === b.pct &&
     a.docCount === b.docCount &&
-    a.available === b.available
+    a.available === b.available &&
+    a.limitKnown === b.limitKnown
   );
 }
 
@@ -944,14 +955,18 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       return true;
     } catch (e) {
       console.warn("[documentStore] Save failed:", e);
+      if (e instanceof StorageQuotaError) {
+        // TERMINAL — see SaveStatus "full". Rethrown so the host's
+        // onStorageQuotaExceeded and the editor's own message can fire.
+        cancelReadyReset();
+        set({ saveStatus: "full", saveError: e.message });
+        throw e;
+      }
       // After showing the transient error, return to "editing" — NOT "ready" —
       // because the content is still unsaved. Downgrading to "ready" here used
       // to disarm the unsaved-changes prompt, silently losing edits on close.
       set({ saveStatus: "error", saveError: e instanceof Error ? e.message : "Save failed" });
       scheduleReadyReset((fn) => set(fn), "error", 3000, "editing");
-      if (e instanceof StorageQuotaError) {
-        throw e;
-      }
       return false;
     }
   },
@@ -967,6 +982,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   allowBlankSaveOnce: () => {
     // Scoped to the document being cleared — see `blankSaveAllowedFor`.
     blankSaveAllowedFor = get().activeDocId;
+  },
+
+  storageFreed: () => {
+    if (get().saveStatus === "full") set({ saveStatus: "editing" });
   },
 
   // ── Revert ─────────────────────────────────────────────────────────────────
@@ -1102,6 +1121,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const list = await storage.list();
     set({ documents: list });
     refreshMetrics(set, get);
+    // The delete freed space: an open document parked on "full" may fit now.
+    get().storageFreed();
     return await get().closeTab(docId, tiptapEditor);
     } finally {
       deletingDocs.delete(docId);

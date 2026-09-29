@@ -82,6 +82,11 @@ const WorkspacePanel = React.lazy(() => import("./ui/WorkspacePanel").then((m) =
 // fresh array identity churning DocNavPanel memoization).
 const EMPTY_HEADINGS: ReturnType<typeof extractHeadings> = [];
 
+/** What the user is told when autosave finds storage full — what happened
+ *  and, more to the point, what would fix it. */
+const STORAGE_FULL_MESSAGE =
+  "Storage is full — your latest changes are NOT saved. Free space by deleting documents or old versions (Tools ▸ Version history), then keep typing to retry.";
+
 interface PerssonifyEditorProps {
   _integrationRef?: RefObject<any>;
   _onIntegrationChange?: (payload: any) => void;
@@ -1738,8 +1743,15 @@ export function PerssonifyEditor({
     } catch (e) {
       const isConflict = e instanceof Error && e.message.startsWith("This document was changed");
       if (e instanceof StorageQuotaError) {
+        // saveActiveDoc parked the TERMINAL "full" status. Say what would help,
+        // once per 30s — this used to toast the raw error on every retry, and
+        // the retries never stopped. No re-arm: freeing space or typing retries.
         if (onStorageQuotaExceeded) onStorageQuotaExceeded(e);
-        else toast.show(e.message, "error");
+        else if (Date.now() - lastAutosaveToastRef.current > 30_000) {
+          lastAutosaveToastRef.current = Date.now();
+          toast.show(STORAGE_FULL_MESSAGE, "error");
+        }
+        return;
       } else {
         // Any failed autosave means the user's latest edits are NOT persisted —
         // staying silent here let edits vanish on close with zero warning.
@@ -1805,10 +1817,11 @@ export function PerssonifyEditor({
     if (status === "editing" || status === "saving" || status === "error") {
       void autosaveRef.current();
     }
-    // "conflict" is deliberately NOT re-saved (it would only re-refuse), but the
-    // draft must still be cached so a leaving path has something to keep.
-    // prepareToLeaveActiveDoc caches it; its own save attempt no-ops on conflict.
-    if (status === "conflict") void prepareToLeaveActiveDoc();
+    // "conflict" and "full" are deliberately NOT re-saved (they would only be
+    // refused again), but the draft must still be cached so a leaving path has
+    // something to keep. prepareToLeaveActiveDoc caches it; its own save
+    // attempt is refused the same way and changes nothing.
+    if (status === "conflict" || status === "full") void prepareToLeaveActiveDoc();
   }, [graphVisible, cardsVisible, prepareToLeaveActiveDoc]);
 
   // Re-arm a debounced save whenever the document enters the "editing" state.
@@ -1841,7 +1854,8 @@ export function PerssonifyEditor({
       // A conflict means this tab has unsaved edits it deliberately WON'T write
       // (another tab owns the newer version) — still warn on close, but do NOT
       // re-attempt the save (it would only re-refuse; never risk clobbering).
-      const conflicted = s.saveStatus === "conflict";
+      // A full store is the same shape: unsaved, and a retry can only fail.
+      const conflicted = s.saveStatus === "conflict" || s.saveStatus === "full";
       const drafts = s._unsavedEdits;
       if (!activeUnsaved && !conflicted && drafts.size === 0) return;
 

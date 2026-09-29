@@ -529,7 +529,8 @@ export function useDocumentLifecycle({
     // "saving" has not committed it yet. None of those states guarantees a
     // cached draft: closing must offer the same choice as ordinary editing.
     const hasUnsavedContent = saveStatus === "editing" || saveStatus === "saving" ||
-      saveStatus === "error" || saveStatus === "conflict" || saveStatus === "blocked";
+      saveStatus === "error" || saveStatus === "conflict" || saveStatus === "blocked" ||
+      saveStatus === "full";
     if (docId === activeDocId && hasUnsavedContent) {
       const result = await confirmUnsaved();
       if (result === "cancel") return;
@@ -641,8 +642,13 @@ export function useDocumentLifecycle({
     // Revert destroys the live (unsaved) version — confirm when there IS one.
     // Especially important when autosave has been failing: the stored copy may
     // be arbitrarily old, and revert would discard the only current copy.
+    // Every status that leaves unsaved content on screen — the same set closing
+    // a document asks for. Revert used to confirm only for "editing"/"error",
+    // so a document parked on a terminal status (conflict, blocked, full) was
+    // reverted, and its only copy discarded, without a question.
     const { saveStatus } = useDocumentStore.getState();
-    if (saveStatus === "editing" || saveStatus === "error") {
+    if (saveStatus === "editing" || saveStatus === "error" || saveStatus === "saving" ||
+        saveStatus === "conflict" || saveStatus === "blocked" || saveStatus === "full") {
       const ok = await confirm({
         title: "Revert to last saved version?",
         description: "Your unsaved changes will be discarded. This cannot be undone.",

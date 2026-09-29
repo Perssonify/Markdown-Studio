@@ -238,6 +238,18 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <span className="sm:hidden">Not saving</span>
           </div>
         )}
+        {saveStatus === "full" && (
+          // TERMINAL: storage is out of room. The old "Save failed — retrying"
+          // retried forever and said nothing about what would help.
+          <div
+            className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
+            title="Storage is full, so your latest changes are not saved. Delete documents or old versions (Version history) to free space, then keep typing to retry."
+          >
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="hidden sm:inline">Storage full — not saving</span>
+            <span className="sm:hidden">Storage full</span>
+          </div>
+        )}
         {saveStatus === "conflict" && (
           <div
             className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
