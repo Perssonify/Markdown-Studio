@@ -13,7 +13,6 @@
  */
 
 import {
-  deserializeFromStorage,
   serializeForStorage,
   stampUpdated,
   toSummary,
@@ -24,13 +23,16 @@ import { safeStorage } from "../utils/safe-storage";
 import {
   IndexedDBStorageAdapter,
   StorageQuotaError,
+  StorageReadError,
+  parseStoredDocument,
+  sameIdSet,
   type IDBStorageConfig,
   type StorageMetrics,
 } from "./idb-storage-adapter";
 import { diag } from "../utils/diag";
 
 // Re-export IDB types so callers only need to import from this module
-export { IndexedDBStorageAdapter, StorageQuotaError };
+export { IndexedDBStorageAdapter, StorageQuotaError, StorageReadError };
 
 export type { IDBStorageConfig, StorageMetrics };
 
@@ -60,6 +62,16 @@ declare global {
   }
 }
 
+/**
+ * Persistence contract for documents.
+ *
+ * `get` MUST resolve null only when no document has that id, and REJECT
+ * (ideally with StorageReadError) when the read itself fails or the stored
+ * value cannot be parsed. The save path's data-loss guards — the blank-over-
+ * content backstop, the multi-tab conflict check, the pre-overwrite snapshot —
+ * fail CLOSED on a rejected read; a read error reported as null walks straight
+ * past all three.
+ */
 export interface StorageAdapter {
   list(): Promise<DocumentSummary[]>;
   get(id: string): Promise<DocumentRecord | null>;
@@ -68,6 +80,10 @@ export interface StorageAdapter {
   search(query: string): Promise<DocumentSummary[]>;
   getPrefs(): Promise<Record<string, unknown>>;
   setPrefs(prefs: Record<string, unknown>): Promise<void>;
+  /** Erase EVERYTHING this adapter stores — documents, the list, and the
+   *  editor's prefs (which hold folder names). Used by clearLocalData(); an
+   *  adapter without it has its documents deleted one by one instead. */
+  clear?(): Promise<void>;
 }
 
 /**
@@ -76,16 +92,32 @@ export interface StorageAdapter {
 export class WindowStorageAdapter implements StorageAdapter {
   /**
    * Get the document manifest (list of IDs + basic metadata).
+   *
+   * `window.storage` cannot enumerate its keys, so an UNREADABLE manifest
+   * cannot be rebuilt here the way the IndexedDB and localStorage adapters
+   * rebuild theirs. What it must not do is quietly start a fresh one-document
+   * list over it — every other document would vanish from the library while
+   * still stored. The unreadable value is set aside (once) under
+   * `doc:__manifest.unreadable` so it can be recovered, before anything
+   * writes a new list.
    */
   async _getManifest(): Promise<StorageManifest> {
+    let value: string | undefined;
     try {
-      const result = await window.storage!.get(MANIFEST_KEY);
-      if (result?.value) {
-        return JSON.parse(result.value) as StorageManifest;
-      }
+      value = (await window.storage!.get(MANIFEST_KEY))?.value;
     } catch {
-      // Key doesn't exist or parse error — return empty
+      return { documents: [] }; // the API rejects for a key it does not have
     }
+    if (!value) return { documents: [] };
+    try {
+      const parsed = JSON.parse(value) as StorageManifest;
+      if (parsed && Array.isArray(parsed.documents)) return parsed;
+    } catch { /* unreadable — below */ }
+    console.error("[Storage] The document list is unreadable; keeping a copy under doc:__manifest.unreadable");
+    try {
+      const kept = await window.storage!.get(MANIFEST_KEY + ".unreadable").catch(() => undefined);
+      if (!kept?.value) await window.storage!.set(MANIFEST_KEY + ".unreadable", value);
+    } catch { /* best effort */ }
     return { documents: [] };
   }
 
@@ -105,17 +137,22 @@ export class WindowStorageAdapter implements StorageAdapter {
 
   /**
    * Get a full document by ID.
+   *
+   * `window.storage` REJECTS for a key it does not have (see `delete` below),
+   * so a rejection here has to keep meaning "absent" — the API offers no way
+   * to tell that from a failure. A value that IS present but will not parse is
+   * a read error, never a miss (see StorageReadError).
    */
   async get(id: string): Promise<DocumentRecord | null> {
+    let value: string | undefined;
     try {
-      const result = await window.storage!.get(PREFIX + id);
-      if (result?.value) {
-        return deserializeFromStorage(result.value);
-      }
+      value = (await window.storage!.get(PREFIX + id))?.value;
     } catch (e) {
       console.warn(`[Storage] Failed to get doc ${id}:`, e);
+      return null;
     }
-    return null;
+    if (value === undefined || value === null) return null;
+    return parseStoredDocument(id, value);
   }
 
   /**
@@ -191,6 +228,17 @@ export class WindowStorageAdapter implements StorageAdapter {
       console.warn("[Storage] Failed to save prefs:", e);
     }
   }
+
+  /** window.storage cannot enumerate keys: delete what the list names. */
+  async clear(): Promise<void> {
+    const manifest = await this._getManifest();
+    for (const d of manifest.documents) {
+      try { await window.storage!.delete(PREFIX + d.id); } catch { /* absent */ }
+    }
+    for (const key of [MANIFEST_KEY, MANIFEST_KEY + ".unreadable", PREFS_KEY]) {
+      try { await window.storage!.delete(key); } catch { /* absent */ }
+    }
+  }
 }
 
 /**
@@ -203,14 +251,46 @@ export class LocalStorageAdapter implements StorageAdapter {
     return PREFIX + id;
   }
 
-  async _getManifest(): Promise<StorageManifest> {
-    try {
-      const raw = localStorage.getItem(MANIFEST_KEY);
-      if (raw) return JSON.parse(raw) as StorageManifest;
-    } catch {
-      /* parse error or access denied */
+  /** The ids of every document actually stored (its own keys, not the list). */
+  _storedIds(): string[] {
+    const ids: string[] = [];
+    for (let k = 0; k < localStorage.length; k++) {
+      const key = localStorage.key(k);
+      if (key && key.startsWith(PREFIX) && key !== MANIFEST_KEY && key !== PREFS_KEY) {
+        ids.push(key.slice(PREFIX.length));
+      }
     }
-    return { documents: [] };
+    return ids;
+  }
+
+  /**
+   * The document list — rebuilt from the stored documents themselves when it
+   * is missing, unreadable, or does not list exactly the ids that are stored.
+   * An unreadable list used to read as EMPTY, and the next save wrote a list
+   * of one: every other document vanished from the library while still stored.
+   */
+  async _getManifest(): Promise<StorageManifest> {
+    let manifest: StorageManifest | null = null;
+    const raw = localStorage.getItem(MANIFEST_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as StorageManifest;
+        if (parsed && Array.isArray(parsed.documents)) manifest = parsed;
+      } catch { /* unreadable — rebuilt below */ }
+    }
+    const ids = this._storedIds();
+    if (manifest && sameIdSet(manifest.documents, ids)) return manifest;
+    if (!manifest && ids.length === 0) return { documents: [] };
+    const documents: DocumentSummary[] = [];
+    for (const id of ids) {
+      try {
+        const doc = await this.get(id);
+        if (doc) documents.push(toSummary(doc));
+      } catch { /* unreadable document: cannot be summarised */ }
+    }
+    const rebuilt = { documents };
+    try { await this._setManifest(rebuilt); } catch { /* the next write retries */ }
+    return rebuilt;
   }
 
   async _setManifest(manifest: StorageManifest): Promise<void> {
@@ -219,24 +299,32 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async list(): Promise<DocumentSummary[]> {
     const manifest = await this._getManifest();
-    return manifest.documents.sort(
+    return manifest.documents.slice().sort(
       (a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()
     );
   }
 
+  /** null only when the key is absent; a storage that throws, or a value that
+   *  will not parse, is a read error (see StorageReadError). */
   async get(id: string): Promise<DocumentRecord | null> {
+    let raw: string | null;
     try {
-      const raw = localStorage.getItem(this._key(id));
-      if (raw) return deserializeFromStorage(raw);
+      raw = localStorage.getItem(this._key(id));
     } catch (e) {
       console.warn(`[Storage] Failed to get doc ${id}:`, e);
+      throw new StorageReadError(`Could not read document ${id}`, { cause: e });
     }
-    return null;
+    if (raw === null) return null;
+    return parseStoredDocument(id, raw);
   }
 
   async save(doc: DocumentRecord): Promise<void> {
     stampUpdated(doc);
     const serialized = serializeForStorage(doc);
+    // Read (and if need be rebuild) the list BEFORE the write, while it still
+    // agrees with the stored keys — afterwards a new document would make every
+    // save of one look like an out-of-step list and trigger a full rebuild.
+    const manifest = await this._getManifest();
 
     try {
       localStorage.setItem(this._key(doc.id), serialized);
@@ -260,7 +348,6 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
 
     // Update manifest
-    const manifest = await this._getManifest();
     const summary = toSummary(doc);
     const idx = manifest.documents.findIndex((d) => d.id === doc.id);
     if (idx >= 0) {
@@ -272,12 +359,12 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async delete(id: string): Promise<void> {
+    const manifest = await this._getManifest(); // before the key goes — see save
     try {
       localStorage.removeItem(this._key(id));
     } catch {
       /* ignore */
     }
-    const manifest = await this._getManifest();
     manifest.documents = manifest.documents.filter((d) => d.id !== id);
     await this._setManifest(manifest);
   }
@@ -314,6 +401,16 @@ export class LocalStorageAdapter implements StorageAdapter {
     } catch (e) {
       console.warn("[Storage] Failed to save prefs:", e);
     }
+  }
+
+  /** Every key this adapter owns — documents, the list, the prefs. */
+  async clear(): Promise<void> {
+    const mine: string[] = [];
+    for (let k = 0; k < localStorage.length; k++) {
+      const key = localStorage.key(k);
+      if (key && key.startsWith(PREFIX)) mine.push(key);
+    }
+    for (const key of mine) localStorage.removeItem(key);
   }
 
   /** Evict the oldest document when storage is full */
@@ -371,6 +468,10 @@ export class MemoryStorageAdapter implements StorageAdapter {
   }
 
   async setPrefs(): Promise<void> {}
+
+  async clear(): Promise<void> {
+    this._docs.clear();
+  }
 }
 
 /**

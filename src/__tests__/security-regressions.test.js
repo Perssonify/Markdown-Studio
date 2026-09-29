@@ -131,7 +131,10 @@ describe('document store quota errors', () => {
     await expect(
       useDocumentStore.getState().saveActiveDoc({ getJSON: () => doc.canonical })
     ).rejects.toBe(quota);
-    expect(useDocumentStore.getState().saveStatus).toBe('error');
+    // A086: a full store parks the TERMINAL "full" status. It used to be the
+    // transient "error", which re-armed autosave every few seconds forever
+    // ("Save failed — retrying") with nothing telling the user what would help.
+    expect(useDocumentStore.getState().saveStatus).toBe('full');
   });
 });
 

@@ -22,6 +22,7 @@ import { adminSettingsAvailable, adsAvailable } from "../utils/build-gates";
 import { PrivacySection } from "./SettingsPrivacy";
 import { StorageBackupSection } from "./SettingsStorage";
 import { AccentCircleRow, ThemeCircleRow } from "./ThemeControls";
+import { EraseLocalDataSection } from "./EraseLocalData";
 
 const FLAVORS: { id: MarkdownFlavor; label: string; desc: string }[] = [
   {
@@ -396,6 +397,10 @@ function SettingsSheetInner({
               )}
             </section>
             )}
+
+            {/* Local data — erase everything the editor keeps in this browser
+                (its own section, last; see EraseLocalData.tsx). */}
+            <EraseLocalDataSection />
           </div>
         </ScrollArea>
       </SheetContent>

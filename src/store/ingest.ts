@@ -549,6 +549,9 @@ export function ingest(
           tags: (isEnvelope && parsed.tags) || [],
           created: (isEnvelope && parsed.created) || undefined,
           updated: (isEnvelope && parsed.updated) || undefined,
+          // Carried through so content exported by a NEWER build opens
+          // read-only instead of blank (see schema-version.ts).
+          schemaVersion: isEnvelope && typeof parsed.schemaVersion === "number" ? parsed.schemaVersion : undefined,
           ingestReport: (isEnvelope && parsed.ingestReport) || {
             timestamp: new Date().toISOString(),
             originFormat: format,

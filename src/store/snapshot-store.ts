@@ -46,6 +46,9 @@ export interface SnapshotMeta {
   words: number;
   /** Content hash — used for dedup and to skip no-op restores. */
   hash: number;
+  /** Insertion order within the session that wrote it, shared by the memory
+   *  ring and the database (see `byRecentDesc`). Absent on older records. */
+  seq?: number;
 }
 
 interface SnapshotRecord extends SnapshotMeta {
@@ -80,9 +83,20 @@ function serialize(canonical: unknown): string {
   try { return JSON.stringify(canonical) ?? ""; } catch { return ""; }
 }
 
-/** Newest-first ordering: by timestamp, then by monotonic id to break same-ms
- *  ties deterministically (higher id = inserted later = newer). */
-const byRecentDesc = (a: SnapshotMeta, b: SnapshotMeta) => b.ts - a.ts || b.id - a.id;
+/**
+ * Insertion order, for breaking same-millisecond ties. `seq` when the record
+ * carries one (both stores stamp it from ONE session counter, so it also orders
+ * a memory fallback against a database write in the same ms). Otherwise the
+ * id's MAGNITUDE: IndexedDB's autoIncrement counts up from 1, the memory ring
+ * counts DOWN from -1 — so for the ring "later" is "more negative", and
+ * comparing raw ids ranked the oldest same-ms version as the newest (listed
+ * first, restored as "latest", and the per-document cap evicted the newest).
+ */
+const insertionOrder = (m: SnapshotMeta): number => m.seq ?? Math.abs(m.id);
+
+/** Newest-first ordering: by timestamp, then by insertion order. */
+const byRecentDesc = (a: SnapshotMeta, b: SnapshotMeta) =>
+  b.ts - a.ts || insertionOrder(b) - insertionOrder(a);
 
 // ─── Store ─────────────────────────────────────────────────────────────────
 
@@ -97,6 +111,10 @@ class SnapshotStore {
   private db: IDBDatabase | null = null;
   private ready: Promise<void> | null = null;
   private usable = true;
+  /** The database this ring lives in (namespaced per host — see configure). */
+  private dbName = DB_NAME;
+  /** False: a host turned version history off — nothing is recorded at all. */
+  private enabled = true;
   /** In-memory fallback ring when IndexedDB is unavailable. */
   private mem: SnapshotRecord[] = [];
   /**
@@ -112,6 +130,8 @@ class SnapshotStore {
    * the one code path whose entire job is recovering content.
    */
   private memSeq = -1;
+  /** Session-wide insertion counter stamped on every record (`seq`). */
+  private insertSeq = 0;
   /** Last autosave-reason snapshot time per doc (throttle; session-only). */
   private lastAutoAt = new Map<string, number>();
   private listeners = new Set<() => void>();
@@ -119,13 +139,14 @@ class SnapshotStore {
   private open(): Promise<void> {
     if (this.ready) return this.ready;
     this.ready = new Promise<void>((resolve) => {
-      if (typeof indexedDB === "undefined") {
+      // Disabled by the host: do not even create the database.
+      if (!this.enabled || typeof indexedDB === "undefined") {
         this.usable = false;
         resolve();
         return;
       }
       try {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        const req = indexedDB.open(this.dbName, DB_VERSION);
         req.onupgradeneeded = (e) => {
           const db = (e.target as IDBOpenDBRequest).result;
           if (!db.objectStoreNames.contains(STORE)) {
@@ -133,7 +154,18 @@ class SnapshotStore {
             os.createIndex(IDX_DOC, "docId", { unique: false });
           }
         };
-        req.onsuccess = (e) => { this.db = (e.target as IDBOpenDBRequest).result; resolve(); };
+        req.onsuccess = (e) => {
+          const db = (e.target as IDBOpenDBRequest).result;
+          // Never block a newer build's upgrade of this database from another
+          // tab (it would hang on open). Close, and keep working from the
+          // in-memory ring for the rest of this tab's life.
+          db.onversionchange = () => {
+            db.close();
+            if (this.db === db) { this.db = null; this.usable = false; }
+          };
+          this.db = db;
+          resolve();
+        };
         req.onerror = () => { this.usable = false; resolve(); };
       } catch {
         this.usable = false;
@@ -141,6 +173,44 @@ class SnapshotStore {
       }
     });
     return this.ready;
+  }
+
+  /**
+   * Where version history lives, and whether it exists at all.
+   *
+   * The ring used to be one database per ORIGIN whatever storage a host
+   * injected, so on a shared device user A's content showed up in user B's
+   * Version history. A host that namespaces its documents namespaces this too
+   * (the editor derives the name from `storageConfig`), or turns it off. The
+   * standalone app's database name is unchanged.
+   */
+  configure(opts: { dbName?: string; enabled?: boolean } = {}): void {
+    const dbName = opts.dbName || DB_NAME;
+    const enabled = opts.enabled !== false;
+    if (dbName === this.dbName && enabled === this.enabled) return;
+    this.db?.close();
+    this.db = null;
+    this.ready = null;
+    this.usable = true;
+    this.mem = [];
+    this.lastAutoAt.clear();
+    this.dbName = dbName;
+    this.enabled = enabled;
+    this.emit();
+  }
+
+  /** Erase every snapshot, stored and in memory (see clearLocalData). */
+  async clearAll(): Promise<void> {
+    await this.open();
+    this.mem = [];
+    this.lastAutoAt.clear();
+    if (this.usable && this.db) {
+      try {
+        const tx = this.db.transaction(STORE, "readwrite");
+        await idbRequest(tx.objectStore(STORE).clear());
+      } catch { /* best effort */ }
+    }
+    this.emit();
   }
 
   subscribe(fn: () => void): () => void {
@@ -164,7 +234,7 @@ class SnapshotStore {
     oldCanonical: unknown,
     newCanonical: unknown
   ): Promise<void> {
-    if (!docId || isBlank(oldCanonical)) return Promise.resolve();
+    if (!this.enabled || !docId || isBlank(oldCanonical)) return Promise.resolve();
     const oldChars = (computeCounts(oldCanonical as PMNode).chars) || 0;
     const newChars = isBlank(newCanonical) ? 0 : (computeCounts(newCanonical as PMNode).chars || 0);
     const shrink = oldChars > 0 && newChars <= oldChars * SHRINK_TRIGGER_RATIO;
@@ -188,7 +258,7 @@ class SnapshotStore {
     canonical: unknown,
     reason: SnapshotReason
   ): Promise<void> {
-    if (!docId || isBlank(canonical)) return;
+    if (!this.enabled || !docId || isBlank(canonical)) return;
     await this.open();
     const serialized = serialize(canonical);
     const hash = quickHash(serialized);
@@ -200,6 +270,7 @@ class SnapshotStore {
       bytes: serialized.length * 2,
       words: computeCounts(canonical as PMNode).words || 0,
       hash,
+      seq: ++this.insertSeq,
       canonical,
     };
 
@@ -310,38 +381,54 @@ class SnapshotStore {
    * of a doc (that is the recovery point we most want to keep).
    */
   private async prune(justSavedDocId: string): Promise<void> {
-    // `id` is monotonic with insertion (mem seq / IDB autoIncrement), so it is
-    // the reliable recency signal and the tiebreak when several snapshots share
-    // the same millisecond `ts` — WITHOUT it, same-ms bursts sort ambiguously and
-    // the count/byte caps could evict the NEWEST record instead of the oldest.
-    // 1) Per-doc count cap (drop oldest beyond MAX_PER_DOC).
-    const docSnaps = (await this.allForDoc(justSavedDocId)).sort(byRecentDesc);
-    for (const r of docSnaps.slice(MAX_PER_DOC)) await this.rawDelete(r.id);
-
-    // 2) Age cap (keep the newest per doc regardless of age).
+    // ONE read of the ring, then every cap decided in memory. This used to read
+    // the doc's snapshots and then ALL records twice more (the age pass and the
+    // byte pass each re-listed the store, payloads included) on every snapshot —
+    // i.e. on autosaves — so its cost grew with the whole history.
+    // Newest-first by `byRecentDesc` (timestamp, then insertion order), so
+    // same-millisecond bursts never evict the newest instead of the oldest.
     const all = (await this.allRecords()).sort(byRecentDesc);
+    const doomed = new Set<number>();
+
+    // 1) Per-doc count cap (drop oldest beyond MAX_PER_DOC).
+    all.filter((r) => r.docId === justSavedDocId)
+      .slice(MAX_PER_DOC)
+      .forEach((r) => doomed.add(r.id));
+
+    // 2) Age cap (keep the newest per doc regardless of age — unless that
+    //    newest one is the doc's PRE-DELETE copy). A deleted document's last
+    //    snapshot used to be exempt from every cap, so deleted content lived
+    //    in the browser forever. It is recoverable for the age window, like
+    //    everything else, and then it goes.
     const seenNewest = new Set<string>();
     const cutoff = Date.now() - MAX_AGE_MS;
     for (const r of all) {
       const isNewestForDoc = !seenNewest.has(r.docId);
       seenNewest.add(r.docId);
-      if (!isNewestForDoc && r.ts < cutoff) await this.rawDelete(r.id);
+      const keep = isNewestForDoc && r.reason !== "pre-delete";
+      if (!keep && r.ts < cutoff) doomed.add(r.id);
     }
 
-    // 3) Global byte budget — evict oldest (never a doc's newest) until under.
-    const recs = (await this.allRecords()).sort(byRecentDesc); // newest first
-    let total = recs.reduce((s, r) => s + r.bytes, 0);
-    if (total <= MAX_TOTAL_BYTES) return;
-    const newestIdByDoc = new Map<string, number>();
-    for (const r of recs) if (!newestIdByDoc.has(r.docId)) newestIdByDoc.set(r.docId, r.id);
-    // Walk oldest→newest, evicting until under budget.
-    for (let i = recs.length - 1; i >= 0; i--) {
-      if (total <= MAX_TOTAL_BYTES) break;
-      const r = recs[i]!;
-      if (newestIdByDoc.get(r.docId) === r.id) continue; // never evict a doc's newest
-      await this.rawDelete(r.id);
-      total -= r.bytes;
+    // 3) Global byte budget over what survives — evict oldest (never a live
+    //    doc's newest) until under.
+    const live = all.filter((r) => !doomed.has(r.id)); // still newest first
+    let total = live.reduce((s, r) => s + r.bytes, 0);
+    if (total > MAX_TOTAL_BYTES) {
+      const newestIdByDoc = new Map<string, number>();
+      for (const r of live) {
+        if (!newestIdByDoc.has(r.docId) && r.reason !== "pre-delete") newestIdByDoc.set(r.docId, r.id);
+        else if (!newestIdByDoc.has(r.docId)) newestIdByDoc.set(r.docId, -Infinity); // a deleted doc: not protected
+      }
+      // Walk oldest→newest, evicting until under budget.
+      for (let i = live.length - 1; i >= 0 && total > MAX_TOTAL_BYTES; i--) {
+        const r = live[i]!;
+        if (newestIdByDoc.get(r.docId) === r.id) continue; // never evict a doc's newest
+        doomed.add(r.id);
+        total -= r.bytes;
+      }
     }
+
+    for (const id of doomed) await this.rawDelete(id);
   }
 
   // ── Low-level accessors ──────────────────────────────────────────────────────
@@ -403,6 +490,9 @@ class SnapshotStore {
   _resetForTests(opts: { useIndexedDB?: boolean } = {}): void {
     this.mem = [];
     this.memSeq = -1;
+    this.insertSeq = 0;
+    this.dbName = DB_NAME;
+    this.enabled = true;
     this.lastAutoAt.clear();
     if (opts.useIndexedDB) {
       this.usable = true;
