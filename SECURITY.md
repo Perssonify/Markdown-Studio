@@ -109,10 +109,16 @@ archive, a URL import or a paste is untrusted:
 
 **The embed and host-supplied parameters.** `embed.html` / the `integration`
 entry point accept host-controlled values (`theme`, `bg`, `accentColor`,
-`view_mode`, `readonly`, `ads`, `chrome`). CSS colours go through
+`view_mode`, `readonly`, `chrome`, `allowed_origin`). CSS colours go through
 `sanitizeCssColor` (`src/theme/palette.ts`). A parameter value that escapes
 into script, breaks out of the iframe, or turns into an outbound network
-request is in scope.
+request is in scope. The embed's host bridge can read and write the documents
+the embed sees; which origin may drive it is decided by
+`src/integration/embed-origins.ts` (a deploy-time `VITE_EMBED_ALLOWED_ORIGINS`
+allowlist, then the browser-reported framer). A framing page that gets bridge
+access despite a configured allowlist, or while naming a window other than
+itself, is in scope. An embed deployed WITHOUT an allowlist trusts whoever
+frames it — that is documented behaviour, not a finding.
 
 **The library API.** `@perssonify/editor` consumed as a package: an input a
 host passes in (initial document, host bridge calls) that leads to script

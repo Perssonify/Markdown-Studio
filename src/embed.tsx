@@ -5,12 +5,18 @@ import { ThemeProvider } from "next-themes";
 import { useEffect, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { PerssonifyEditorIntegration, type EditorHandle } from "./integration/PerssonifyEditorIntegration";
+import { resolveEmbedAllowedOrigins } from "./integration/embed-origins";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { useUIStore } from "./store/uiStore";
 import { sanitizeCssColor } from "./theme/palette";
 import "./styles.css";
 import { initPalette } from "./theme/palette";
+import { installGlobalErrorCapture } from "./utils/diagnostics";
 
+// The embed owns its document (it is its own iframe), so it may capture that
+// document's uncaught errors — locally, like the standalone app. Never done by
+// the library entry, where the page belongs to the host.
+installGlobalErrorCapture();
 initPalette();
 
 /**
@@ -23,30 +29,19 @@ initPalette();
  * were discarded too. Every action in docs/integration-guide.md was inert
  * against the shipped /embed.html, and no parameter could widen it.
  *
- * Resolution order, never "*":
- *   1. `?allowed_origin=` (repeatable, or comma-separated) — an explicit host.
- *   2. `document.referrer`'s origin — the page that framed us. It cannot be
- *      spoofed by a third party, because it IS the framing page; a referrer
- *      policy that suppresses it simply leaves the allowlist empty, which is
- *      the old behaviour.
+ * The rules live in integration/embed-origins.ts: a deploy-time allowlist
+ * (VITE_EMBED_ALLOWED_ORIGINS) has the last word; where the browser reports the
+ * real framer (`location.ancestorOrigins`) a requested origin must be it; then
+ * `?allowed_origin=` (never "*"), the reported framer, or `document.referrer`.
  */
 function resolveAllowedOrigins(params: URLSearchParams): string[] {
-  const explicit = params
-    .getAll("allowed_origin")
-    .flatMap((v) => v.split(","))
-    .map((v) => v.trim())
-    .filter(Boolean)
-    // A wildcard from a URL parameter would let whoever frames us relay the
-    // document to anyone; they already get their own origin below.
-    .filter((v) => v !== "*")
-    .filter((v) => {
-      try { return new URL(v).origin === v; } catch { return false; }
-    });
-  if (explicit.length) return explicit;
-  try {
-    if (document.referrer) return [new URL(document.referrer).origin];
-  } catch { /* opaque or malformed referrer */ }
-  return [];
+  const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  return resolveEmbedAllowedOrigins({
+    params,
+    referrer: document.referrer,
+    ancestorOrigins: (window.location as Location & { ancestorOrigins?: DOMStringList }).ancestorOrigins,
+    deployAllowlist: env?.["VITE_EMBED_ALLOWED_ORIGINS"],
+  });
 }
 
 /**
@@ -120,18 +115,20 @@ function EmbedApp() {
     }
   }, [bgParam]);
 
-  // Read-only / ads deep-links (the URL builder emits these). Applied SESSION-ONLY
-  // via setState — never the persisting setters, or one host embedding with
+  // Resolved ONCE: the framing page does not change under us. (It was keyed on
+  // `params`, a new object every render, so each render handed the integration
+  // a new array and it tore down and re-created the host bridge.)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const allowedOrigins = useMemo(() => resolveAllowedOrigins(params), []);
+
+  // Read-only deep-link (the URL builder emits it). Applied SESSION-ONLY via
+  // setState — never the persisting setter, or one host embedding with
   // ?readonly=1 would write pf:read-only for the whole origin and leave the
   // standalone app (same key) stuck read-only. Mirrors App.tsx.
-  // Resolved once: the framing page does not change under us.
-  const allowedOrigins = useMemo(() => resolveAllowedOrigins(params), [params]);
-
   useEffect(() => {
     const ro = params.get("readonly");
     if (ro !== null) useUIStore.setState({ readOnly: ro === "true" || ro === "1" });
-    const ads = params.get("ads");
-    if (ads !== null) useUIStore.setState({ showAds: ads === "true" || ads === "1" });
+    // (`?ads=` is no longer applied: ad slots only render in dev builds.)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

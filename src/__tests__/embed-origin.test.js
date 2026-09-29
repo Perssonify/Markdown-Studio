@@ -11,9 +11,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveEmbedAllowedOrigins } from "../integration/embed-origins";
 import { createEditorClient } from "../integration/host-bridge";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
+
+/** The resolver with defaults: no params, no referrer, browser without ancestorOrigins. */
+const resolve = ({ query = "", referrer = "", ancestorOrigins, deployAllowlist } = {}) =>
+  resolveEmbedAllowedOrigins({ params: new URLSearchParams(query), referrer, ancestorOrigins, deployAllowlist });
 
 describe("embed origin resolution", () => {
   const src = read("src/embed.tsx");
@@ -23,18 +28,59 @@ describe("embed origin resolution", () => {
     expect(src).toMatch(/allowedOrigins=\{allowedOrigins\}/);
   });
 
-  it("prefers an explicit ?allowed_origin and falls back to the framing page", () => {
+  it("feeds the resolver the framing page's real signals and the deploy allowlist", () => {
     const fn = src.slice(src.indexOf("function resolveAllowedOrigins"), src.indexOf("\n}", src.indexOf("function resolveAllowedOrigins")));
-    expect(fn).toMatch(/getAll\("allowed_origin"\)/);
+    expect(fn).toMatch(/resolveEmbedAllowedOrigins\(/);
     expect(fn).toMatch(/document\.referrer/);
+    expect(fn).toMatch(/ancestorOrigins/);
+    expect(fn).toMatch(/VITE_EMBED_ALLOWED_ORIGINS/);
+  });
+
+  // The rules that were pinned by reading embed.tsx's source are now asserted
+  // on the resolver's behaviour (A072 moved them to integration/embed-origins.ts).
+  it("prefers an explicit ?allowed_origin and falls back to the framing page", () => {
+    expect(resolve({ query: "allowed_origin=https://host.example", referrer: "https://other.example/page" })).toEqual(["https://host.example"]);
+    expect(resolve({ query: "allowed_origin=https://a.example,https://b.example" })).toEqual(["https://a.example", "https://b.example"]);
+    expect(resolve({ referrer: "https://framer.example/some/page?x=1" })).toEqual(["https://framer.example"]);
+    expect(resolve({})).toEqual([]); // referrer suppressed, nothing else known: deny all
   });
 
   it("never resolves to a wildcard", () => {
-    const fn = src.slice(src.indexOf("function resolveAllowedOrigins"), src.indexOf("\n}", src.indexOf("function resolveAllowedOrigins")));
     // A wildcard from a URL parameter would let whoever frames us relay the
     // document to anyone else.
-    expect(fn).toMatch(/filter\(\(v\) => v !== "\*"\)/);
-    expect(fn).not.toMatch(/return \["\*"\]/);
+    expect(resolve({ query: "allowed_origin=*" })).toEqual([]);
+    expect(resolve({ query: "allowed_origin=*&allowed_origin=https://host.example" })).toEqual(["https://host.example"]);
+    expect(resolve({ referrer: "https://framer.example/", deployAllowlist: "*" })).toEqual([]);
+    expect(resolve({ query: "allowed_origin=https://host.example/not-an-origin" })).toEqual([]);
+  });
+});
+
+describe("the embed trusts only whoever REALLY frames it (A072)", () => {
+  it("an ?allowed_origin must be the actual framer where the browser reports it", () => {
+    const framed = { ancestorOrigins: ["https://host.example"] };
+    expect(resolve({ ...framed, query: "allowed_origin=https://host.example" })).toEqual(["https://host.example"]);
+    // A framing page naming some other window gets nothing.
+    expect(resolve({ ...framed, query: "allowed_origin=https://victim.example" })).toEqual([]);
+    // A spoofed/stale referrer is overridden by the reported framer.
+    expect(resolve({ ...framed, referrer: "https://elsewhere.example/" })).toEqual(["https://host.example"]);
+  });
+
+  it("uses the reported framer when the referrer is suppressed", () => {
+    expect(resolve({ ancestorOrigins: ["https://host.example"] })).toEqual(["https://host.example"]);
+  });
+
+  it("a page that is not framed at all has no bridge partner", () => {
+    expect(resolve({ ancestorOrigins: [], query: "allowed_origin=https://host.example", referrer: "https://host.example/" })).toEqual([]);
+  });
+
+  it("the deploy-time allowlist has the last word", () => {
+    const allow = "https://meridien.example, https://staging.meridien.example";
+    expect(resolve({ ancestorOrigins: ["https://meridien.example"], deployAllowlist: allow })).toEqual(["https://meridien.example"]);
+    // Any other framer — whatever it passes — is refused.
+    expect(resolve({ ancestorOrigins: ["https://attacker.example"], query: "allowed_origin=https://attacker.example", deployAllowlist: allow })).toEqual([]);
+    // Firefox (no ancestorOrigins): the referrer is still checked against the list.
+    expect(resolve({ referrer: "https://attacker.example/", deployAllowlist: allow })).toEqual([]);
+    expect(resolve({ referrer: "https://staging.meridien.example/x", deployAllowlist: allow })).toEqual(["https://staging.meridien.example"]);
   });
 });
 
