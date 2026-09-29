@@ -172,6 +172,18 @@ describe("caching and routing", () => {
     }
   });
 
+  it("/embed.html is never answered with the full app", () => {
+    // /embed.html is exempt from anti-framing because the EMBED build is meant
+    // to be framed. The app deploy does not ship that file, so the SPA rewrite
+    // used to answer /embed.html with index.html — the full app, frameable by
+    // any site, undoing A068. Without the file it now 404s; with it (a deploy
+    // that includes the embed build) the file itself is served, since Vercel
+    // checks the filesystem before rewrites.
+    const [rewrite] = vercel.rewrites;
+    expect(matches(rewrite.source, "/embed.html")).toBe(false);
+    expect(existsSync(join(process.cwd(), "public", "embed.html"))).toBe(false);
+  });
+
   it("installs exactly what bun.lock pins (A014)", () => {
     expect(vercel.installCommand).toMatch(/--frozen-lockfile/);
   });
