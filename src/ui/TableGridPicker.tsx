@@ -127,7 +127,7 @@ export function TableGridPicker({ onSelect, onClose, inline = false }: TableGrid
       <div 
         className={`
           mt-3 pt-2 border-t border-border/40 text-center text-[11px] font-bold tracking-tight transition-colors
-          ${hoverRow > 0 ? "text-primary" : "text-muted-foreground/50"}
+          ${hoverRow > 0 ? "text-primary-strong" : "text-muted-foreground/50"}
         `}
       >
         {hoverRow > 0 ? (
