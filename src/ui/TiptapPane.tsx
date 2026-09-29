@@ -32,6 +32,7 @@ import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
 import { ThemeImage } from "../extensions/ThemeImage";
 import { UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
+import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
 import { TableBubbleMenu } from "./TableBubbleMenu";
@@ -234,6 +235,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         TableRow, TableCell, TableHeader,
         SearchHighlightExtension,
         UnresolvedWikiLinks, // broken-link marking (a plugin: no schema change)
+        AltGraphPassthrough, // AltGr types; it never triggers a Mod-Alt keymap
       ],
       content: defaultValue || "",
       editorProps: {
