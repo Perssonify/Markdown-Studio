@@ -254,18 +254,100 @@ const WHITESPACE = /\s/;
  *  adjacent text nodes "foo" and "bar" are one word, not two — but without
  *  materialising the document's text. On the sync path this ran on every
  *  projection, building a full copy of the document as a string each time.
+ *
+ *  Scripts written WITHOUT spaces between words (Chinese, Japanese, Thai, Lao,
+ *  Khmer, Myanmar) broke that rule completely: a whole Japanese paragraph is
+ *  one whitespace-delimited run, so it counted as ONE word. A run containing
+ *  such a character is segmented with `Intl.Segmenter` (dictionary word
+ *  boundaries — 東京は日本の首都です is six words); every other run still counts
+ *  as one, so counts in space-delimited languages are unchanged. The optional
+ *  fields carry that run across text-node boundaries.
  */
-export interface CountAcc { chars: number; words: number; inWord: boolean }
+export interface CountAcc {
+  chars: number;
+  words: number;
+  inWord: boolean;
+  /** Text of the current run seen in EARLIER text nodes (see countTextRun). */
+  head?: string;
+  /** The current run contains a character from a no-space script. */
+  seg?: boolean;
+  /** Words currently credited to the current run (1 until it is segmented). */
+  credit?: number;
+}
 
 /** A fresh accumulator for `countTextRun`. */
-export const newCountAcc = (): CountAcc => ({ chars: 0, words: 0, inWord: false });
+export const newCountAcc = (): CountAcc => ({ chars: 0, words: 0, inWord: false, head: "", seg: false, credit: 0 });
+
+/** Scripts whose words are not separated by spaces. Korean is NOT one of them —
+ *  Hangul text is spaced, so the whitespace rule is already right for it. */
+const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+/** Han and kana, for the no-Segmenter fallback. */
+const HAN_KANA = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
+type WordSegmenter = { segment(input: string): Iterable<{ isWordLike?: boolean }> };
+let _segmenter: WordSegmenter | null | undefined;
+function wordSegmenter(): WordSegmenter | null {
+  if (_segmenter === undefined) {
+    try {
+      const S = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: string }) => WordSegmenter }).Segmenter;
+      _segmenter = S ? new S(undefined, { granularity: "word" }) : null;
+    } catch {
+      _segmenter = null;
+    }
+  }
+  return _segmenter;
+}
+/** Tests: force the fallback (`null`) or restore detection (`undefined`). */
+export function __setWordSegmenterForTests(seg: WordSegmenter | null | undefined): void {
+  _segmenter = seg;
+  _segCache.clear();
+}
+
+// Counting runs on every projection; an unchanged paragraph should not be
+// re-segmented each time. Bounded, and simply dropped when full.
+const _segCache = new Map<string, number>();
+
+/** Words in one whitespace-free run that contains a no-space-script character. */
+function unspacedWordCount(run: string): number {
+  const hit = _segCache.get(run);
+  if (hit !== undefined) return hit;
+  let n = 0;
+  const seg = wordSegmenter();
+  if (seg) {
+    for (const s of seg.segment(run)) if (s.isWordLike) n++;
+  } else {
+    // No Segmenter (older engines): each Han/kana character is a word — the
+    // convention word processors use for East Asian text — and every other
+    // stretch of letters or digits between them one more.
+    let inOther = false;
+    for (const ch of run) {
+      if (HAN_KANA.test(ch)) { n++; inOther = false; }
+      else if (/[\p{L}\p{N}]/u.test(ch)) { if (!inOther) { n++; inOther = true; } }
+      else inOther = false;
+    }
+  }
+  n = Math.max(1, n);
+  if (_segCache.size >= 512) _segCache.clear();
+  _segCache.set(run, n);
+  return n;
+}
+
+/** Re-credit the current run with its segmented word count. */
+function recredit(acc: CountAcc, run: string): void {
+  const n = unspacedWordCount(run);
+  acc.words += n - (acc.credit ?? 1);
+  acc.credit = n;
+}
 
 /** Fold one text run into the accumulator. Exported so that anything already
  *  walking the document (see `computeCanonicalStats`) can count as it goes
  *  rather than walking a second time — and so the whitespace rule lives in
- *  exactly one place. */
+ *  exactly one place. `acc.words` is correct after EVERY call (a run that
+ *  continues into the next text node is provisionally counted), because
+ *  callers read it straight after their walk. */
 export function countTextRun(text: string, acc: CountAcc): void {
   acc.chars += text.length;
+  let runStart = acc.inWord ? 0 : -1; // where the current run began in THIS text
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
     // Fast path for the characters that actually occur in prose.
@@ -274,8 +356,31 @@ export function countTextRun(text: string, acc: CountAcc): void {
       : c < 128
         ? c === 11 || c === 12
         : WHITESPACE.test(text[i]!);
-    if (ws) acc.inWord = false;
-    else if (!acc.inWord) { acc.inWord = true; acc.words++; }
+    if (ws) {
+      if (acc.inWord && acc.seg) recredit(acc, (acc.head ?? "") + text.slice(runStart, i));
+      acc.inWord = false;
+    } else {
+      if (!acc.inWord) {
+        acc.inWord = true;
+        acc.words++;
+        acc.head = "";
+        acc.seg = false;
+        acc.credit = 1;
+        runStart = i;
+      }
+      // No-space scripts all live above U+0E00, so ASCII and Latin-1 never pay.
+      // A high surrogate is tested as its whole code point (CJK Extension B+).
+      if (!acc.seg && c >= 0x0e00) {
+        const ch = c >= 0xd800 && c <= 0xdbff ? String.fromCodePoint(text.codePointAt(i)!) : text[i]!;
+        if (UNSPACED_SCRIPT.test(ch)) acc.seg = true;
+      }
+    }
+  }
+  if (acc.inWord) {
+    // The run continues into the next text node (or the document ends here):
+    // keep its text so far, and credit it provisionally if it needs segmenting.
+    acc.head = (acc.head ?? "") + text.slice(runStart);
+    if (acc.seg) recredit(acc, acc.head);
   }
 }
 
