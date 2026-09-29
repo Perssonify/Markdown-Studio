@@ -167,6 +167,16 @@ interface StorageManifest {
   documents: DocumentSummary[];
 }
 
+/** Does the manifest list exactly the ids that are stored? */
+export function sameIdSet(documents: { id: string }[], ids: readonly unknown[]): boolean {
+  if (documents.length !== ids.length) return false;
+  const stored = new Set(ids.map(String));
+  const listed = new Set(documents.map((d) => d.id));
+  if (listed.size !== documents.length) return false; // duplicate rows
+  for (const id of listed) if (!stored.has(id)) return false;
+  return true;
+}
+
 // ─── IndexedDBStorageAdapter ──────────────────────────────────────────────────
 
 export class IndexedDBStorageAdapter implements StorageAdapter {
@@ -236,18 +246,49 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
     return this._db;
   }
 
-  private async _getManifest(tx?: IDBTransaction): Promise<StorageManifest> {
+  /**
+   * The stored document list, or null when it is MISSING or UNREADABLE — which
+   * the caller must answer by rebuilding it from the documents themselves.
+   *
+   * It used to answer both with an empty list. The very next save then wrote a
+   * manifest containing one document, and every other document became
+   * invisible though still stored — the whole library hanging off one JSON
+   * value nothing ever rebuilt. A transaction that fails still throws.
+   */
+  private async _getManifest(tx: IDBTransaction): Promise<StorageManifest | null> {
+    // idbRequest resolves in the onsuccess microtask — safe to await inside a tx
+    const raw = await idbRequest<string | undefined>(tx.objectStore(STORE_META).get(MANIFEST_KEY));
+    if (raw === undefined || raw === null) return null;
     try {
-      const store = tx
-        ? tx.objectStore(STORE_META)
-        : this._db_().transaction(STORE_META, "readonly").objectStore(STORE_META);
-      // idbRequest resolves in the onsuccess microtask — safe to await inside a tx
-      const raw = await idbRequest<string | undefined>(store.get(MANIFEST_KEY));
-      if (raw) return JSON.parse(raw) as StorageManifest;
-    } catch {
-      /* return empty manifest on any error */
-    }
-    return { documents: [] };
+      const parsed = JSON.parse(raw) as StorageManifest;
+      if (parsed && Array.isArray(parsed.documents)) return parsed;
+    } catch { /* fall through: unreadable */ }
+    console.warn("[IDBStorage] The document list is unreadable — rebuilding it from the stored documents.");
+    return null;
+  }
+
+  /** Summaries of every document actually in the store (cursor, inside `tx`).
+   *  A record that will not parse cannot be summarised and is left out. */
+  private _summariesFromStore(tx: IDBTransaction): Promise<DocumentSummary[]> {
+    return new Promise((resolve, reject) => {
+      const out: DocumentSummary[] = [];
+      const req = tx.objectStore(STORE_DOCS).openCursor();
+      req.onsuccess = () => {
+        const cursor = req.result as IDBCursorWithValue | null;
+        if (!cursor) { resolve(out); return; }
+        const doc = typeof cursor.value === "string" ? deserializeFromStorage(cursor.value) : null;
+        if (doc) out.push(toSummary(doc));
+        cursor.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /** The manifest inside a write transaction, rebuilt first when it is missing
+   *  or unreadable — so a write never replaces the library's index with one
+   *  that lists only the document being written. */
+  private async _manifestForWrite(tx: IDBTransaction): Promise<StorageManifest> {
+    return (await this._getManifest(tx)) ?? { documents: await this._summariesFromStore(tx) };
   }
 
   private async _setManifest(manifest: StorageManifest, tx: IDBTransaction): Promise<void> {
@@ -300,10 +341,29 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
 
   // ── StorageAdapter interface ────────────────────────────────────────────────
 
+  /**
+   * Summaries, newest first. The manifest is checked against the ids that are
+   * really stored and rebuilt from the documents when it is missing,
+   * unreadable or out of step, instead of being trusted blindly.
+   */
   async list(): Promise<DocumentSummary[]> {
     await this._readyPromise;
-    const manifest = await this._getManifest();
-    return manifest.documents.sort(
+    const { manifest, ids } = await idbTransaction(
+      this._db_(), [STORE_DOCS, STORE_META], "readonly",
+      async (tx) => ({
+        manifest: await this._getManifest(tx),
+        ids: await idbRequest<IDBValidKey[]>(tx.objectStore(STORE_DOCS).getAllKeys()),
+      })
+    );
+    let documents = manifest?.documents;
+    if (!documents ? ids.length > 0 : !sameIdSet(documents, ids)) {
+      documents = await idbTransaction(this._db_(), [STORE_DOCS, STORE_META], "readwrite", async (tx) => {
+        const rebuilt = await this._summariesFromStore(tx);
+        await this._setManifest({ documents: rebuilt }, tx);
+        return rebuilt;
+      });
+    }
+    return (documents ?? []).slice().sort(
       (a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()
     );
   }
@@ -372,7 +432,7 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
 
         await idbRequest(store.put(serialized, doc.id));
 
-        const manifest = await this._getManifest(tx);
+        const manifest = await this._manifestForWrite(tx);
         const summary = toSummary(doc);
         const idx = manifest.documents.findIndex((d) => d.id === doc.id);
         if (idx >= 0) {
@@ -416,7 +476,7 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
       async (tx) => {
         await idbRequest(tx.objectStore(STORE_DOCS).delete(id));
 
-        const manifest = await this._getManifest(tx);
+        const manifest = await this._manifestForWrite(tx);
         manifest.documents = manifest.documents.filter((d) => d.id !== id);
         await this._setManifest(manifest, tx);
       }
@@ -426,10 +486,9 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
   }
 
   async search(query: string): Promise<DocumentSummary[]> {
-    await this._readyPromise;
-    const manifest = await this._getManifest();
+    const documents = await this.list();
     const q = query.toLowerCase();
-    return manifest.documents.filter(
+    return documents.filter(
       (d) =>
         d.title.toLowerCase().includes(q) ||
         (d.tags ?? []).some((t) => t.toLowerCase().includes(q))
