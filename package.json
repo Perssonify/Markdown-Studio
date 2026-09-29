@@ -75,7 +75,7 @@
   "scripts": {
     "dev": "vite --config vite.app.config.ts",
     "build": "vite build && tsc -p tsconfig.build.json",
-    "build:app": "vite build --config vite.app.config.ts",
+    "build:app": "vite build --config vite.app.config.ts && node scripts/third-party-licenses.mjs",
     "build:embed": "vite build --config vite.embed.config.ts",
     "preview": "vite preview --config vite.app.config.ts",
     "test": "vitest run",
@@ -93,6 +93,8 @@
     "e2e:faults": "node e2e/run.mjs faults",
     "e2e:library": "node e2e/run.mjs library",
     "e2e:bridge": "node e2e/run.mjs bridge",
+    "e2e:csp": "node e2e/run.mjs csp",
+    "e2e:pwa": "node e2e/run.mjs pwa",
     "e2e:perf": "node e2e/run.mjs perf"
   },
   "peerDependencies": {

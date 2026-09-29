@@ -2,6 +2,7 @@ import { FileText, Heart, Shield, WifiOff } from "lucide-react";
 import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, VERSION } from "../../constants";
 import { CREDITS, LICENSE_SUMMARY, THIRD_PARTY_NOTICES_PATH } from "../../data/credits";
 import { PageChrome } from "./PageChrome";
+import { CopyDiagnosticsButton } from "../DiagnosticsActions";
 
 interface AboutPageProps {
   onClose: () => void;
@@ -125,6 +126,18 @@ export function AboutPage({ onClose }: AboutPageProps) {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Report a problem — the diagnostics report is privacy-safe (event
+            types, versions, browser; never document content), so it can be
+            pasted into a support request as-is (utils/diagnostics.ts, A009). */}
+        <section className="mt-12">
+          <h2 className="text-lg font-semibold tracking-tight">Something not working?</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Copy a diagnostics report and include it when you get in touch. It lists recent
+            errors, the app version and your browser — never the contents of your documents.
+          </p>
+          <CopyDiagnosticsButton className="mt-3" />
         </section>
 
         <footer className="mt-12 border-t border-border pt-6 text-center text-xs text-muted-foreground">
