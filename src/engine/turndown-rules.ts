@@ -12,7 +12,7 @@ interface TurndownInstance {
       replacement: (content: string, node?: Node) => string;
     }
   ): TurndownInstance;
-  turndown(html: string): string;
+  turndown(input: string | Node): string;
 }
 
 interface FieldEntry {
@@ -36,6 +36,144 @@ export const BLOCK_ELEMENTS = new Set([
 ]);
 const isBlockElement = (el: Element): boolean =>
   BLOCK_ELEMENTS.has(el.nodeName) || el.nodeName === "DETAILS";
+
+/** Boundary markers for turndownLinear (see there); never part of the output. */
+const SEAM_OPEN = "";
+const SEAM_CLOSE = "";
+
+const VOID_ELEMENTS = new Set([
+  "AREA", "BASE", "BR", "COL", "COMMAND", "EMBED", "HR", "IMG", "INPUT", "KEYGEN",
+  "LINK", "META", "PARAM", "SOURCE", "TRACK", "WBR",
+]);
+
+/**
+ * The top-level elements of SERIALIZED markup (the output of innerHTML /
+ * getHTML: every non-void element closed, `<` escaped in text), as
+ * [start, end) offsets — or null if the markup is not plainly well-formed, in
+ * which case the caller converts it whole. Attribute values may hold `>` and
+ * even `</p>` (serialization does not escape those), so tags are scanned
+ * quote-aware.
+ */
+function topLevelElements(html: string): Array<{ start: number; end: number; tag: string }> | null {
+  const out: Array<{ start: number; end: number; tag: string }> = [];
+  let depth = 0;
+  let open: { start: number; tag: string } | null = null;
+  let i = 0;
+  for (;;) {
+    const lt = html.indexOf("<", i);
+    if (lt === -1) break;
+    if (html.startsWith("<!--", lt)) {
+      const end = html.indexOf("-->", lt + 4);
+      if (end === -1) return null;
+      i = end + 3;
+      continue;
+    }
+    const m = /^<(\/?)([A-Za-z][A-Za-z0-9-]*)/.exec(html.slice(lt, lt + 80));
+    if (!m) return null;
+    let j = lt + m[0].length;
+    let quote = "";
+    for (; j < html.length; j++) {
+      const c = html[j];
+      if (quote) { if (c === quote) quote = ""; }
+      else if (c === '"' || c === "'") quote = c;
+      else if (c === ">") break;
+    }
+    if (j >= html.length) return null;
+    const tag = m[2]!.toUpperCase();
+    if (m[1]) {
+      if (--depth < 0) return null;
+      if (depth === 0) {
+        if (!open || open.tag !== tag) return null;
+        out.push({ start: open.start, end: j + 1, tag });
+        open = null;
+      }
+    } else if (!VOID_ELEMENTS.has(tag) && html[j - 1] !== "/") {
+      if (depth === 0) open = { start: lt, tag };
+      depth++;
+    } else if (depth === 0) {
+      out.push({ start: lt, end: j + 1, tag });
+    }
+    i = j + 1;
+  }
+  return depth === 0 ? out : null;
+}
+
+/**
+ * `td.turndown(html)`, in linear time.
+ *
+ * Turndown folds a node's children into one string with `join(output, next)`,
+ * and every join reads the last characters of the accumulated output — which
+ * makes V8 flatten the whole string it has built so far. At the root of a
+ * large document (thousands of top-level blocks) that is quadratic, and the
+ * conversion runs on every rich→markdown projection.
+ *
+ * So the top level is converted in runs of `chunk` blocks and the runs joined
+ * here with turndown's OWN separator rule: the seam gets max(newlines ending
+ * the left run, newlines starting the right run), at most two. Each run is
+ * bracketed by a sentinel character, so turndown's final trim cannot eat the
+ * newlines a seam needs to see. Runs split only between two elements turndown
+ * itself treats as blocks, with nothing but whitespace between them — where
+ * its whitespace pass removes that whitespace anyway — so the output is
+ * byte-identical to the plain conversion (`converter-linear.test.js`). The
+ * split is made on the markup STRING: taking the nodes out of one parsed tree
+ * costs more than it saves wherever child lists are arrays (jsdom measured
+ * slower than doing nothing at all). Small documents take the plain path.
+ */
+export function turndownLinear(td: TurndownInstance, html: string, chunk = 64): string {
+  const elements = html.length > 4096 || chunk < 64 ? topLevelElements(html) : null;
+  if (!elements) return td.turndown(html);
+
+  // Run boundaries: the offsets where one run ends and the next begins.
+  const cuts: Array<[number, number]> = [];
+  let blocksInRun = 0;
+  for (let k = 0; k < elements.length; k++) {
+    const el = elements[k]!;
+    const isBlock = BLOCK_ELEMENTS.has(el.tag);
+    const prev = elements[k - 1];
+    if (
+      isBlock && prev && BLOCK_ELEMENTS.has(prev.tag) && blocksInRun >= chunk &&
+      !/[^ \t\r\n]/.test(html.slice(prev.end, el.start))
+    ) {
+      cuts.push([prev.end, el.start]);
+      blocksInRun = 0;
+    }
+    if (isBlock) blocksInRun++;
+  }
+  if (!cuts.length) return td.turndown(html);
+
+  const parts: string[] = [];
+  let pending = 0; // newlines owed after the text so far
+  let started = false;
+  for (let i = 0; i <= cuts.length; i++) {
+    const from = i === 0 ? 0 : cuts[i - 1]![1];
+    const to = i === cuts.length ? html.length : cuts[i]![0];
+    const first = i === 0;
+    const last = i === cuts.length;
+    let out = td.turndown((first ? "" : SEAM_OPEN) + html.slice(from, to) + (last ? "" : SEAM_CLOSE));
+    if (!first) {
+      if (!out.startsWith(SEAM_OPEN)) return td.turndown(html);
+      out = out.slice(1);
+    }
+    if (!last) {
+      if (!out.endsWith(SEAM_CLOSE)) return td.turndown(html);
+      out = out.slice(0, -1);
+    }
+    let lead = 0;
+    while (lead < out.length && out[lead] === "\n") lead++;
+    if (lead === out.length) {
+      pending = Math.max(pending, lead);
+      continue;
+    }
+    let trail = 0;
+    while (out[out.length - 1 - trail] === "\n") trail++;
+    if (started) parts.push("\n\n".slice(0, Math.min(2, Math.max(pending, lead))));
+    parts.push(out.slice(lead, out.length - trail));
+    started = true;
+    pending = trail;
+  }
+  // turndown's own final trim, over the whole document.
+  return parts.join("").replace(/^[\t\r\n]+/, "").replace(/[\t\r\n\s]+$/, "");
+}
 
 /**
  * `<a data-doc-link data-anchor>` → `[[target#anchor]]` / `[[target|alias]]`.
