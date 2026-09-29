@@ -13,6 +13,7 @@ import { EditorSelection } from "@codemirror/state";
 import { MODES } from "../constants";
 import { applyCase, type CaseMode } from "../formatting/case-transform";
 import { useUIStore } from "../store/uiStore";
+import { isAltGraphInput } from "../utils/alt-graph";
 export interface MatchPosition {
   pos: number;
   len: number;
@@ -1046,6 +1047,8 @@ export function FindReplaceBar({
         // ⌘F / ⌘H switch modes while focus is INSIDE the panel — the global
         // shortcut listener is scoped to the editor container, so it can't see
         // keystrokes here (the panel is a fixed overlay outside that container).
+        // AltGr is typing (Windows reports it as Ctrl+Alt) — never a mode switch.
+        if (isAltGraphInput(e.nativeEvent)) return;
         const mod = e.ctrlKey || e.metaKey;
         if (mod && e.key.toLowerCase() === "f") { e.preventDefault(); setPanelMode("find"); }
         else if (mod && e.key.toLowerCase() === "h" && !readOnly) { e.preventDefault(); setPanelMode("replace"); }

@@ -1,5 +1,6 @@
 import { RefObject, useEffect } from "react";
 import { useUIStore } from "../store/uiStore";
+import { isAltGraphInput } from "../utils/alt-graph";
 
 interface KeyboardShortcutsOptions {
   dispatch: (command: string, value?: any) => void;
@@ -59,6 +60,13 @@ export function useKeyboardShortcuts(
     // on the mount order.
     const handler = (e: KeyboardEvent) => {
       if (!useUIStore.getState().keyboardShortcutsEnabled) return; // disabled in Settings
+      // AltGr is TYPING, not a chord. Windows reports it as Ctrl+Alt, so without
+      // this every AltGr character met the `mod` test below: `[` and `]` (AltGr+8
+      // / AltGr+9 on a German layout) were swallowed as outdent / indent in both
+      // panes, and Hungarian AltGr+F — its `[` — opened Find & Replace through
+      // the physical-key match in the ⌥⌘F branch. See isAltGraphInput for why a
+      // plain Ctrl+Alt+F on a US layout still counts as a chord.
+      if (isAltGraphInput(e)) return;
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       // This listener is capture-phase on `document`, so it runs before
