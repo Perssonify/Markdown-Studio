@@ -20,15 +20,17 @@ import { Callout } from "../extensions/Callout";
 import { Details, Summary } from "../extensions/Details";
 import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
+import { TableCellAlign } from "../extensions/TableCellAlign";
 import { ThemeImage } from "../extensions/ThemeImage";
 
 /**
  * Headless serialization of canonical ProseMirror JSON → HTML, mirroring the
  * schema used by TiptapPane (base codeBlock instead of the React node view;
  * no SearchHighlight plugin). Used for bulk export (e.g. folder → zip) where no
- * live editor instance is available.
+ * live editor instance is available. Exported so the converter round-trip
+ * suite parses through exactly this schema.
  */
-const SERIALIZE_EXTENSIONS = [
+export const SERIALIZE_EXTENSIONS = [
   StarterKit.configure({ link: false, underline: false }),
   TaskList,
   TaskItem.configure({ nested: true }),
@@ -59,6 +61,7 @@ const SERIALIZE_EXTENSIONS = [
   TableRow,
   TableCell,
   TableHeader,
+  TableCellAlign,
 ];
 
 export function canonicalToHtml(canonical: unknown): string {

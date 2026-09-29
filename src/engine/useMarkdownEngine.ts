@@ -5,7 +5,7 @@ import type { Marked } from 'marked';
 import TurndownService from 'turndown';
 import { preprocessMarkdown, normalizeMarkdown } from './preprocessor';
 import { cleanHtmlForTurndown } from './html-cleaner';
-import { addBaseRules, addInlineStyleRule } from './turndown-rules';
+import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
 import { buildMarked } from './build-marked';
 import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
 import { useUIStore } from '../store/uiStore';
@@ -147,6 +147,99 @@ export interface MarkdownEngine {
   htmlToCleanMd: (html: string) => string;
 }
 
+/**
+ * The three converters as a plain factory. `useMarkdownEngine` is a thin React
+ * wrapper around this; it exists on its own so the converter round-trip suite
+ * drives the very objects the app uses — the same turndown instances, rules,
+ * escaping and whitespace passes — rather than a hand-assembled copy that can
+ * drift from them.
+ *
+ * Both getters are read at CALL time, never captured: the hook keeps the engine
+ * object identity stable across settings changes (the sync engine holds it in
+ * effect dependencies) and relies on that to pick up new settings.
+ */
+export function createMarkdownEngine(
+  getFeatures: () => MarkdownFeatureSettings,
+  getMarked?: () => Marked,
+): MarkdownEngine {
+  let cachedFor: MarkdownFeatureSettings | null = null;
+  let cached: Marked | null = null;
+  const marked = getMarked ?? (() => {
+    const f = getFeatures();
+    if (f !== cachedFor || !cached) {
+      cached = buildMarked(f);
+      cachedFor = f;
+    }
+    return cached;
+  });
+
+  // `hr: "---"`: turndown's default `* * *` rewrote every thematic break the
+  // user typed on the first rich-pane edit. Its rule always emits the break
+  // between blank lines, so `---` cannot read as a setext underline or open
+  // front matter.
+  const options = { headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*", hr: "---" } as const;
+
+  // Escape exactly what the CURRENT settings give meaning to (turndown-rules.ts
+  // escapeMarkdownText): `$` only while maths is on, `~~` only while
+  // strikethrough is, `{` only while the curly syntax is.
+  const escapeOptions = (): EscapeOptions => {
+    const f = getFeatures();
+    return {
+      math: f.math,
+      strikethrough: f.flavor !== "commonmark" && f.strikethrough,
+      curly: f.curlyBraceFormatting === true,
+    };
+  };
+
+  const tdInline = new TurndownService(options);
+  addBaseRules(tdInline);
+  addInlineStyleRule(tdInline);
+  installEscape(tdInline, escapeOptions);
+
+  const tdClean = new TurndownService(options);
+  addBaseRules(tdClean);
+  installEscape(tdClean, escapeOptions);
+
+  return {
+    mdToHtml: (md: string) => {
+      const features = getFeatures();
+      let html = marked().parse(
+        preprocessMarkdown(md, {
+          taskLists: features.taskLists,
+          frontmatter: true,
+          // Wiki links / heading anchors are rendered by the marked extension
+          // in build-marked.ts (so they can never land inside code); this
+          // pass only protects an alias's `|` from GFM table cell splitting.
+          wikiLinkTablePipes: true,
+          // Undocumented and opt-in: see PreprocessFeatures.
+          curlyBraceFormatting: features.curlyBraceFormatting === true,
+        }),
+        { async: false }
+      ) as string;
+      // Skip task lists (data-type="taskList"/"taskItem") — they render as
+      // a checkbox row, not a disc/decimal marker, and TaskList/TaskItem
+      // parse on their data-type so a disc bullet would just sit beside the
+      // checkbox. The negative lookaheads leave those elements untouched.
+      //
+      // Each of these is a backtracking scan of the WHOLE rendered
+      // document, run on every projection. Most documents contain no list
+      // at all, and an `indexOf` scan is far cheaper than a regex one, so
+      // check for the tag before scanning for it.
+      if (html.indexOf("<ul") !== -1)
+        html = html.replace(/<ul(?![^>]*data-type="taskList")(?=[\s>])/g, '<ul style="list-style:disc outside;padding-left:24px;margin:8px 0"');
+      if (html.indexOf("<ol") !== -1)
+        html = html.replace(/<ol(?=[\s>])/g, '<ol style="list-style:decimal outside;padding-left:24px;margin:8px 0"');
+      if (html.indexOf("<li") !== -1)
+        html = html.replace(/<li(?![^>]*data-type="taskItem")(?=[\s>])/g, '<li style="display:list-item;margin-bottom:2px"');
+      return html;
+    },
+    // turndownLinear, not td.turndown: the plain conversion is quadratic in
+    // document length (turndown-rules.ts).
+    htmlToMd: (html: string) => normalizeMarkdown(turndownLinear(tdInline, cleanHtmlForTurndown(html))),
+    htmlToCleanMd: (html: string) => normalizeMarkdown(turndownLinear(tdClean, cleanHtmlForTurndown(html))),
+  };
+}
+
 export function useMarkdownEngine(): {
   ready: boolean;
   engine: MarkdownEngine | null;
@@ -191,50 +284,10 @@ export function useMarkdownEngine(): {
         // Ensure a marked instance exists even before the features effect runs.
         if (!markedRef.current) markedRef.current = buildMarked(featuresRef.current);
 
-        const tdInline = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*" });
-        addBaseRules(tdInline);
-        addInlineStyleRule(tdInline);
-
-        const tdClean = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*" });
-        addBaseRules(tdClean);
-
-        engineRef.current = {
-          mdToHtml: (md: string) => {
-            const m = markedRef.current ?? (markedRef.current = buildMarked(featuresRef.current));
-            let html = m.parse(
-              preprocessMarkdown(md, {
-                taskLists: featuresRef.current.taskLists,
-                frontmatter: true,
-                // Internal links are a core feature of this editor, but the
-                // renderer had never enabled them — so [[Doc]] / [[Doc#Heading]]
-                // showed as plain text in the rich pane (no styling, no click
-                // target). Turn them on so wiki links and heading anchors
-                // actually render and are clickable; the turndown wikiLink rule
-                // round-trips them back to source.
-                wikiLinks: true,
-              }),
-              { async: false }
-            ) as string;
-            // Skip task lists (data-type="taskList"/"taskItem") — they render as
-            // a checkbox row, not a disc/decimal marker, and TaskList/TaskItem
-            // parse on their data-type so a disc bullet would just sit beside the
-            // checkbox. The negative lookaheads leave those elements untouched.
-            //
-            // Each of these is a backtracking scan of the WHOLE rendered
-            // document, run on every projection. Most documents contain no list
-            // at all, and an `indexOf` scan is far cheaper than a regex one, so
-            // check for the tag before scanning for it.
-            if (html.indexOf("<ul") !== -1)
-              html = html.replace(/<ul(?![^>]*data-type="taskList")(?=[\s>])/g, '<ul style="list-style:disc outside;padding-left:24px;margin:8px 0"');
-            if (html.indexOf("<ol") !== -1)
-              html = html.replace(/<ol(?=[\s>])/g, '<ol style="list-style:decimal outside;padding-left:24px;margin:8px 0"');
-            if (html.indexOf("<li") !== -1)
-              html = html.replace(/<li(?![^>]*data-type="taskItem")(?=[\s>])/g, '<li style="display:list-item;margin-bottom:2px"');
-            return html;
-          },
-          htmlToMd: (html: string) => normalizeMarkdown(tdInline.turndown(cleanHtmlForTurndown(html))),
-          htmlToCleanMd: (html: string) => normalizeMarkdown(tdClean.turndown(cleanHtmlForTurndown(html))),
-        };
+        engineRef.current = createMarkdownEngine(
+          () => featuresRef.current,
+          () => markedRef.current ?? (markedRef.current = buildMarked(featuresRef.current)),
+        );
 
         setReady(true);
         diag("ENGINE", "ready=true, engine created successfully");

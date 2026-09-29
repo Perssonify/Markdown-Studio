@@ -1,7 +1,48 @@
 import type { PMNode } from "./document";
 import { isDangerousUrl } from "../utils/url-safety";
+import { sanitizeCssColor, sanitizeFontFamily, sanitizeTextAlign } from "../engine/css-safety";
 
-const URL_ATTRS = new Set(["href", "src", "xlink:href"]);
+// Compared lower-cased. `lightsrc`/`darksrc` are the themeImage node's two
+// image URLs: they render as <img src> and <source srcset>.
+const URL_ATTRS = new Set(["href", "src", "xlink:href", "lightsrc", "darksrc"]);
+
+/**
+ * Attributes the editor's extensions interpolate into a `style` attribute:
+ * `color` / `backgroundColor` / `fontFamily` on the textStyle mark,
+ * `textAlign` on paragraphs and headings, `align` on table cells, and the
+ * cell column widths the table view writes into `<col style="width: …">`.
+ * ProseMirror trusts JSON attrs verbatim and those renderers concatenate them
+ * unchecked, so a crafted `.json`/backup import or a host update could carry
+ * `color: "red; position: fixed; inset: 0; …"` and render a full-screen
+ * overlay (with a link mark on it, one that redirects every click). A value
+ * that is not the kind of value its attribute holds is dropped — the schema
+ * default (no style) takes its place.
+ */
+function sanitizeStyleAttr(key: string, value: unknown): { keep: boolean; value?: unknown } {
+  if (value == null) return { keep: true, value };
+  switch (key) {
+    case "color":
+    case "backgroundColor": {
+      const v = sanitizeCssColor(String(value));
+      return v ? { keep: true, value: v } : { keep: false };
+    }
+    case "fontFamily": {
+      const v = sanitizeFontFamily(value);
+      return v ? { keep: true, value: v } : { keep: false };
+    }
+    case "textAlign":
+    case "align": {
+      const v = sanitizeTextAlign(value);
+      return v ? { keep: true, value: v } : { keep: false };
+    }
+    case "colwidth":
+      return Array.isArray(value) && value.every((w) => typeof w === "number" && Number.isFinite(w))
+        ? { keep: true, value }
+        : { keep: false };
+    default:
+      return { keep: true, value };
+  }
+}
 
 /** Deeper than any real ProseMirror document; guards against a hostile,
  *  pathologically-nested pmjson import overflowing the recursion stack. */
@@ -24,7 +65,11 @@ export function sanitizeCanonicalNode<T extends PMNode | null | undefined>(node:
     for (const key of Object.keys(attrs)) {
       if (URL_ATTRS.has(key.toLowerCase()) && isDangerousUrl(attrs[key])) {
         delete attrs[key];
+        continue;
       }
+      const styled = sanitizeStyleAttr(key, attrs[key]);
+      if (!styled.keep) delete attrs[key];
+      else attrs[key] = styled.value;
     }
     return attrs;
   };
