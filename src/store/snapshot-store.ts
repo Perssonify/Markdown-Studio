@@ -149,7 +149,18 @@ class SnapshotStore {
             os.createIndex(IDX_DOC, "docId", { unique: false });
           }
         };
-        req.onsuccess = (e) => { this.db = (e.target as IDBOpenDBRequest).result; resolve(); };
+        req.onsuccess = (e) => {
+          const db = (e.target as IDBOpenDBRequest).result;
+          // Never block a newer build's upgrade of this database from another
+          // tab (it would hang on open). Close, and keep working from the
+          // in-memory ring for the rest of this tab's life.
+          db.onversionchange = () => {
+            db.close();
+            if (this.db === db) { this.db = null; this.usable = false; }
+          };
+          this.db = db;
+          resolve();
+        };
         req.onerror = () => { this.usable = false; resolve(); };
       } catch {
         this.usable = false;

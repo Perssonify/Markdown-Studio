@@ -65,6 +65,10 @@ export function isNewerThanBase(
   return drift > CONFLICT_TOLERANCE_MS;
 }
 
+/** The saveError a document gets while it is locked read-only because its
+ *  content does not fit this build (see schema-version.ts). */
+export const SCHEMA_LOCK_ERROR = "Made by a newer version of the app — open read-only, not saving";
+
 /** The message a refused multi-tab write carries (the UI matches on its start). */
 export const CONFLICT_MESSAGE =
   "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload.";
@@ -239,7 +243,21 @@ interface DocumentState {
    * editor over real content).
    */
   hydratedDocId: string | null;
+  /** Mark which document the editor holds. Refused (left null) for a document
+   *  locked by `markIncompatible` — the editor only holds a display copy. */
   markHydrated: (docId: string | null) => void;
+
+  /**
+   * A document whose stored content does not fit the live editor schema, or
+   * claims a newer schema version (see schema-version.ts). The editor shows a
+   * best-effort READ-ONLY copy, so the document is never marked hydrated and
+   * saveActiveDoc refuses it; renames and metadata changes keep the stored
+   * content. Cleared when the document is next hydrated with content that fits.
+   */
+  schemaLock: { docId: string; reason: string } | null;
+  markIncompatible: (docId: string, reason: string) => void;
+  clearIncompatible: (docId: string) => void;
+  isIncompatible: (docId: string) => boolean;
 
   /**
    * Register a getter that returns the LIVE TipTap editor's canonical for a
@@ -371,6 +389,11 @@ let blankSaveAllowedFor: string | null = null;
 // still passes its hydration chokepoint and writes the record straight back,
 // resurrecting a document the user just deleted. Consulted by the save path.
 const deletingDocs = new Set<string>();
+
+// Documents locked read-only because their content does not fit this build
+// (see `schemaLock`). Module scope, like `deletingDocs`: the save path consults
+// it synchronously.
+const incompatibleDocs = new Map<string, string>();
 
 // Getter for the LIVE editor canonical of a doc (registered by PE). Returns the
 // current TipTap JSON when the editor holds that doc's content, else null. Kept
@@ -575,7 +598,20 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   _unsavedEdits: new Map(),
   _draftBases: new Map(),
   hydratedDocId: null,
-  markHydrated: (docId) => set({ hydratedDocId: docId }),
+  markHydrated: (docId) => set({ hydratedDocId: docId && incompatibleDocs.has(docId) ? null : docId }),
+  schemaLock: null,
+  markIncompatible: (docId, reason) => {
+    incompatibleDocs.set(docId, reason);
+    set((s) => ({
+      schemaLock: { docId, reason },
+      hydratedDocId: s.hydratedDocId === docId ? null : s.hydratedDocId,
+    }));
+  },
+  clearIncompatible: (docId) => {
+    if (!incompatibleDocs.delete(docId)) return;
+    set((s) => (s.schemaLock?.docId === docId ? { schemaLock: null } : {}));
+  },
+  isIncompatible: (docId) => incompatibleDocs.has(docId),
   registerLiveCanonical: (fn) => { liveCanonicalProvider = fn; },
 
   setEngine: (engine) => set({ _engine: engine }),
@@ -784,6 +820,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   saveActiveDoc: async (tiptapEditor) => {
     const { activeDoc, hydratedDocId } = get();
     if (!activeDoc || !tiptapEditor) return false;
+
+    // Locked read-only (content from a newer build): the editor holds a display
+    // copy, and writing it would replace the real content with a lossy one.
+    // TERMINAL like the blank backstop — retrying cannot help.
+    if (incompatibleDocs.has(activeDoc.id)) {
+      set({ saveStatus: "blocked", saveError: SCHEMA_LOCK_ERROR });
+      return false;
+    }
 
     // Data-integrity chokepoint: the editor's content must belong to the
     // active document. If a code path switched documents without hydrating
@@ -1114,6 +1158,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (doomed) await snapshotStore.record(docId, doomed.title, doomed.canonical, "pre-delete");
     } catch { /* best effort — never block a delete on the snapshot net */ }
     await storage.delete(docId);
+    get().clearIncompatible(docId);
     // Purge any cached draft for the deleted doc: a later import that reuses
     // the same id (e.g. restoring an exported .json) would otherwise resurrect
     // the dead doc's draft over the freshly imported content.
