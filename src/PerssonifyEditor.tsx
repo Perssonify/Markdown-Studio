@@ -1622,11 +1622,11 @@ export function PerssonifyEditor({
               await new Promise((r) => requestAnimationFrame(r));
               // Now finalize with the editor instance to capture canonical and persist
               await finalizeDoc(doc as any, editor, false);
-              // Seed the companion documents AFTER the initial doc is live, so
-              // this reuses the ordinary import path (editor mounted → real
-              // canonical captured) rather than a second, headless one. Then
-              // return to the initial document so the user lands where they
-              // expect. Best-effort: a failure here must not break startup.
+              // Seed the companion documents AFTER the initial doc is live,
+              // through the ordinary import path (which converts headlessly
+              // against the live schema and never activates mid-loop, A031),
+              // then return to the initial document so the user lands where
+              // they expect. Best-effort: a failure here must not break startup.
               if (starterDocuments?.length) {
                 try {
                   await importItems(
