@@ -24,6 +24,7 @@ import {
 } from "./document";
 import { sanitizeCanonicalNode } from "./canonical-sanitize";
 import { isDangerousUrl } from "../utils/url-safety";
+import { sanitizeStyleDeclarations } from "../engine/css-safety";
 
 // --- Types ---
 
@@ -114,10 +115,14 @@ const KNOWN_ELEMENTS = new Set([
   "strike",
   "sub",
   "sup",
-  "mark",
+  // NOT "mark": there is no Highlight extension (highlight is a textStyle
+  // backgroundColor), so a <mark>'s highlight is dropped and must be reported.
   "span",
   "details",
   "summary",
+  // `<section>` — marked-footnote wraps the definitions in one; the section
+  // itself is regenerated from the markdown and its content round-trips.
+  "section",
   // `<div>` — the callout node parses `div[data-type="callout"]`, and turndown's
   // `plainDiv` rule handles the rest. Our OWN markdown renderer emits callout
   // divs, so without this the shipped welcome document reported its own
@@ -131,12 +136,12 @@ const KNOWN_ELEMENTS = new Set([
   "source",
 ]);
 
-/** Known CSS properties that Tiptap extensions handle */
+/** Known CSS properties that Tiptap extensions handle. (NOT `font-size`: there
+ *  is no FontSize extension, so a size is dropped and must be reported.) */
 const KNOWN_STYLES = new Set([
   "color",
   "background-color",
   "background",
-  "font-size",
   "font-family",
   "font-weight",
   "font-style",
@@ -208,20 +213,26 @@ const BLOCKED_ELEMENTS = new Set([
  * `build-marked.ts` / the custom TipTap nodes and survive the schema, so they
  * are NOT serialization losses and must never be counted as residuals.
  */
+//
+// Re-synced with the LIVE schema (TiptapPane / SERIALIZE_EXTENSIONS): an entry
+// here silences a residual, so one the schema does NOT keep hides a real loss.
+// `data-block-id` (no BlockId extension is registered), `data-latex` /
+// `data-diagram` / `data-slot` / `data-md-preview` (nothing in the document
+// pipeline emits or keeps them) were removed; `data-frontmatter` was missing,
+// so every document with front matter reported a bogus residual.
 const SCHEMA_OWNED_ATTRS = new Set([
-  "data-type",        // taskList / taskItem / callout
+  "data-type",        // taskList / taskItem / callout / frontmatter
   "data-checked",     // task items
   "data-callout",     // callout kind
   "data-doc-link",    // wiki links
   "data-anchor",      // heading anchors
-  "data-latex",       // math nodes
   "data-math-inline",
   "data-math-block",
-  "data-block-id",
   "data-emoji",
-  "data-diagram",
-  "data-md-preview",
-  "data-slot",
+  "data-frontmatter", // the front matter node's raw YAML
+  // (Not marked-footnote's `data-footnote-*`: it writes them VALUELESS, which
+  // the scan below never matches on the markdown path, and on the HTML path —
+  // serialized as `=""` — they genuinely are dropped.)
 ]);
 
 function analyzeHtml(html: string): AnalysisResult {
@@ -229,6 +240,22 @@ function analyzeHtml(html: string): AnalysisResult {
   const processed: Record<string, number> = {};
   const transformed: unknown[] = [];
   let totalElements = 0;
+
+  // HTML comments have no node in the schema, so a `<!-- note -->` in an
+  // imported document was deleted on the first projection with nothing to say
+  // so. An empty `<!---->` carries nothing (the serializer uses one as an
+  // invisible separator) and is not a loss.
+  if (html.indexOf("<!--") !== -1) {
+    for (const c of html.matchAll(/<!--([\s\S]*?)-->/g)) {
+      const text = c[1]!.trim();
+      if (!text) continue;
+      residuals.push({
+        type: "html-comment",
+        value: text.length > 80 ? text.slice(0, 80) + "…" : text,
+        location: `position ${c.index}`,
+      });
+    }
+  }
 
   const tagRegex = /<(\/?)(\w[\w-]*)((?:\s+[^>]*)?)>/g;
   let match;
@@ -359,6 +386,15 @@ function hasDangerousSrcset(value: string): boolean {
     .some((url) => url && isDangerousUrl(url));
 }
 
+/**
+ * `class` values that carry meaning for the editor: the code block's language
+ * (`language-js`, read by the CodeBlock node) and the screen-reader-only
+ * footnote heading. Everything else goes — this output is injected into a live
+ * document by the Cards preview, where the app's own Tailwind utilities are
+ * loaded, so `class="fixed inset-0 z-50"` was a full-screen overlay.
+ */
+const KEPT_CLASS = /^(?:language-[\w+#.-]+|sr-only)$/;
+
 function stripDangerousAttributes(doc: Document): void {
   doc.querySelectorAll("*").forEach((el) => {
     for (const attr of Array.from(el.attributes)) {
@@ -370,10 +406,19 @@ function stripDangerousAttributes(doc: Document): void {
         // into a live document by the Cards preview. A style can fetch
         // (`background-image: url(...)`) and can escape its box
         // (`position: fixed`), so the ingest path keeps only declarations that
-        // cannot do either.
-        const safe = sanitizeInlineStyle(attr.value);
+        // cannot do either — through an ALLOWLIST (css-safety.ts): a deny-list
+        // was walked straight past by CSS escapes (`posit\ion: fixed`).
+        const safe = sanitizeStyleDeclarations(attr.value);
         if (safe) el.setAttribute("style", safe);
         else el.removeAttribute("style");
+      } else if (name === "class") {
+        const kept = attr.value.split(/\s+/).filter((c) => KEPT_CLASS.test(c));
+        if (kept.length) el.setAttribute("class", kept.join(" "));
+        else el.removeAttribute("class");
+      } else if (name === "id" || name === "name") {
+        // Named elements are reachable as globals (`window.foo`,
+        // `document.foo`): DOM clobbering. Nothing the schema keeps uses them.
+        el.removeAttribute(attr.name);
       } else if (name === "srcset") {
         if (hasDangerousSrcset(attr.value)) el.removeAttribute(attr.name);
       } else if (URL_ATTRS.has(name) && isDangerousUrl(attr.value)) {
@@ -382,43 +427,6 @@ function stripDangerousAttributes(doc: Document): void {
     }
   });
 }
-
-/**
- * Keep the inline styles the editor itself round-trips (colour, weight,
- * alignment, background COLOUR) and drop anything that fetches or positions.
- * Returns "" when nothing survives.
- */
-function sanitizeInlineStyle(value: string): string {
-  const kept: string[] = [];
-  for (const decl of value.split(";")) {
-    const idx = decl.indexOf(":");
-    if (idx < 0) continue;
-    const prop = decl.slice(0, idx).trim().toLowerCase();
-    const val = decl.slice(idx + 1).trim();
-    if (!prop || !val) continue;
-    // A value that can issue a request or run a legacy expression, whatever the
-    // property it is attached to.
-    if (/url\s*\(|expression\s*\(|image-set\s*\(|@import|behavior|-moz-binding/i.test(val)) continue;
-    if (BLOCKED_STYLE_PROPS.has(prop) || prop.startsWith("-")) continue;
-    kept.push(`${prop}: ${val}`);
-  }
-  return kept.join("; ");
-}
-
-/**
- * Properties that let pasted content leave its own box or hide itself.
- *
- * Sizing (`width`/`height`) is deliberately NOT here: table column widths ride
- * on `<col style="width: …">` and images carry explicit sizes, both of which the
- * editor round-trips. With `position` blocked, an over-wide element can only be
- * over-wide inside the document flow.
- */
-const BLOCKED_STYLE_PROPS = new Set([
-  "position", "top", "right", "bottom", "left", "z-index",
-  "transform", "translate", "rotate", "scale",
-  "content", "cursor", "pointer-events", "opacity", "filter", "mix-blend-mode",
-  "background", "background-image", "src",
-]);
 
 /**
  * Container elements that are blocked as ELEMENTS but whose children are
@@ -463,13 +471,12 @@ export function sanitizeForIngest(html: string): string {
     stripDangerousAttributes(doc);
     return doc.body.innerHTML;
   } catch {
-    // Fallback: strip blocked tags entirely if DOMParser unavailable
-    let clean = html;
-    for (const tag of BLOCKED_ELEMENTS) {
-      clean = clean.replace(new RegExp(`<${tag}[\\s\\S]*?</${tag}>`, "gi"), "");
-      clean = clean.replace(new RegExp(`<${tag}[^>]*/?>`, "gi"), "");
-    }
-    return clean;
+    // No DOM parser (SSR, a worker, a stripped-down host). The old fallback
+    // removed blocked TAGS with regexes and kept every attribute — event
+    // handlers, javascript: URLs and styles went through untouched, which is
+    // "nearly a no-op" for a sanitizer. Fail CLOSED instead: without a parser
+    // nothing here can be trusted to be markup, so it all becomes text.
+    return `<p>${escapeHtml(html)}</p>`;
   }
 }
 

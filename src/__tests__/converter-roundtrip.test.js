@@ -19,7 +19,7 @@ import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
 import { computeFidelity } from "../store/fidelity";
-import { htmlRoundTrip, roundTrip } from "./converter-harness";
+import { engineFor, htmlRoundTrip, roundTrip } from "./converter-harness";
 
 /** Assert the input survives two trips unchanged. */
 function expectFixedPoint(md, opts) {
@@ -166,6 +166,39 @@ describe("A044 — tables keep alignment and in-cell formatting", () => {
     const headless = readFileSync(join(process.cwd(), "src/engine/serialize-doc.ts"), "utf8");
     expect(pane).toMatch(/TableHeader, TableCellAlign/);
     expect(headless).toMatch(/\n\s+TableCellAlign,\r?\n/);
+  });
+});
+
+describe("A043 — footnotes survive a rich-pane edit", () => {
+  const features = { footnotes: true };
+
+  it("keeps a numbered footnote as footnote syntax", () => {
+    const r = expectFixedPoint("A claim[^1].\n\n[^1]: The source.", { features });
+    // …and it really was rendered as a footnote in between, not left as text.
+    expect(r.html1).toContain("data-footnote-ref");
+  });
+
+  it("keeps a named label (the rich pane shows its number, the source keeps the name)", () => {
+    expectFixedPoint("Text[^note] and again[^note].\n\n[^note]: A named note.", { features });
+  });
+
+  it("keeps several footnotes and a multi-paragraph definition", () => {
+    expectFixedPoint("A[^1] and B[^2].\n\n[^1]: One.\n[^2]: Two, first paragraph.\n\n    Second paragraph.", { features });
+  });
+
+  it("converts the renderer's own markup too (the import path skips the rich pane)", () => {
+    // marked writes <sup><a>1</a></sup>; the rich pane re-nests it as <a><sup>.
+    const engine = engineFor(features);
+    const md = "A claim[^1].\n\n[^1]: The source.";
+    expect(engine.htmlToMd(engine.mdToHtml(md))).toBe(md);
+  });
+
+  it("keeps footnote syntax even when footnotes are switched off later", () => {
+    // Written back as markdown, not as a link and a numbered list — so the
+    // footnote is still there the moment the feature is switched back on.
+    const on = roundTrip("A claim[^1].\n\n[^1]: The source.", { features });
+    const off = htmlRoundTrip(on.rich1, { features: { footnotes: false } });
+    expect(off.md1).toBe("A claim[^1].\n\n[^1]: The source.");
   });
 });
 
