@@ -18,7 +18,11 @@ import {
 } from "../store/settings";
 import { useUIStore } from "../store/uiStore";
 import { MODES } from "../constants";
+import { adminSettingsAvailable, adsAvailable } from "../utils/build-gates";
+import { PrivacySection } from "./SettingsPrivacy";
+import { StorageBackupSection } from "./SettingsStorage";
 import { AccentCircleRow, ThemeCircleRow } from "./ThemeControls";
+import { EraseLocalDataSection } from "./EraseLocalData";
 
 const FLAVORS: { id: MarkdownFlavor; label: string; desc: string }[] = [
   {
@@ -54,9 +58,12 @@ const RICH_TOGGLES: { key: keyof MarkdownFeatureSettings; label: string }[] = [
 function SettingsSheetInner({
   open,
   onOpenChange,
+  onBackup,
 }: {
   open: boolean;
   onOpenChange: (value: boolean) => void;
+  /** Run the full, restorable backup (shown in Storage & backup when given). */
+  onBackup?: () => void;
 }) {
   const markdownFeatures = useUIStore((s) => s.markdownFeatures);
   const setMarkdownFeatures = useUIStore((s) => s.setMarkdownFeatures);
@@ -85,6 +92,10 @@ function SettingsSheetInner({
 
   const toggle = (key: keyof MarkdownFeatureSettings) => (value: boolean) =>
     setMarkdownFeatures((prev) => ({ ...prev, [key]: value }));
+
+  // Read at render: the sheet re-renders when it opens, so a `pf:admin` flag
+  // set from the console shows up the next time Settings is opened.
+  const showAdmin = adminSettingsAvailable();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -344,8 +355,19 @@ function SettingsSheetInner({
               </div>
             </section>
 
+            <Separator />
+
+            {/* Storage & backup (SettingsStorage.tsx), then Privacy (SettingsPrivacy.tsx). */}
+            <StorageBackupSection open={open} onBackup={onBackup} />
+
+            <Separator />
+
+            <PrivacySection open={open} />
+
             {/* Admin — debugging / operator modules, separate from everyday
-                settings. These are not necessarily exposed to all users. */}
+                settings. Hidden from users (A081): shown in development builds,
+                or in a browser opted in with localStorage["pf:admin"] = "1". */}
+            {showAdmin && (
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Admin
@@ -364,14 +386,21 @@ function SettingsSheetInner({
                 </div>
                 <Switch id="pref-console" checked={consoleEnabled} onCheckedChange={setConsoleEnabled} />
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="pref-ads" className="text-sm">Show ads</Label>
-                  <p className="text-xs text-muted-foreground">Optional support slots; never shown in embeds.</p>
+              {adsAvailable() && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="pref-ads" className="text-sm">Show ads</Label>
+                    <p className="text-xs text-muted-foreground">Placeholder ad slots for layout work — development builds only; never shown in embeds.</p>
+                  </div>
+                  <Switch id="pref-ads" checked={showAds} onCheckedChange={setShowAds} />
                 </div>
-                <Switch id="pref-ads" checked={showAds} onCheckedChange={setShowAds} />
-              </div>
+              )}
             </section>
+            )}
+
+            {/* Local data — erase everything the editor keeps in this browser
+                (its own section, last; see EraseLocalData.tsx). */}
+            <EraseLocalDataSection />
           </div>
         </ScrollArea>
       </SheetContent>

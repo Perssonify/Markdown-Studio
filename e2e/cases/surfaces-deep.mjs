@@ -63,29 +63,31 @@ runCase("surfaces-deep", async (rep, onClose) => {
   const trayState = () => pg.evaluate(() => {
     const strip = [...document.querySelectorAll("div")].find((d) =>
       d.style.gridTemplateRows === "1fr" || d.style.gridTemplateRows === "0fr");
-    return strip ? { rows: strip.style.gridTemplateRows, h: Math.round(strip.getBoundingClientRect().height) } : null;
+    // `inert` (A093): the collapsed tray stays mounted, so aria-hidden alone left
+    // its buttons in the Tab order.
+    return strip ? { rows: strip.style.gridTemplateRows, h: Math.round(strip.getBoundingClientRect().height), inert: strip.hasAttribute("inert") } : null;
   });
 
-  rep.check("the tray starts collapsed at zero height",
-    await until(async () => { const v = await trayState(); return v && v.rows === "0fr" && v.h < 1 ? v : null; }),
+  rep.check("the tray starts collapsed at zero height, and inert",
+    await until(async () => { const v = await trayState(); return v && v.rows === "0fr" && v.h < 1 && v.inert ? v : null; }),
     JSON.stringify(await trayState()));
 
-  await pg.locator('button[aria-label="Expand bottom tray"]').first().click();
+  await pg.locator('button[aria-label="Panel tray"][aria-expanded="false"]').first().click();
   const expanded = await until(async () => {
     const v = await trayState();
-    return v && v.rows === "1fr" && v.h > 40 ? v : null;
+    return v && v.rows === "1fr" && v.h > 40 && !v.inert ? v : null;
   });
-  rep.check("the tray opens on a tall window", !!expanded, JSON.stringify(expanded ?? await trayState()));
+  rep.check("the tray opens on a tall window, and is no longer inert", !!expanded, JSON.stringify(expanded ?? await trayState()));
   rep.check("its Document Links tab is there once open",
     await until(async () => (await pg.locator('button:has-text("Document Links")').first().isVisible().catch(() => false))));
 
   // …and collapses back to genuinely zero height, the documented invariant.
-  await pg.locator('button[aria-label="Collapse bottom tray"]').first().click();
+  await pg.locator('button[aria-label="Panel tray"][aria-expanded="true"]').first().click();
   const collapsed = await until(async () => {
     const v = await trayState();
-    return v && v.rows === "0fr" && v.h < 1 ? v : null;
+    return v && v.rows === "0fr" && v.h < 1 && v.inert ? v : null;
   });
-  rep.check("the tray collapses to zero height", !!collapsed, JSON.stringify(collapsed ?? await trayState()));
+  rep.check("the tray collapses to zero height, and is inert again", !!collapsed, JSON.stringify(collapsed ?? await trayState()));
 
   // ── the Outline tab ─────────────────────────────────────────────────────
   await menuItem("View", "Outline");
@@ -198,16 +200,20 @@ runCase("surfaces-deep", async (rep, onClose) => {
   // ── the guided tour ─────────────────────────────────────────────────────
   await pg.locator('button:has-text("Help")').first().click();
   await pg.locator('[role="menuitem"]:has-text("Take a guided tour")').first().click();
+  // Wait for the tour's OWN title. This waited for any "Next|Done|Skip" text,
+  // which the always-present (visually hidden) "Skip to editor" link satisfies
+  // before the tour has rendered — so the checks below raced the tour's first
+  // paint and, under load, measured nothing and sent Escape to nobody.
   rep.check("the guided tour starts",
-    await until(async () => (await pg.locator('text=/Next|Done|Skip/').count()) > 0));
+    await until(async () => (await pg.locator("#pf-tour-title").count()) > 0));
   // It spotlights real anchors, so a step whose target is missing would leave
   // the highlight at 0x0 — worth knowing, since the anchors live in other files.
-  const spot = await pg.evaluate(() => {
+  const spot = await until(() => pg.evaluate(() => {
     const ring = document.querySelector(".ring-primary");
     if (!ring) return null;
     const r = ring.getBoundingClientRect();
     return { w: Math.round(r.width), h: Math.round(r.height) };
-  });
+  }));
   rep.check("the tour's spotlight has found a real element",
     !!spot && spot.w > 10 && spot.h > 10, JSON.stringify(spot));
   await pg.keyboard.press("Escape");

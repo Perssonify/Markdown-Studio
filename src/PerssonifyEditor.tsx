@@ -1,5 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
-import React, { RefObject, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { RefObject, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { toast as toastSonner } from "sonner";
 import { useMarkdownEngine } from "./engine/useMarkdownEngine";
@@ -12,25 +12,32 @@ import { buildContextPrompt } from "./integration/prompt-builder";
 import type { DocumentRecord } from "./store/document";
 import { extractText, resolveDocTitle } from "./store/document";
 import { AUTOSAVE_MS } from "./constants";
-import { isBlankCanonical, useDocumentStore } from "./store/documentStore";
+import { clearLocalData, collectUnloadStash, configureLocalStores, ConflictError, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "./store/documentStore";
+import { snapshotStore } from "./store/snapshot-store";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
+import { captureIngestHeadless } from "./store/headless-ingest";
+import { buildZipAsync, readDocuments } from "./store/zip-builder";
+import { carryBlockAttrs } from "./store/card-save";
+import { canonicalMisfit, isNewerSchema } from "./store/schema-version";
+import { computeFidelity } from "./store/fidelity";
 import { useEditorStore } from "./store/editorStore";
 import type { IDBStorageConfig, StorageMetrics } from "./store/idb-storage-adapter";
-import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, getFileContentAndFormat } from "./store/import-export";
+import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, getFileContentAndFormat, toExportEnvelope } from "./store/import-export";
 import { printHtmlDocument } from "./store/print-export";
 import type { IngestFormat } from "./store/ingest";
 import { sanitizeForIngest } from "./store/ingest";
 import { exportGraph } from "./store/link-index";
+import { headingLinkHtml } from "./formatting/heading-link";
 import type { StorageAdapter } from "./store/storage-adapter";
 import { StorageQuotaError } from "./store/storage-adapter";
-import { canonicalToHtml, canonicalToMarkdown } from "./engine/serialize-doc";
-import { extractHeadings } from "./store/doc-outline";
+import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
+import { extractHeadings, findHeadingByAnchor } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
 import { LinkBuilderDialog } from "./ui/LinkBuilderDialog";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, buildZip, extractArchive, isArchiveName, type ArchiveEntry } from "./store/archive";
+import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, extractArchive, isArchiveName, type ArchiveEntry } from "./store/archive";
 import { collectFolderExport, groupDocsByFolder, useFolderStore } from "./store/folders";
 import type { ImportResource } from "./store/url-import";
 import { searchDocuments } from "./store/search";
@@ -39,6 +46,8 @@ import { normalizeMarkdownFeatures } from "./store/settings";
 import { useUIStore } from "./store/uiStore";
 import { MenuBar } from "./ui/MenuBar";
 import { AdUnit } from "./ui/AdUnit";
+import { DurabilityNotices } from "./ui/DurabilityNotices";
+import { noteLibraryAtBoot, recordFullBackup } from "./store/storage-durability";
 import { BacklinksPanel } from "./ui/BacklinksPanel";
 import { BottomTray } from "./ui/BottomTray";
 import { trayFits } from "./ui/tray-fit";
@@ -49,6 +58,7 @@ import { StatusBar } from "./ui/StatusBar";
 import { ToastType, useToast } from "./ui/Toast";
 import { EditorToolbar } from "./ui/Toolbar";
 import { diagError } from "./utils/diag";
+import { scrollBehavior } from "./utils/reduced-motion";
 
 // Handle types for the sub-panes
 import { FileTextIcon, Link as LinkIcon, TerminalSquare } from "lucide-react";
@@ -72,6 +82,7 @@ import { TiptapPaneHandle } from "./ui/TiptapPane";
 
 // Lazy-loaded panels (bundle splitting - load only when feature is used)
 import { LazyChunkBoundary } from "./ui/LazyChunkBoundary";
+import { promptImage } from "./formatting/image-insert";
 const FindReplaceBar = React.lazy(() => import("./ui/FindReplace").then((m) => ({ default: m.FindReplaceBar })));
 const GraphView = React.lazy(() => import("./ui/GraphView").then((m) => ({ default: m.GraphView })));
 const CardsView = React.lazy(() => import("./ui/CardsView").then((m) => ({ default: m.CardsView })));
@@ -80,6 +91,11 @@ const WorkspacePanel = React.lazy(() => import("./ui/WorkspacePanel").then((m) =
 // Stable empty outline reference for when the nav panel is closed (avoids a
 // fresh array identity churning DocNavPanel memoization).
 const EMPTY_HEADINGS: ReturnType<typeof extractHeadings> = [];
+
+/** What the user is told when autosave finds storage full — what happened
+ *  and, more to the point, what would fix it. */
+const STORAGE_FULL_MESSAGE =
+  "Storage is full — your latest changes are NOT saved. Free space by deleting documents or old versions (Tools ▸ Version history), then keep typing to retry.";
 
 interface PerssonifyEditorProps {
   _integrationRef?: RefObject<any>;
@@ -172,6 +188,14 @@ interface PerssonifyEditorProps {
   /** Controlled graph visibility (paired with onGraphOpenChange). */
   graphOpen?: boolean;
   onGraphOpenChange?: (open: boolean) => void;
+  /**
+   * Standalone app only: storage-durability notices for the app's own library
+   * (backup reminder, wiped-library explanation, moved-domain banner, Safari
+   * install tip) plus the boot check that stops a library the browser has
+   * emptied from being re-seeded as if new. See store/storage-durability.ts.
+   * The "not saving" warning shows without it.
+   */
+  durabilityNotices?: boolean;
 
   /**
    * Open the URL importer PRE-FILLED with this source (the standalone app
@@ -206,6 +230,15 @@ interface PerssonifyEditorProps {
   fitParent?: boolean;
 }
 
+/**
+ * The dual-pane Markdown editor.
+ *
+ * ONE PER PAGE: its stores are module singletons (see `useDocumentStore`), so
+ * two instances in the same page share the active document and storage. Use
+ * one instance per page or per iframe (the embed build). Unmounting and
+ * remounting a single instance is supported; switching `storageAdapter` /
+ * `storageConfig` needs a page load — use `clearLocalData()` for a logout.
+ */
 export function PerssonifyEditor({
   _integrationRef,
   _onIntegrationChange,
@@ -226,6 +259,7 @@ export function PerssonifyEditor({
   onStartTour,
   graphOpen,
   onGraphOpenChange,
+  durabilityNotices = false,
   initialImportUrl,
   readOnly: readOnlyProp,
   fitParent = false,
@@ -281,7 +315,7 @@ export function PerssonifyEditor({
   const {
     documents, activeDoc, activeDocId,
     fidelityReport, storageMetrics, saveStatus,
-    initialize, createDoc, finalizeDoc, saveActiveDoc,
+    initialize, createDoc, finalizeDoc, saveNewDoc, saveActiveDoc,
     setDirty, revertActiveDoc, switchToDoc, closeTab,
     deleteDoc, renameDoc, duplicateDoc, patchDocById,
     updateDerived, setEngine, setSyncModeInternal,
@@ -290,7 +324,7 @@ export function PerssonifyEditor({
     useShallow((s) => ({
       documents: s.documents, activeDoc: s.activeDoc, activeDocId: s.activeDocId,
       fidelityReport: s.fidelityReport, storageMetrics: s.storageMetrics, saveStatus: s.saveStatus,
-      initialize: s.initialize, createDoc: s.createDoc, finalizeDoc: s.finalizeDoc, saveActiveDoc: s.saveActiveDoc,
+      initialize: s.initialize, createDoc: s.createDoc, finalizeDoc: s.finalizeDoc, saveNewDoc: s.saveNewDoc, saveActiveDoc: s.saveActiveDoc,
       setDirty: s.setDirty, revertActiveDoc: s.revertActiveDoc, switchToDoc: s.switchToDoc, closeTab: s.closeTab,
       deleteDoc: s.deleteDoc, renameDoc: s.renameDoc, duplicateDoc: s.duplicateDoc, patchDocById: s.patchDocById,
       updateDerived: s.updateDerived, setEngine: s.setEngine,
@@ -350,11 +384,10 @@ export function PerssonifyEditor({
     setWorkspaceView("editor");
   }, [setMode, setWorkspaceView]);
 
-  // Shared overlay shell for the graph / cards boards. Takes focus on mount,
-  // keeps Tab inside, closes on Escape at the CAPTURE phase (ProseMirror marks
-  // Escape defaultPrevented before it bubbles, which is why a plain bubble
-  // listener never fired), and marks the editor behind it inert so its controls
-  // are neither tabbable nor clickable while covered.
+  // Shared overlay shell for the graph / cards boards. Takes focus on mount and
+  // marks the editor behind it inert so its controls are neither tabbable nor
+  // clickable while covered. Escape is each surface's own (bubble phase, and
+  // only when pressed inside it — see ui/overlay-escape.ts).
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
 
@@ -388,7 +421,7 @@ export function PerssonifyEditor({
   const [findSeed, setFindSeed] = useState("");
   // Stable indirection to the multi-doc zip exporter (defined below handleAction),
   // so handleAction can trigger "export all" without a forward dependency.
-  const exportDocsRef = useRef<(ids: string[], zipName: string, opts?: { canonical?: boolean }) => void>(() => {});
+  const exportDocsRef = useRef<(ids: string[], zipName: string, opts?: { canonical?: boolean }) => Promise<number> | void>(() => {});
 
   // ── Engine
   const { ready: engineReady, engine, configVersion } = useMarkdownEngine();
@@ -461,6 +494,22 @@ export function PerssonifyEditor({
   const toast = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const { confirmUnsaved, UnsavedChangesDialog } = useUnsavedChangesConfirm();
+  // A deleted document keeps a recoverable copy in version history. Say so,
+  // and offer to erase that too — the only way it could otherwise go was to
+  // wait out the snapshot age cap.
+  const onDocDeleted = useCallback((docId: string, title: string) => {
+    toastSonner("Deleted — a recoverable copy is kept in Version history", {
+      duration: 8000,
+      action: {
+        label: "Erase history",
+        onClick: () => {
+          void useDocumentStore.getState().purgeDocHistory(docId)
+            .then(() => toastSonner.success(`Version history of “${title}” erased`))
+            .catch(() => toastSonner.error("Version history could not be erased"));
+        },
+      },
+    });
+  }, []);
   const { prompt: promptText, promptState, handlePromptClose, equation: equationPrompt, equationState, handleEquationClose } = useDialogs();
   // Single dialog surface handed to all children via context (see DialogProvider).
   const dialogApi = React.useMemo<DialogApi>(
@@ -535,8 +584,20 @@ export function PerssonifyEditor({
     // md→html re-parse below replaces the rich pane wholesale, which would
     // discard whatever rich-pane typing has not been projected yet.
     syncHtmlToMdRef2.current();
+    // …and the re-parse REPLACES the rich document with only what the markdown
+    // projection carries. For a document holding something it cannot carry —
+    // alignment always, colour/highlight/font in Clean mode — toggling ANY
+    // markdown feature silently stripped it, and the next edit or switch made
+    // that permanent. Such a document keeps its rich content; only the markdown
+    // pane is re-projected. (Markdown typed afterwards re-parses as usual.)
+    const live = tiptapRef.current?.getEditor?.()?.getJSON?.();
+    const mode = useUIStore.getState().syncMode === "styled" ? "styled" : "clean";
+    if (live && !computeFidelity(live, mode).lossless) {
+      forceSyncHtmlToMd();
+      return;
+    }
     forceSyncMdToHtml();
-  }, [configVersion, forceSyncMdToHtml]);
+  }, [configVersion, forceSyncMdToHtml, forceSyncHtmlToMd]);
 
   // ── Format dispatcher ─────────────────────────────────────────────────────
   const setActiveFormats = useEditorStore((s) => s.setActiveFormats);
@@ -617,14 +678,22 @@ export function PerssonifyEditor({
     handleNewDoc, handleDeleteDoc,
     prepareToLeaveActiveDoc, hydrateEditorWithDoc,
     restoreSnapshotInPlace, restoreSnapshotAsNew,
-    cancelPendingSync, flushPendingSync,
+    cancelPendingSync, flushPendingSync, releaseEditor,
   } = useDocumentLifecycle({
     tiptapRef, cmRef, engine, syncMdToHtml, syncHtmlToMd, forceSyncMdToHtml, forceSyncHtmlToMd,
     resetHashes, setCanonical, setFromHtml, switchToDoc, closeTab,
     createDoc, deleteDoc, finalizeDoc, revertActiveDoc, saveActiveDoc,
     setDirty, handleCanonicalChange, pasteStyled, setPasteStyled,
-    syncMode, setSyncMode, toast, confirm, confirmUnsaved,
+    syncMode, setSyncMode, toast, confirm, confirmUnsaved, onDocDeleted,
   });
+
+  // Unmount is a document-leaving path (see releaseEditor). A LAYOUT cleanup,
+  // not a passive one: React runs a component's layout cleanups before its
+  // children's, so both panes — and the refs to them — still exist here; by
+  // the time passive cleanups run, the pane handles have been detached.
+  const releaseEditorRef = useRef(releaseEditor);
+  useEffect(() => { releaseEditorRef.current = releaseEditor; }, [releaseEditor]);
+  useLayoutEffect(() => () => { releaseEditorRef.current(); }, []);
 
   // Open a document scrolled to one of its headings (by document-order index),
   // used by the graph's document-structure view. Heading elements in the rich
@@ -644,7 +713,7 @@ export function PerssonifyEditor({
         const dom = editor?.view?.dom as HTMLElement | undefined;
         const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
         const el = headings?.[index] as HTMLElement | undefined;
-        if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+        if (el) { el.scrollIntoView({ behavior: scrollBehavior(), block: "start" }); return; }
       }
       if (tries > 0) setTimeout(() => attempt(tries - 1), 200);
     };
@@ -658,8 +727,6 @@ export function PerssonifyEditor({
   const scrollToHeadingByAnchor = useCallback(async (docId: string | null, anchorText: string) => {
     const targetId = docId ?? useDocumentStore.getState().activeDocId;
     if (!targetId) return;
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const wanted = norm(anchorText);
     if (targetId !== useDocumentStore.getState().activeDocId) await handleSwitchDoc(targetId);
     setWorkspaceView("editor");
     if (mode === "md") setMode("split");
@@ -669,11 +736,13 @@ export function PerssonifyEditor({
         const dom = tiptapRef.current?.getEditor()?.view?.dom as HTMLElement | undefined;
         const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
         if (headings) {
-          for (const h of Array.from(headings)) {
-            if (norm(h.textContent || "") === wanted) {
-              (h as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" });
-              return;
-            }
+          // The ONE anchor matcher (doc-outline). Its old inline normaliser,
+          // `[^a-z0-9]`, erased every non-Latin heading to "", so an anchor to
+          // any of them jumped to the FIRST non-Latin heading in the document.
+          const i = findHeadingByAnchor(Array.from(headings, (h) => h.textContent || ""), anchorText);
+          if (i >= 0) {
+            (headings[i] as HTMLElement).scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+            return;
           }
           if (headings.length) { toast.show(`Heading not found: "${anchorText}"`, "info"); return; }
         }
@@ -771,7 +840,7 @@ export function PerssonifyEditor({
       const editor = tiptapRef.current?.getEditor?.();
       if (!editor) return;
       editor.chain().focus().insertContent(
-        `<a data-doc-link="" data-anchor="${anchor.replace(/"/g, "&quot;")}" class="wiki-link" href="#">${anchor}</a>`
+        headingLinkHtml(anchor)
       ).run();
       handleHtmlChange();
     }
@@ -924,11 +993,8 @@ export function PerssonifyEditor({
       return;
     }
     if (kind === "image") {
-      const url = await promptText("Insert Image", {
-        placeholder: "https://example.com/image.png",
-        description: "Enter the URL of the image to insert.",
-      });
-      if (url) dispatch("insertImage", url);
+      const img = await promptImage(promptText);
+      if (img) dispatch("insertImage", img);
       return;
     }
     const block = kind === "mathBlock";
@@ -1001,54 +1067,29 @@ export function PerssonifyEditor({
   }), []);
 
   /**
-   * Activate a freshly created document, push its ingest HTML into the live
-   * editor, and capture the resulting canonical — re-checking after EVERY yield
-   * that the editor still holds THIS document.
+   * Persist and ACTIVATE a freshly created document, then hydrate the editor
+   * with it — if, after every await, the store is still on it.
    *
-   * The rAF below is a real yield, and a loop over an archive of fifty notes
-   * runs for seconds — long enough for the user to click a document in the
-   * library. That switch hydrates the editor with THEIR document, and capturing
-   * here would then persist that content as this entry's canonical (the file's
-   * own content discarded) while yanking the store back mid-switch. Re-push and
-   * re-check once; if the store still is not on this document, persist the
-   * pre-Tiptap canonical rather than someone else's content.
+   * The canonical is captured HEADLESSLY (see captureIngestHeadless): this used
+   * to borrow the live editor — activate, push the ingest HTML in, yield a
+   * frame, read it back — and a document switch landing in that frame either
+   * captured the OTHER document's content as this one's or persisted an empty
+   * "Untitled". There is no yield between conversion and persistence now.
+   * Hydration is checked on `activeDocId` alone: a switch that took the store
+   * elsewhere hydrates its own document, and this must not push over it.
    *
-   * Checked on `activeDocId` ALONE, deliberately — not through
-   * `isEditorTargeting`. `finalizeDoc(..., true)` activates without marking
-   * hydrated (the capture is what establishes hydration), so requiring
-   * `hydratedDocId` here is false on the normal path: it sent every markdown
-   * import — including the first-run starter documents — down the no-editor
-   * fallback, which persists the pre-Tiptap canonical and left them all titled
-   * "Untitled".
-   *
-   * Extracted because THREE loops need it and only one had it: `importItems`
-   * carried the guard, while `addDocumentsImpl` (the host bridge's
-   * `addDocuments`) and `handleCardCreate` (quick capture on the Cards board)
-   * ran the identical sequence — same awaits, same rAF — unguarded.
+   * Used by every path that creates and opens a document outside import:
+   * the host bridge's `addDocuments` and `importContent`, and quick capture
+   * on the Cards board.
    */
   const activateAndCapture = useCallback(async (doc: DocumentRecord) => {
-    if (!doc._ingestHtml) {
-      await finalizeDoc(doc, null, false);   // pmjson: canonical already set
-      return;
-    }
-    await finalizeDoc(doc, null, true);      // activate → mounts the editor
+    captureIngestHeadless(doc, tiptapRef.current?.getEditor?.()?.schema ?? headlessSchema());
+    await finalizeDoc(doc, null, false);     // persist + activate (the editor mounts if it was not)
     const editor = await waitForEditor(2000);
-    if (!editor) {
-      await finalizeDoc(doc, null, false);
-      return;
+    if (editor && useDocumentStore.getState().activeDocId === doc.id) {
+      hydrateEditorWithDoc(doc.id, doc.canonical);
     }
-    setFromHtml(doc._ingestHtml);
-    await new Promise((r) => requestAnimationFrame(r));
-
-    const stillOurs = () => useDocumentStore.getState().activeDocId === doc.id;
-    if (!stillOurs()) {
-      await finalizeDoc(doc, null, true);
-      setFromHtml(doc._ingestHtml);
-      await new Promise((r) => requestAnimationFrame(r));
-    }
-    if (stillOurs()) await finalizeDoc(doc, editor, false);
-    else await finalizeDoc(doc, null, false);
-  }, [finalizeDoc, setFromHtml, waitForEditor]);
+  }, [finalizeDoc, waitForEditor, hydrateEditorWithDoc, tiptapRef]);
 
   /**
    * Append documents to the store (persisted), non-destructively. Reuses the
@@ -1103,7 +1144,7 @@ export function PerssonifyEditor({
       const store = useDocumentStore.getState();
       const active = store.activeDocId;
       if (active && ids.includes(active) && store.hydratedDocId !== active) {
-        const rec = await store.getDocById(active);
+        const rec = await store.getDocById(active).catch(() => null);
         if (rec?.canonical) hydrateEditorWithDoc(active, rec.canonical);
       }
     }
@@ -1165,13 +1206,16 @@ export function PerssonifyEditor({
     getDocuments: () => useDocumentStore.getState().documents,
     getActiveDocument: () => activeDoc,
     getDocById: (id: string) => useDocumentStore.getState().getDocById(id),
+    // Creates and opens a document from host-supplied content. It used to push
+    // the content straight into the live editor — over the open document, with
+    // no flush, no draft, no save — and a `pmjson` payload was neither saved
+    // nor opened at all. It is a document-LEAVING path like import and
+    // addDocuments, and goes through the same two steps they do.
     importContent: async (content: string, format: string) => {
       const doc = createDoc(content, format as IngestFormat, "api", { mdToHtml: engine?.mdToHtml });
-      if (doc?._ingestHtml) {
-        setFromHtml(doc._ingestHtml);
-        const editor = tiptapRef.current?.getEditor();
-        if (editor) await finalizeDoc(doc as DocumentRecord, editor);
-      }
+      if (!doc) return doc;
+      await prepareToLeaveActiveDoc();
+      await activateAndCapture(doc as DocumentRecord);
       return doc;
     },
     /**
@@ -1217,20 +1261,13 @@ export function PerssonifyEditor({
       const hasBody = patch.markdown != null || patch.canonical != null;
       if (!hasBody) {
         if (patch.title != null) {
-          // A title-only update must NOT let patchDocById persist the store's
-          // `activeDoc.canonical`, which lags the live editor by up to one
-          // autosave interval — doing so would overwrite the user's unsaved
-          // keystrokes. For the ACTIVE, hydrated doc, pin the live editor JSON
-          // (mirrors appendToDocument's base-selection).
-          const { activeDocId: curId, hydratedDocId: hydId } = useDocumentStore.getState();
-          const liveEditor = tiptapRef.current?.getEditor();
-          const liveCanonical =
-            curId === id && hydId === id && liveEditor ? liveEditor.getJSON() : undefined;
-          await patchDocById(id, {
-            title: patch.title,
-            userTitle: patch.title,
-            ...(liveCanonical ? { canonical: liveCanonical } : {}),
-          });
+          // A title-only update must not persist the store's lagging
+          // `activeDoc.canonical`. patchDocById already merges the LIVE editor
+          // content for the open document (liveCanonicalFor) — and, unlike a
+          // canonical passed from here, it knows a title is not content: when
+          // another tab has overtaken the document it renames the stored
+          // record without writing this tab's content over that tab's work.
+          await patchDocById(id, { title: patch.title, userTitle: patch.title });
           await emitGraphUpdate();
         }
         return { id, updated: true };
@@ -1256,10 +1293,11 @@ export function PerssonifyEditor({
         ...(patch.title != null ? { title: patch.title, userTitle: patch.title } : {}),
       });
       // Post-await check — a switch during the write must not redirect this
-      // content into whatever document the editor now holds.
+      // content into whatever document the editor now holds. Through the
+      // hydration ritual, so host content that does not fit this build's
+      // schema is shown read-only instead of loading as an empty document.
       if (patched?.canonical && isEditorTargeting(id)) {
-        setCanonical(patched.canonical);
-        useDocumentStore.getState().markHydrated(id);
+        hydrateEditorWithDoc(id, patched.canonical);
       }
       await emitGraphUpdate();
       return { id, updated: !!patched };
@@ -1300,8 +1338,7 @@ export function PerssonifyEditor({
       // Post-await check, for the same reason as updateDocument above.
       if (patched?.canonical && isEditorTargeting(id)) {
         // Same-document content update: keep the user's undo history.
-        setCanonical(patched.canonical, { resetHistory: false });
-        useDocumentStore.getState().markHydrated(id);
+        hydrateEditorWithDoc(id, patched.canonical, { keepHistory: true });
       }
       await emitGraphUpdate();
       return { id, updated: !!patched };
@@ -1315,7 +1352,10 @@ export function PerssonifyEditor({
     // would have written into the newly-active doc.
     openDocument: (id: string) => handleSwitchDoc(id),
     exportAs: async (format: string) => handleAction?.(`export-${format}`),
-  }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical]);
+    /** Erase everything the editor keeps in this browser (see clearLocalData)
+     *  — for a host's logout on a shared device. */
+    clearLocalData: (opts?: { preferences?: boolean }) => clearLocalData(opts),
+  }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical, hydrateEditorWithDoc, prepareToLeaveActiveDoc, activateAndCapture]);
 
   // ── Inject storage adapter before init (runs once, synchronously before engine) ──
   const storageInjectedRef = useRef(false);
@@ -1323,6 +1363,10 @@ export function PerssonifyEditor({
     storageInjectedRef.current = true;
     if (storageAdapter) {
       initStorage(storageAdapter);
+      // With a host's own adapter, storageConfig still decides where the
+      // editor's OTHER browser stores go (version history, the crash stash) —
+      // or that they are off (see configureLocalStores).
+      if (storageConfig) configureLocalStores(storageConfig);
     } else if (storageConfig) {
       initStorage(storageConfig);
     }
@@ -1403,56 +1447,30 @@ export function PerssonifyEditor({
       return parentId;
     };
 
+    // Every file is converted HEADLESSLY against the editor's schema — the live
+    // one when an editor is mounted, the identical serialisation schema when
+    // not. The loop used to BORROW the live editor per file (activate, push the
+    // HTML in, yield a frame, read the canonical back): a click in the library
+    // during that frame hydrated the user's own document, and the fallback then
+    // persisted the file's pre-editor canonical — an empty "Untitled" — and
+    // counted it as imported, while each later file yanked the store back off
+    // the user's choice. Nothing here activates a document or touches the
+    // editor now; the caller opens the first import through handleSwitchDoc,
+    // the ordinary leaving path.
+    const schema = tiptapRef.current?.getEditor?.()?.schema ?? headlessSchema();
+    let firstDoc: DocumentRecord | null = null;
+
     for (const item of items) {
       const doc = createDoc(item.raw, item.format, "file-import", { mdToHtml: engine?.mdToHtml });
       if (!doc) continue;
-      if (!firstDocId) firstDocId = doc.id;
+      if (!firstDocId) { firstDocId = doc.id; firstDoc = doc as DocumentRecord; }
       const folderId = item.folderPath.length ? ensureFolder(item.folderPath) : null;
 
-      // finalizeDoc rethrows persistence failures (quota, adapter errors) —
-      // count them so callers can report the truth instead of "Imported N".
+      // Persistence failures (quota, adapter errors) are counted so callers
+      // can report the truth instead of "Imported N".
       try {
-        if (doc._ingestHtml) {
-          await finalizeDoc(doc as DocumentRecord, null, true);
-          const editor = await waitForEditor(2000);
-          if (editor) {
-            setFromHtml(doc._ingestHtml);
-            await new Promise((r) => requestAnimationFrame(r));
-            // The rAF above is a real yield, and importing an archive of 50
-            // notes keeps this loop running for seconds — long enough for the
-            // user to click a document in the library. That switch hydrates the
-            // editor with THEIR document, and capturing here would then persist
-            // that document's content as this imported entry's canonical (the
-            // file's actual content discarded) while yanking the store back
-            // mid-switch. Re-push and re-check once; if the store still is not
-            // on this import, persist the pre-Tiptap canonical rather than
-            // someone else's content.
-            //
-            // Checked on `activeDocId` ALONE, deliberately — not through
-            // `isEditorTargeting`. `finalizeDoc(..., true)` activates the document
-            // without marking it hydrated (hydration is what the capture below
-            // establishes), so requiring hydratedDocId here is false on the
-            // normal path: it sent every markdown import — including the
-            // first-run starter documents — down the no-editor fallback, which
-            // persists the pre-Tiptap canonical and left them all titled
-            // "Untitled".
-            const stillOurs = () => useDocumentStore.getState().activeDocId === doc.id;
-            if (!stillOurs()) {
-              await finalizeDoc(doc as DocumentRecord, null, true);
-              setFromHtml(doc._ingestHtml);
-              await new Promise((r) => requestAnimationFrame(r));
-            }
-            if (stillOurs()) {
-              await finalizeDoc(doc as DocumentRecord, editor, false);
-            } else {
-              await finalizeDoc(doc as DocumentRecord, null, false);
-            }
-          } else {
-            await finalizeDoc(doc as DocumentRecord, null, false);
-          }
-        } else {
-          await finalizeDoc(doc as DocumentRecord, null, false);
-        }
+        captureIngestHeadless(doc as DocumentRecord, schema);
+        await saveNewDoc(doc as DocumentRecord);
       } catch (e) {
         console.warn("[importItems] Persist failed for imported doc:", e);
         failedCount++;
@@ -1462,24 +1480,19 @@ export function PerssonifyEditor({
       importedCount++;
     }
 
-    // Leave the editor genuinely holding the document the store says is active.
-    // A `pmjson` item has no ingest HTML, so its branch never pushes content
-    // into the editor: `activeDocId` moved to the import while `hydratedDocId`
-    // still pointed at the PREVIOUS document. The caller's `handleSwitchDoc`
-    // could not repair it either — the ids already matched, so it returned
-    // immediately — leaving the editor showing the old document's text under the
-    // new document's identity, with every subsequent save refused for the rest
-    // of the session ("editor is not hydrated for the active document").
-    if (firstDocId) {
-      const store = useDocumentStore.getState();
-      if (store.activeDocId === firstDocId && store.hydratedDocId !== firstDocId) {
-        const rec = await store.getDocById(firstDocId);
-        if (rec?.canonical) hydrateEditorWithDoc(firstDocId, rec.canonical);
+    // With NO editor mounted (an empty library) the caller's switch would
+    // hydrate an editor that does not exist yet. Open the first import here,
+    // once the editor has mounted for it; handleSwitchDoc then finds it open.
+    if (firstDoc && importedCount > 0 && !useDocumentStore.getState().activeDocId) {
+      await finalizeDoc(firstDoc, null, true);          // activate only — already persisted
+      const editor = await waitForEditor(2000);
+      if (editor && useDocumentStore.getState().activeDocId === firstDoc.id) {
+        hydrateEditorWithDoc(firstDoc.id, firstDoc.canonical);
       }
     }
 
     return { importedCount, failedCount, firstDocId };
-  }, [createDoc, engine, finalizeDoc, waitForEditor, setFromHtml, prepareToLeaveActiveDoc, hydrateEditorWithDoc]);
+  }, [createDoc, engine, finalizeDoc, saveNewDoc, waitForEditor, prepareToLeaveActiveDoc, hydrateEditorWithDoc, tiptapRef]);
 
   useEffect(() => {
     if (!engineReady || !engine || initDoneRef.current) return;
@@ -1529,14 +1542,21 @@ export function PerssonifyEditor({
         }
 
         const existingDoc = await initialize();
-        
+        // A library the BROWSER emptied (eviction, a cleared or damaged
+        // database) must not be greeted as a first visit: seeding the starter
+        // documents would dress the loss up as a fresh install. Read-only — it
+        // only decides whether to seed; the notice explains (A017).
+        const libraryWiped =
+          durabilityNotices && noteLibraryAtBoot(useDocumentStore.getState().documents.length);
+
         if (existingDoc) {
           setEditorReady(true);
           const editor = await waitForEditor();
           if (existingDoc.canonical && editor) {
-            setCanonical(existingDoc.canonical);
-            useDocumentStore.getState().markHydrated(existingDoc.id);
-            handleCanonicalChange(existingDoc.canonical);
+            // The hydration ritual — it also keeps a document from a newer
+            // build (content this schema cannot load) read-only instead of
+            // loading it as an empty editor that the next save would persist.
+            hydrateEditorWithDoc(existingDoc.id, existingDoc.canonical);
           } else if (existingDoc.canonical && !editor) {
             // Editor slow to mount (cold load / slow device). Keep waiting in
             // the background and hydrate when it appears — WITHOUT this, the
@@ -1549,11 +1569,7 @@ export function PerssonifyEditor({
               const doc = s.activeDoc;
               if (!doc?.canonical) return;
               const editorEmpty = (late.getText?.() ?? "").trim().length === 0;
-              if (editorEmpty) {
-                setCanonical(doc.canonical);
-                s.markHydrated(doc.id);
-                handleCanonicalChange(doc.canonical);
-              }
+              if (editorEmpty) hydrateEditorWithDoc(doc.id, doc.canonical);
             });
             if (cmRef.current) {
               const html = existingDoc._ingestHtml || "";
@@ -1571,9 +1587,9 @@ export function PerssonifyEditor({
             useDocumentStore.getState().markHydrated(existingDoc.id);
           }
           toastSonner.success("Restored: " + existingDoc.title, { id: loadingId, duration: 3000 });
-        } else if (initialDocument) {
+        } else if (initialDocument && !libraryWiped) {
           // No stored documents — seed with the provided initial document.
-          let doc = createDoc(initialDocument.content, "markdown", "api", { mdToHtml: engine.mdToHtml });
+          const doc = createDoc(initialDocument.content, "markdown", "api", { mdToHtml: engine.mdToHtml });
           if (doc) {
             if (initialDocument.title) {
               // F4. `title` is the NAME TO FALL BACK TO, not a rename. Setting
@@ -1596,7 +1612,7 @@ export function PerssonifyEditor({
             
             // Now wait for Tiptap to be ready with more generous timeout
             await new Promise((r) => setTimeout(r, 100)); // Give UI time to mount
-            let editor = await waitForEditor(3000);
+            const editor = await waitForEditor(3000);
 
             // If we have an editor and HTML content, sync it in and persist
             if (editor && doc._ingestHtml) {
@@ -1606,11 +1622,11 @@ export function PerssonifyEditor({
               await new Promise((r) => requestAnimationFrame(r));
               // Now finalize with the editor instance to capture canonical and persist
               await finalizeDoc(doc as any, editor, false);
-              // Seed the companion documents AFTER the initial doc is live, so
-              // this reuses the ordinary import path (editor mounted → real
-              // canonical captured) rather than a second, headless one. Then
-              // return to the initial document so the user lands where they
-              // expect. Best-effort: a failure here must not break startup.
+              // Seed the companion documents AFTER the initial doc is live,
+              // through the ordinary import path (which converts headlessly
+              // against the live schema and never activates mid-loop, A031),
+              // then return to the initial document so the user lands where
+              // they expect. Best-effort: a failure here must not break startup.
               if (starterDocuments?.length) {
                 try {
                   await importItems(
@@ -1682,7 +1698,15 @@ export function PerssonifyEditor({
     // "Saved" while silently missing those keystrokes).
     flushPendingSync();
     try {
-      await saveActiveDoc(editor);
+      // Resolution is not a commit (see saveActiveDoc): a refused blank write,
+      // an ownership abort and a swallowed write error all resolve. Only a
+      // committed write may say "Changes saved" or tell the host it happened.
+      const committed = await saveActiveDoc(editor);
+      if (!committed) {
+        const { message, type } = describeUncommittedSave(useDocumentStore.getState());
+        toast.show(message, type);
+        return;
+      }
       toast.show("Changes saved", "success");
       if (onSave && activeDoc) {
         const markdown = cmRef.current?.getValue() || "";
@@ -1730,14 +1754,24 @@ export function PerssonifyEditor({
       if (useDocumentStore.getState().saveStatus === "blocked") {
         if (Date.now() - lastAutosaveToastRef.current > 30_000) {
           lastAutosaveToastRef.current = Date.now();
-          toast.show("Document is empty — not saved. Undo to restore it, or delete the document to remove it.", "warning");
+          // The same wording ⌘S uses — which also knows that a document from a
+          // newer build is "blocked" without being empty.
+          const { message, type } = describeUncommittedSave(useDocumentStore.getState());
+          toast.show(message, type);
         }
       }
     } catch (e) {
       const isConflict = e instanceof Error && e.message.startsWith("This document was changed");
       if (e instanceof StorageQuotaError) {
+        // saveActiveDoc parked the TERMINAL "full" status. Say what would help,
+        // once per 30s — this used to toast the raw error on every retry, and
+        // the retries never stopped. No re-arm: freeing space or typing retries.
         if (onStorageQuotaExceeded) onStorageQuotaExceeded(e);
-        else toast.show(e.message, "error");
+        else if (Date.now() - lastAutosaveToastRef.current > 30_000) {
+          lastAutosaveToastRef.current = Date.now();
+          toast.show(STORAGE_FULL_MESSAGE, "error");
+        }
+        return;
       } else {
         // Any failed autosave means the user's latest edits are NOT persisted —
         // staying silent here let edits vanish on close with zero warning.
@@ -1803,10 +1837,11 @@ export function PerssonifyEditor({
     if (status === "editing" || status === "saving" || status === "error") {
       void autosaveRef.current();
     }
-    // "conflict" is deliberately NOT re-saved (it would only re-refuse), but the
-    // draft must still be cached so a leaving path has something to keep.
-    // prepareToLeaveActiveDoc caches it; its own save attempt no-ops on conflict.
-    if (status === "conflict") void prepareToLeaveActiveDoc();
+    // "conflict" and "full" are deliberately NOT re-saved (they would only be
+    // refused again), but the draft must still be cached so a leaving path has
+    // something to keep. prepareToLeaveActiveDoc caches it; its own save
+    // attempt is refused the same way and changes nothing.
+    if (status === "conflict" || status === "full") void prepareToLeaveActiveDoc();
   }, [graphVisible, cardsVisible, prepareToLeaveActiveDoc]);
 
   // Re-arm a debounced save whenever the document enters the "editing" state.
@@ -1839,7 +1874,8 @@ export function PerssonifyEditor({
       // A conflict means this tab has unsaved edits it deliberately WON'T write
       // (another tab owns the newer version) — still warn on close, but do NOT
       // re-attempt the save (it would only re-refuse; never risk clobbering).
-      const conflicted = s.saveStatus === "conflict";
+      // A full store is the same shape: unsaved, and a retry can only fail.
+      const conflicted = s.saveStatus === "conflict" || s.saveStatus === "full";
       const drafts = s._unsavedEdits;
       if (!activeUnsaved && !conflicted && drafts.size === 0) return;
 
@@ -1854,33 +1890,24 @@ export function PerssonifyEditor({
       // the autosave window and it was on neither pane nor disk afterwards.
       // localStorage is the only store that completes while the page is being
       // torn down; documentStore.initialize adopts it on the next boot.
-      const stash: RecoveryEntry[] = [];
-      const at = Date.now();
       // The editor's JSON belongs to hydratedDocId, not activeDocId — stashing
       // it under the wrong id is the cross-document overwrite every other path
       // in this file guards against.
       const owns = !!s.activeDocId && s.hydratedDocId === s.activeDocId;
       const live = owns ? getCanonicalRef.current() : null;
-      if (s.activeDocId && live && !isBlankCanonical(live)) {
-        stash.push({ docId: s.activeDocId, canonical: live, at });
-      }
-      for (const [docId, canonical] of drafts) {
-        if (docId === s.activeDocId) continue;
-        // Honour the blank-over-content backstop here too. `patchDocById` has no
-        // such guard (a host clearing a document through the bridge is a
-        // legitimate write), so a blank canonical that `saveActiveDoc` had
-        // deliberately REFUSED — parking a terminal "blocked" status — was
-        // cached as that document's draft and then written to disk anyway on tab
-        // close, with no pre-clear snapshot to recover from. The exact wipe the
-        // backstop exists to prevent, taking the long way round.
-        if (isBlankCanonical(canonical)) {
-          const stored = s.documents.find((d) => d.id === docId);
-          // `documents` carries list summaries; a non-zero word count is proof
-          // the stored document is not itself blank.
-          if (!stored || (stored.wordCount ?? 0) > 0) continue;
-        }
-        s.patchDocById(docId, { canonical }).catch(() => {});
-        stash.push({ docId, canonical, at });
+      // Which entries (and the revision each was written against — without it a
+      // reload laundered a two-tab conflict) is decided by collectUnloadStash,
+      // which also applies the blank-over-content backstop to parked drafts.
+      const stash: RecoveryEntry[] = collectUnloadStash(
+        s, live && !isBlankCanonical(live) ? live : null, Date.now()
+      );
+      for (const entry of stash) {
+        if (entry.docId === s.activeDocId) continue;
+        // Parked drafts are also written directly (best effort; the stash is
+        // the copy that survives when this write does not land). patchDocById
+        // measures drift against the draft's own base, so a draft another tab
+        // has since overtaken is refused here rather than written over it.
+        s.patchDocById(entry.docId, { canonical: entry.canonical as DocumentRecord["canonical"] }).catch(() => {});
       }
       stashUnsaved(stash);
       e.preventDefault();
@@ -1888,7 +1915,7 @@ export function PerssonifyEditor({
     // `pagehide` as well as `beforeunload`: iOS Safari does not fire
     // beforeunload at all when the tab is swiped away or the app is
     // backgrounded, and a bfcache eviction skips it too. The handler is
-    // idempotent — the stash is a whole-value overwrite.
+    // idempotent — the stash merges per document, the newest entry winning.
     const handlePageHide = () => handleBeforeUnload(new Event("pagehide") as BeforeUnloadEvent);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);
@@ -1944,6 +1971,9 @@ export function PerssonifyEditor({
     toggleGraph: toggleGraphCb,
     toggleCards: toggleCardsCb,
     cancelPendingSync, tiptapRef,
+    // Formatting chords need the caret in one of these panes AND the editor on
+    // screen — typing ⌘B in the Cards composer used to bold the hidden doc.
+    cmRef, workspaceView,
     // ⌘K now uses the styled prompt dialog instead of native window.prompt.
     promptLink: promptLinkCb,
   });
@@ -1985,7 +2015,10 @@ export function PerssonifyEditor({
       // Full backup: canonical JSON per doc (styled content round-trips exactly),
       // in folders, timestamped. Re-import restores the same library state.
       const ids = useDocumentStore.getState().documents.map((d) => d.id);
-      exportDocsRef.current(ids, "perssonify-backup", { canonical: true });
+      // The backup reminder needs the time of the last RESTORABLE backup, so a
+      // non-empty one is recorded (storage-durability, A017).
+      void Promise.resolve(exportDocsRef.current(ids, "perssonify-backup", { canonical: true }))
+        .then((count) => { if (typeof count === "number" && count > 0) recordFullBackup(); });
       return;
     }
     if (type === "export-pdf" && activeDoc) {
@@ -1999,7 +2032,8 @@ export function PerssonifyEditor({
     if (type === "prompt" && activeDoc) {
       try {
         const storage = useDocumentStore.getState().getStorage();
-        const docStoreGetter = { get: async (id: string) => (storage ? await storage.get(id) : null) };
+        // An unreadable linked document is left out of the prompt, not fatal to it.
+        const docStoreGetter = { get: async (id: string) => (storage ? await storage.get(id).catch(() => null) : null) };
         const promptText = await buildContextPrompt(activeDoc, docStoreGetter, linkIndex, {
           format: "markdown",
           mdConverter: (d) => d.markdownCache ?? (engine?.htmlToMd && d.htmlCache ? engine.htmlToMd(d.htmlCache) : extractText(d.canonical)),
@@ -2015,7 +2049,12 @@ export function PerssonifyEditor({
     }
     if ((type === "export-md" || type === "export-html" || type === "export-json") && activeDoc) {
       const getHtml = () => tiptapRef.current?.getHTML() ?? "";
-      const canonical = getCanonical();
+      // The live editor's content only when it genuinely holds this document —
+      // a document locked read-only (content from a newer build) shows a
+      // display copy, and exporting THAT as the JSON would lose what it lacks.
+      const canonical = useDocumentStore.getState().hydratedDocId === activeDoc.id
+        ? getCanonical()
+        : activeDoc.canonical;
       const docForExport = {
         ...activeDoc,
         canonical,
@@ -2161,8 +2200,18 @@ export function PerssonifyEditor({
       // pane-sync debounce — was silently missing from the ZIP. A backup that
       // quietly omits the paragraph you just typed is the worst kind.
       try { await autosaveRef.current(); } catch { /* fall through to stored copy */ }
+      // Read everything up front — one transaction on IndexedDB, parallel
+      // batches elsewhere — instead of one awaited read per document.
+      const { docs: records, unreadable } = await readDocuments(storage, entries.map((e) => e.docId));
+      // Serialising a document to markdown is main-thread work as well: yield
+      // between slices so a big export does not freeze the page (see buildZipAsync).
+      let sliceStart = performance.now();
       for (const { docId, dirSegments } of entries) {
-        const rec = await storage.get(docId);
+        if (performance.now() - sliceStart > 12) {
+          await new Promise((r) => setTimeout(r, 0));
+          sliceStart = performance.now();
+        }
+        const rec = records.get(docId);
         if (!rec) continue;
         // Full backup: always write canonical ProseMirror JSON so styled content
         // (colors/highlights/fonts) round-trips exactly on re-import. Otherwise
@@ -2186,29 +2235,19 @@ export function PerssonifyEditor({
           // Full-fidelity backup entry: the `perssonify-document` envelope so
           // title/id/tags/metadata/created/updated all round-trip on re-import
           // (the pmjson ingest reads this envelope), not just the PM content.
-          files[path] = JSON.stringify(
-            {
-              _format: "perssonify-document",
-              _version: "1.1.0",
-              id: rec.id,
-              title: resolvedTitle,
-              canonical: rec.canonical,
-              origin: rec.origin,
-              residuals: rec.residuals,
-              ingestReport: rec.ingestReport,
-              metadata: rec.metadata,
-              tags: rec.tags,
-              created: rec.created,
-              updated: rec.updated,
-            },
-            null,
-            2
-          );
+          // (Carries schemaVersion, and leaves out the imported raw text and
+          // clipboard copies — see toExportEnvelope.)
+          files[path] = JSON.stringify(toExportEnvelope(rec, resolvedTitle), null, 2);
         }
+      }
+      // An unreadable document is reported, never silently left out of what
+      // the user believes is a complete backup.
+      if (unreadable.length) {
+        toastRef.current.show(`${unreadable.length} document(s) could not be read and are NOT in this export`, "error");
       }
       const count = Object.keys(files).length;
       if (count === 0) return 0;
-      const zip = buildZip(files);
+      const zip = await buildZipAsync(files);
       // Timestamped filename (YYYYMMDD-HHMMSSmmm) so each export is implicitly
       // version-stamped — a rudimentary portability/backup system.
       const ts = exportTimestamp();
@@ -2227,6 +2266,12 @@ export function PerssonifyEditor({
   // handleAction, which is declared above this point.
   const handleFileDropImport = useCallback((files: FileList | File[]) => {
     handleAction("import", files);
+  }, [handleAction]);
+
+  // The storage-durability notices and Settings ▸ Storage & backup run the
+  // SAME full backup as File ▸ Export, so it is recorded the same way.
+  const handleBackupNow = useCallback(() => {
+    void handleAction("export-backup-zip");
   }, [handleAction]);
 
   const handleExportFolder = useCallback(async (folderId: string, opts: { canonical?: boolean } = {}) => {
@@ -2287,8 +2332,8 @@ export function PerssonifyEditor({
 
   // Export an explicit set of document IDs (from sidebar multi-select, or all
   // documents) as a ZIP, preserving each doc's folder path within the archive.
-  const handleExportDocs = useCallback(async (docIds: string[], zipName: string, opts: { canonical?: boolean } = {}) => {
-    if (docIds.length === 0) { toast.show("No documents selected", "warning"); return; }
+  const handleExportDocs = useCallback(async (docIds: string[], zipName: string, opts: { canonical?: boolean } = {}): Promise<number> => {
+    if (docIds.length === 0) { toast.show("No documents selected", "warning"); return 0; }
     const { folders, docParents } = useFolderStore.getState();
     const byId = new Map(folders.map((f) => [f.id, f]));
     const pathOf = (folderId: string | undefined): string[] => {
@@ -2309,7 +2354,8 @@ export function PerssonifyEditor({
     try {
       const count = await exportDocsToZip(entries, zipName, opts);
       toast.show(`Exported ${count} document(s)`, "success");
-    } catch { toast.show("Export failed", "error"); }
+      return count;
+    } catch { toast.show("Export failed", "error"); return 0; }
   }, [exportDocsToZip, toast]);
   exportDocsRef.current = handleExportDocs;
 
@@ -2415,10 +2461,16 @@ export function PerssonifyEditor({
   // the live editor's schema, persist via patchDocById, and re-hydrate the live
   // editor when the edited doc is the active one — otherwise the editor would
   // keep (and later autosave) the pre-edit content over the change.
+  // The revision each opened card was read from. A card edit is saved later,
+  // after the board has closed it; if another tab wrote the note in between,
+  // replacing the whole document with the card's text would overwrite that
+  // tab's work — patchDocById refuses when the stored copy is newer than this.
+  const cardBasesRef = useRef(new Map<string, string>());
   const cardLoadDoc = useCallback(async (id: string) => {
     const store = useDocumentStore.getState();
     const rec = await store.getDocById(id);
     if (!rec) return null;
+    cardBasesRef.current.set(id, rec.updated);
     // Prefer the LIVE editor canonical for the document the editor currently
     // holds. Reading the stored copy meant a card opened during the autosave
     // window was seeded with pre-edit text, and saving that card wrote it back
@@ -2438,9 +2490,17 @@ export function PerssonifyEditor({
     };
   }, [getCanonical]);
 
+  // The card's editable source. STYLED, never Clean: a card save replaces the
+  // whole note with what this source parses back to, and the Clean converter
+  // has no carrier for colour, highlight or font — one card edit stripped them
+  // from the entire document (reproduced by the audit). Styled keeps them as
+  // inline `<span style>`, which parses back to the same marks. Alignment has
+  // no carrier in either; handleCardSave restores it on unchanged blocks.
   const cardToMarkdown = useCallback(
-    (canonical: unknown) =>
-      (engine?.htmlToCleanMd ? canonicalToMarkdown(canonical, engine.htmlToCleanMd) : null) ?? "",
+    (canonical: unknown) => {
+      const convert = engine?.htmlToMd ?? engine?.htmlToCleanMd;
+      return (convert ? canonicalToMarkdown(canonical, convert) : null) ?? "";
+    },
     [engine]
   );
 
@@ -2483,7 +2543,51 @@ export function PerssonifyEditor({
     if (!editor?.schema) { toast.show("Editor not ready — note not saved", "error"); return; }
     const html = engine?.mdToHtml ? engine.mdToHtml(markdown) : markdown;
     const canonical = htmlToCanonical(html, editor.schema);
-    const patched = await patchDocById(id, { canonical });
+    // A note from a newer build cannot be shown as a card (its source reads
+    // back EMPTY), so saving the card would replace the whole note with only
+    // what was typed. Refuse; keep the typing recoverable.
+    const current = await useDocumentStore.getState().getDocById(id).catch(() => null);
+    if (current && (isNewerSchema(current.schemaVersion) || canonicalMisfit(current.canonical, editor.schema))) {
+      void snapshotStore.record(id, current.title || "Untitled", canonical, "manual").catch(() => {});
+      toast.show("This note was made by a newer version of the app and can't be edited as a card — your typing is kept in Version history.", "warning");
+      return;
+    }
+    // What this edit REPLACES — the live editor's copy when it holds the note.
+    // Alignment cannot survive the markdown round trip, so carry it over onto
+    // every block the edit left unchanged; and when the note holds anything the
+    // round trip cannot carry, keep the version being replaced recoverable.
+    const replaced = useDocumentStore.getState().hydratedDocId === id ? getCanonical() : current?.canonical;
+    let carried = { doc: canonical as unknown, lost: 0 };
+    if (replaced) {
+      carried = carryBlockAttrs(replaced, canonical);
+      if (!computeFidelity(replaced as DocumentRecord["canonical"], "styled").lossless) {
+        void snapshotStore.record(id, current?.title || "Untitled", replaced, "autosave").catch(() => {});
+      }
+    }
+    let patched: DocumentRecord | null;
+    try {
+      patched = await patchDocById(id, {
+        canonical: carried.doc as DocumentRecord["canonical"],
+        expectedUpdated: cardBasesRef.current.get(id) ?? null,
+      });
+    } catch (e) {
+      // Refused (another tab wrote this note after the card was opened) or the
+      // write failed. The board has already closed the card, so its text exists
+      // nowhere else: keep it recoverable in Version history, never drop it.
+      const title = useDocumentStore.getState().documents.find((d) => d.id === id)?.title ?? "Untitled";
+      void snapshotStore.record(id, title, canonical, "manual").catch(() => {});
+      toast.show(
+        e instanceof ConflictError
+          ? "This note was changed in another tab — your card edit was not saved over it. It is kept in Version history."
+          : "The note could not be saved — your card edit is kept in Version history.",
+        "warning",
+      );
+      return;
+    }
+    if (patched) cardBasesRef.current.set(id, patched.updated);
+    if (carried.lost > 0) {
+      toast.show("Alignment on the paragraphs you changed can't be kept in a card edit — the previous version is in Version history.", "info");
+    }
     // Re-check AFTER the await, never before it. `patchDocById` writes to
     // IndexedDB, which is slow enough that a document switch routinely lands
     // during it — and a pre-await "is this the active doc?" snapshot would then
@@ -2491,17 +2595,21 @@ export function PerssonifyEditor({
     // which autosave duly persists under the other document's id. The save-side
     // analogue of `saveActiveDoc`'s post-await hydration re-assert.
     if (patched?.canonical && isEditorTargeting(id)) {
-      setCanonical(patched.canonical);
-      useDocumentStore.getState().markHydrated(id);
+      hydrateEditorWithDoc(id, patched.canonical);
     }
     try { await rebuildLinks(); } catch { /* index refresh is best-effort */ }
-  }, [engine, patchDocById, setCanonical, rebuildLinks, toast, isEditorTargeting]);
+  }, [engine, patchDocById, hydrateEditorWithDoc, rebuildLinks, toast, isEditorTargeting, getCanonical]);
 
   const handleCardMeta = useCallback(
     async (id: string, metadata: Record<string, unknown>) => {
       // Presentation-only: don't bump `updated`, or pinning a note would
-      // re-sort the board as if it had been edited.
-      await patchDocById(id, { metadata, touchUpdated: false });
+      // re-sort the board as if it had been edited. touchUpdated:false writes
+      // the metadata ONLY, onto the freshest stored copy.
+      try {
+        await patchDocById(id, { metadata, touchUpdated: false });
+      } catch {
+        toastRef.current.show("That change to the card could not be saved", "error");
+      }
     },
     [patchDocById]
   );
@@ -2540,24 +2648,26 @@ export function PerssonifyEditor({
       }
     }
 
-    const onKeyCapture = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Capture phase: ProseMirror would otherwise mark this defaultPrevented.
-      const inOverlay = !!node && node.contains(document.activeElement);
-      // Let the overlay's own Escape ladder (clear search first) run when focus
-      // is genuinely inside it; only force-close when it can't hear the key.
-      if (inOverlay) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setWorkspaceView("editor");
-    };
-    document.addEventListener("keydown", onKeyCapture, true);
+    // No Escape listener here any more (A057). This used to force-close the
+    // overlay from a CAPTURE-phase document listener whenever focus was
+    // outside it — which is exactly where the delete-confirmation dialog, the
+    // library's rename box and every menu live, so their Escape closed the
+    // overlay instead (and the rename box's blur then committed the rename
+    // being cancelled). Cards and the map each close themselves on an Escape
+    // pressed inside them or with nothing focused (overlayShouldHandleEscape).
     return () => {
-      document.removeEventListener("keydown", onKeyCapture, true);
       for (const child of covered) child.removeAttribute("inert");
       if (restoreTo && document.body.contains(restoreTo)) restoreTo.focus?.();
     };
-  }, [anyOverlayOpen, setWorkspaceView]);
+  }, [anyOverlayOpen]);
+
+  // A082. Without a `dir` prop, sonner's <Toaster> reads
+  // getComputedStyle(document.documentElement).direction on EVERY render — and
+  // it re-renders with this shell on every autosave, forcing a synchronous
+  // style recalculation of the whole page each time. Read it once.
+  const [toasterDir] = useState<"ltr" | "rtl">(() =>
+    typeof document !== "undefined" && getComputedStyle(document.documentElement).direction === "rtl" ? "rtl" : "ltr"
+  );
 
   if (!engineReady || !editorReady) {
     return (
@@ -2640,8 +2750,8 @@ export function PerssonifyEditor({
         )}
 
 
-        <div ref={trayRegionRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-            <SettingsSheet open={showSettings} onOpenChange={setShowSettings} />
+        <div ref={trayRegionRef} className="pf-tray-region relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <SettingsSheet open={showSettings} onOpenChange={setShowSettings} onBackup={handleBackupNow} />
             <MemorySheet open={showMemory} onOpenChange={setShowMemory} />
             <VersionHistorySheet
               open={showVersionHistory}
@@ -2654,7 +2764,7 @@ export function PerssonifyEditor({
 
 
             {showFindReplace && (
-              <LazyChunkBoundary>
+              <LazyChunkBoundary label="Find & Replace">
                 <React.Suspense fallback={null}>
                   <FindReplaceBar sourceRef={cmRef} previewRef={tiptapRef} mode={mode} onSync={forceSyncMdToHtml} syncHtmlToMd={forceSyncHtmlToMd} initialQuery={findSeed} initialMode={frMode} initialTarget={lastFocusedPaneRef.current === "md" ? "md" : "richtext"} onClose={closeFindReplace} />
                 </React.Suspense>
@@ -2668,7 +2778,52 @@ export function PerssonifyEditor({
               onClose={closeSearchPanel}
             />
 
-            <div className="relative flex min-h-[10rem] flex-1 flex-row">
+            <div className="pf-editor-row relative flex min-h-[10rem] flex-1 flex-row">
+            {/* The workspace panel comes BEFORE <main> in the DOM (A094). It used to
+                render after it and be pulled left with md:order-first, so visual
+                order and tab order disagreed: the library was reached only after
+                the toolbar and BOTH editors. The docked column is a plain flex
+                item now; the phone drawer is absolutely positioned either way. */}
+            {!chromeMinimal && showSidebar && (
+              <React.Suspense
+                fallback={<div className="hidden border-r border-border md:block md:w-[var(--ws-w)] md:shrink-0" style={{ ["--ws-w" as string]: `${docNavWidth}px` }} aria-hidden />}
+              >
+                <WorkspacePanel
+                  tab={workspaceTab}
+                  onTabChange={setWorkspaceTab}
+                  onClose={closeWorkspacePanel}
+                  onOpenCards={showCardsView}
+                  width={docNavWidth}
+                  onResize={setDocNavWidth}
+                  onSelect={handleSelectDocFromPanel}
+                  onNew={handleNewDoc}
+                  onDelete={handleDeleteDoc}
+                  onRename={handleRenameFromPanel}
+                  onDuplicate={handleDuplicateFromPanel}
+                  onFileDrop={handleFileDropImport}
+                  onExportFolder={handleExportFolder}
+                  onExportDocs={handleExportDocs}
+                  onExportDoc={handleExportDoc}
+                  onSearchBody={searchDocBody}
+                  headings={docNavHeadings}
+                  activeIndex={activeHeadingIndex}
+                  onNavigateHeading={handleNavigateHeading}
+                />
+              </React.Suspense>
+            )}
+            {/* Reopen affordance when the panel is collapsed. */}
+            {!chromeMinimal && !showSidebar && (
+              <button
+                type="button"
+                onClick={openWorkspacePanel}
+                title="Open workspace panel"
+                data-print-hide
+                aria-label="Open workspace panel"
+                className="absolute left-1 top-1 z-10 flex size-8 items-center justify-center rounded-md border border-border bg-card/80 text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+              >
+                <PanelLeft className="size-4" />
+              </button>
+            )}
             <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
 
               {activeDocId ? (
@@ -2755,46 +2910,19 @@ export function PerssonifyEditor({
                 </div>
               )}
             </main>
-            {!chromeMinimal && showSidebar && (
-              <React.Suspense
-                fallback={<div className="hidden border-r border-border md:order-first md:block md:w-[var(--ws-w)] md:shrink-0" style={{ ["--ws-w" as string]: `${docNavWidth}px` }} aria-hidden />}
-              >
-                <WorkspacePanel
-                  tab={workspaceTab}
-                  onTabChange={setWorkspaceTab}
-                  onClose={closeWorkspacePanel}
-                  onOpenCards={showCardsView}
-                  width={docNavWidth}
-                  onResize={setDocNavWidth}
-                  onSelect={handleSelectDocFromPanel}
-                  onNew={handleNewDoc}
-                  onDelete={handleDeleteDoc}
-                  onRename={handleRenameFromPanel}
-                  onDuplicate={handleDuplicateFromPanel}
-                  onFileDrop={handleFileDropImport}
-                  onExportFolder={handleExportFolder}
-                  onExportDocs={handleExportDocs}
-                  onExportDoc={handleExportDoc}
-                  onSearchBody={searchDocBody}
-                  headings={docNavHeadings}
-                  activeIndex={activeHeadingIndex}
-                  onNavigateHeading={handleNavigateHeading}
-                />
-              </React.Suspense>
-            )}
-            {/* Reopen affordance when the panel is collapsed. */}
-            {!chromeMinimal && !showSidebar && (
-              <button
-                type="button"
-                onClick={openWorkspacePanel}
-                title="Open workspace panel"
-                aria-label="Open workspace panel"
-                className="absolute left-1 top-1 z-10 flex size-8 items-center justify-center rounded-md border border-border bg-card/80 text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
-              >
-                <PanelLeft className="size-4" />
-              </button>
-            )}
             </div>
+
+            {/* Storage-durability notices (A017/A022/A004): one slim strip in
+                the flow above the status bar, never over the document. */}
+            {chrome !== "none" && (
+              <DurabilityNotices
+                appNotices={durabilityNotices}
+                checkStorage={!storageAdapter}
+                onBackup={handleBackupNow}
+                onImportFiles={handleFileDropImport}
+                onOpenVersionHistory={openVersionHistory}
+              />
+            )}
 
             {/* B1: in FLOW above the tray/status bar. It used to be position:fixed
                 bottom-0, which covered every status-bar control on phones and the
@@ -2825,7 +2953,7 @@ export function PerssonifyEditor({
                 offset puts a bottom-right toast straight over it — worst on a
                 phone, where the bar is exactly where the save state and the
                 fidelity warning live. Clear the bar's height plus a margin. */}
-            <Toaster position="bottom-right" offset={48} expand={false} richColors closeButton />
+            <Toaster position="bottom-right" offset={48} expand={false} richColors closeButton dir={toasterDir} />
             {ConfirmDialog}
             {UnsavedChangesDialog}
             <PromptDialog

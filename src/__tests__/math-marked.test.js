@@ -103,8 +103,19 @@ describe("attribute escaping", () => {
 describe("start hints", () => {
   it("point marked at the first candidate delimiter", () => {
     expect(mathBlockExtension.start("no maths here")).toBeUndefined();
-    expect(mathBlockExtension.start("text $$x$$")).toBe(5);
+    // Only a `$$` that STARTS a line can open a block (A049): a mid-line one
+    // used to split the paragraph around it.
+    expect(mathBlockExtension.start("text $$x$$")).toBeUndefined();
+    expect(mathBlockExtension.start("text\n$$x$$")).toBe(5);
+    expect(mathBlockExtension.start("text\n   $$x$$")).toBe(8);
     expect(mathInlineExtension.start("no maths here")).toBeUndefined();
     expect(mathInlineExtension.start("text $x$")).toBe(5);
+  });
+
+  it("look no further than the current paragraph (A083)", () => {
+    // marked asks this per paragraph with the rest of the document; scanning
+    // past the paragraph's end made rendering quadratic in document length.
+    expect(mathBlockExtension.start("para\n\nlater\n$$x$$")).toBeUndefined();
+    expect(mathBlockExtension.start("para\n  \nlater\n$$x$$")).toBeUndefined();
   });
 });

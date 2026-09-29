@@ -10,6 +10,259 @@ and every feature commit subject after v1.35 carries its `(vX.Y.Z)` tag.
 > [`docs/v1-to-current-changelog.md`](docs/v1-to-current-changelog.md) — the full,
 > area-grouped feature delta from the initial import ("v1") to the current release.
 
+## [Unreleased]
+
+An external production-readiness audit of 1.77.0 (18 September 2026) raised 114
+findings. This release fixes 90 of them in code and does the code side of 17
+more; what remains — mostly accounts, settings and legal pages that need a
+person — is listed in [`docs/audit-2026-09.md`](docs/audit-2026-09.md). The
+finding IDs (A001–A114) are cited below.
+
+### Changed — what you will notice
+- **Updates are offered, never forced.** A new version shows "Update ready —
+  Reload" and waits for you. Every deploy used to reload every open tab,
+  mid-sentence, losing undo history, dictation in progress and open dialogs. A
+  tab left open checks for a new version every hour; a background tab with
+  nothing unsaved updates itself when another tab applies the update. (A008)
+- **Works offline after one visit.** The whole app — maths, diagrams, sheet music,
+  Find, the map, Cards, Word export — is cached in the background on the first
+  online visit. Before, any feature you had not already opened online failed
+  offline. (A085)
+- **The `{…}` formatting syntax is off by default.** The undocumented curly-brace
+  syntax (`{color=red}text{/color}`) was on by default and deleted text inside
+  braces it did not recognise: `## Returns {Promise}` became `## Returns`.
+  Documents that used it now show the braces as written. It is an opt-in engine
+  feature with no Settings switch, and even when enabled a group it does not
+  recognise stays exactly as typed. (A039)
+- **The markdown pane writes `---` for a horizontal rule**, not `* * *`, when it
+  is regenerated from the rich pane. (A051)
+- **Literal `<` and `&` are escaped where they would become markup.** A sentence
+  about `<details>` or the text `&lt;br&gt;`, typed in the rich pane, is written
+  `\<details>` and `\&lt;br&gt;` in the markdown instead of turning into a
+  collapsible block or a line break on the next pass. A number followed by `)` at
+  the start of a line is escaped too, and `$` and `~~` while maths and
+  strikethrough are on. Ordinary prose — `a < b`, `Tom & Jerry`, `$5 and $10` —
+  gets no backslashes. (A040)
+- **Importing through our server asks first.** When a site blocks browsers from
+  reading a link, the import used to go silently through Markdown Studio's
+  server. It now asks once, remembers the answer, and lets you change it in
+  Settings ▸ Privacy; say no and that import fails instead. (A076)
+- **Formatting shortcuts act only inside the document.** ⌘B, ⌘I, ⌘K and the
+  heading chords used to format the document hidden under Cards or the map when
+  typed in a search box, the Cards composer or a rename field. They now do
+  nothing unless the caret is in one of the two panes and the editor is showing.
+  Find, Save, New and the view shortcuts still work from anywhere. (A025)
+- **AltGr types characters, never shortcuts.** On German, Nordic, Swiss, Spanish,
+  French and other AltGr keyboards, `[`, `]` and `\` can be typed again — so can
+  markdown links, task lists and `[[wiki links]]`. As a result the undocumented
+  Ctrl+Alt+digit heading shortcuts no longer work on Windows and Linux (use the
+  documented Ctrl+Shift+1–6), and on an AltGr layout Ctrl+Alt+F types its
+  character — use Ctrl+H for Replace. (A052)
+- **Tab next to a list keeps its old meaning.** The editor-library upgrade in
+  this release would have made Tab, pressed in a paragraph right after a list,
+  pull that paragraph into the list. That is switched off; Tab inside a list item
+  still indents it.
+- **Inserting an image asks for a description** (alt text) after the address —
+  leave it empty for a decorative image. The markdown pane now inserts the image
+  you asked for instead of a placeholder, and ⌘K there links to the address you
+  typed. (A096)
+- **The placeholder ads and the Admin settings are gone from the shipped app.**
+  "Your Ad Here" slots could be switched on by anyone from the View menu,
+  Settings or a `?ads=1` link; they exist only in development builds now. The
+  Admin section (console, context-menu switch) is hidden unless enabled for a
+  support session. (A078, A081)
+- **The app refuses to load inside another page's frame** (anti-framing is
+  enforced). `/embed.html` remains the page meant for iframes. (A068)
+- **Remote images can be blocked.** Settings ▸ Privacy ▸ Block remote images stops
+  images in a document from loading from other sites, which otherwise learn when
+  the document is opened. The app no longer sends a Referer. (A076)
+- **Split view keeps both panes side by side on a landscape phone**, where
+  stacking left each editor 37–69px tall, and **printing prints the document**
+  rather than one page of the app's chrome. (A100)
+
+### Fixed — content that was lost or changed
+- Hard line breaks — addresses, poems, verse — are kept (A037); anything nested
+  under a checklist item is kept (A038); blank lines inside list items and inside
+  code in a list are kept (A041).
+- Footnotes survive editing in the rich pane (A043).
+- Table column alignment survives, line breaks in cells are kept, and a cell
+  holding something a markdown table cannot carry is reported (A044).
+- A wiki-link alias in a table no longer gains a backslash on every round trip
+  (A045); wiki links and `{…}` inside indented code are left alone (A048).
+- Code in longer fences and in fences inside quotes or callouts is no longer
+  reformatted (A046); front matter containing `&` or quotes is no longer wiped
+  (A047).
+- `$5 and $10` and `$5-$10` stay prose, and `$$…$$` in the middle of a line no
+  longer splits the paragraph (A049). HTML comments are reported instead of
+  silently deleted (A050).
+- The toolbar's own "Mono" font no longer turns into literal tag text in Styled
+  mode (A042). Toggling a Markdown feature no longer strips alignment and colour
+  (A033). Editing a card no longer strips colour, highlight, font and alignment
+  from the whole note (A020).
+- Select ▸ All headings + Bold bolds every heading instead of destroying the first
+  (A054); markdown-pane Clear formatting no longer deletes images, links, code and
+  bullets (A055); markdown table operations no longer split cells on `\|` or on a
+  wiki-link alias, and keep `:---` and a table's indentation in a list (A053);
+  `# comments` in code blocks are no longer treated as headings (A062).
+- Smaller round-trip drift: `[[My_Doc]]` keeps its short form, a leading `---`
+  plus a blank line is a rule rather than front matter, a heading ending in `#`
+  keeps it (A051).
+
+### Fixed — data safety
+- **Unmounting an emptied editor never writes a blank document** over the stored
+  one (hosts that unmount the editor inside the autosave window).
+- **A document from a newer version is no longer reported as "empty"** when a
+  save is refused; the message says it is open read-only.
+- **The first-run documents' links to the welcome document work** — they were
+  drawn as broken for every new user.
+- **A slow URL import says it timed out**, instead of asking to use the server
+  relay for a site that simply had not answered yet.
+- **Reloading after a two-tab conflict no longer overwrites the other tab's work**,
+  and closing a window with two unsaved tabs keeps both tabs' recovery copies
+  (A018, A027).
+- **A document written by a newer version opens read-only instead of blank** —
+  loading it blank and autosaving would have replaced it (A021).
+- **Read-only keeps protecting the markdown pane after a document switch**, and the
+  first edit after a switch is always saved — one paste into the markdown pane was
+  never synced, marked dirty or saved (A019).
+- ⌘S says "Changes saved" only when something was saved, and a host's `onSave`
+  fires only then (A026).
+- Rename, card pin/colour and host patches respect a conflict with another tab
+  (A028); a storage read error is treated as an error, not "document not found"
+  (A029); a damaged document list rebuilds itself instead of hiding documents
+  (A030).
+- A click during a multi-file import no longer saves a file as an empty
+  "Untitled" (A031); New document during a pending switch no longer leaves every
+  later save refused (A032); a host's `importContent` saves the open document
+  first (A034); remounting the editor inside a host app no longer overwrites the
+  last document (A024).
+- Version history: deleting a version asks first (A023), same-millisecond versions
+  list in the right order (A035), and restoring in place is refused while
+  read-only (A036).
+- **The storage limit is the browser's real quota** — saves used to stop at about
+  18 MB of markdown and retry forever — and a full disk is a clear "Storage full —
+  not saving" state that deleting a document or pressing Save recovers from (A086).
+- **Protection against the browser clearing its storage**: the app asks for
+  persistent storage, reminds you to take a full backup, notices when a library it
+  knew about comes back empty (instead of greeting you with the starter documents)
+  and shows a "Not saving" banner whenever storage is unavailable; Safari users get
+  an install tip (A017, A022). The old address shows a "we've moved" banner with a
+  one-click backup (A004).
+
+### Security and privacy
+- **The full app can no longer be framed at `/embed.html`.** The production
+  deploy has no embed build, so that address served the full app under the
+  embed's anti-framing exemption; it now returns 404 unless an embed build is
+  deployed there.
+- **Erasing local data removes the Cards composer's unsent draft**, and the
+  integration handle exposes `clearLocalData()` for a host's logout.
+- **No export carries the imported originals**: the crash screen's "Export my
+  documents" uses the same envelope as every other export, and that envelope
+  no longer includes the pre-import HTML.
+- A Content-Security-Policy (report-only, hash-pinned) and hardening headers;
+  hashed assets cache as immutable; a missing chunk returns 404 instead of the app
+  page (A068, A012, A016).
+- Diagram directives can no longer restyle the page outside the diagram (A069);
+  style attributes in imported JSON are validated (A070); a hostile `.docx` can no
+  longer freeze the tab (A071); sanitiser hardening (A073).
+- The import relay reaches only public addresses, stops at 4 MB with a message you
+  can act on, logs one line per request with the host only, and grants
+  cross-origin access to markdownstudio.com alone (A010, A013, A074).
+- The embed's host bridge trusts only the page that actually frames it, and a
+  deploy-time allowlist has the last word (A072).
+- **Erase all local data** (Settings ▸ Local data); **Erase history** after
+  deleting a document; deleted documents' copies expire after 30 days; exports no
+  longer carry the original imported text (A079). A host's own storage keeps
+  version history and crash recovery in its namespace, and `clearLocalData()`
+  logs a shared device out cleanly (A103).
+- The privacy copy says what is true: documents stay in the browser; the import
+  relay and remote images are the two things that reach the network (A076).
+- Third-party licence notices ship with the app at `/third-party-licenses.txt`, and
+  the About page's credits are corrected (A077). `/.well-known/security.txt`
+  names a security contact (A007).
+
+### Accessibility
+- Both editors have accessible names (A089); a visible focus ring in every palette
+  (A090); the editor stays usable at 400% zoom (A091); accent-coloured text meets
+  contrast in every palette (A092).
+- The collapsed bottom panel is out of the Tab order and its tabs are a real
+  tablist (A093); a "Skip to editor" link, a keyboard-operable library tree, a
+  toolbar that is one Tab stop with arrow keys, and a DOM order that matches the
+  screen (A094); further contrast and Windows High Contrast fixes, including dimmed
+  text on the Cards board (A095).
+- Save announcements speak only when something goes wrong or recovers; visible
+  labels are part of each control's name; reduced motion reaches scripted
+  scrolling; images get alt text; the Find box is labelled (A096). Help documents
+  the keyboard navigation keys.
+
+### Editor, links and search
+- **Broken wiki links are marked** — the 1.76.0 marking never actually fired
+  (A058). Links go to the right document, titles containing `#` can be linked
+  (A059), and link clicks keep working after the editor remounts (A064).
+- Find & Replace: a regular expression runs off the main thread with a time limit,
+  so a catastrophic pattern cannot freeze the tab (A061); replacements that depend
+  on context now happen (A060); `^`/`$` mean line start/end in the markdown pane,
+  highlights honour Match case and Whole word, and Replace inserts text rather
+  than HTML (A067).
+- The Outline shows every heading, not the first 40 (A063); non-Latin heading
+  links, whole-word search and Chinese/Japanese/Thai word counts work (A098);
+  right-to-left text renders right-to-left (A099).
+- Cards update in place, pin and colour show at once, and Escape keeps the
+  composer's draft (A087, A056, A057); Escape in a dialog over Cards or the map
+  closes only the dialog (A057). The map's wheel zoom works on every open (A065).
+  A folder dropped on a document row lands in that document's folder (A066).
+  "Link to heading" inserts the heading's words, not its markup.
+
+### Performance
+- The library panel no longer freezes the editor on every autosave: at 2,000
+  documents a save went from ~2.3 s to ~16 ms (measured in jsdom) (A082).
+- Large documents: rich→markdown conversion is linear instead of quadratic and
+  the maths scan is bounded. For a 1.6 MB document (jsdom) markdown→rich went from
+  ~0.4 s to ~0.1 s and rich→markdown from ~5 s to 1.6–3.5 s — but every edit still
+  converts the whole document (A083, partly done).
+- Startup download 915 → 680 KiB gzip (A084); the Cards board reloads only what
+  changed (A087); snapshot pruning, batched backup export and a single KaTeX copy
+  (A088).
+
+### Reliability
+- A local, redacted error log behind **Copy diagnostics** (the crash screen and
+  the About page) and an **Export my documents** button on the crash screen; no
+  telemetry leaves the device (A009).
+- The boot watchdog acts only on evidence of a failed app script, and only online
+  — a slow device no longer has its offline cache wiped (A011). A diagram or
+  formula whose renderer failed to download says so, instead of showing the fetch
+  error as a diagram error, and the app no longer caches the failure (Chromium
+  itself still needs a reload to fetch a failed module again) (A085).
+
+### npm library
+- Every runtime import is declared (A101); the stylesheet no longer restyles the
+  host page or its design tokens (A102); the tarball is 0.66 MB instead of 13 MB,
+  the ES build mounts in browser bundles and the CommonJS build loads in Node
+  (A104).
+- Public API that did nothing — `setFieldSchemas`, the `fieldSchemas` and
+  `linkResolver` props, the `BlockId`/`FieldBlock`/`TransclusionBlock` exports —
+  is deprecated and warns once in development (A105). One editor per page is
+  documented (A106).
+- New: `clearLocalData()` and `setErrorReporter()`; `storageConfig` accepts
+  `namespace`, `snapshots` and `crashRecovery`. **Consumers must import KaTeX's
+  stylesheet themselves** (`katex/dist/katex.min.css`). Tiptap is 3.31.3 across
+  every `@tiptap/*` package and the peer ranges are bounded (A113).
+
+### Developer
+- ESLint with the React hook rules (`bun run lint`, 0 errors) (A109); coverage
+  measured over all of `src` (A108); the unit suite no longer fails intermittently
+  (A107) — 196 files, 2,126 tests.
+- Bun pinned to 1.4.0 with `--frozen-lockfile`, actions pinned to commit SHAs,
+  least-privilege CI and Dependabot (A014); npm publishing only from CI, with
+  provenance (A006); an uptime check (A001); `bun audit` 34 → 0 (A114).
+- New browser suites `bun run e2e:csp` (the build under an enforced CSP) and
+  `bun run e2e:pwa` (offline after one visit; updates never force a reload).
+- `build:app` generates the third-party licence notice; the deploy strips
+  sourcemaps after it (A077, A016). Line endings are pinned to LF. The
+  documentation anchor script runs on Windows.
+- Deployment owner steps, decision records and five new runbooks (A005, A003,
+  A015); docs, `CLAUDE.md` and the backlog reconciled with the code (A111).
+
 ## [1.77.0]
 
 An external review of the codebase found five defects, three of them paths that

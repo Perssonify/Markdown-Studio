@@ -6,32 +6,32 @@ Draft posts. Adjust voice to the account; keep the claims exactly as written.
 
 ## X / Bluesky
 
-**Launch (261):**
+**Launch (272):**
 > Markdown editors make you choose: write the syntax and imagine the result, or
 > use a rich editor and lose the file.
 >
 > Markdown Studio shows both at once. Two panes, one document, always in sync.
 >
-> Free, runs entirely in your browser, works offline.
+> Free, keeps your documents in your browser, works offline.
 >
 > markdownstudio.com
 
-**Feature — the map (204):**
+**Feature — the map (216):**
 > Link notes with [[wiki links]] and Markdown Studio draws your library as a
 > map. Pick any note: its headings, everything it links to, everything linking
 > back. Click through without leaving the map.
 >
 > markdownstudio.com
 
-**Feature — privacy (163):**
-> No account. No server. Nothing uploaded.
+**Feature — privacy (174):**
+> No account. No server copy. No analytics.
 >
-> Markdown Studio stores your documents in your own browser and works with the
-> network off.
+> Markdown Studio keeps your documents in your own browser, and once it has
+> loaded it works with the network off.
 >
 > markdownstudio.com
 
-**Feature — round-trip (192):**
+**Feature — round-trip (187):**
 > Drop a Mermaid diagram into the rich-text pane. Look at the Markdown pane:
 > it's a clean fenced code block.
 >
@@ -59,8 +59,8 @@ Draft posts. Adjust voice to the account; keep the claims exactly as written.
 > Markdown. Notes link to each other with [[wiki links]], and a relationship map
 > draws the whole library as a graph you can explore.
 >
-> It runs entirely in your browser. No account, no server, nothing uploaded, and
-> it works offline.
+> Your documents stay in your browser: no account, no server copy, no
+> analytics, and it works offline.
 >
 > Free to use. Built by Perssonify Labs.
 
@@ -83,7 +83,7 @@ Draft posts. Adjust voice to the account; keep the claims exactly as written.
 > sync as you type — edit whichever side suits the moment.
 >
 > Both panes are real editors. The rich side has table grids, tickable task
-> lists and resizable images; the Markdown side has syntax highlighting,
+> lists and formulas you edit in place; the Markdown side has syntax highlighting,
 > multi-cursor editing and a Find & Replace that can target only headings, or
 > only code. A shared structured document model underneath is why the
 > round-trip actually holds.
@@ -93,8 +93,8 @@ Draft posts. Adjust voice to the account; keep the claims exactly as written.
 > map, a Keep-style Cards board, and export to Markdown, HTML, Word, PDF or
 > JSON.
 >
-> It runs entirely in your browser — no account, no server, nothing uploaded —
-> and works offline. Free, and embeddable in your own product.
+> Your documents stay in your browser — no account, no server copy, no
+> analytics — and it works offline. Free, and embeddable in your own product.
 
 **First comment:**
 > Maker here. The thing that took the longest wasn't the features, it was making
@@ -116,7 +116,7 @@ Draft posts. Adjust voice to the account; keep the claims exactly as written.
 
 Understated; this audience punishes marketing language.
 
-**Title:** Markdown Studio – a dual-pane Markdown editor that runs entirely in the browser
+**Title:** Markdown Studio – a dual-pane Markdown editor that runs in the browser
 
 **Text:**
 > Raw Markdown in one pane, a rich-text editor in the other, both showing the
@@ -129,9 +129,14 @@ Understated; this audience punishes marketing language.
 > blocks, LaTeX, footnotes, theme-aware `<picture>` images, sized images, nested
 > task lists.
 >
-> No backend. Documents are in IndexedDB, and there's a snapshot sidecar
-> database for version history plus a backstop that refuses to persist a blank
-> document over one with content — the failure mode that actually loses work.
+> No backend for documents. They are in IndexedDB, and there's a snapshot
+> sidecar database for version history plus a backstop that refuses to persist
+> a blank document over one with content — the failure mode that actually loses
+> work. The only server code is an opt-in relay for importing links whose hosts
+> block browser reads; it passes the file straight back without keeping a copy,
+> though like any web request the address can show up in the hosting provider's
+> logs. No analytics. After one visit the service worker has the whole app
+> cached, so it works offline.
 >
 > The same code ships as an embeddable component.
 
@@ -158,8 +163,8 @@ Understated; this audience punishes marketing language.
 > footnotes), links notes with `[[wiki links]]` and maps them, and exports to
 > Markdown, HTML, Word, PDF or JSON.
 >
-> It's free, it runs entirely in your browser, and it works offline. Nothing you
-> write is uploaded.
+> It's free, it keeps your documents in your browser, and it works offline. No
+> server stores or reads them.
 >
 > → [markdownstudio.com](https://markdownstudio.com)
 
@@ -177,8 +182,10 @@ Lead with the fact, not the pitch. Disclose that you made it.
 > Markdown for speed and switch to the formatted pane when you're fighting a
 > table.
 >
-> It's browser-only — no account, no server, IndexedDB storage, works offline.
-> Math, Mermaid, wiki links with a relationship map, and export to
+> Documents stay in the browser (IndexedDB) — no account, no server copy, no
+> analytics, and it works offline after the first visit. The only server code is
+> an opt-in relay for importing links whose hosts block browser reads. Math,
+> Mermaid, wiki links with a relationship map, and export to
 > Markdown/HTML/Word/PDF.
 >
 > markdownstudio.com — feedback welcome, especially on the round-trip fidelity.

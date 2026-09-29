@@ -1,3 +1,5 @@
+import { spawnSync } from "child_process";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { anchorsIn, audit, defineLine } from "../../scripts/doc-anchors.mjs";
 
@@ -73,5 +75,28 @@ describe("the checker itself", () => {
 
   it("reports line 0 for a symbol that is not there at all", () => {
     expect(defineLine("const other = 1;", "thing")).toEqual({ line: 0, tier: 0 });
+  });
+});
+
+describe("the command-line entry point", () => {
+  // `node scripts/doc-anchors.mjs [--fix]` is what a contributor runs. Its
+  // "am I the main module?" check compared a file URL with a native path, which
+  // never matches on Windows: the script exited 0 having checked nothing.
+  it("actually runs when invoked directly", () => {
+    const r = spawnSync(process.execPath, [join(process.cwd(), "scripts", "doc-anchors.mjs")], { encoding: "utf8" });
+    expect(r.stdout).toMatch(/\d+ anchors checked/);
+  });
+});
+
+describe("--fix keeps the definition the author chose", () => {
+  it("re-points a drifted anchor at the NEAREST definition, not the first", async () => {
+    const { mkdtempSync, writeFileSync } = await import("fs");
+    const { tmpdir } = await import("os");
+    const { nearestDefinition } = await import("../../scripts/doc-anchors.mjs");
+    const file = join(mkdtempSync(join(tmpdir(), "anchors-")), "store.ts");
+    // A store action is defined twice: its interface member and its body.
+    writeFileSync(file, ["interface S {", "  saveDoc: () => void;", "}", "", "", "", "", "", "const store = {", "  saveDoc: () => {},", "};"].join("\n"));
+    expect(nearestDefinition(file, "saveDoc", 12)).toBe(10); // was at the body: stays with the body
+    expect(nearestDefinition(file, "saveDoc", 1)).toBe(2);   // was at the declaration: stays there
   });
 });

@@ -1,0 +1,7 @@
+# Markdown Studio — security contact (RFC 9116).
+# Please report vulnerabilities privately by e-mail; do not open a public issue.
+# Scope and what to include: the security policy shipped with the source (SECURITY.md).
+Contact: mailto:security@markdownstudio.com
+Expires: 2027-09-29T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://markdownstudio.com/.well-known/security.txt

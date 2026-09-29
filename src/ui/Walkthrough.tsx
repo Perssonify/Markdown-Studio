@@ -154,10 +154,18 @@ export function Walkthrough({ run, onFinish }: WalkthroughProps) {
   // Keyboard: Esc to skip, arrows / Enter to move. Capture phase + full event
   // containment — the tour is modal, so underlying Escape handlers (help page,
   // graph, dialogs) must not also fire.
+  //
+  // A094: Enter is "next" only when no CONTROL has focus. The capture-phase
+  // handler used to take Enter everywhere, so pressing it on Skip, Back or the
+  // close button advanced the tour instead of doing what the focused button
+  // says — a keyboard user could not skip the tour with Enter at all. On a
+  // button, Enter is left to the button's own activation.
   useEffect(() => {
     if (!run) return;
     const onKey = (e: KeyboardEvent) => {
+      const onControl = !!(e.target as HTMLElement | null)?.closest?.("button, a[href], input, select, textarea, [role='button']");
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(); }
+      else if (e.key === "Enter" && onControl) return;
       else if (e.key === "ArrowRight" || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); next(); }
       else if (e.key === "ArrowLeft") { e.preventDefault(); e.stopPropagation(); goBack(); }
     };
@@ -189,6 +197,7 @@ export function Walkthrough({ run, onFinish }: WalkthroughProps) {
   return (
     <div
       className="fixed inset-0 z-[100]"
+      data-print-hide
       role="dialog"
       aria-modal="true"
       aria-labelledby="pf-tour-title"

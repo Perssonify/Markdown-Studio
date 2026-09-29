@@ -53,6 +53,18 @@ import { useEditorStore } from '../store/editorStore';
 import { useUIStore } from '../store/uiStore';
 import { TableGridPicker } from './TableGridPicker';
 import { Icons } from "./Icons";
+import { useRovingFocus } from "./use-roving-focus";
+import { promptImage } from "../formatting/image-insert";
+
+/**
+ * Arrow-key order is VISUAL order. Save floats right, so it comes FIRST in the
+ * DOM (the float needs that) but sits LAST on screen; walking the DOM would
+ * put it between nothing and "Search".
+ */
+function rightControlsLast(items: HTMLElement[]): HTMLElement[] {
+  const right = items.filter((el) => el.closest("#toolbar-right-controls"));
+  return right.length ? [...items.filter((el) => !right.includes(el)), ...right] : items;
+}
 
 // --- Types ---
 
@@ -138,6 +150,16 @@ const fontOptions = [
   { value: "Courier New", label: "Mono" },
 ];
 
+/**
+ * The generated `default_soft` variant colours its glyph `text-primary` — the
+ * bright fill, 1.7:1 on its own 10% tint in amber, so an ACTIVE format button's
+ * icon (the only thing saying "bold is on") failed WCAG 1.4.11's 3:1 (A092).
+ * The primitive is generated and not hand-edited; `cn` (tailwind-merge) lets a
+ * className override the variant's colour classes, including the dark/hover
+ * ones, so this is applied wherever the variant is.
+ */
+const SOFT_ACTIVE_INK = "text-primary-strong dark:text-primary-strong hover:dark:text-primary-strong";
+
 function TbBtn({ icon: Icon, title, hint, active, onClick, className = "size-8" }: TbBtnProps) {
   return (
     <Button
@@ -158,7 +180,7 @@ function TbBtn({ icon: Icon, title, hint, active, onClick, className = "size-8" 
       aria-label={title}
       aria-pressed={active}
       title={hint ? `${title} — ${hint}` : title}
-      className={className}
+      className={cn(className, active && SOFT_ACTIVE_INK)}
     >
       <Icon />
     </Button>
@@ -306,7 +328,7 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
                 type="button"
                 onClick={() => { onClear(); setOpen(false); }}
                 disabled={!hasColor}
-                className="flex items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:bg-destructive hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                className="flex items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:bg-destructive hover:text-destructive-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                 title={`Clear ${isHighlight ? "highlight" : "text color"}`}
               >
                 <X className="h-3.5 w-3.5" />
@@ -328,7 +350,10 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
 function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplace, toggleFindReplace, saveStatus, onSave, mode }: EditorToolbarProps) {
   const st = useEditorStore((s) => s.activeFormats);
   const syncMode = useUIStore((s) => s.syncMode);
-  const isDirty = saveStatus === "editing" || saveStatus === "error";
+  // "full" (storage quota reached, A086) is terminal for AUTOSAVE, but a manual
+  // save is exactly how a user retries after freeing space. "conflict" and
+  // "blocked" stay disabled: saving them again would only be refused again.
+  const isDirty = saveStatus === "editing" || saveStatus === "error" || saveStatus === "full";
   const [isCompact, setIsCompact] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -336,6 +361,10 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const rootRef = React.useRef<HTMLDivElement>(null);
 
   const { prompt, equation } = useDialog();
+
+  // A094: one tab stop for the whole bar (WAI-ARIA toolbar pattern) instead of
+  // ~40 — the document used to be forty Tab presses away.
+  useRovingFocus(rootRef, { orderItems: rightControlsLast });
 
   // Compact is decided by the toolbar's OWN width, not the window's: the full
   // control set needs ~TOOLBAR_COMPACT_BP px and used to wrap into a ragged,
@@ -414,7 +443,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           size="icon"
           variant={showExpanded ? "default_soft" : "outline"}
           title={pinned ? "Unpin to collapse" : (showExpanded ? "Collapse Toolbar" : "Expand Toolbar")}
-          className="h-8 w-8"
+          className={cn("h-8 w-8", showExpanded && SOFT_ACTIVE_INK)}
         >
           {showExpanded ? <ChevronUp className={pinned ? "opacity-50" : ""} /> : <ChevronDown />}
         </Button>
@@ -427,7 +456,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           title={pinned ? "Unpin Toolbar" : "Pin Toolbar"}
           size="icon"
           variant={pinned ? "default_soft" : "outline"}
-          className="size-8"
+          className={cn("size-8", pinned && SOFT_ACTIVE_INK)}
         >
           {pinned ? <Pin /> : <PinOff />}
         </Button>
@@ -440,7 +469,9 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const blockDropdown = (
     <DropdownMenu>
       <DropdownMenuTrigger render={
-        <Button variant="outline" size="sm" className="h-8 min-w-[108px] justify-between gap-1 px-2 font-normal">
+        // The visible text is the CURRENT block type; the name keeps it (label
+        // in name) and says what the control is.
+        <Button variant="outline" size="sm" aria-label={`Block type: ${blockOptions.find((o) => o.value === blockFmt)?.label ?? "Paragraph"}`} className="h-8 min-w-[108px] justify-between gap-1 px-2 font-normal">
           {blockOptions.find((o) => o.value === blockFmt)?.label ?? "Paragraph"}
           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -465,7 +496,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const fontDropdown = (
     <DropdownMenu>
       <DropdownMenuTrigger render={
-        <Button variant="outline" size="sm" className="h-8 min-w-[84px] justify-between gap-1 px-2 font-normal">
+        <Button variant="outline" size="sm" aria-label={`Font: ${fontOptions.find((o) => o.value === fontName)?.label ?? fontName}`} className="h-8 min-w-[84px] justify-between gap-1 px-2 font-normal">
           {fontOptions.find((o) => o.value === fontName)?.label ?? fontName}
           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -552,7 +583,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
 
         <ButtonGroup>
           <TbBtn icon={Link} title={`Link (${displayKeys("⌘K")})`} onClick={async () => { const u = await prompt("Insert Link", { placeholder: "https://example.com", description: "Enter the URL for the link." }); if (u) exec("createLink", u); }} />
-          <TbBtn icon={Image} title="Image" onClick={async () => { const u = await prompt("Insert Image", { placeholder: "https://example.com/image.png", description: "Enter the URL of the image to insert." }); if (u) exec("insertImage", u); }} />
+          <TbBtn icon={Image} title="Image" onClick={async () => { const img = await promptImage(prompt); if (img) exec("insertImage", img); }} />
         </ButtonGroup>
 
         <div className="w-px h-4 bg-border mx-0.5" />
@@ -631,7 +662,14 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
 
   return (
     <>
-      <div ref={rootRef} data-tour="toolbar" className="bg-card/80 border-b border-border transition-all duration-300 px-4 pt-1.5 pb-0">
+      <div
+        ref={rootRef}
+        data-tour="toolbar"
+        data-print-hide
+        role="toolbar"
+        aria-label="Formatting"
+        className="bg-card/80 border-b border-border transition-all duration-300 px-4 pt-1.5 pb-0"
+      >
 
         {/* 1. RIGHT CONTROLS (Floated Right)
         Must come first in the DOM. This pins it to the top right, allowing 
@@ -639,11 +677,13 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
       */}
         <div id="toolbar-right-controls" className="float-right ml-2 mb-1.5 flex items-center gap-2">
           {/* Clear / Revert now live in the Edit and File menus; Save stays here
-              (high-frequency) alongside Undo/Redo in the compact controls. */}
+              (high-frequency) alongside Undo/Redo in the compact controls.
+              Named explicitly: below `sm` the "Save" text is display:none,
+              which left an icon-only button with no name at all. */}
           <ButtonGroup>
             <Tooltip>
               <TooltipTrigger render={
-                <Button variant="ghost" onClick={onSave} disabled={!isDirty} className="h-8 hover:bg-card">
+                <Button variant="ghost" onClick={onSave} disabled={!isDirty} aria-label="Save" className="h-8 hover:bg-card">
                   <Save className="text-success" />
                   <span className="hidden sm:inline-block">Save</span>
                 </Button>

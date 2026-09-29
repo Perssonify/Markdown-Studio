@@ -6,8 +6,11 @@ body:
     attributes:
       value: |
         Thanks for the report. **Do not use this form for security issues** —
-        see [SECURITY.md](https://github.com/SolutionPath/markdown-studio/blob/main/SECURITY.md)
-        for private disclosure.
+        e-mail security@markdownstudio.com instead (see SECURITY.md and
+        https://markdownstudio.com/.well-known/security.txt).
+
+        If the app showed a crash screen, **Copy diagnostics** there (or in
+        Help ▸ About) and paste the result below — it contains no document content.
 
         If a document of yours looks wrong or truncated, please **do not delete
         it** — Tools ▸ Version history keeps recent versions and may let you
@@ -85,6 +88,13 @@ body:
       placeholder: "Safari 18.4 on iOS 18 / Chrome 140 on Windows 11"
     validations:
       required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: The text from "Copy diagnostics" (crash screen, or Help ▸ About), if you have it. It lists recent errors with no document content.
+      render: text
 
   - type: textarea
     id: console

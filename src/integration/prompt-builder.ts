@@ -196,6 +196,37 @@ export function formatDocumentsForPrompt(
 }
 
 /**
+ * The documents linked to `activeId` in either direction, as prompt items.
+ *
+ * `getDocById` is asynchronous (it reads storage). The integration's
+ * copyAsPrompt used to call it without `await`, so each "linked document" it
+ * handed the formatter was a pending Promise — truthy, with no title or
+ * content. A document that fails to load is skipped, not fatal: an unreadable
+ * record now throws (A029) rather than reading as missing.
+ */
+export async function linkedPromptItems(
+  edges: { source: string; target: string }[],
+  activeId: string,
+  getDocById: (id: string) => Promise<DocumentRecord | null> | DocumentRecord | null | undefined
+): Promise<PromptItem[]> {
+  const ids = new Set<string>();
+  for (const edge of edges) {
+    if (edge.source === activeId && edge.target !== activeId) ids.add(edge.target);
+    if (edge.target === activeId && edge.source !== activeId) ids.add(edge.source);
+  }
+  const items: PromptItem[] = [];
+  for (const id of ids) {
+    try {
+      const doc = await getDocById(id);
+      if (doc) items.push({ doc });
+    } catch {
+      /* unreadable — leave it out of the prompt */
+    }
+  }
+  return items;
+}
+
+/**
  * Build a prompt from the active document and its linked neighbors.
  */
 export async function buildContextPrompt(

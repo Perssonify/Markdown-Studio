@@ -56,7 +56,7 @@ export function LinkBubbleMenu({ editor, onEditLink }: LinkBubbleMenuProps) {
         {/* Link Preview Info */}
         <div className="flex items-center gap-2 px-2 py-1 max-w-[220px]">
           <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" />
-          <span className="text-xs font-mono text-primary truncate cursor-default">
+          <span className="text-xs font-mono text-primary-strong truncate cursor-default">
             {editor.getAttributes("link")["href"] || "No URL"}
           </span>
         </div>

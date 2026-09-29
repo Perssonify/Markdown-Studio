@@ -6,6 +6,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { prefersReducedMotion } from "../utils/reduced-motion";
+import { overlayShouldHandleEscape } from "./overlay-escape";
 import {
   stepsPerFrame,
   brokenLinks as computeBrokenLinks,
@@ -190,7 +191,7 @@ const isWideViewport = () =>
  * clears an active search/filter first, else closes.
  */
 function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, onExport, headingsFor, onOpenHeading, unresolved }: GraphViewProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const posRef = useRef<Map<string, Pt>>(new Map());
   const rafRef = useRef<number | null>(null);
@@ -643,11 +644,15 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const anyFilterRef = useRef(anyFilter || brokenHi);
   anyFilterRef.current = anyFilter || brokenHi;
 
-  // Escape: clear an active search/filter first, else exit the graph. Respect
-  // defaultPrevented (dialogs above us).
+  // Escape: clear an active search/filter first, else exit the graph — but
+  // only an Escape meant for the map. It used to act on EVERY Escape in the
+  // window: in a library rename box beside the map it closed the map, and the
+  // blur that followed committed the rename the user was cancelling. See
+  // overlayShouldHandleEscape.
+  const rootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (!overlayShouldHandleEscape(e, rootRef.current)) return;
       e.preventDefault();
       if (anyFilterRef.current) clearFilters();
       else onClose();
@@ -694,8 +699,17 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     return { x: (raw.x - tx) / k, y: (raw.y - ty) / k };
   }, [toRaw]);
 
-  useEffect(() => {
-    const svg = svgRef.current;
+  // Wheel zoom is attached by a CALLBACK REF on the <svg>, not an effect. The
+  // effect ran once, on mount — and the <svg> only exists once there is a graph
+  // to draw: every open after the first mounts with no graph data yet (the
+  // empty state renders instead), so the listener was never attached and a
+  // trackpad pinch zoomed the whole browser page. A callback ref runs whenever
+  // that element actually appears or goes away.
+  const wheelCleanupRef = useRef<(() => void) | null>(null);
+  const setSvgRef = useCallback((svg: SVGSVGElement | null) => {
+    wheelCleanupRef.current?.();
+    wheelCleanupRef.current = null;
+    svgRef.current = svg;
     if (!svg) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -713,7 +727,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       render();
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
+    wheelCleanupRef.current = () => svg.removeEventListener("wheel", onWheel);
   }, [toRaw]);
 
   const zoomBy = useCallback((factor: number) => {
@@ -1133,7 +1147,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
 
   const canvas = (
     <svg
-      ref={svgRef}
+      ref={setSvgRef}
       viewBox={`0 0 ${dims.w} ${dims.h}`}
       className="h-full w-full touch-none select-none"
       role="group"
@@ -1590,7 +1604,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background">
+    <div ref={rootRef} className="flex h-full flex-col overflow-hidden bg-background">
       {header}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {mapPane}
@@ -1638,7 +1652,7 @@ function HealthChip({
           : active
             ? warn
               ? "border-amber-500/50 bg-amber-500/15 text-amber-600"
-              : "border-primary/50 bg-primary/15 text-primary"
+              : "border-primary/50 bg-primary/15 text-primary-strong"
             : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
       )}
     >
@@ -1682,7 +1696,7 @@ function RailTag({ children, tone }: { children: React.ReactNode; tone?: "primar
     <span
       className={cn(
         "rounded px-1.5 py-0.5 text-[10px] font-medium",
-        tone === "primary" ? "bg-primary/15 text-primary"
+        tone === "primary" ? "bg-primary/15 text-primary-strong"
           : tone === "warn" ? "bg-amber-500/15 text-amber-600"
           : "bg-foreground/10 text-foreground/70"
       )}

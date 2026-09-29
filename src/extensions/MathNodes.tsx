@@ -1,6 +1,7 @@
 import { mergeAttributes, Node } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
+import { cachedImport } from "../utils/lazy-import";
 
 /**
  * TipTap nodes that render LaTeX with KaTeX (lazy-loaded). The LaTeX source is
@@ -15,11 +16,10 @@ import { useEffect, useRef, useState } from "react";
  * (KaTeX renders from the committed attribute, not the live draft).
  */
 
-let katexPromise: Promise<typeof import("katex").default> | null = null;
-async function getKatex() {
-  if (!katexPromise) katexPromise = import("katex").then((m) => m.default);
-  return katexPromise;
-}
+// Memoised while pending/fulfilled, forgotten if it rejects: a failed chunk
+// (offline, a purged deploy) must not leave every formula unrendered for the
+// rest of the session (A085; utils/lazy-import.ts explains what a retry can do).
+export const getKatex = cachedImport(() => import("katex").then((m) => m.default)); // exported for its test
 
 function MathView({
   latex,

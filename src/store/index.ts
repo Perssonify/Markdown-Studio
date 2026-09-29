@@ -7,11 +7,12 @@ export {
   MemoryStorageAdapter,
   IndexedDBStorageAdapter,
   StorageQuotaError,
+  StorageReadError,
   type StorageAdapter,
   type IDBStorageConfig,
   type StorageMetrics,
 } from "./storage-adapter";
-export { useDocumentStore } from "./documentStore";
+export { useDocumentStore, clearLocalData, configureLocalStores } from "./documentStore";
 export { useUIStore } from "./uiStore";
 export { useEditorStore } from "./editorStore";
 export { computeFidelity } from "./fidelity";

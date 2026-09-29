@@ -1,5 +1,5 @@
 import { indentLess, indentMore, redo as cmRedo, undo as cmUndo } from "@codemirror/commands";
-import { ChangeSpec } from "@codemirror/state";
+import { ChangeSpec, EditorSelection, type EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { RefObject, useCallback, useEffect, useRef } from "react";
 import { MODES } from "../constants";
@@ -7,7 +7,8 @@ import { MODES } from "../constants";
 // Starter content for the "Insert" toolbar menu.
 const MERMAID_SAMPLE = "graph TD;\n  A[Start] --> B{Decision};\n  B -->|Yes| C[Do it];\n  B -->|No| D[Skip];";
 const ABC_SAMPLE = "X:1\nT:Ode to Joy\nM:4/4\nL:1/4\nK:C\nE E F G | G F E D | C C D E | E3/2 D/2 D2 |";
-import { isWrapped as _isWrapped, mdWrap as _mdWrap } from "./md-format-utils";
+import { clearMdFormatting, isWrapped as _isWrapped, mdLinkDestination, mdWrap as _mdWrap, mdWrapBy } from "./md-format-utils";
+import { mdImage, toImageInsert } from "./image-insert";
 import {
   type CaseMode,
   headingsCaseCM,
@@ -86,6 +87,24 @@ interface FormatState {
 }
 
 /**
+ * Line numbers touched by ANY range of the selection, ascending, each once.
+ *
+ * The markdown formatters used to read `selection.main` only, so on the
+ * multi-range selections that Select ▸ All headings / list items and Find ▸
+ * Find all exist to produce, they formatted the first match and silently
+ * ignored every other one.
+ */
+export function selectedLineNumbers(state: EditorState): number[] {
+  const lines = new Set<number>();
+  for (const r of state.selection.ranges) {
+    const first = state.doc.lineAt(r.from).number;
+    const last = state.doc.lineAt(r.to).number;
+    for (let n = first; n <= last; n++) lines.add(n);
+  }
+  return [...lines].sort((a, b) => a - b);
+}
+
+/**
  * Is every line the selection touches one where indentation carries meaning?
  *
  * List items (nesting) and lines inside a fenced code block (code) — yes.
@@ -152,13 +171,9 @@ export function useFormatDispatcher({
     if (!cm) return;
     const view = cm.getView();
     if (!view) return;
-    
-    const { from, to } = view.state.selection.main;
-    const startLine = view.state.doc.lineAt(from);
-    const endLine = view.state.doc.lineAt(to);
 
     const changes:ChangeSpec[] = [];
-    for (let i = startLine.number; i <= endLine.number; i++) {
+    for (const i of selectedLineNumbers(view.state)) {
       const line = view.state.doc.line(i);
       if (line.text.startsWith(prefix)) {
         changes.push({ from: line.from, to: line.from + prefix.length, insert: "" });
@@ -182,14 +197,11 @@ export function useFormatDispatcher({
     const view = cm.getView();
     if (!view) return;
 
-    const { from, to } = view.state.selection.main;
-    const startLine = view.state.doc.lineAt(from);
-    const endLine = view.state.doc.lineAt(to);
     const taskRe = /^(\s*)([-*+]) \[[ xX]\] /;
     const bulletRe = /^(\s*)([-*+]) /;
 
     const changes: ChangeSpec[] = [];
-    for (let i = startLine.number; i <= endLine.number; i++) {
+    for (const i of selectedLineNumbers(view.state)) {
       const line = view.state.doc.line(i);
       const t = line.text;
       const taskM = taskRe.exec(t);
@@ -218,16 +230,22 @@ export function useFormatDispatcher({
     const view = cm.getView();
     if (!view) return;
     
-    const pos = view.state.selection.main.head;
-    const line = view.state.doc.lineAt(pos);
-    const text = line.text;
-
-    const stripped = text.replace(/^#{1,6}\s*/, "");
+    // Each range's caret line, once. Only the PREFIX is rewritten, so the
+    // selection over each heading's text survives the change instead of
+    // collapsing — which is what lets Select ▸ All headings be followed by
+    // another command.
+    const { state } = view;
     const newPrefix = level > 0 ? "#".repeat(level) + " " : "";
-    
-    view.dispatch({
-      changes: { from: line.from, to: line.to, insert: newPrefix + stripped },
-    });
+    const seen = new Set<number>();
+    const changes: ChangeSpec[] = [];
+    for (const r of state.selection.ranges) {
+      const line = state.doc.lineAt(r.head);
+      if (seen.has(line.number)) continue;
+      seen.add(line.number);
+      const old = /^#{1,6}\s*/.exec(line.text)?.[0] ?? "";
+      changes.push({ from: line.from, to: line.from + old.length, insert: newPrefix });
+    }
+    view.dispatch({ changes });
   }
 
   function mdInsertTable(rows: number, cols: number) {
@@ -243,19 +261,26 @@ export function useFormatDispatcher({
     cm.insertAtCursor("\n" + header + "\n" + sep + "\n" + body + "\n");
   }
 
-  function mdInsertLink() {
+  // The URL the user typed into the Link prompt. It used to be dropped: every
+  // caller prompts for it and passes it, but the markdown side always wrote a
+  // literal "(url)" placeholder, so ⌘K in this pane never linked anything.
+  function mdInsertLink(url?: string) {
     const cm = cmRef.current;
     if (!cm) return;
+    const dest = url ? mdLinkDestination(url) : "url";
     const { text } = cm.getSelection();
     if (text) {
-      cm.wrapSelection("[", "](url)");
+      cm.wrapSelection("[", `](${dest})`);
     } else {
-      cm.insertAtCursor("[link text](url)");
+      cm.insertAtCursor(`[link text](${dest})`);
     }
   }
 
-  function mdInsertImage() {
-    cmRef.current?.insertAtCursor("![alt text](image-url)");
+  // Like mdInsertLink, this ignored the URL the prompt collected and wrote a
+  // placeholder; it now writes the image that was asked for, alt text included.
+  function mdInsertImage(value?: unknown) {
+    const img = toImageInsert(value);
+    cmRef.current?.insertAtCursor(img ? mdImage(img) : "![alt text](image-url)");
   }
 
   function mdInsertHr() {
@@ -263,14 +288,11 @@ export function useFormatDispatcher({
   }
 
   function mdInsertCode() {
-    const cm = cmRef.current;
-    if (!cm) return;
-    const { text } = cm.getSelection();
-    if (text && text.includes("\n")) {
-      cm.wrapSelection("```\n", "\n```");
-    } else {
-      mdWrap("`", "`");
-    }
+    const view = cmRef.current?.getView();
+    if (!view) return;
+    // Per range: a range that spans lines becomes a fenced block, one that
+    // does not becomes inline code.
+    mdWrapBy(view, (text) => (text.includes("\n") ? ["```\n", "\n```"] : ["`", "`"]));
   }
 
   function mdInsertBlockquote() {
@@ -282,35 +304,41 @@ export function useFormatDispatcher({
     if (!cm) return;
     const view = cm.getView();
     if (!view) return;
+    const { state } = view;
 
-    const { from, to } = view.state.selection.main;
-    const selectedText = view.state.sliceDoc(from, to);
+    // Every range, not just the main one (see selectedLineNumbers). The new
+    // span is left SELECTED, so a second colour command on the same range
+    // takes the merge branch below instead of nesting another span.
+    view.dispatch(state.changeByRange((range) => {
+      const { from, to } = range;
+      const selectedText = state.sliceDoc(from, to);
 
-    // Check whether the selection is already exactly one <span style="...">…</span>
-    const outerSpanRe = /^<span\s+style="([^"]*)"[^>]*>([\s\S]*)<\/span>$/i;
-    const outerMatch = selectedText.match(outerSpanRe);
+      // Check whether the selection is already exactly one <span style="...">…</span>
+      const outerSpanRe = /^<span\s+style="([^"]*)"[^>]*>([\s\S]*)<\/span>$/i;
+      const outerMatch = selectedText.match(outerSpanRe);
 
-    let newStyleStr: string;
-    let innerText: string;
+      let newStyleStr: string;
+      let innerText: string;
 
-    if (outerMatch) {
-      // Merge: update or insert the CSS property within the existing style string
-      const existingStyle = outerMatch[1]!;
-      innerText = outerMatch[2]!;
-      const propEscaped = cssProp.replace(/-/g, "\\-");
-      const propRe = new RegExp(`${propEscaped}\\s*:[^;]*(;|$)`, "i");
-      if (propRe.test(existingStyle)) {
-        newStyleStr = existingStyle.replace(propRe, `${cssProp}: ${cssVal};`).replace(/;\s*$/, "");
+      if (outerMatch) {
+        // Merge: update or insert the CSS property within the existing style string
+        const existingStyle = outerMatch[1]!;
+        innerText = outerMatch[2]!;
+        const propEscaped = cssProp.replace(/-/g, "\\-");
+        const propRe = new RegExp(`${propEscaped}\\s*:[^;]*(;|$)`, "i");
+        if (propRe.test(existingStyle)) {
+          newStyleStr = existingStyle.replace(propRe, `${cssProp}: ${cssVal};`).replace(/;\s*$/, "");
+        } else {
+          newStyleStr = `${existingStyle.replace(/;\s*$/, "")}; ${cssProp}: ${cssVal}`;
+        }
       } else {
-        newStyleStr = `${existingStyle.replace(/;\s*$/, "")}; ${cssProp}: ${cssVal}`;
+        innerText = selectedText;
+        newStyleStr = `${cssProp}: ${cssVal}`;
       }
-    } else {
-      innerText = selectedText;
-      newStyleStr = `${cssProp}: ${cssVal}`;
-    }
 
-    const newText = `<span style="${newStyleStr}">${innerText}</span>`;
-    view.dispatch({ changes: { from, to, insert: newText } });
+      const newText = `<span style="${newStyleStr}">${innerText}</span>`;
+      return { changes: { from, to, insert: newText }, range: EditorSelection.range(from, from + newText.length) };
+    }));
   }
 
   function dispatchToTiptap(command: string, value?: any) {
@@ -378,7 +406,9 @@ export function useFormatDispatcher({
       }
       case "unlink": cmd.unsetLink().run(); break;
       case "insertImage": {
-        if (value) cmd.setImage({ src: value }).run();
+        // { src, alt } from the prompts, or a bare URL from the host API (A096).
+        const img = toImageInsert(value);
+        if (img) cmd.setImage({ src: img.src, alt: img.alt }).run();
         break;
       }
       case "insertCallout":
@@ -445,10 +475,7 @@ export function useFormatDispatcher({
   function mdUnwrapInlineStyle(prop: string) {
     const view = cmRef.current?.getView();
     if (!view) return;
-    const { from, to } = view.state.selection.main;
-    if (from === to) return;
-    const text = view.state.sliceDoc(from, to);
-    const next = text.replace(
+    replaceEachRange(view, (text) => text.replace(
       /<span style="([^"]*)">([\s\S]*?)<\/span>/g,
       (whole, style: string, inner: string) => {
         const kept = style
@@ -459,8 +486,27 @@ export function useFormatDispatcher({
         // Another declaration survives, so the span stays — minus this one.
         return kept.join("; ") === style.trim() ? whole : `<span style="${kept.join("; ")}">${inner}</span>`;
       }
-    );
-    if (next !== text) view.dispatch({ changes: { from, to, insert: next }, selection: { anchor: from, head: from + next.length } });
+    ));
+  }
+
+  /** Rewrite the text of every NON-EMPTY range, leaving each rewritten range
+   *  selected. A range whose text comes back unchanged is not touched, and if
+   *  none changed nothing is dispatched (no empty undo step). */
+  function replaceEachRange(view: EditorView, rewrite: (text: string) => string) {
+    const { state } = view;
+    let changed = false;
+    const spec = state.changeByRange((range) => {
+      if (range.empty) return { range };
+      const text = state.sliceDoc(range.from, range.to);
+      const next = rewrite(text);
+      if (next === text) return { range };
+      changed = true;
+      return {
+        changes: { from: range.from, to: range.to, insert: next },
+        range: EditorSelection.range(range.from, range.from + next.length),
+      };
+    });
+    if (changed) view.dispatch(spec);
   }
 
   function dispatchToMd(command: string, value?: any) {
@@ -500,8 +546,8 @@ export function useFormatDispatcher({
       case "hiliteColor": mdWrapInlineStyle("background-color", value); break;
       case "unsetHighlight": mdUnwrapInlineStyle("background-color"); break; 
       case "fontFamily": mdWrapInlineStyle("font-family", value); break;
-      case "createLink": mdInsertLink(); break;
-      case "insertImage": mdInsertImage(); break;
+      case "createLink": mdInsertLink(typeof value === "string" ? value : undefined); break;
+      case "insertImage": mdInsertImage(value); break;
       case "insertCallout": cmRef.current?.insertAtCursor(`\n> [!${String(value || "note").toUpperCase()}]\n> \n\n`); break;
       // Single contiguous HTML block (no internal blank lines, which would split
       // the marked HTML block) so it round-trips through the Details/Summary nodes.
@@ -549,17 +595,10 @@ export function useFormatDispatcher({
       // affordance with different outcomes — one worked, one warned.
       case "clearFormatting":
       case "removeFormat": {
-        if (!view) break;
-        const { from, to } = view.state.selection.main;
-        let text = view.state.sliceDoc(from, to);
-        
-        text = text.replace(/\*\*(.+?)\*\*/g, "$1")
-                   .replace(/\*(.+?)\*/g, "$1")
-                   .replace(/~~(.+?)~~/g, "$1")
-                   .replace(/`(.+?)`/g, "$1")
-                   .replace(/<[^>]+>/g, "");
-                   
-        view.dispatch({ changes: { from, to, insert: text } });
+        // Formatting only — never content. The old regex pass deleted images,
+        // autolinks and every other tag, list bullets, the `*` in `5 * 3 * 2`
+        // and the contents of code spans; see clearMdFormatting.
+        if (view) replaceEachRange(view, clearMdFormatting);
         break;
       }
       case "selectAll":

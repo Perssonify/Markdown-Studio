@@ -9,6 +9,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0a0a" />
+    <!-- No Referer on requests made FROM the embed (remote images in a
+         document). document.referrer — how the embed learns its parent's
+         origin — is set by the framing page's policy, so it is unaffected. -->
+    <meta name="referrer" content="no-referrer" />
         <script>
         // Pre-paint theme + palette. next-themes only applies `.dark` in a
         // post-mount effect, so without this the browser painted the LIGHT

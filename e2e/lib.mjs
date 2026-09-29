@@ -45,8 +45,13 @@ const MIME = {
   ".webmanifest": "application/manifest+json",
 };
 
-/** Static server with SPA fallback. `extra` maps URL prefixes to other dirs. */
-export async function serve(dir, extra = {}) {
+/**
+ * Static server with SPA fallback. `extra` maps URL prefixes to other dirs.
+ * `opts.headers(path)` adds response headers per request path (the CSP case
+ * replays vercel.json's), and `opts.transform(path, buffer)` may rewrite a
+ * file's bytes (the update case serves a "new" sw.js).
+ */
+export async function serve(dir, extra = {}, opts = {}) {
   const srv = http.createServer((q, r) => {
     const url = decodeURIComponent(q.url.split("?")[0]);
     let root = dir, rel = url;
@@ -59,11 +64,25 @@ export async function serve(dir, extra = {}) {
     if (!p.startsWith(root)) { r.writeHead(403).end(); return; }
     if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) p = path.join(root, "index.html");
     if (!fs.existsSync(p)) { r.writeHead(404).end(); return; }
-    r.writeHead(200, { "content-type": MIME[path.extname(p)] || "application/octet-stream" });
+    const head = { "content-type": MIME[path.extname(p)] || "application/octet-stream", ...(opts.headers ? opts.headers(url) : {}) };
+    if (opts.transform) {
+      r.writeHead(200, head);
+      r.end(opts.transform(url, fs.readFileSync(p)));
+      return;
+    }
+    r.writeHead(200, head);
     fs.createReadStream(p).pipe(r);
   });
+  // Track sockets so a case can take the server down HARD (offline): a plain
+  // close() waits for keep-alive connections, which Chromium holds open.
+  const sockets = new Set();
+  srv.on("connection", (s) => { sockets.add(s); s.on("close", () => sockets.delete(s)); });
   await new Promise((res) => srv.listen(0, "127.0.0.1", res));
-  return { port: srv.address().port, close: () => srv.close() };
+  return {
+    port: srv.address().port,
+    close: () => srv.close(),
+    kill: () => new Promise((res) => { srv.close(() => res()); for (const s of sockets) s.destroy(); }),
+  };
 }
 
 /**

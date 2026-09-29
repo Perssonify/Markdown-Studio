@@ -7,7 +7,16 @@ import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
+import { SkipToEditor } from "./ui/SkipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
+import { sessionAdsFromParam } from "./utils/build-gates";
+import { installRemoteImagePolicy } from "./utils/remote-images";
+
+// Settings ▸ Privacy ▸ "Block remote images" is enforced as an img-src policy
+// for THIS page, and must be in force before any document renders — hence
+// module scope, not an effect. The app shell owns its document; the library
+// never does this (it must not restrict its host page).
+installRemoteImagePolicy();
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
 const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
@@ -36,14 +45,16 @@ export function App() {
     // SESSION only — via setState, which bypasses the persisting setters — so
     // opening a shared read-only/ads link doesn't overwrite the visitor's own
     // saved settings on later normal visits. The standalone app's counterpart to
-    // embed.tsx's param block.
+    // embed.tsx's param block. `ads` is honoured in DEVELOPMENT builds only
+    // (sessionAdsFromParam) — a crafted `?ads=1` link must not dress a
+    // production build in placeholder ad slots — but it is stripped either way.
     useEffect(() => {
         let params: URLSearchParams;
         try { params = new URLSearchParams(window.location.search); } catch { return; }
         if (![...params.keys()].some((k) => k === "ads" || k === "readonly" || k === "view_mode" || k === "import_url")) return;
         const store = useUIStore.getState();
-        const ads = params.get("ads");
-        if (ads !== null) useUIStore.setState({ showAds: ads === "true" || ads === "1" });
+        const ads = sessionAdsFromParam(params.get("ads"));
+        if (ads !== null) useUIStore.setState({ showAds: ads });
         const ro = params.get("readonly");
         if (ro !== null) useUIStore.setState({ readOnly: ro === "true" || ro === "1" });
         const vm = params.get("view_mode");
@@ -136,15 +147,21 @@ export function App() {
 
     return (
         <ErrorBoundary isDark={isDark}>
+          {/* First stop on the page (A094): past the header, menus, toolbar
+              and library straight into the document. */}
+          <SkipToEditor />
           {/* Viewport-locked shell: header + editor must sum to exactly 100dvh.
               Without this the editor alone was viewport-height, the page gained
               a scrollbar of exactly the header height, and any caret scroll
-              drifted the whole chrome off-screen (clipped header/status bar). */}
-          <div className="pf-safe-x flex h-dvh flex-col overflow-hidden">
-            <div className="shrink-0">
+              drifted the whole chrome off-screen (clipped header/status bar).
+              EXCEPT below ~450px of viewport height (400% zoom, a landscape
+              phone), where the lock left the editor zero pixels: `pf-shell`
+              lets the page scroll there instead (A091, styles.css). */}
+          <div className="pf-shell pf-safe-x flex h-dvh flex-col overflow-hidden">
+            <div className="shrink-0" data-print-hide>
                 <EditorHeader />
             </div>
-            <div className="min-h-0 flex-1">
+            <div className="pf-shell-editor min-h-0 flex-1">
             <PerssonifyEditor
                 fitParent
                 initialMode="split"
@@ -162,6 +179,10 @@ export function App() {
                 onAbout={() => navigate("about")}
                 onHelp={() => navigate("help")}
                 onStartTour={startTour}
+                // Backup reminders, the wiped-library explanation, the moved-
+                // domain banner and the install tip: the app's own library,
+                // so the app's own notices (an embedder's storage is theirs).
+                durabilityNotices
                 initialImportUrl={importUrlSeed}
                 graphOpen={route === "graph"}
                 // Opening the graph pushes (so browser Back closes it); closing

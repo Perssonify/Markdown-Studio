@@ -4,6 +4,7 @@ import markedFootnote from "marked-footnote";
 import type { MarkdownFeatureSettings } from "../store/settings";
 import { EMOJI_MAP } from "./emoji-map";
 import { mathBlockExtension, mathInlineExtension } from "./math-marked";
+import { wikiLinkExtension } from "./wiki-link-marked";
 
 /**
  * Build a configured `marked` instance from the current feature settings.
@@ -16,6 +17,10 @@ export function buildMarked(features: MarkdownFeatureSettings): Marked {
     gfm: features.flavor !== "commonmark",
     breaks: true,
   });
+
+  // Wiki links / heading anchors — a core feature, always on. An inline
+  // extension, so it never fires inside code of any kind (see the module).
+  m.use({ extensions: [wikiLinkExtension as never] });
 
   // Emoji → `<span data-emoji="name">char</span>` so turndown can restore `:name:`.
   if (features.emoji) {

@@ -6,19 +6,46 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: CI only ever reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Pinned to the Bun that produced bun.lock. `latest` made every run a
+  # different toolchain, so a Bun release could turn CI red (or green) with no
+  # change in this repo. Bump it together with bun.lock.
+  BUN_VERSION: "1.4.0"
+
+# Actions are pinned to full commit SHAs (resolved from their release tags,
+# noted beside each) so a moved or compromised tag cannot change what runs.
+# Dependabot (.github/dependabot.yml) proposes the updates.
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      # Runs once package.json has a `lint` script; a clear skip until then.
+      - name: Lint
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
+            bun run lint
+          else
+            echo "No lint script in package.json — skipped."
+          fi
 
       - name: Type-check
         run: bunx tsc --noEmit
@@ -29,6 +56,26 @@ jobs:
       - name: Build (app)
         run: bun run build:app
 
+      # The CSP in vercel.json allows the inline scripts by hash; this re-runs
+      # the hash check against the BUILT index.html, which only exists now.
+      - name: CSP hashes match the built app
+        run: bunx vitest run src/__tests__/ops-vercel-headers.test.js
+
+      # What Vercel runs last: sourcemaps are built but never deployed.
+      - name: Keep sourcemaps out of the deploy
+        run: node scripts/strip-sourcemaps.mjs
+
+      # The maps that symbolicate a stack from "Copy diagnostics" for this
+      # exact build (hashes match a deploy built from the same commit).
+      - name: Keep the sourcemaps as an artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-sourcemaps-${{ github.sha }}
+          path: dist-app-sourcemaps/
+          retention-days: 90
+          if-no-files-found: warn
+
       - name: Build (library)
         run: bun run build
 
@@ -36,19 +83,20 @@ jobs:
         run: bun run build:embed
 
   # Browser campaign. Unit tests cannot reach real IME composition, real
-  # IndexedDB, quota exhaustion, a second tab, or a coarse pointer — every one
-  # of which has hidden a data-loss defect in this codebase. See e2e/README.md.
+  # IndexedDB, quota exhaustion, a second tab, a coarse pointer, a service
+  # worker or an enforced CSP — every one of which has hidden a defect in this
+  # codebase. See e2e/README.md.
   e2e:
     runs-on: ubuntu-latest
     # A hung browser would otherwise burn the 360-minute default.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -92,6 +140,16 @@ jobs:
       - name: Fault injection (tier 4)
         run: bun run e2e:faults
 
+      # vercel.json's Content-Security-Policy, ENFORCED, against every
+      # renderer: it ships report-only, and this is what says it is safe to
+      # promote.
+      - name: Content-Security-Policy, enforced
+        run: node e2e/run.mjs csp
+
+      # Offline after one visit, and updates that never force-reload a tab.
+      - name: Service worker (offline + updates)
+        run: node e2e/run.mjs pwa
+
       # Tier 2 runs on a schedule rather than per-PR: it is minutes of
       # sustained typing and a 120-document library.
       - name: Stress (tier 2)
@@ -102,7 +160,7 @@ jobs:
       # only evidence a failure leaves is the PASS/FAIL lines in the log.
       - name: Upload failure artefacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-failure
           if-no-files-found: ignore

@@ -7,28 +7,56 @@ import {
 import { Input } from "@/components/ui/input";
 import { Ban, Bold, CaseSensitive, Check, ChevronDown, ChevronUp, Funnel, GripHorizontal, Highlighter, Info, Italic, Regex, Replace, ReplaceAll, Search, Underline as UnderlineIcon, WholeWord, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { RefObject, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EditorSelection } from "@codemirror/state";
 import { MODES } from "../constants";
 import { applyCase, type CaseMode } from "../formatting/case-transform";
+import {
+  compileFindQuery,
+  expandReplacement,
+  firstMatchFrom,
+  MAX_FIND_MATCHES,
+  mdCodeRanges,
+  mdHeadingRanges,
+  pickMatch,
+  type FindMatch,
+  type HighlightRange,
+  type HighlightSpec,
+} from "../formatting/find-engine";
+import { FindSupersededError, runFind } from "../formatting/find-worker";
 import { useUIStore } from "../store/uiStore";
+import { isAltGraphInput } from "../utils/alt-graph";
+import { MAX_PREVIEW_WIDGETS } from "./search-colors";
 export interface MatchPosition {
   pos: number;
   len: number;
 }
 
-/** Character ranges of the CONTENT of every ATX heading line (after "# "). */
-function mdHeadingRanges(doc: string): Array<[number, number]> {
-  const ranges: Array<[number, number]> = [];
-  let idx = 0;
-  for (const line of doc.split("\n")) {
-    const m = line.match(/^(#{1,6}\s+)(.*)$/);
-    if (m && m[2]!.length) ranges.push([idx + m[1]!.length, idx + line.length]);
-    idx += line.length + 1;
-  }
-  return ranges;
+/**
+ * One match, in the target pane's positions. `input` is the string it was found
+ * in (the whole markdown, or one rich-text node) and `base` where that string
+ * starts — what `` $` ``/`$'`/group offsets are relative to.
+ */
+interface FoundRange {
+  from: number;
+  to: number;
+  m: FindMatch;
+  input: string;
+  base: number;
 }
+
+/** Every match for one query in one revision of one pane's document. `doc` is
+ *  that document (CodeMirror's Text / ProseMirror's Node — both immutable, so
+ *  identity IS the revision): a set whose `doc` is not the pane's current one
+ *  is stale and is recomputed before anything acts on it. */
+interface MatchSet {
+  key: string;
+  doc: unknown;
+  ranges: FoundRange[];
+  truncated: boolean;
+}
+
 const inRanges = (pos: number, len: number, ranges: Array<[number, number]>) =>
   ranges.some(([s, e]) => pos >= s && pos + len <= e);
 
@@ -80,16 +108,9 @@ const readScope = (): Record<ScopeRegion, ScopeState> => {
   return s;
 };
 
-// Region range finders in raw Markdown text (approximate but robust).
-const mdCodeRanges = (doc: string): Array<[number, number]> => {
-  const out: Array<[number, number]> = [];
-  let m: RegExpExecArray | null;
-  const fence = /^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm;
-  while ((m = fence.exec(doc))) out.push([m.index, m.index + m[0].length]);
-  const inline = /`[^`\n]+`/g;
-  while ((m = inline.exec(doc))) { const s = m.index; if (!out.some(([a, b]) => s >= a && s < b)) out.push([s, s + m[0].length]); }
-  return out;
-};
+// Region range finders in raw Markdown text (approximate but robust). Headings
+// and code come from find-engine, which shares the fence tracker with the rest
+// of the markdown tools (a `# comment` in a code block is not a heading).
 const mdLinkRanges = (doc: string): Array<[number, number]> => {
   const out: Array<[number, number]> = [];
   let m: RegExpExecArray | null;
@@ -116,6 +137,41 @@ const mdHighlightRanges = (doc: string) => collect(doc, /==[^\n]+?==|<span[^>]{0
 const overlaps = (pos: number, len: number, ranges: Array<[number, number]>) =>
   ranges.some(([s, e]) => !(pos + len <= s || pos >= e));
 
+/** Apply the markdown-pane scope filter (per-region include / exclude). The
+ *  Replace All that follows acts on exactly what survives it. */
+function applyMdScope(ranges: FoundRange[], doc: string, sc: Record<ScopeRegion, ScopeState>): FoundRange[] {
+  if (Object.values(sc).every((v) => v === "off")) return ranges;
+  const rangesFor = (r: ScopeRegion): Array<[number, number]> =>
+    r === "headings" ? mdHeadingRanges(doc)
+    : r === "code" ? mdCodeRanges(doc)
+    : r === "links" ? mdLinkRanges(doc)
+    : r === "bold" ? mdBoldRanges(doc)
+    : r === "italic" ? mdItalicRanges(doc)
+    : r === "strike" ? mdStrikeRanges(doc)
+    : mdHighlightRanges(doc);
+  const includes: Array<[number, number]> = [];
+  const excludes: Array<[number, number]> = [];
+  (Object.keys(sc) as ScopeRegion[]).forEach((r) => {
+    if (sc[r] === "include") includes.push(...rangesFor(r));
+    else if (sc[r] === "exclude") excludes.push(...rangesFor(r));
+  });
+  const anyInclude = Object.values(sc).some((v) => v === "include");
+  return ranges.filter((m) => {
+    const len = m.to - m.from;
+    if (anyInclude && !inRanges(m.from, len, includes)) return false; // must sit inside an included region
+    if (overlaps(m.from, len, excludes)) return false; // …and outside every excluded one
+    return true;
+  });
+}
+
+// "Format matches" wrappers for the markdown pane.
+const CM_WRAP: Record<string, [string, string]> = {
+  bold: ["**", "**"],
+  italic: ["*", "*"],
+  underline: ["<u>", "</u>"],
+  strike: ["~~", "~~"],
+};
+
 export interface FindReplaceBarProps {
   sourceRef: RefObject<any>;
   previewRef: RefObject<any>;
@@ -134,6 +190,17 @@ export interface FindReplaceBarProps {
   initialTarget?: "md" | "richtext";
 }
 
+/**
+ * Find & Replace.
+ *
+ * Matching lives in ONE place (`computeMatches` → formatting/find-engine and
+ * find-worker): the count, Next/Previous, Find all, Replace, Replace All,
+ * Format matches, the scrollbar ticks and both panes' highlights all consume
+ * the same MatchSet. A user REGEX runs in a Worker with a timeout, never on the
+ * main thread (see find-worker), so an async step sits between a query and its
+ * matches; anything that acts re-checks that the set still belongs to the
+ * document the pane holds.
+ */
 export function FindReplaceBar({
   sourceRef,
   previewRef,
@@ -153,6 +220,10 @@ export function FindReplaceBar({
   const [replaceText, setReplaceText] = useState("");
   const [matchCount, setMatchCount] = useState(0);
   const [currentMatch, setCurrentMatch] = useState(0);
+  /** The match cap (MAX_FIND_MATCHES) was hit: the count is a lower bound. */
+  const [truncated, setTruncated] = useState(false);
+  /** A regex is still running in the Worker. */
+  const [pending, setPending] = useState(false);
   // Number of headings in the active pane — only tracked for the "select all
   // headings" mode (headings-only toggle on, no query) so the format row can
   // enable + label itself.
@@ -165,8 +236,7 @@ export function FindReplaceBar({
   );
   const showReplace = panelMode === "replace" && !readOnly;
   const setShowReplace = useCallback((open: boolean) => setPanelMode(open ? "replace" : "find"), []);
-  // Search options are persisted and mirrored into refs so the search / replace /
-  // format callbacks can read them without churning their dependency arrays.
+  // Search options are persisted.
   const [useRegex, setUseRegex] = useState(() => readFrBool(FR_REGEX_KEY));
   const [caseSensitive, setCaseSensitive] = useState(() => readFrBool(FR_CASE_KEY));
   const [wholeWord, setWholeWord] = useState(() => readFrBool(FR_WORD_KEY));
@@ -175,12 +245,6 @@ export function FindReplaceBar({
   const [mdScope, setMdScope] = useState<Record<ScopeRegion, ScopeState>>(() => readScope());
   const [showScope, setShowScope] = useState(false);
   const headingsOnly = mdScope.headings === "include";
-  const mdScopeRef = useRef(mdScope);
-  mdScopeRef.current = mdScope;
-  const useRegexRef = useRef(useRegex);
-  useRegexRef.current = useRegex;
-  const headingsOnlyRef = useRef(headingsOnly);
-  headingsOnlyRef.current = headingsOnly;
   const cycleScope = useCallback((region: ScopeRegion) => {
     setMdScope((prev) => {
       const order: ScopeState[] = ["off", "include", "exclude"];
@@ -189,35 +253,18 @@ export function FindReplaceBar({
       return next;
     });
   }, []);
-  const caseSensitiveRef = useRef(caseSensitive);
-  caseSensitiveRef.current = caseSensitive;
-  const wholeWordRef = useRef(wholeWord);
-  wholeWordRef.current = wholeWord;
   const [regexError, setRegexError] = useState<string | null>(null);
 
   const toggleRegex = useCallback(() => setUseRegex((v) => { writeFrBool(FR_REGEX_KEY, !v); return !v; }), []);
   const toggleCaseSensitive = useCallback(() => setCaseSensitive((v) => { writeFrBool(FR_CASE_KEY, !v); return !v; }), []);
   const toggleWholeWord = useCallback(() => setWholeWord((v) => { writeFrBool(FR_WORD_KEY, !v); return !v; }), []);
 
-  // Build a search regex honoring the regex / case-sensitive / whole-word options.
-  // Reads refs so it stays identity-stable; returns null on an invalid pattern.
-  const buildSource = useCallback((text: string): string => {
-    let src = useRegexRef.current ? text : text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (wholeWordRef.current) src = `\\b(?:${src})\\b`;
-    return src;
-  }, []);
-  const buildRegex = useCallback((text: string, global = true): RegExp | null => {
-    try {
-      return new RegExp(buildSource(text), (global ? "g" : "") + (caseSensitiveRef.current ? "" : "i"));
-    } catch {
-      return null;
-    }
-  }, [buildSource]);
   const [searchTarget, setSearchTarget] = useState<"md" | "richtext">(
     // Prefer the pane the cursor was in; fall back to the visible view mode.
     initialTarget ?? (mode === MODES.HTML ? "richtext" : "md")
   );
   const findInputRef = useRef<HTMLInputElement>(null);
+  const countId = useId();
 
   // Floating-panel drag: `pos` is null until first dragged (anchored top-right
   // by class), then pixel coords clamped to the viewport.
@@ -273,7 +320,6 @@ export function FindReplaceBar({
     } else {
       setPos(clamp((window.innerWidth - w) / 2, Math.max(16, (window.innerHeight - h) / 2 - 40)));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-clamp on window resize so a shrinking viewport can't strand the fixed
@@ -317,615 +363,160 @@ export function FindReplaceBar({
     if (!isMd && !textAvailable) setSearchTarget("md");
   }, [mode, isMd, mdAvailable, textAvailable]);
 
-  useEffect(() => {
-    setMatchCount(0);
-    setCurrentMatch(0);
-  }, [searchTarget]);
+  // Everything the async paths read, current at CALL time — no stale closures,
+  // and no dependency churn re-creating every callback on each keystroke.
+  const live = useRef({ findText, replaceText, useRegex, caseSensitive, wholeWord, mdScope, headingsOnly, isMd, readOnly });
+  live.current = { findText, replaceText, useRegex, caseSensitive, wholeWord, mdScope, headingsOnly, isMd, readOnly };
 
-  const getMatchPositions = useCallback((doc: string, searchText: string): MatchPosition[] => {
-    if (!searchText) return [];
-    let re: RegExp;
-    try {
-      re = new RegExp(buildSource(searchText), caseSensitiveRef.current ? "g" : "gi");
-      setRegexError(null);
-    } catch (e: any) {
-      setRegexError(e.message);
-      return [];
-    }
-    const positions: MatchPosition[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(doc)) !== null) {
-      positions.push({ pos: m.index, len: m[0].length });
-      if (m[0].length === 0) re.lastIndex++;
-    }
-    return positions;
-  }, [buildSource]);
+  const getView = useCallback(() => sourceRef.current?.getView?.() ?? null, [sourceRef]);
+  const getEditor = useCallback(() => previewRef.current?.getEditor?.() ?? null, [previewRef]);
+  /** The target pane's current document (immutable, so identity = revision). */
+  const currentDoc = useCallback(
+    (): unknown => (live.current.isMd ? getView()?.state.doc : getEditor()?.state.doc) ?? null,
+    [getView, getEditor]
+  );
 
-  /** Apply the markdown-pane scope filter (per-region include / exclude). */
-  const scopeMd = useCallback((matches: MatchPosition[], doc: string): MatchPosition[] => {
-    const sc = mdScopeRef.current;
-    if (Object.values(sc).every((v) => v === "off")) return matches;
-    const rangesFor = (r: ScopeRegion): Array<[number, number]> =>
-      r === "headings" ? mdHeadingRanges(doc)
-      : r === "code" ? mdCodeRanges(doc)
-      : r === "links" ? mdLinkRanges(doc)
-      : r === "bold" ? mdBoldRanges(doc)
-      : r === "italic" ? mdItalicRanges(doc)
-      : r === "strike" ? mdStrikeRanges(doc)
-      : mdHighlightRanges(doc);
-    const includes: Array<[number, number]> = [];
-    const excludes: Array<[number, number]> = [];
-    (Object.keys(sc) as ScopeRegion[]).forEach((r) => {
-      if (sc[r] === "include") includes.push(...rangesFor(r));
-      else if (sc[r] === "exclude") excludes.push(...rangesFor(r));
-    });
-    const anyInclude = Object.values(sc).some((v) => v === "include");
-    return matches.filter((m) => {
-      if (anyInclude && !inRanges(m.pos, m.len, includes)) return false; // must sit inside an included region
-      if (overlaps(m.pos, m.len, excludes)) return false; // …and outside every excluded one
-      return true;
-    });
-  }, []);
+  // ── Matching ──────────────────────────────────────────────────────────────
+  const cacheRef = useRef<MatchSet | null>(null);
 
-  // --- CM6 search helpers ---
+  /** The MatchSet for the current query in the target pane's current document
+   *  (cached per query + document revision). Throws the pattern's error. */
+  const computeMatches = useCallback(async (): Promise<MatchSet | null> => {
+    const L = live.current;
+    if (!L.findText) return null;
+    const pane = L.isMd ? "md" : "rich";
+    const doc = currentDoc();
+    if (!doc) return null;
+    const key = [pane, L.findText, L.useRegex, L.caseSensitive, L.wholeWord, pane === "md" ? JSON.stringify(L.mdScope) : L.headingsOnly].join("\u0000");
+    const cached = cacheRef.current;
+    if (cached && cached.key === key && cached.doc === doc) return cached;
 
-  const findInCM6 = useCallback((searchText: string) => {
-    if (!searchText) {
-      setMatchCount(0);
-      setCurrentMatch(0);
-      return;
-    }
-
-    const cm = sourceRef.current;
-    if (!cm) return;
-    const view = cm.getView();
-    if (!view) return;
-
-    const doc = view.state.doc.toString();
-    const matches = scopeMd(getMatchPositions(doc, searchText), doc);
-    setMatchCount(matches.length);
-
-    if (matches.length === 0) {
-      setCurrentMatch(0);
-      return;
-    }
-
-    const cursor = view.state.selection.main.head;
-    let nearest = 0;
-
-    for (let i = 0; i < matches.length; i++) {
-      if (matches[i]!.pos >= cursor) {
-        nearest = i;
-        break;
-      }
-      nearest = i;
-    }
-
-    setCurrentMatch(nearest + 1);
-    const m = matches[nearest];
-
-    view.dispatch({
-      selection: { anchor: m!.pos, head: m!.pos + m!.len },
-      scrollIntoView: true,
-    });
-  }, [sourceRef, getMatchPositions, scopeMd]);
-
-  const findNextInCM6 = useCallback((searchText: string, direction = 1) => {
-    const cm = sourceRef.current;
-    if (!cm || !searchText) return;
-    const view = cm.getView();
-    if (!view) return;
-
-    const doc = view.state.doc.toString();
-    const matches = scopeMd(getMatchPositions(doc, searchText), doc);
-    if (matches.length === 0) return;
-
-    const cursorEnd = view.state.selection.main.to;
-    const cursorStart = view.state.selection.main.from;
-
-    let idx;
-    if (direction > 0) {
-      idx = matches.findIndex((m: MatchPosition) => m.pos >= cursorEnd);
-      if (idx === -1) idx = 0;
+    const q = compileFindQuery(L.findText, { regex: L.useRegex, caseSensitive: L.caseSensitive, wholeWord: L.wholeWord }, pane);
+    const texts: string[] = [];
+    const bases: number[] = [];
+    if (pane === "md") {
+      texts.push(String(doc));
+      bases.push(0);
     } else {
-      idx = -1;
-      for (let i = matches.length - 1; i >= 0; i--) {
-        if (matches[i]!.pos < cursorStart) {
-          idx = i;
-          break;
-        }
-      }
-      if (idx === -1) idx = matches.length - 1;
-    }
-
-    const m = matches[idx];
-    view.dispatch({
-      selection: { anchor: m!.pos, head: m!.pos + m!.len },
-      scrollIntoView: true,
-    });
-    setCurrentMatch(idx + 1);
-  }, [sourceRef, getMatchPositions, scopeMd]);
-
-  const replaceInCM6 = useCallback((searchText: string, replacement: string) => {
-    const cm = sourceRef.current;
-    if (!cm || !searchText) return;
-    const view = cm.getView();
-    if (!view) return;
-
-    const { from, to } = view.state.selection.main;
-    const selected = view.state.sliceDoc(from, to);
-
-    if (useRegex) {
-      try {
-        // Route through buildRegex so whole-word wrapping matches Find/Next/highlight.
-        const re = buildRegex(searchText, false);
-        const match = re ? re.exec(selected) : null;
-        if (re && match && match[0] === selected) {
-          const expanded = selected.replace(re, replacement);
-          view.dispatch({
-            changes: { from, to, insert: expanded },
-            selection: { anchor: from + expanded.length },
-          });
-          if (onSync) onSync();
-          findNextInCM6(searchText);
-        } else {
-          findNextInCM6(searchText);
-        }
-      } catch {
-        findNextInCM6(searchText);
-      }
-    } else {
-      const eq = caseSensitiveRef.current
-        ? selected === searchText
-        : selected.toLowerCase() === searchText.toLowerCase();
-      if (eq) {
-        view.dispatch({
-          changes: { from, to, insert: replacement },
-          selection: { anchor: from + replacement.length },
-        });
-        if (onSync) onSync();
-        findNextInCM6(searchText);
-      } else {
-        findNextInCM6(searchText);
-      }
-    }
-  }, [sourceRef, onSync, findNextInCM6, useRegex, buildRegex]);
-
-  const replaceAllInCM6 = useCallback((searchText: string, replacement: string) => {
-    const cm = sourceRef.current;
-    if (!cm || !searchText) return;
-    const view = cm.getView();
-    if (!view) return;
-
-    const doc = view.state.doc.toString();
-
-    // Scoped replace: whenever ANY MD scope filter is active (headings, code,
-    // links, bold/italic/strike/highlight — include OR exclude), replace only the
-    // matches that survive the same `scopeMd` filter the count/markers use, so
-    // Replace All mutates exactly the matches shown. A plain full-document
-    // `doc.replace` would ignore the filter and rewrite excluded regions too.
-    const scopeActive = Object.values(mdScopeRef.current).some((v) => v !== "off");
-    if (scopeActive) {
-      const matches = scopeMd(getMatchPositions(doc, searchText), doc);
-      if (!matches.length) { setMatchCount(0); setCurrentMatch(0); return; }
-      const singleRe = useRegexRef.current ? buildRegex(searchText, false) : null;
-      const changes = matches.map((mm) => {
-        const seg = doc.slice(mm.pos, mm.pos + mm.len);
-        // Literal mode: CodeMirror inserts `insert` verbatim (no $-substitution),
-        // so the raw replacement is correct. Regex mode routes through
-        // String.replace on the matched segment to honor backrefs.
-        let insert = replacement;
-        if (singleRe) {
-          try { insert = seg.replace(singleRe, replacement); } catch { insert = seg; }
-        }
-        return { from: mm.pos, to: mm.pos + mm.len, insert };
+      // Per text node, as before — so the rich pane never matches across a
+      // node boundary (which is also where the marks change).
+      (doc as { descendants: (f: (n: any, p: number, parent: any) => void) => void }).descendants((node, p, parent) => {
+        if (!node.isText) return;
+        if (L.headingsOnly && parent?.type?.name !== "heading") return;
+        texts.push(node.text || "");
+        bases.push(p);
       });
-      view.dispatch({ changes });
-      if (onSync) onSync();
-      setMatchCount(0); setCurrentMatch(0);
-      return;
     }
-
-    const re = buildRegex(searchText, true);
-    if (!re) return;
-    // Literal mode: escape $ in the REPLACEMENT too — String.replace treats
-    // $&, $', $` etc. as substitution patterns, so a literal "$'" would splice
-    // the rest of the document in at every match. Regex mode keeps backrefs.
-    const newDoc = useRegexRef.current
-      ? doc.replace(re, replacement)
-      : doc.replace(re, replacement.replace(/\$/g, "$$$$"));
-
-    if (newDoc !== doc) {
-      view.dispatch({ changes: { from: 0, to: doc.length, insert: newDoc } });
-      if (onSync) onSync();
-    }
-
-    setMatchCount(0);
-    setCurrentMatch(0);
-  }, [sourceRef, onSync, buildRegex, getMatchPositions, scopeMd]);
-
-  // --- Tiptap search helpers ---
-
-  /** All match ranges in the rich editor, in document order, honoring the
-   *  regex / case-sensitive / whole-word / headings-only options. */
-  const collectTiptapMatches = useCallback((editor: any, searchText: string): { from: number; to: number }[] => {
-    const re = buildRegex(searchText, true);
-    if (!re) return [];
-    const ranges: { from: number; to: number }[] = [];
-    editor.state.doc.descendants((node: any, pos: number, parent: any) => {
-      if (!node.isText) return;
-      if (headingsOnlyRef.current && parent?.type?.name !== "heading") return;
-      const t: string = node.text || "";
-      re.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(t)) !== null) {
-        const from = pos + m.index;
-        ranges.push({ from, to: from + m[0].length });
-        if (m[0].length === 0) re.lastIndex++;
-      }
+    const run = await runFind(q, texts, { isRegex: L.useRegex, maxMatches: MAX_FIND_MATCHES });
+    let ranges: FoundRange[] = [];
+    run.results.forEach((res, i) => {
+      const base = bases[i]!;
+      const input = texts[i]!;
+      for (const m of res.matches) ranges.push({ from: base + m.index, to: base + m.index + m.length, m, input, base });
     });
-    return ranges;
-  }, [buildRegex]);
+    if (pane === "md") ranges = applyMdScope(ranges, texts[0]!, L.mdScope);
+    const set: MatchSet = { key, doc, ranges, truncated: run.truncated };
+    cacheRef.current = set;
+    return set;
+  }, [currentDoc]);
 
-  const findInTiptap = useCallback((searchText: string) => {
-    if (!searchText) {
-      setMatchCount(0);
-      setCurrentMatch(0);
-      return;
-    }
-    const tp = previewRef.current;
-    if (!tp) return;
-    const editor = tp.getEditor();
-    if (!editor) return;
-
-    const ranges = collectTiptapMatches(editor, searchText);
-    setMatchCount(ranges.length);
-    if (ranges.length === 0) {
-      setCurrentMatch(0);
-      return;
-    }
-    // Select the first match at/after the caret so live-typing keeps context;
-    // fall back to the very first match.
-    const caret = editor.state.selection.from;
-    let idx = ranges.findIndex((r) => r.from >= caret);
-    if (idx === -1) idx = 0;
-    const r = ranges[idx]!;
+  /** computeMatches with its errors shown in the panel; null = nothing to act on. */
+  const getMatches = useCallback(async (): Promise<MatchSet | null> => {
     try {
-      editor.commands.setTextSelection({ from: r.from, to: r.to });
+      const set = await computeMatches();
+      setRegexError(null);
+      return set;
+    } catch (e) {
+      if (e instanceof FindSupersededError) return null;
+      cacheRef.current = null;
+      setRegexError(e instanceof Error ? e.message : String(e));
+      return null;
+    }
+  }, [computeMatches]);
+
+  const currentSelection = useCallback((): { from: number; to: number } | null => {
+    if (live.current.isMd) {
+      const view = getView();
+      if (!view) return null;
+      const { from, to } = view.state.selection.main;
+      return { from, to };
+    }
+    const editor = getEditor();
+    if (!editor) return null;
+    const { from, to } = editor.state.selection;
+    return { from, to };
+  }, [getView, getEditor]);
+
+  /** Select a match. The rich pane takes focus for Next/Previous (as it always
+   *  has); find-as-you-type leaves focus in the Find box. */
+  const selectRange = useCallback((r: { from: number; to: number }, focusRich: boolean) => {
+    if (live.current.isMd) {
+      getView()?.dispatch({ selection: { anchor: r.from, head: r.to }, scrollIntoView: true });
+      return;
+    }
+    const editor = getEditor();
+    if (!editor) return;
+    try {
+      if (focusRich) editor.chain().focus().setTextSelection({ from: r.from, to: r.to }).scrollIntoView().run();
+      else editor.commands.setTextSelection({ from: r.from, to: r.to });
     } catch (e) {
       console.warn("[FindReplace] Tiptap selection failed:", e);
     }
-    setCurrentMatch(idx + 1);
-  }, [previewRef, collectTiptapMatches]);
+  }, [getView, getEditor]);
 
-  /** Advance to the next/previous match in the rich editor (dir 1 / -1). */
-  const findNextInTiptap = useCallback((searchText: string, direction = 1) => {
-    const tp = previewRef.current;
-    if (!tp || !searchText) return;
-    const editor = tp.getEditor();
-    if (!editor) return;
-    const ranges = collectTiptapMatches(editor, searchText);
-    setMatchCount(ranges.length);
-    if (ranges.length === 0) {
-      setCurrentMatch(0);
-      return;
-    }
-    const sel = editor.state.selection;
-    let idx: number;
-    if (direction > 0) {
-      idx = ranges.findIndex((r) => r.from >= sel.to);
-      if (idx === -1) idx = 0; // wrap to top
-    } else {
-      idx = -1;
-      for (let i = ranges.length - 1; i >= 0; i--) {
-        if (ranges[i]!.to <= sel.from) { idx = i; break; }
-      }
-      if (idx === -1) idx = ranges.length - 1; // wrap to bottom
-    }
-    const r = ranges[idx]!;
-    try {
-      editor.chain().focus().setTextSelection({ from: r.from, to: r.to }).scrollIntoView().run();
-    } catch (e) {
-      console.warn("[FindReplace] Tiptap next failed:", e);
-    }
-    setCurrentMatch(idx + 1);
-  }, [previewRef, collectTiptapMatches]);
+  // ── Find-as-you-type and live counts ──────────────────────────────────────
+  const [matchSet, setMatchSet] = useState<MatchSet | null>(null);
+  const seqRef = useRef(0);
+  const pendingSelectRef = useRef(false);
+  /** The document the latest refresh was started for — finished OR still in
+   *  the Worker. A document-change refresh for that same document would only
+   *  supersede (and so kill) a job that is already answering it. */
+  const requestedDocRef = useRef<unknown>(null);
 
-  const replaceInTiptap = useCallback((searchText: string, replacement: string) => {
-    const tp = previewRef.current;
-    if (!tp) return;
-    const editor = tp.getEditor();
-    if (!editor) return;
-
-    const { from, to } = editor.state.selection;
-    const selected = editor.state.doc.textBetween(from, to, " ");
-
-    if (useRegex) {
-      try {
-        // Route through buildRegex so whole-word wrapping matches Find/Next/highlight.
-        const re = buildRegex(searchText, false);
-        const match = re ? re.exec(selected) : null;
-        if (re && match && match[0] === selected) {
-          const expanded = selected.replace(re, replacement);
-          editor.chain().focus().deleteSelection().insertContent(expanded).run();
-          if (syncHtmlToMd) syncHtmlToMd();
-          findNextInTiptap(searchText, 1);
-        } else {
-          findNextInTiptap(searchText, 1);
-        }
-      } catch {
-        findNextInTiptap(searchText, 1);
-      }
-    } else {
-      const eq = caseSensitiveRef.current
-        ? selected === searchText
-        : selected.toLowerCase() === searchText.toLowerCase();
-      if (eq) {
-        editor.chain().focus().deleteSelection().insertContent(replacement).run();
-        if (syncHtmlToMd) syncHtmlToMd();
-        findNextInTiptap(searchText, 1);
-      } else {
-        findNextInTiptap(searchText, 1);
-      }
-    }
-  }, [previewRef, syncHtmlToMd, findNextInTiptap, useRegex, buildRegex]);
-
-  const replaceAllInTiptap = useCallback((searchText: string, replacement: string) => {
-    const tp = previewRef.current;
-    if (!tp) return;
-    const editor = tp.getEditor();
-    if (!editor) return;
-    if (!searchText) return;
-
-    // Match against the document's TEXT nodes and replace via a ProseMirror
-    // transaction — never against serialized getHTML(). A regex replace on HTML
-    // can match inside tags/attributes (e.g. searching "div" or "1") and corrupt
-    // the document; walking text nodes only ever touches user-visible text.
-    const globalRe = buildRegex(searchText, true);
-    if (!globalRe) return; // invalid regex
-    // Regex mode supports $1… backreferences by re-applying the pattern to just
-    // the matched substring; literal mode uses the replacement verbatim.
-    const singleRe = useRegexRef.current ? buildRegex(searchText, false) : null;
-
-    const { state } = editor;
-    const ranges: { from: number; to: number; text: string }[] = [];
-    state.doc.descendants((node: any, pos: number, parent: any) => {
-      if (!node.isText) return;
-      if (headingsOnlyRef.current && parent?.type?.name !== "heading") return;
-      const text: string = node.text || "";
-      globalRe.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = globalRe.exec(text)) !== null) {
-        const matched = m[0];
-        const from = pos + m.index;
-        const to = from + matched.length;
-        // Regex mode supports $1… backreferences by re-applying the pattern to
-        // just the matched substring; literal mode uses the replacement verbatim.
-        const repText = singleRe ? matched.replace(singleRe, replacement) : replacement;
-        ranges.push({ from, to, text: repText });
-        if (matched.length === 0) globalRe.lastIndex++; // avoid infinite loop
-      }
-    });
-
-    if (ranges.length === 0) {
+  /** Recompute, publish the count and highlights, and (when `select`) select
+   *  the match at or after the selection's start. The newest call wins. */
+  const refresh = useCallback((select: boolean) => {
+    if (select) pendingSelectRef.current = true;
+    const seq = ++seqRef.current;
+    requestedDocRef.current = currentDoc();
+    if (!live.current.findText) {
+      cacheRef.current = null;
+      pendingSelectRef.current = false;
+      setMatchSet(null);
       setMatchCount(0);
       setCurrentMatch(0);
+      setTruncated(false);
+      setPending(false);
+      setRegexError(null);
       return;
     }
-
-    // Apply end-to-start so earlier positions remain valid as we edit.
-    let tr = state.tr;
-    for (let i = ranges.length - 1; i >= 0; i--) {
-      const r = ranges[i]!;
-      if (r.text) tr = tr.insertText(r.text, r.from, r.to);
-      else tr = tr.delete(r.from, r.to);
-    }
-    editor.view.dispatch(tr);
-    if (syncHtmlToMd) syncHtmlToMd();
-
-    setMatchCount(0);
-    setCurrentMatch(0);
-  }, [previewRef, syncHtmlToMd, buildRegex]);
-
-  // ── Apply formatting to ALL matches ─────────────────────────────────────
-  // A style (bold/italic/underline/highlight) or case (upper/lower/title) is
-  // applied to every match at once — the "add formatting via find & replace"
-  // path. Marks are added via a ProseMirror transaction in the rich pane and by
-  // wrapping the matched text in the markdown pane.
-  const CM_WRAP: Record<string, [string, string]> = {
-    bold: ["**", "**"],
-    italic: ["*", "*"],
-    underline: ["<u>", "</u>"],
-    strike: ["~~", "~~"],
-  };
-
-  const formatAllInCM6 = useCallback((kind: string) => {
-    const cm = sourceRef.current;
-    if (!cm) return;
-    if (!findText && !headingsOnlyRef.current) return;
-    const view = cm.getView();
-    if (!view) return;
-    const doc = view.state.doc.toString();
-    // With a query: scope its matches. Without one but "headings only" on: target
-    // the full content of every heading — the "select all headings" affordance.
-    const matches = findText
-      ? scopeMd(getMatchPositions(doc, findText), doc)
-      : mdHeadingRanges(doc).map(([s, e]) => ({ pos: s, len: e - s }));
-    if (!matches.length) return;
-    const changes = matches.map((mm) => {
-      const seg = doc.slice(mm.pos, mm.pos + mm.len);
-      let insert: string;
-      if (kind === "highlight") insert = `<span style="background-color: #fef08a">${seg}</span>`;
-      else if (kind === "upper" || kind === "lower" || kind === "title") insert = applyCase(seg, kind as CaseMode);
-      else {
-        const w = CM_WRAP[kind];
-        insert = w ? `${w[0]}${seg}${w[1]}` : seg;
-      }
-      return { from: mm.pos, to: mm.pos + mm.len, insert };
-    });
-    view.dispatch({ changes });
-    onSync?.();
-  }, [sourceRef, findText, getMatchPositions, scopeMd, onSync]);
-
-  const formatAllInTiptap = useCallback((kind: string) => {
-    const tp = previewRef.current;
-    if (!tp) return;
-    if (!findText && !headingsOnlyRef.current) return;
-    const editor = tp.getEditor();
-    if (!editor) return;
-    const { state } = editor;
-    const ranges: { from: number; to: number; text: string; marks: any }[] = [];
-    if (findText) {
-      const globalRe = buildRegex(findText, true);
-      if (!globalRe) return;
-      state.doc.descendants((node: any, pos: number, parent: any) => {
-        if (!node.isText) return;
-        if (headingsOnlyRef.current && parent?.type?.name !== "heading") return;
-        const text: string = node.text || "";
-        globalRe.lastIndex = 0;
-        let m: RegExpExecArray | null;
-        while ((m = globalRe.exec(text)) !== null) {
-          const from = pos + m.index;
-          ranges.push({ from, to: from + m[0].length, text: m[0], marks: node.marks });
-          if (m[0].length === 0) globalRe.lastIndex++;
-        }
-      });
-    } else {
-      // No query + "headings only": target every heading's full text content.
-      state.doc.descendants((node: any, pos: number, parent: any) => {
-        if (!node.isText || parent?.type?.name !== "heading") return;
-        const text: string = node.text || "";
-        if (text) ranges.push({ from: pos, to: pos + text.length, text, marks: node.marks });
-      });
-    }
-    if (!ranges.length) return;
-    const marks = state.schema.marks;
-    const markType =
-      kind === "bold" ? marks.bold
-      : kind === "italic" ? marks.italic
-      : kind === "underline" ? marks.underline
-      : kind === "strike" ? marks.strike
-      : null;
-    let tr = state.tr;
-    for (let i = ranges.length - 1; i >= 0; i--) {
-      const r = ranges[i]!;
-      if (markType) tr = tr.addMark(r.from, r.to, markType.create());
-      else if (kind === "highlight" && marks.textStyle) tr = tr.addMark(r.from, r.to, marks.textStyle.create({ backgroundColor: "#fef08a" }));
-      else if (kind === "upper" || kind === "lower" || kind === "title") tr = tr.replaceWith(r.from, r.to, state.schema.text(applyCase(r.text, kind as CaseMode), r.marks));
-    }
-    editor.view.dispatch(tr);
-    syncHtmlToMd?.();
-  }, [previewRef, findText, buildRegex, syncHtmlToMd]);
-
-  const doFormatAll = useCallback((kind: string) => {
-    if (readOnly) return;
-    if (isMd) formatAllInCM6(kind);
-    else formatAllInTiptap(kind);
-  }, [readOnly, isMd, formatAllInCM6, formatAllInTiptap]);
-
-  const doFind = useCallback(() => {
-    if (isMd) findInCM6(findText);
-    else findInTiptap(findText);
-  }, [isMd, findText, findInCM6, findInTiptap]);
-
-  const doFindNext = useCallback((dir = 1) => {
-    if (isMd) findNextInCM6(findText, dir);
-    else findNextInTiptap(findText, dir);
-  }, [isMd, findText, findNextInCM6, findNextInTiptap]);
-
-  // "Find all" — in the MD pane, place a real multi-range selection over every
-  // match (CodeMirror supports multiple selections); in the rich pane, jump to
-  // the first (all matches stay highlighted, and the scrollbar markers show them).
-  const doFindAll = useCallback(() => {
-    if (!findText) return;
-    if (isMd) {
-      const view = sourceRef.current?.getView?.();
-      if (!view) return;
-      const doc = view.state.doc.toString();
-      const matches = scopeMd(getMatchPositions(doc, findText), doc);
-      setMatchCount(matches.length);
-      if (!matches.length) { setCurrentMatch(0); return; }
-      try {
-        const ranges = matches.map((m) => EditorSelection.range(m.pos, m.pos + m.len));
-        view.dispatch({ selection: EditorSelection.create(ranges, 0), scrollIntoView: true });
-        view.focus();
-        setCurrentMatch(1);
-      } catch {
-        findInCM6(findText); // multi-selection unavailable — select the first
-      }
-    } else {
-      findInTiptap(findText);
-    }
-  }, [isMd, findText, sourceRef, getMatchPositions, scopeMd, findInCM6, findInTiptap]);
-
-  const doReplace = useCallback(() => {
-    if (readOnly) return;
-    if (isMd) replaceInCM6(findText, replaceText);
-    else replaceInTiptap(findText, replaceText);
-  }, [readOnly, isMd, findText, replaceText, replaceInCM6, replaceInTiptap]);
-
-  const doReplaceAll = useCallback(() => {
-    if (readOnly) return;
-    if (isMd) replaceAllInCM6(findText, replaceText);
-    else replaceAllInTiptap(findText, replaceText);
-  }, [readOnly, isMd, findText, replaceText, replaceAllInCM6, replaceAllInTiptap]);
-
-  const applyHighlights = useCallback(() => {
-    const cm = sourceRef.current;
-    const tp = previewRef.current;
-    const rep = showReplace ? replaceText : undefined;
-
-    if (isMd) {
-      cm?.setSearchHighlight?.(findText, useRegex, rep);
-      tp?.clearSearchHighlight?.();
-    } else {
-      tp?.setSearchHighlight?.(findText, useRegex, rep);
-      cm?.clearSearchHighlight?.();
-    }
-  }, [findText, replaceText, showReplace, useRegex, isMd, sourceRef, previewRef]);
-
-  useEffect(() => {
-    applyHighlights();
-    const t = setTimeout(applyHighlights, 120);
-    return () => clearTimeout(t);
-  }, [applyHighlights, mode]);
-
-  useEffect(() => {
-    return () => {
-      sourceRef.current?.clearSearchHighlight?.();
-      previewRef.current?.clearSearchHighlight?.();
-    };
-  }, [sourceRef, previewRef]);
-
-  useEffect(() => {
-    doFind();
-  }, [findText, mdScope, caseSensitive, wholeWord, useRegex, doFind]);
-
-  // Count headings for the "select all headings" affordance (headings-only on,
-  // no query). Kept out of the hot find path — only recomputes when relevant.
-  useEffect(() => {
-    if (findText || !headingsOnly) { setHeadingCount(0); return; }
-    try {
-      if (isMd) {
-        const view = sourceRef.current?.getView?.();
-        if (view) { setHeadingCount(mdHeadingRanges(view.state.doc.toString()).length); return; }
+    setPending(live.current.useRegex);
+    void getMatches().then((set) => {
+      if (seq !== seqRef.current) return;
+      const doSelect = pendingSelectRef.current;
+      pendingSelectRef.current = false;
+      setPending(false);
+      setMatchSet(set);
+      setMatchCount(set ? set.ranges.length : 0);
+      setTruncated(!!set?.truncated);
+      if (!set || set.ranges.length === 0) { setCurrentMatch(0); return; }
+      const sel = currentSelection();
+      if (!sel) return;
+      if (doSelect) {
+        const i = firstMatchFrom(set.ranges, sel.from);
+        selectRange(set.ranges[i]!, false);
+        setCurrentMatch(i + 1);
       } else {
-        const editor = previewRef.current?.getEditor?.();
-        if (editor) {
-          let c = 0;
-          editor.state.doc.descendants((n: any) => { if (n.type?.name === "heading") c++; });
-          setHeadingCount(c);
-          return;
-        }
+        setCurrentMatch(set.ranges.findIndex((r) => r.from === sel.from && r.to === sel.to) + 1);
       }
-    } catch { /* editor not ready */ }
-    setHeadingCount(0);
-  }, [findText, headingsOnly, isMd, mode, sourceRef, previewRef]);
+    });
+  }, [getMatches, currentSelection, selectRange, currentDoc]);
 
-  // Format/case actions target all headings when the headings-only toggle is on
-  // and there's no query — otherwise they operate on the current match set.
-  const formatAllHeadings = !findText && headingsOnly && headingCount > 0;
-  const canFormat = matchCount > 0 || formatAllHeadings;
+  // The query or an option changed: recompute and select (find-as-you-type).
+  useEffect(() => {
+    refresh(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findText, useRegex, caseSensitive, wholeWord, mdScope, searchTarget]);
 
   // ── Scrollbar match markers ──────────────────────────────────────────────
   // Vertical position (0–1 of scroll height) of every match, drawn as ticks over
@@ -968,6 +559,11 @@ export function FindReplaceBar({
    * changed" signal) and a ResizeObserver for the `scrollHeight` that is baked
    * into every fraction. Both only bump a counter; the recompute stays behind
    * the same 120ms debounce, so a burst of typing still costs one pass.
+   *
+   * The same counter now also drives the live match COUNT and the highlights:
+   * an edit re-matches the document (below). DOM changes that are not edits —
+   * our own highlight decorations, a reflow — leave the document identical, and
+   * that recompute returns at once.
    */
   const [docRevision, setDocRevision] = useState(0);
   useEffect(() => {
@@ -982,32 +578,89 @@ export function FindReplaceBar({
     };
     const mo = new MutationObserver(bump);
     mo.observe(content, { childList: true, characterData: true, subtree: true });
-    const ro = new ResizeObserver(bump);
-    ro.observe(scroller);
-    ro.observe(content);
-    return () => { mo.disconnect(); ro.disconnect(); };
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(bump) : null;
+    if (ro) { ro.observe(scroller); ro.observe(content); }
+    return () => { mo.disconnect(); if (ro) ro.disconnect(); };
   }, [getActiveScroller, findText]);
+
+  // The DOCUMENT changed: recompute the count and highlights — but never move
+  // the selection out from under someone who is typing.
+  useEffect(() => {
+    if (!live.current.findText) return;
+    // Only the DOM moved (our own highlights, a reflow), or a refresh for this
+    // very document is already done or on its way.
+    if (requestedDocRef.current === currentDoc()) return;
+    refresh(false);
+  }, [docRevision, refresh, currentDoc]);
+
+  // Push the matches to the target pane's highlighter (and clear the other).
+  useEffect(() => {
+    const cm = sourceRef.current;
+    const tp = previewRef.current;
+    const apply = () => {
+      const set = matchSet;
+      if (!set || set.ranges.length === 0) {
+        cm?.clearSearchHighlight?.();
+        tp?.clearSearchHighlight?.();
+        return;
+      }
+      // A set computed for an older revision would paint the wrong text; the
+      // pane has mapped the previous highlights, and the recompute is on its way.
+      if (set.doc !== currentDoc()) return;
+      const replaceMode = showReplace && replaceText !== "";
+      let previews = 0;
+      const ranges: HighlightRange[] = set.ranges.map((r) => {
+        const h: HighlightRange = { from: r.from, to: r.to };
+        if (r.m.indices) h.groups = r.m.indices.map((ix) => (ix ? [r.base + ix[0], r.base + ix[1]] : [0, 0]));
+        if (replaceMode && previews < MAX_PREVIEW_WIDGETS) {
+          const next = useRegex ? expandReplacement(replaceText, r.m, r.input) : replaceText;
+          h.preview = next !== r.input.slice(r.m.index, r.m.index + r.m.length) ? next : null;
+          previews++;
+        }
+        return h;
+      });
+      const spec: HighlightSpec = { ranges, replaceMode };
+      if (isMd) {
+        cm?.setSearchHighlight?.(spec);
+        tp?.clearSearchHighlight?.();
+      } else {
+        tp?.setSearchHighlight?.(spec);
+        cm?.clearSearchHighlight?.();
+      }
+    };
+    apply();
+    // Re-apply once a pane that has just been switched in has mounted.
+    const t = setTimeout(apply, 120);
+    return () => clearTimeout(t);
+  }, [matchSet, showReplace, replaceText, useRegex, isMd, mode, sourceRef, previewRef, currentDoc]);
+
+  useEffect(() => {
+    return () => {
+      sourceRef.current?.clearSearchHighlight?.();
+      previewRef.current?.clearSearchHighlight?.();
+    };
+  }, [sourceRef, previewRef]);
 
   useEffect(() => {
     if (!findText) { setMarkers([]); return; }
     const timer = setTimeout(() => {
       try {
+        const set = cacheRef.current;
+        if (!set || set.doc !== currentDoc()) { setMarkers([]); return; }
+        const ms = sampleEvenly(set.ranges);
         if (isMd) {
           const view = sourceRef.current?.getView?.();
           if (!view) { setMarkers([]); return; }
-          const doc = view.state.doc.toString();
-          const ms = sampleEvenly(scopeMd(getMatchPositions(doc, findText), doc));
           const H = view.scrollDOM.scrollHeight || 1;
-          setMarkers(ms.map((m) => Math.min(1, Math.max(0, view.lineBlockAt(m.pos).top / H))));
+          setMarkers(ms.map((m) => Math.min(1, Math.max(0, view.lineBlockAt(m.from).top / H))));
         } else {
           const ed = previewRef.current?.getEditor?.();
           const scroller = ed?.view.dom.closest(".tiptap-editor-content")?.parentElement as HTMLElement | undefined;
           if (!ed || !scroller) { setMarkers([]); return; }
-          const ranges = sampleEvenly(collectTiptapMatches(ed, findText));
           const sRect = scroller.getBoundingClientRect();
           const H = scroller.scrollHeight || 1;
           const fr: number[] = [];
-          for (const r of ranges) {
+          for (const r of ms) {
             try { const c = ed.view.coordsAtPos(r.from); fr.push(Math.min(1, Math.max(0, (c.top - sRect.top + scroller.scrollTop) / H))); } catch { /* pos not laid out */ }
           }
           setMarkers(fr);
@@ -1015,7 +668,234 @@ export function FindReplaceBar({
       } catch { setMarkers([]); }
     }, 120);
     return () => clearTimeout(timer);
-  }, [findText, isMd, matchCount, docRevision, mdScope, caseSensitive, wholeWord, useRegex, sourceRef, previewRef, getMatchPositions, scopeMd, collectTiptapMatches, sampleEvenly]);
+  }, [findText, isMd, matchCount, matchSet, docRevision, sourceRef, previewRef, sampleEvenly, currentDoc]);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  const doFindNext = useCallback(async (dir: 1 | -1 = 1) => {
+    const set = await getMatches();
+    if (!set) return;
+    setMatchCount(set.ranges.length);
+    setTruncated(set.truncated);
+    if (set.ranges.length === 0) { setCurrentMatch(0); return; }
+    const sel = currentSelection();
+    if (!sel) return;
+    const i = pickMatch(set.ranges, sel.from, sel.to, dir);
+    selectRange(set.ranges[i]!, true);
+    setCurrentMatch(i + 1);
+  }, [getMatches, currentSelection, selectRange]);
+
+  // "Find all" — in the MD pane, place a real multi-range selection over every
+  // match (CodeMirror supports multiple selections); in the rich pane, jump to
+  // the first (all matches stay highlighted, and the scrollbar markers show them).
+  const doFindAll = useCallback(async () => {
+    if (!live.current.findText) return;
+    const set = await getMatches();
+    if (!set) return;
+    setMatchCount(set.ranges.length);
+    if (set.ranges.length === 0) { setCurrentMatch(0); return; }
+    if (live.current.isMd) {
+      const view = getView();
+      if (!view) return;
+      try {
+        const ranges = set.ranges.map((m) => EditorSelection.range(m.from, m.to));
+        view.dispatch({ selection: EditorSelection.create(ranges, 0), scrollIntoView: true });
+        view.focus();
+        setCurrentMatch(1);
+      } catch {
+        selectRange(set.ranges[0]!, false); // multi-selection unavailable — select the first
+        setCurrentMatch(1);
+      }
+    } else {
+      const i = firstMatchFrom(set.ranges, currentSelection()?.from ?? 0);
+      selectRange(set.ranges[i]!, false);
+      setCurrentMatch(i + 1);
+    }
+  }, [getMatches, getView, currentSelection, selectRange]);
+
+  /** The text a match becomes. Regex mode expands `$1`/`$&`/`$<name>` from the
+   *  ORIGINAL match — re-running the pattern on the matched text alone is what
+   *  made lookarounds (`\d+(?=px)`) count, highlight and never replace (A060).
+   *  Literal mode inserts the replacement verbatim. */
+  const replacementFor = useCallback((r: FoundRange) => {
+    const L = live.current;
+    return L.useRegex ? expandReplacement(L.replaceText, r.m, r.input) : L.replaceText;
+  }, []);
+
+  const doReplace = useCallback(async () => {
+    if (live.current.readOnly) return;
+    const set = await getMatches();
+    if (!set) return;
+    const sel = currentSelection();
+    const r = sel ? set.ranges.find((x) => x.from === sel.from && x.to === sel.to) : undefined;
+    // Replace acts on the SELECTED match; with none selected it finds one first.
+    if (!r) { await doFindNext(1); return; }
+    const text = replacementFor(r);
+    if (live.current.isMd) {
+      const view = getView();
+      if (!view || view.state.doc !== set.doc) return;
+      view.dispatch({ changes: { from: r.from, to: r.to, insert: text }, selection: { anchor: r.from + text.length } });
+      onSync?.();
+    } else {
+      const editor = getEditor();
+      if (!editor || editor.state.doc !== set.doc) return;
+      // TEXT, never HTML. This went through insertContent(), which parses its
+      // argument as HTML: replacing with "<b>x</b>" inserted a bold x, and a
+      // "<" in the replacement could swallow what followed it.
+      editor.chain().focus().command(({ tr }: { tr: any }) => {
+        if (text) tr.insertText(text, r.from, r.to);
+        else tr.delete(r.from, r.to);
+        return true;
+      }).run();
+      syncHtmlToMd?.();
+    }
+    await doFindNext(1);
+  }, [getMatches, currentSelection, doFindNext, replacementFor, getView, getEditor, onSync, syncHtmlToMd]);
+
+  const doReplaceAll = useCallback(async () => {
+    if (live.current.readOnly || !live.current.findText) return;
+    const set = await getMatches();
+    if (!set || set.ranges.length === 0) { setMatchCount(0); setCurrentMatch(0); return; }
+    if (live.current.isMd) {
+      const view = getView();
+      if (!view || view.state.doc !== set.doc) return;
+      // One transaction over exactly the matches the count shows — the scope
+      // filter's survivors, never an unscoped whole-document rewrite.
+      view.dispatch({ changes: set.ranges.map((r) => ({ from: r.from, to: r.to, insert: replacementFor(r) })) });
+      onSync?.();
+    } else {
+      const editor = getEditor();
+      if (!editor || editor.state.doc !== set.doc) return;
+      // Text nodes only, via a transaction — never a regex over getHTML(),
+      // which could match inside tags and attributes. End-to-start so earlier
+      // positions stay valid.
+      let tr = editor.state.tr;
+      for (let i = set.ranges.length - 1; i >= 0; i--) {
+        const r = set.ranges[i]!;
+        const text = replacementFor(r);
+        tr = text ? tr.insertText(text, r.from, r.to) : tr.delete(r.from, r.to);
+      }
+      editor.view.dispatch(tr);
+      syncHtmlToMd?.();
+    }
+    setMatchCount(0);
+    setCurrentMatch(0);
+  }, [getMatches, replacementFor, getView, getEditor, onSync, syncHtmlToMd]);
+
+  // ── Apply formatting to ALL matches ─────────────────────────────────────
+  // A style (bold/italic/underline/highlight) or case (upper/lower/title) is
+  // applied to every match at once — the "add formatting via find & replace"
+  // path. Marks are added via a ProseMirror transaction in the rich pane and by
+  // wrapping the matched text in the markdown pane. With no query but "headings
+  // only" on, it targets every heading's text instead.
+  const doFormatAll = useCallback(async (kind: string) => {
+    const L = live.current;
+    if (L.readOnly) return;
+    if (!L.findText && !L.headingsOnly) return;
+    if (L.isMd) {
+      const view = getView();
+      if (!view) return;
+      let spans: { from: number; to: number }[];
+      if (L.findText) {
+        const set = await getMatches();
+        if (!set || view.state.doc !== set.doc) return;
+        spans = set.ranges;
+      } else {
+        spans = mdHeadingRanges(view.state.doc.toString()).map(([s, e]) => ({ from: s, to: e }));
+      }
+      if (!spans.length) return;
+      const doc = view.state.doc;
+      const changes = spans.map((mm) => {
+        const seg = doc.sliceString(mm.from, mm.to);
+        let insert: string;
+        if (kind === "highlight") insert = `<span style="background-color: #fef08a">${seg}</span>`;
+        else if (kind === "upper" || kind === "lower" || kind === "title") insert = applyCase(seg, kind as CaseMode);
+        else {
+          const w = CM_WRAP[kind];
+          insert = w ? `${w[0]}${seg}${w[1]}` : seg;
+        }
+        return { from: mm.from, to: mm.to, insert };
+      });
+      view.dispatch({ changes });
+      onSync?.();
+      return;
+    }
+    const editor = getEditor();
+    if (!editor) return;
+    let spans: { from: number; to: number }[];
+    if (L.findText) {
+      const set = await getMatches();
+      if (!set || editor.state.doc !== set.doc) return;
+      spans = set.ranges;
+    } else {
+      spans = [];
+      editor.state.doc.descendants((node: any, p: number, parent: any) => {
+        if (!node.isText || parent?.type?.name !== "heading") return;
+        const text: string = node.text || "";
+        if (text) spans.push({ from: p, to: p + text.length });
+      });
+    }
+    if (!spans.length) return;
+    const { state } = editor;
+    const marks = state.schema.marks;
+    const markType =
+      kind === "bold" ? marks.bold
+      : kind === "italic" ? marks.italic
+      : kind === "underline" ? marks.underline
+      : kind === "strike" ? marks.strike
+      : null;
+    let tr = state.tr;
+    for (let i = spans.length - 1; i >= 0; i--) {
+      const r = spans[i]!;
+      if (r.to <= r.from) continue;
+      if (markType) tr = tr.addMark(r.from, r.to, markType.create());
+      else if (kind === "highlight" && marks.textStyle) {
+        // MERGE into each run's existing textStyle. addMark REPLACES a mark of
+        // the same type, and colour, highlight and font all live on textStyle —
+        // so this used to wipe the text colour and font a run already had.
+        state.doc.nodesBetween(r.from, r.to, (node: any, p: number) => {
+          if (!node.isText) return;
+          const from = Math.max(p, r.from);
+          const to = Math.min(p + node.nodeSize, r.to);
+          if (from >= to) return;
+          const existing = node.marks.find((mk: any) => mk.type === marks.textStyle);
+          tr = tr.addMark(from, to, marks.textStyle.create({ ...(existing?.attrs ?? {}), backgroundColor: "#fef08a" }));
+        });
+      } else if (kind === "upper" || kind === "lower" || kind === "title") {
+        const text = state.doc.textBetween(r.from, r.to);
+        const nodeMarks = state.doc.nodeAt(r.from)?.marks;
+        tr = tr.replaceWith(r.from, r.to, state.schema.text(applyCase(text, kind as CaseMode), nodeMarks));
+      }
+    }
+    editor.view.dispatch(tr);
+    syncHtmlToMd?.();
+  }, [getMatches, getView, getEditor, onSync, syncHtmlToMd]);
+
+  // Count headings for the "select all headings" affordance (headings-only on,
+  // no query). Kept out of the hot find path — only recomputes when relevant.
+  useEffect(() => {
+    if (findText || !headingsOnly) { setHeadingCount(0); return; }
+    try {
+      if (isMd) {
+        const view = sourceRef.current?.getView?.();
+        if (view) { setHeadingCount(mdHeadingRanges(view.state.doc.toString()).length); return; }
+      } else {
+        const editor = previewRef.current?.getEditor?.();
+        if (editor) {
+          let c = 0;
+          editor.state.doc.descendants((n: any) => { if (n.type?.name === "heading") c++; });
+          setHeadingCount(c);
+          return;
+        }
+      }
+    } catch { /* editor not ready */ }
+    setHeadingCount(0);
+  }, [findText, headingsOnly, isMd, mode, sourceRef, previewRef]);
+
+  // Format/case actions target all headings when the headings-only toggle is on
+  // and there's no query — otherwise they operate on the current match set.
+  const formatAllHeadings = !findText && headingsOnly && headingCount > 0;
+  const canFormat = matchCount > 0 || formatAllHeadings;
 
   const handleClose = useCallback(() => {
     sourceRef.current?.clearSearchHighlight?.();
@@ -1046,6 +926,8 @@ export function FindReplaceBar({
         // ⌘F / ⌘H switch modes while focus is INSIDE the panel — the global
         // shortcut listener is scoped to the editor container, so it can't see
         // keystrokes here (the panel is a fixed overlay outside that container).
+        // AltGr is typing (Windows reports it as Ctrl+Alt) — never a mode switch.
+        if (isAltGraphInput(e.nativeEvent)) return;
         const mod = e.ctrlKey || e.metaKey;
         if (mod && e.key.toLowerCase() === "f") { e.preventDefault(); setPanelMode("find"); }
         else if (mod && e.key.toLowerCase() === "h" && !readOnly) { e.preventDefault(); setPanelMode("replace"); }
@@ -1139,11 +1021,21 @@ export function FindReplaceBar({
                 if (e.key === "Escape") { e.preventDefault(); handleClose(); }
               }}
               placeholder={isMd ? "Find in Markdown..." : "Find in Rich Text..."}
+              // A placeholder is not a label: it vanishes once text is typed
+              // and is not reliably announced. The count is its description.
+              aria-label={isMd ? "Find in Markdown" : "Find in Rich Text"}
+              aria-describedby={countId}
+              aria-invalid={regexError ? true : undefined}
               className="h-7 w-full pr-12"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              <span className={`text-[10px] tabular-nums font-medium ${regexError ? "text-destructive" : "text-muted-foreground"}`} title={regexError || ""}>
-                {regexError ? "ERR" : matchCount > 0 ? `${currentMatch}/${matchCount}` : findText ? "0" : ""}
+              <span
+                id={countId}
+                className={`text-[10px] tabular-nums font-medium ${regexError ? "text-destructive" : "text-muted-foreground"}`}
+                title={regexError || (truncated ? `Showing the first ${matchCount} matches` : "")}
+                aria-label={regexError ? `Error: ${regexError}` : undefined}
+              >
+                {regexError ? "ERR" : pending ? "…" : matchCount > 0 ? `${currentMatch}/${matchCount}${truncated ? "+" : ""}` : findText ? "0" : ""}
               </span>
             </div>
           </div>
@@ -1308,6 +1200,7 @@ export function FindReplaceBar({
                 if (e.key === "Escape") { e.preventDefault(); handleClose(); }
               }}
               placeholder="Replace with..."
+              aria-label="Replace with"
               className="h-8"
             />
           </div>

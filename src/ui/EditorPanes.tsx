@@ -12,6 +12,7 @@ import { Icons } from "./Icons";
 import { TiptapPane } from "./TiptapPane";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
 import { markdownHeadings } from "./scroll-anchors";
+import { currentSplitShouldStack } from "./split-layout";
 
 interface PaneHeaderProps {
   /** Only the topmost header sits under the floating workspace trigger. */
@@ -19,7 +20,7 @@ interface PaneHeaderProps {
   icon: React.ElementType;
   label: string;
   children?: React.ReactNode;
-  headerRef?: RefObject<HTMLDivElement | null>;
+  headerRef?: RefObject<HTMLDivElement>;
 }
 
 /** Split-ratio bounds and the keyboard nudge, shared by the pointer and key paths. */
@@ -73,8 +74,20 @@ interface SyncModePillsProps {
   onSyncModeChange: (mode: string) => void;
 }
 
+/**
+ * A096 / WCAG 2.5.3. These switches SHOW a one-word label and used to be NAMED
+ * by a whole explanatory sentence ("Pasting keeps the formatting…"), which does
+ * not contain the visible "Styled paste" — so "click Styled paste" found
+ * nothing, and a screen reader read a paragraph as the control's name. The name
+ * is now the visible label; the explanation is the DESCRIPTION.
+ */
+function SwitchExplainer({ id, text }: { id: string; text: string }) {
+  return <span id={id} className="sr-only">{text}</span>;
+}
+
 function SyncModePills({ syncMode, onSyncModeChange }: SyncModePillsProps) {
   const styled = syncMode !== "clean";
+  const descId = React.useId();
   const explainer =
     // Underline, sub/superscript and image sizing are written as inline HTML in
     // BOTH modes (addBaseRules) — only the <span style="…"> carrier is
@@ -85,7 +98,8 @@ function SyncModePills({ syncMode, onSyncModeChange }: SyncModePillsProps) {
     <Label htmlFor="sync-mode" className="text-[10px] md:text-xs whitespace-nowrap" title={explainer}>
       Styled
     </Label>
-    <Switch id="sync-mode" checked={styled} onCheckedChange={(checked) => onSyncModeChange(checked ? "styled" : "clean")} aria-label={explainer} />
+    <Switch id="sync-mode" checked={styled} onCheckedChange={(checked) => onSyncModeChange(checked ? "styled" : "clean")} aria-label="Styled Markdown" aria-describedby={descId} />
+    <SwitchExplainer id={descId} text={explainer} />
   </div>;
 }
 
@@ -97,6 +111,7 @@ interface PasteStyledPillProps {
 function PasteStyledPill({ pasteStyled, setPasteStyled }: PasteStyledPillProps) {
   // On by default and remembered. Hold Shift while pasting to do the opposite
   // once, whichever way this is set.
+  const descId = React.useId();
   const explainer = pasteStyled
     ? "Pasting keeps the formatting you copied. Shift+paste to strip it once."
     : "Pasting strips formatting. Shift+paste to keep it once.";
@@ -104,7 +119,8 @@ function PasteStyledPill({ pasteStyled, setPasteStyled }: PasteStyledPillProps) 
     <Label htmlFor="paste-styled" className="text-[10px] md:text-xs whitespace-nowrap" title={explainer}>
       Styled paste
     </Label>
-    <Switch id="paste-styled" checked={pasteStyled} onCheckedChange={setPasteStyled} aria-label={explainer} />
+    <Switch id="paste-styled" checked={pasteStyled} onCheckedChange={setPasteStyled} aria-label="Styled paste" aria-describedby={descId} />
+    <SwitchExplainer id={descId} text={explainer} />
   </div>;
 }
 
@@ -119,7 +135,7 @@ function ImageModePills({ showImages, setShowImages }: ImageModePillsProps) {
     <Label htmlFor="show-images" className="text-[10px] md:text-xs whitespace-nowrap" title="Show or hide images in the preview">
       Images
     </Label>
-    <Switch id="show-images" checked={showImages} onCheckedChange={setShowImages} aria-label="Show images in preview" />
+    <Switch id="show-images" checked={showImages} onCheckedChange={setShowImages} aria-label="Images in preview" />
   </div>;
 }
 
@@ -129,7 +145,7 @@ interface MarkdownPaneProps {
   syncMode: string;
   onSyncModeChange: (mode: string) => void;
   onFocus?: () => void;
-  headerRef?: RefObject<HTMLDivElement | null>;
+  headerRef?: RefObject<HTMLDivElement>;
   syncScroll?: boolean;
   onSyncScrollChange?: (sync: boolean) => void;
   isSplit?: boolean;
@@ -155,10 +171,16 @@ const MarkdownPane = React.memo(forwardRef<any, MarkdownPaneProps>(function Mark
                 // E8. 16px against WCAG 2.5.8's 24px, and jammed against the
                 // right edge on a phone. The icon stays 16px; the BUTTON grows
                 // on coarse pointers, the same shape as the divider's fix.
-                className="flex h-4 items-center justify-center pointer-coarse:h-8 pointer-coarse:w-8 [&_svg]:size-4 [&_svg]:text-primary/70"
-                aria-label={syncScroll ? "Disable scroll sync" : "Enable scroll sync"}
+                // Icon-only: its glyph must clear 3:1 (WCAG 1.4.11), which the
+                // 70%-alpha accent did not (1.4:1 in amber).
+                className="flex h-4 items-center justify-center pointer-coarse:h-8 pointer-coarse:w-8 [&_svg]:size-4 [&_svg]:text-primary-strong"
+                // A toggle button keeps ONE name and reports its state through
+                // aria-pressed; a name that flips between "Enable…" and
+                // "Disable…" contradicts the pressed state it sits beside, and
+                // aria-roledescription replaced the "toggle button" role a
+                // screen reader would otherwise announce.
+                aria-label="Sync scrolling"
                 aria-pressed={syncScroll}
-                aria-roledescription="Toggle scroll synchronization"
               >
                 {syncScroll ? <Mouse /> : <MouseOff />}
               </button>
@@ -199,7 +221,7 @@ interface HtmlPaneProps {
   pasteStyled: boolean;
   setPasteStyled: (styled: boolean) => void;
   onFocus?: () => void;
-  headerRef?: RefObject<HTMLDivElement | null>;
+  headerRef?: RefObject<HTMLDivElement>;
   showImages: boolean;
   setShowImages: (show: boolean) => void;
 }
@@ -319,15 +341,19 @@ function EditorLayoutInner({
   }, [mode, readOnly, focusMode]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    // Stack the split panes below 768px — the same breakpoint at which the menu
-    // bar collapses to ☰. Two side-by-side editor panes (each with a full
-    // header of toggles) at ~300px are too cramped to edit in.
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsNarrow(mq.matches);
+    if (typeof window === "undefined") return;
+    // Stack the split panes below 768px — the breakpoint at which the menu bar
+    // collapses to ☰ — but only when there is HEIGHT for two panes. A landscape
+    // phone stacked them into 37-69px editors apiece (A100); see split-layout.ts
+    // for why an upright phone ignores the keyboard-shrunk height.
+    const update = () => setIsNarrow(currentSplitShouldStack(window));
     update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
   }, []);
 
   const onDividerMove = useCallback((e: PointerEvent) => {
@@ -588,7 +614,10 @@ function EditorLayoutInner({
   "--reading-width": readingWidth ? `${readingWidth}ch` : "none",
       } as React.CSSProperties}
     >
+      {/* data-print-pane: printing prints the RICH pane, whatever the view
+          (styles.css @media print) — both panes are always mounted. */}
       <div
+        data-print-pane="md"
         className={cn("flex min-h-0 min-w-0 flex-col", !isSplit && "flex-1 w-full", !showMd && "hidden")}
         style={mdStyle}
       >
@@ -608,6 +637,7 @@ function EditorLayoutInner({
       {isSplit && showMd && showHtml && (
         <div
           role="separator"
+          data-print-hide
           aria-orientation={isNarrow ? "horizontal" : "vertical"}
           aria-label="Resize panes"
           // A separator that reports no value is not operable by assistive tech
@@ -637,6 +667,7 @@ function EditorLayoutInner({
       )}
 
       <div
+        data-print-pane="rich"
         className={cn("flex min-h-0 min-w-0 flex-col", isSplit ? "flex-1" : "flex-1 w-full", !showHtml && "hidden")}
       >
         <HtmlPane
