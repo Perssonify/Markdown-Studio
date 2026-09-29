@@ -2,7 +2,7 @@
  * IndexedDB Storage Adapter
  *
  * Implements the StorageAdapter interface using the browser's IndexedDB API.
- * Provides configurable max storage quota and live storage metrics.
+ * Provides live storage metrics and, optionally, a host-configured hard cap.
  *
  * Database layout:
  *   DB: <dbName> (default: "perssonify-docs")
@@ -21,23 +21,40 @@ import type { StorageAdapter } from "./storage-adapter";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
+/**
+ * Storage usage, measured in real bytes.
+ *
+ * With a host-configured `maxBytes`, the numbers are the documents' own
+ * (UTF-8) bytes against that cap. Without one — the default — the limit is the
+ * BROWSER's quota for this site, so the numbers come from
+ * `navigator.storage.estimate()`: the whole origin's usage (documents,
+ * version history, caches) against its quota. `limitKnown: false` means the
+ * browser offers no estimate; `maxBytes` is then 0 and `pct` 0.
+ */
 export interface StorageMetrics {
-  /** Bytes currently consumed by all stored documents */
+  /** Bytes in use (see above for which bytes). */
   usedBytes: number;
-  /** Configured upper limit in bytes */
+  /** The limit in bytes, or 0 when unknown. */
   maxBytes: number;
   /** Usage as a percentage 0–100 */
   pct: number;
   /** Number of documents stored */
   docCount: number;
-  /** Bytes remaining before the limit is hit */
+  /** Bytes remaining before the limit is hit (0 when the limit is unknown). */
   available: number;
+  /** Whether `maxBytes` is a real limit rather than unknown. */
+  limitKnown?: boolean;
 }
 
 export interface IDBStorageConfig {
   /** IndexedDB database name. Defaults to "perssonify-docs". */
   dbName?: string;
-  /** Maximum bytes allowed for document storage. Defaults to 50 MB. */
+  /**
+   * An optional HARD cap on document bytes, for a host that wants one. Unset
+   * (the default), the browser's own quota is the limit. There used to be a
+   * self-imposed 50 MB default measured as characters × 2, which stopped a
+   * library at ~18 MB of real markdown while the browser had gigabytes free.
+   */
   maxBytes?: number;
 }
 
@@ -50,8 +67,10 @@ export class StorageQuotaError extends Error {
 
   constructor(used: number, max: number, required: number) {
     super(
-      `Storage quota exceeded: ${formatBytes(used)} used of ${formatBytes(max)} limit. ` +
-      `Requires ${formatBytes(required)} more.`
+      max > 0
+        ? `Storage quota exceeded: ${formatBytes(used)} used of ${formatBytes(max)} limit. ` +
+          `Requires ${formatBytes(required)} more.`
+        : `Storage is full: the browser refused to store more data for this site.`
     );
     this.name = "StorageQuotaError";
     this.usedBytes = used;
@@ -92,8 +111,9 @@ export function parseStoredDocument(id: string, raw: string): DocumentRecord {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_DB_NAME = "perssonify-docs";
-const DEFAULT_MAX_BYTES = 50 * 1024 * 1024; // 50 MB
 const DB_VERSION = 1;
+/** How often a write may re-ask the browser for its storage estimate. */
+const ESTIMATE_THROTTLE_MS = 3000;
 const STORE_DOCS = "documents";
 const STORE_META = "meta";
 const MANIFEST_KEY = "__manifest";
@@ -107,9 +127,30 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function byteSize(str: string): number {
-  // UTF-16 code units × 2 gives a conservative estimate without TextEncoder overhead
-  return str.length * 2;
+/**
+ * The UTF-8 size of a string, without allocating an encoded copy. Characters ×
+ * 2 (UTF-16 code units) was the old measure: it roughly DOUBLED every
+ * ASCII-heavy note, which is most of them, so the cap was hit at about half the
+ * data it claimed to allow.
+ */
+export function utf8Bytes(str: string): number {
+  let n = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
+      const d = str.charCodeAt(i + 1);
+      if (d >= 0xdc00 && d <= 0xdfff) { n += 4; i++; } else n += 3;
+    } else n += 3;
+  }
+  return n;
+}
+
+/** The browser refused a write because the origin is out of quota. */
+export function isQuotaExceeded(e: unknown): boolean {
+  const err = e as { name?: string; code?: number } | null;
+  return !!err && (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED" || err.code === 22);
 }
 
 function idbRequest<T>(req: IDBRequest<T>): Promise<T> {
@@ -181,21 +222,23 @@ export function sameIdSet(documents: { id: string }[], ids: readonly unknown[]):
 
 export class IndexedDBStorageAdapter implements StorageAdapter {
   private readonly _dbName: string;
-  private readonly _maxBytes: number;
+  /** A host-configured hard cap, or null: the browser's quota is the limit. */
+  private readonly _maxBytes: number | null;
   private _db: IDBDatabase | null = null;
   private _readyPromise: Promise<void>;
   private _metrics: StorageMetrics;
+  /** The documents' own UTF-8 bytes and count (the store, not the origin). */
+  private _docBytes = 0;
+  private _docCount = 0;
+  /** The browser's last answer to navigator.storage.estimate(), if any. */
+  private _estimate: { usage: number; quota: number } | null = null;
+  private _estimateAt = 0;
 
   constructor(config?: IDBStorageConfig) {
     this._dbName = config?.dbName ?? DEFAULT_DB_NAME;
-    this._maxBytes = config?.maxBytes ?? DEFAULT_MAX_BYTES;
-    this._metrics = {
-      usedBytes: 0,
-      maxBytes: this._maxBytes,
-      pct: 0,
-      docCount: 0,
-      available: this._maxBytes,
-    };
+    this._maxBytes = typeof config?.maxBytes === "number" && config.maxBytes > 0 ? config.maxBytes : null;
+    this._metrics = { usedBytes: 0, maxBytes: 0, pct: 0, docCount: 0, available: 0, limitKnown: false };
+    this._publishMetrics();
     this._readyPromise = this._open();
     // A rejected open with no consumer YET is an unhandled rejection, which
     // surfaces as a top-level page error — and in a browser with storage
@@ -228,7 +271,7 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
       req.onsuccess = (event) => {
         this._db = (event.target as IDBOpenDBRequest).result;
         // Recompute metrics after open so first getMetrics() call is accurate
-        this._recomputeMetrics().then(resolve).catch(resolve);
+        Promise.all([this._recomputeMetrics(), this._refreshEstimate(true)]).then(() => resolve(), () => resolve());
       };
       req.onerror = () => reject(req.error);
     });
@@ -296,9 +339,57 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
     await idbRequest(store.put(JSON.stringify(manifest), MANIFEST_KEY));
   }
 
+  /** Derive the published metrics from what is known (see StorageMetrics). */
+  private _publishMetrics(): void {
+    const docCount = this._docCount;
+    if (this._maxBytes != null) {
+      const used = this._docBytes;
+      const max = this._maxBytes;
+      this._metrics = {
+        usedBytes: used, maxBytes: max, docCount, limitKnown: true,
+        pct: Math.min(100, Math.round((used / max) * 100)),
+        available: Math.max(0, max - used),
+      };
+    } else if (this._estimate && this._estimate.quota > 0) {
+      const { usage, quota } = this._estimate;
+      this._metrics = {
+        usedBytes: usage, maxBytes: quota, docCount, limitKnown: true,
+        pct: Math.min(100, Math.round((usage / quota) * 100)),
+        available: Math.max(0, quota - usage),
+      };
+    } else {
+      this._metrics = { usedBytes: this._docBytes, maxBytes: 0, pct: 0, docCount, available: 0, limitKnown: false };
+    }
+  }
+
+  /**
+   * Ask the browser how much of its quota this origin uses — the limit that
+   * actually decides whether a write lands. Throttled on the write path; never
+   * throws (a browser without the API leaves the limit unknown).
+   */
+  private async _refreshEstimate(force = false): Promise<void> {
+    if (!force && Date.now() - this._estimateAt < ESTIMATE_THROTTLE_MS) return;
+    this._estimateAt = Date.now();
+    try {
+      const nav = typeof navigator !== "undefined" ? (navigator as Navigator & { storage?: StorageManager }) : null;
+      const est = nav?.storage?.estimate ? await nav.storage.estimate() : null;
+      if (est && typeof est.quota === "number" && typeof est.usage === "number") {
+        this._estimate = { usage: est.usage, quota: est.quota };
+      }
+    } catch { /* no estimate — the limit stays unknown */ }
+    this._publishMetrics();
+  }
+
+  /** The error to raise when the browser refused a write for lack of quota. */
+  private _quotaError(requiredBytes: number): StorageQuotaError {
+    return this._estimate
+      ? new StorageQuotaError(this._estimate.usage, this._estimate.quota, requiredBytes)
+      : new StorageQuotaError(this._docBytes, 0, requiredBytes);
+  }
+
   /**
    * Walk all document keys and sum their byte sizes to build accurate metrics.
-   * Called once on open and after every mutating operation.
+   * Called on open and after a delete; saves account for themselves.
    */
   private async _recomputeMetrics(): Promise<void> {
     try {
@@ -316,7 +407,7 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
           if (cursor) {
             const val: unknown = cursor.value;
             if (typeof val === "string") {
-              usedBytes += byteSize(val);
+              usedBytes += utf8Bytes(val);
               docCount++;
             }
             cursor.continue();
@@ -327,13 +418,9 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
         req.onerror = () => reject(req.error);
       });
 
-      this._metrics = {
-        usedBytes,
-        maxBytes: this._maxBytes,
-        pct: Math.min(100, Math.round((usedBytes / this._maxBytes) * 100)),
-        docCount,
-        available: Math.max(0, this._maxBytes - usedBytes),
-      };
+      this._docBytes = usedBytes;
+      this._docCount = docCount;
+      this._publishMetrics();
     } catch {
       /* best effort — keep last known metrics */
     }
@@ -388,83 +475,99 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
     await this._readyPromise;
     stampUpdated(doc);
     const serialized = serializeForStorage(doc);
-    const newDocBytes = byteSize(serialized);
-    let usedAfter = -1;
-    let countAfter = 0;
+    const newDocBytes = utf8Bytes(serialized);
+    let docBytesAfter = -1;
+    let docCountAfter = 0;
 
-    await idbTransaction(
-      this._db_(),
-      [STORE_DOCS, STORE_META],
-      "readwrite",
-      async (tx) => {
-        // Quota check INSIDE the write transaction, computing the true current
-        // usage from the store (not cached metrics that concurrent saves could
-        // read stale). This serializes the check+write and closes the race.
-        const store = tx.objectStore(STORE_DOCS);
-        // The cursor also counts documents, so the post-commit metrics can be
-        // derived arithmetically instead of walking the whole store a SECOND
-        // time (see below).
-        const { total, existing, count } = await new Promise<{ total: number; existing: number; count: number }>(
-          (resolve, reject) => {
-            let total = 0;
-            let existing = 0;
-            let count = 0;
-            const req = store.openCursor();
-            req.onsuccess = () => {
-              const cursor = req.result;
-              if (cursor) {
-                const bytes = byteSize(cursor.value as string);
-                total += bytes;
-                count++;
-                if (cursor.key === doc.id) existing = bytes;
-                cursor.continue();
-              } else {
-                resolve({ total, existing, count });
+    try {
+      await idbTransaction(
+        this._db_(),
+        [STORE_DOCS, STORE_META],
+        "readwrite",
+        async (tx) => {
+          const store = tx.objectStore(STORE_DOCS);
+          let existing = 0;
+          let found = false;
+          if (this._maxBytes != null) {
+            // A host's HARD cap is checked INSIDE the write transaction against
+            // the true current usage (not cached metrics a concurrent save could
+            // read stale), which serializes the check and the write. The cursor
+            // also counts documents, so the post-commit metrics are arithmetic.
+            const cap = this._maxBytes;
+            const walk = await new Promise<{ total: number; existing: number; found: boolean; count: number }>(
+              (resolve, reject) => {
+                let total = 0;
+                let existingBytes = 0;
+                let hit = false;
+                let count = 0;
+                const req = store.openCursor();
+                req.onsuccess = () => {
+                  const cursor = req.result;
+                  if (cursor) {
+                    const bytes = utf8Bytes(cursor.value as string);
+                    total += bytes;
+                    count++;
+                    if (cursor.key === doc.id) { existingBytes = bytes; hit = true; }
+                    cursor.continue();
+                  } else {
+                    resolve({ total, existing: existingBytes, found: hit, count });
+                  }
+                };
+                req.onerror = () => reject(req.error);
               }
-            };
-            req.onerror = () => reject(req.error);
+            );
+            const projectedUsed = walk.total - walk.existing + newDocBytes;
+            if (projectedUsed > cap) {
+              throw new StorageQuotaError(walk.total, cap, projectedUsed - cap);
+            }
+            existing = walk.existing;
+            found = walk.found;
+            this._docBytes = walk.total;
+            this._docCount = walk.count;
+          } else {
+            // No self-imposed cap: the browser's quota is the limit, and the
+            // browser enforces it (a QuotaExceededError, translated below). Only
+            // this record's previous size is needed — not a walk of the whole
+            // library on every autosave.
+            const prev = await idbRequest<string | undefined>(store.get(doc.id));
+            found = prev !== undefined && prev !== null;
+            existing = typeof prev === "string" ? utf8Bytes(prev) : 0;
           }
-        );
-        const projectedUsed = total - existing + newDocBytes;
-        if (projectedUsed > this._maxBytes) {
-          throw new StorageQuotaError(total, this._maxBytes, projectedUsed - this._maxBytes);
+
+          await idbRequest(store.put(serialized, doc.id));
+
+          const manifest = await this._manifestForWrite(tx);
+          const summary = toSummary(doc);
+          const idx = manifest.documents.findIndex((d) => d.id === doc.id);
+          if (idx >= 0) {
+            manifest.documents[idx] = summary;
+          } else {
+            manifest.documents.push(summary);
+          }
+          await this._setManifest(manifest, tx);
+          // Metrics from the numbers this transaction ALREADY has, never a second
+          // walk of the store: saving one note must not cost the whole library.
+          docBytesAfter = this._docBytes - existing + newDocBytes;
+          docCountAfter = found ? this._docCount : this._docCount + 1;
         }
+      );
+    } catch (e) {
+      // The browser is out of quota for this site. Surface it as the one error
+      // the UI knows means "storage is full" — raw, it read as a generic write
+      // failure and autosave retried it forever ("Save failed — retrying").
+      if (isQuotaExceeded(e)) throw this._quotaError(newDocBytes);
+      throw e;
+    }
 
-        await idbRequest(store.put(serialized, doc.id));
-
-        const manifest = await this._manifestForWrite(tx);
-        const summary = toSummary(doc);
-        const idx = manifest.documents.findIndex((d) => d.id === doc.id);
-        if (idx >= 0) {
-          manifest.documents[idx] = summary;
-        } else {
-          manifest.documents.push(summary);
-        }
-        await this._setManifest(manifest, tx);
-        // Metrics from the numbers this transaction ALREADY has. Every autosave
-        // used to walk the entire document store twice — once here for the quota
-        // check, then again in _recomputeMetrics() — so the cost of saving one
-        // note was proportional to the whole library, on a 5-second timer, while
-        // the user typed. The quota cursor is unavoidable (it must be inside the
-        // write transaction to close the check/write race); the second pass was
-        // pure duplication.
-        usedAfter = total - existing + newDocBytes;
-        countAfter = existing > 0 ? count : count + 1;
-      }
-    );
-
-    if (usedAfter >= 0) {
-      this._metrics = {
-        usedBytes: usedAfter,
-        maxBytes: this._maxBytes,
-        pct: Math.min(100, Math.round((usedAfter / this._maxBytes) * 100)),
-        docCount: countAfter,
-        available: Math.max(0, this._maxBytes - usedAfter),
-      };
+    if (docBytesAfter >= 0) {
+      this._docBytes = Math.max(0, docBytesAfter);
+      this._docCount = docCountAfter;
+      this._publishMetrics();
     } else {
       // Transaction did not reach the accounting step — fall back to a full walk.
       await this._recomputeMetrics();
     }
+    void this._refreshEstimate();
   }
 
   async delete(id: string): Promise<void> {
@@ -483,6 +586,7 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
     );
 
     await this._recomputeMetrics();
+    await this._refreshEstimate(true);
   }
 
   async search(query: string): Promise<DocumentSummary[]> {
