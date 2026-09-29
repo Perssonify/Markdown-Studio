@@ -36,7 +36,7 @@ A running log of what changes in Markdown Studio, kept **inside** the app.
 > entirely and begin fresh. It is an ordinary document: edit it, export it,
 > or delete it.
 
-See also: [[Welcome]] · [[About Perssonify]]
+See also: [[Markdown Studio|Welcome]] · [[About Perssonify]]
 
 ---
 
@@ -277,7 +277,7 @@ fast without breaking things: applications, AI integrations, and automation
 systems. → [perssonify.com](https://perssonify.com/)
 
 This document is a deep dive into the divisions and what each one is for. The
-editor you are reading it in was built by **Perssonify Labs** — see [[Welcome]]
+editor you are reading it in was built by **Perssonify Labs** — see [[Markdown Studio|Welcome]]
 for a tour of the product, and [[Changelog]] for what has changed recently.
 
 ---
@@ -371,7 +371,7 @@ and what it learns there points Research at the next question.
 
 ## Where to go next
 
-- **Try the product you are holding** — [[Welcome]] is a full tour of Markdown Studio
+- **Try the product you are holding** — [[Markdown Studio|Welcome]] is a full tour of Markdown Studio
 - **Track what changes** — [[Changelog]]
 - **Everything else** — [perssonify.com](https://perssonify.com/)
 
