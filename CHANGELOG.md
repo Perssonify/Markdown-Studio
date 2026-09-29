@@ -109,6 +109,14 @@ finding IDs (A001–A114) are cited below.
   keeps it (A051).
 
 ### Fixed — data safety
+- **Unmounting an emptied editor never writes a blank document** over the stored
+  one (hosts that unmount the editor inside the autosave window).
+- **A document from a newer version is no longer reported as "empty"** when a
+  save is refused; the message says it is open read-only.
+- **The first-run documents' links to the welcome document work** — they were
+  drawn as broken for every new user.
+- **A slow URL import says it timed out**, instead of asking to use the server
+  relay for a site that simply had not answered yet.
 - **Reloading after a two-tab conflict no longer overwrites the other tab's work**,
   and closing a window with two unsaved tabs keeps both tabs' recovery copies
   (A018, A027).
@@ -142,6 +150,15 @@ finding IDs (A001–A114) are cited below.
   one-click backup (A004).
 
 ### Security and privacy
+- **The full app can no longer be framed at `/embed.html`.** The production
+  deploy has no embed build, so that address served the full app under the
+  embed's anti-framing exemption; it now returns 404 unless an embed build is
+  deployed there.
+- **Erasing local data removes the Cards composer's unsent draft**, and the
+  integration handle exposes `clearLocalData()` for a host's logout.
+- **No export carries the imported originals**: the crash screen's "Export my
+  documents" uses the same envelope as every other export, and that envelope
+  no longer includes the pre-import HTML.
 - A Content-Security-Policy (report-only, hash-pinned) and hardening headers;
   hashed assets cache as immutable; a missing chunk returns 404 instead of the app
   page (A068, A012, A016).
