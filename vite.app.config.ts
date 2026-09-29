@@ -39,7 +39,7 @@ export default defineConfig({
       manifest: {
         name: 'Markdown Studio',
         short_name: 'Markdown Studio',
-        description: 'Dual-pane Markdown editor — write Markdown and rich text side by side. Client-only, works offline.',
+        description: 'Dual-pane Markdown editor — write Markdown and rich text side by side. Your documents stay in your browser, and it works offline.',
         theme_color: '#0a0a0a',
         background_color: '#0a0a0a',
         display: 'standalone',

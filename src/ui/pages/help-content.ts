@@ -266,7 +266,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         list: [
           "Import from URL fetches the link you enter. If that site blocks browsers from reading it, the app can fetch it through its own server instead — it asks you first and remembers the answer (change it in Settings → Privacy). The server receives the address, downloads the file and passes it straight back without keeping a copy; like any web request, the address may appear in our hosting provider's logs, so avoid importing links that carry secrets.",
           "Images in a document load from wherever they are hosted, which lets that site see when the document is opened. Settings → Privacy → Block remote images stops that; blocked images show as their description, and the setting applies the next time the app loads.",
-          "Install it as an app (from your browser’s install/Add-to-Home-Screen option) to work offline.",
+          "It keeps working offline once it has loaded one time while online. Installing it as an app (your browser’s Install or Add to Home Screen option) also protects your library from Safari clearing the storage of sites you have not visited for 7 days.",
           "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write, but nothing is saved: a “Not saving” banner says so for as long as it is true. Export before you close the tab.",
         ],
       },
