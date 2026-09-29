@@ -34,6 +34,7 @@ import { SizedImage } from "../extensions/SizedImage";
 import { TableCellAlign } from "../extensions/TableCellAlign";
 import { ThemeImage } from "../extensions/ThemeImage";
 import { UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
+import { ListKeymapNoTab } from "../extensions/ListKeymapNoTab";
 import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
@@ -222,7 +223,9 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
           underline: false,
           heading: { levels: [1, 2, 3, 4, 5, 6] },
           codeBlock: false, // Disable default code block
+          listKeymap: false, // replaced by ListKeymapNoTab below (Tiptap 3.31 Tab change)
         }),
+        ListKeymapNoTab,
         CodeBlockWithCopy, // Use our custom code block with copy button
         TaskList, TaskItem.configure({ nested: true }),
         Callout, Details, Summary,
