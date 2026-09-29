@@ -432,8 +432,12 @@ export function preprocessMarkdown(
   // literal. Restored verbatim just before returning.
   const codeStore: string[] = [];
   const stash = (m: string) => `@@PFCODE${codeStore.push(m) - 1}@@`;
+  // Only when a pass below can match: this runs on every md→rich projection,
+  // and the engine always asks for the table-pipe pass.
+  const hasWiki = md.indexOf("[[") !== -1;
   const needsMask =
-    transclusions || blockIds || wikiLinks || wikiLinkTablePipes ||
+    transclusions || blockIds ||
+    ((wikiLinks || wikiLinkTablePipes) && hasWiki) ||
     (curlyBraceFormatting && md.indexOf("{") !== -1);
   if (needsMask) {
     // Keep a fence's own indentation in place: it is what tells the
