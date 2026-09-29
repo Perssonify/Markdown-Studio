@@ -18,6 +18,7 @@ import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { captureIngestHeadless } from "./store/headless-ingest";
 import { canonicalMisfit, CURRENT_SCHEMA_VERSION, isNewerSchema } from "./store/schema-version";
+import { computeFidelity } from "./store/fidelity";
 import { useEditorStore } from "./store/editorStore";
 import type { IDBStorageConfig, StorageMetrics } from "./store/idb-storage-adapter";
 import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, getFileContentAndFormat } from "./store/import-export";
@@ -543,8 +544,20 @@ export function PerssonifyEditor({
     // md→html re-parse below replaces the rich pane wholesale, which would
     // discard whatever rich-pane typing has not been projected yet.
     syncHtmlToMdRef2.current();
+    // …and the re-parse REPLACES the rich document with only what the markdown
+    // projection carries. For a document holding something it cannot carry —
+    // alignment always, colour/highlight/font in Clean mode — toggling ANY
+    // markdown feature silently stripped it, and the next edit or switch made
+    // that permanent. Such a document keeps its rich content; only the markdown
+    // pane is re-projected. (Markdown typed afterwards re-parses as usual.)
+    const live = tiptapRef.current?.getEditor?.()?.getJSON?.();
+    const mode = useUIStore.getState().syncMode === "styled" ? "styled" : "clean";
+    if (live && !computeFidelity(live, mode).lossless) {
+      forceSyncHtmlToMd();
+      return;
+    }
     forceSyncMdToHtml();
-  }, [configVersion, forceSyncMdToHtml]);
+  }, [configVersion, forceSyncMdToHtml, forceSyncHtmlToMd]);
 
   // ── Format dispatcher ─────────────────────────────────────────────────────
   const setActiveFormats = useEditorStore((s) => s.setActiveFormats);
