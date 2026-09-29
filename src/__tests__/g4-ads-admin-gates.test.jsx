@@ -137,7 +137,19 @@ describe("the share-link builder", () => {
 });
 
 describe("Settings ▸ Admin (A081)", () => {
-  const renderOpen = () => render(<SettingsSheet open onOpenChange={() => {}} />);
+  // The sheet's "Erase all local data" section (A079) asks through useDialog().
+  const dialogApi = {
+    confirm: async () => false,
+    prompt: async () => null,
+    equation: async () => null,
+    confirmUnsaved: async () => "cancel",
+  };
+  const renderOpen = () =>
+    render(
+      <DialogProvider value={dialogApi}>
+        <SettingsSheet open onOpenChange={() => {}} />
+      </DialogProvider>
+    );
 
   it("is hidden in production without the opt-in flag", () => {
     _setDevBuildForTests(false);
