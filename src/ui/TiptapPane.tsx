@@ -20,6 +20,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, JSONContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { COMPOSITION_STALL_MS } from "../constants";
+import type { HighlightSpec } from "../formatting/find-engine";
 import { useUIStore } from "../store/uiStore";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";
@@ -43,120 +44,43 @@ import {
 } from "./search-colors";
 
 /**
- * RegExp with 'd' flag support (hasIndices)
+ * Search highlights, drawn from the RANGES the Find panel computed — the same
+ * matches it counts and navigates (see CodeMirrorPane's buildSearchHighlights,
+ * its twin). This used to re-run the query with a hard-coded "gi" — ignoring
+ * Match case and Whole word — locate literal terms by `toLowerCase().indexOf`
+ * (misaligned after any "İ"), and run the user's regex on the main thread on
+ * every document change.
  */
-interface RegExpExecArrayWithIndices extends RegExpExecArray {
-  indices?: Array<[number, number]>;
-}
-
-let _searchTerm = "";
-let _searchIsRegex = false;
-let _searchReplacement = "";
-let _hasIndicesFlag = false;
-
-try {
-  _hasIndicesFlag = (new RegExp("", "d") as unknown as { hasIndices: boolean }).hasIndices === true;
-} catch {
-  _hasIndicesFlag = false;
-}
-
-function buildSearchDecorations(doc: PMNode): DecorationSet | null {
-  const term = _searchTerm;
-  if (!term) return null;
-
-  const replacement = _searchReplacement;
-  const showPreview = replacement !== undefined && replacement !== "";
+function buildSearchDecorations(doc: PMNode, spec: HighlightSpec): DecorationSet | null {
+  const size = doc.content.size;
   const decorations: Decoration[] = [];
   let widgetCount = 0;
-
-  let re: RegExp | null = null;
-  let reExpand: RegExp | null = null;
-  let hasGroups = false;
-
-  if (_searchIsRegex) {
-    try {
-      const flags = _hasIndicesFlag ? "gid" : "gi";
-      re = new RegExp(term, flags);
-      reExpand = new RegExp(term, "i");
-      hasGroups = _hasIndicesFlag && re.source.includes("(");
-    } catch {
-      return null;
-    }
-  }
-
-  doc.descendants((node, pos) => {
-    if (!node.isText || !node.text) return;
-    const text = node.text;
-
-    if (_searchIsRegex && re && reExpand) {
-      re.lastIndex = 0;
-      let m: RegExpExecArrayWithIndices | null;
-      while ((m = re.exec(text) as RegExpExecArrayWithIndices | null) !== null) {
-        if (m[0].length === 0) {
-          re.lastIndex++;
-          continue;
-        }
-        const mStart = pos + m.index;
-        const mEnd = pos + m.index + m[0].length;
-
-        if (showPreview) {
-          decorations.push(Decoration.inline(mStart, mEnd, { style: REPLACE_OLD_STYLE, class: "replace-preview-old" }));
-          
-          if (widgetCount < MAX_PREVIEW_WIDGETS) {
-            const expanded = m[0].replace(reExpand, replacement);
-            if (expanded !== m[0]) {
-              decorations.push(Decoration.widget(mEnd, () => {
-                const span = document.createElement("span");
-                span.textContent = expanded;
-                span.setAttribute("style", REPLACE_NEW_STYLE);
-                return span;
-              }, { side: 1 }));
-              widgetCount++;
-            }
-          }
-        } else {
-          decorations.push(Decoration.inline(mStart, mEnd, { style: HIGHLIGHT_STYLE, class: "search-highlight" }));
-          
-          if (hasGroups && m.indices) {
-            for (let g = 1; g < m.indices.length && g <= TP_GROUP_STYLES.length; g++) {
-              const idx = m.indices[g];
-              if (!idx) continue;
-              decorations.push(Decoration.inline(pos + idx[0], pos + idx[1], {
-                style: TP_GROUP_STYLES[g - 1],
-                class: `search-group search-group-${g}`
-              }));
-            }
-          }
-        }
+  for (const r of spec.ranges) {
+    // Zero-length matches have nothing to paint; stale ranges are skipped.
+    if (r.to <= r.from || r.from < 0 || r.to > size) continue;
+    if (spec.replaceMode) {
+      decorations.push(Decoration.inline(r.from, r.to, { style: REPLACE_OLD_STYLE, class: "replace-preview-old" }));
+      if (r.preview != null && widgetCount < MAX_PREVIEW_WIDGETS) {
+        const expanded = r.preview;
+        decorations.push(Decoration.widget(r.to, () => {
+          const span = document.createElement("span");
+          span.textContent = expanded;
+          span.setAttribute("style", REPLACE_NEW_STYLE);
+          return span;
+        }, { side: 1 }));
+        widgetCount++;
       }
     } else {
-      const lower = text.toLowerCase();
-      const search = term.toLowerCase();
-      let idx = 0;
-      while ((idx = lower.indexOf(search, idx)) !== -1) {
-        const mStart = pos + idx;
-        const mEnd = pos + idx + term.length;
-
-        if (showPreview) {
-          decorations.push(Decoration.inline(mStart, mEnd, { style: REPLACE_OLD_STYLE, class: "replace-preview-old" }));
-          if (widgetCount < MAX_PREVIEW_WIDGETS && replacement !== text.substring(idx, idx + term.length)) {
-            const previewText = replacement;
-            decorations.push(Decoration.widget(mEnd, () => {
-              const span = document.createElement("span");
-              span.textContent = previewText;
-              span.setAttribute("style", REPLACE_NEW_STYLE);
-              return span;
-            }, { side: 1 }));
-            widgetCount++;
-          }
-        } else {
-          decorations.push(Decoration.inline(mStart, mEnd, { style: HIGHLIGHT_STYLE, class: "search-highlight" }));
-        }
-        idx += term.length;
-      }
+      decorations.push(Decoration.inline(r.from, r.to, { style: HIGHLIGHT_STYLE, class: "search-highlight" }));
+      r.groups?.forEach(([gFrom, gTo], g) => {
+        if (g >= TP_GROUP_STYLES.length || gTo <= gFrom || gFrom < 0 || gTo > size) return;
+        decorations.push(Decoration.inline(gFrom, gTo, {
+          style: TP_GROUP_STYLES[g],
+          class: `search-group search-group-${g + 1}`,
+        }));
+      });
     }
-  });
-
+  }
   return decorations.length ? DecorationSet.create(doc, decorations) : null;
 }
 
@@ -169,26 +93,24 @@ const searchHighlightKey = new PluginKey<DecorationSet | null>("searchHighlight"
  * `props.decorations(state)` runs on every transaction — including the ones that
  * change nothing but the selection (each caret move, each drag-select) — so with
  * Find open the editor walked the ENTIRE document and re-allocated a Decoration
- * per match just to move the cursor one character. Now the set is rebuilt only
- * when the document actually changed or the search terms did, and is reused
- * verbatim otherwise (positions cannot have moved if the doc did not).
+ * per match just to move the cursor one character. The set changes only when
+ * the Find panel sends new ranges; an edit in between MAPS it, and the panel
+ * recomputes and resends once the document has changed.
  */
 const SearchHighlightExtension = Extension.create({
   name: "searchHighlight",
   addProseMirrorPlugins() {
     return [
-      new Plugin({
+      new Plugin<DecorationSet | null>({
         key: searchHighlightKey,
         state: {
-          init: (_config, state) => buildSearchDecorations(state.doc),
+          init: () => null,
           apply: (tr, prev) => {
             // setSearchHighlight/clearSearchHighlight dispatch this meta.
-            if (tr.getMeta("searchHighlight")) return buildSearchDecorations(tr.doc);
-            if (!_searchTerm) return null;
-            if (!tr.docChanged) return prev;
-            // An edit can add or remove matches anywhere, so mapping the old set
-            // through the transaction would go stale — rebuild.
-            return buildSearchDecorations(tr.doc);
+            const meta = tr.getMeta(searchHighlightKey) as { spec: HighlightSpec | null } | undefined;
+            if (meta) return meta.spec ? buildSearchDecorations(tr.doc, meta.spec) : null;
+            if (!prev) return null;
+            return tr.docChanged ? prev.map(tr.mapping, tr.doc) : prev;
           },
         },
         props: {
@@ -258,7 +180,8 @@ export interface TiptapPaneHandle {
    *  arrives. ProseMirror's own keydown handler calls `forceFlush()` for this,
    *  but that only acts when a mutation flush was already scheduled. */
   syncSelectionFromDom: () => void;
-  setSearchHighlight: (term: string, isRegex?: boolean, replacement?: string) => void;
+  /** Draw the Find panel's matches (see buildSearchDecorations). */
+  setSearchHighlight: (spec: HighlightSpec) => void;
   clearSearchHighlight: () => void;
   /**
    * Drop the undo/redo history by re-initialising plugin state around the
@@ -448,18 +371,14 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         view.domObserver?.flush?.();
       },
 
-      setSearchHighlight: (term, isRegex = false, replacement) => {
-        _searchTerm = term || "";
-        _searchIsRegex = isRegex;
-        _searchReplacement = replacement || "";
-        editor?.view.dispatch(editor.state.tr.setMeta("searchHighlight", true));
+      setSearchHighlight: (spec) => {
+        if (!editor || editor.isDestroyed) return;
+        editor.view.dispatch(editor.state.tr.setMeta(searchHighlightKey, { spec }));
       },
 
       clearSearchHighlight: () => {
-        _searchTerm = "";
-        _searchIsRegex = false;
-        _searchReplacement = "";
-        editor?.view.dispatch(editor.state.tr.setMeta("searchHighlight", true));
+        if (!editor || editor.isDestroyed) return;
+        editor.view.dispatch(editor.state.tr.setMeta(searchHighlightKey, { spec: null }));
       },
     }), [editor]);
 
