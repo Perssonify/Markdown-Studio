@@ -14,10 +14,8 @@ import {
   FOLDER_CHIP_H,
   folderRects,
   findOrphans,
-  LABEL_GAP,
-  LABEL_H,
+  isLargeMap,
   labelBoxAt,
-  labelWidth,
   matchNodes,
   neighborIds,
   placeLabels,
@@ -25,6 +23,8 @@ import {
   truncateLabel,
   type LabelBox,
 } from "../store/graph-metrics";
+import { ALPHA_DECAY, MAX_FRAMES, PAD, shouldFreeze, stepLayout, worldFor, type SimPoint } from "../store/graph-physics";
+import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry } from "../store/graph-draw";
 
 export interface GraphNode {
   id: string;
@@ -82,61 +82,31 @@ export interface GraphViewProps {
 // `allDocs` was removed from the prop set — map node labels come straight from
 // `graph.nodes` (which now includes every document via `exportGraph`).
 
-interface Pt {
-  id: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-}
+type Pt = SimPoint;
 
 // ── Physics ──────────────────────────────────────────────────────────────────
-// Tuned to settle in well under a second and then FREEZE.
-//
-// The simulation runs in its OWN world-space, sized from the node count — NOT
-// from the viewport. That separation is load-bearing: layout used to be keyed to
-// the canvas rect, so every resize (including docking/undocking a panel beside
-// the map) reheated the sim and visibly reshuffled the whole graph. Now a resize
-// only re-aims the camera; the layout is untouched.
-const PAD = 40;
-const REPULSION = 1400;
-const SPRING_K = 0.02;
-const GRAVITY = 0.015;
-// Folder clustering. Cohesion is the SOFT half — it gathers a folder's members.
-// Keeping containers off each other and off strangers is a HARD positional
-// constraint applied after integration (see `stepOnce`), because as a force it
-// simply lost to the springs between two linked folders.
-const FOLDER_COHESION = 0.09;
-/** Room the LAYOUT reserves for each note's name, so labels are not merely
- *  dropped when they collide — the graph spreads out enough to show them. The
- *  layout measures at 1× (screen units == world units); the draw-time placer is
- *  what actually guarantees no overlap at the current zoom. */
-const TEXT_SEPARATION = 0.05;
-const TEXT_ROOM_Y = 34;
-const FOLDER_GAP = 44;
-/** Overlap under this many units is left alone, so clusters stop nudging each
- *  other back and forth instead of settling. */
-const FOLDER_SLACK = 6;
-const DAMPING = 0.82;
-const SETTLE_V = 0.06;
-/** Force cooling (d3-style). Without it the layout relaxed on its own schedule —
- *  measured at 377 frames (~6s of rAF) for a 25-note workspace, and worse as the
- *  graph grows. A decaying alpha makes convergence DETERMINISTIC: forces fade to
- *  nothing in ~110 frames, so the loop always reaches its freeze. */
-const ALPHA_DECAY = 0.965;
-const ALPHA_MIN = 0.02;
-/** Hard stop for the force loop. It normally settles in well under a second,
- *  but "settles" must never be a precondition for freezing: a layout that keeps
- *  nudging itself (clusters trading places, nodes pinned on a world edge) once
- *  left the loop running forever, which also meant the post-settle camera fit
- *  NEVER ran — the map stayed framed on its initial ring in a corner. */
-const MAX_FRAMES = 900;
+// The force layout itself — its constants, its world-space (`worldFor`), the
+// exact small-map loop and the Barnes–Hut large-map path — lives in
+// `store/graph-physics.ts`, pure and unit-tested. This component owns the ONE
+// position map it mutates (`posRef`) and the loop that drives it.
 
-/** Stable layout space for `n` documents (independent of the viewport). */
-function worldFor(n: number) {
-  const w = Math.max(720, Math.min(2600, 520 + n * 90));
-  return { w, h: Math.round(w * 0.72) };
-}
+// ── Scale ────────────────────────────────────────────────────────────────────
+// A LARGE map (`isLargeMap`, graph-metrics.ts) is drawn and paced for scale:
+// ordinary dots, links and arrowheads are a few batched paths (graph-draw.ts),
+// hover is hit-tested in code, and the layout is stepped against a clock and
+// painted at most every PAINT_EVERY_MS. A small map is untouched: one element
+// per note and per link, every step painted.
+/** A large map's physics budget per animation frame (at least one step runs). */
+const SLICE_MS = 12;
+/** A large map paints its moving layout at most this often. */
+const PAINT_EVERY_MS = 250;
+/** A large map holds its layout still this long after the user moves the camera
+ *  (wheel, pan, zoom buttons) or the pointer over the map, so the interaction
+ *  gets the main thread rather than queueing behind layout steps — and a pan or
+ *  a hover over an unchanged layout rebuilds nothing. The held steps are
+ *  deferred, not skipped: the layout resumes where it was and rests where it
+ *  would have. */
+const CAMERA_HOLD_MS = 300;
 
 const CAM_MIN = 0.3;
 const CAM_MAX = 3;
@@ -159,6 +129,11 @@ const LABEL_CANDIDATES = 200;
 
 const HEADING_CAP = 10;
 const LIST_CAP = 8;
+
+/** World-unit cell of a large map's hit-test index. */
+const HIT_CELL = 64;
+/** Largest drawn dot (`nodeRadius`: 7 + at most 10), before zoom damping. */
+const MAX_NODE_RADIUS = 17;
 
 const isWideViewport = () =>
   typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -189,6 +164,17 @@ const isWideViewport = () =>
  * user pans/zooms/drags (`camTouchedRef`). The rail tracks the SELECTED node
  * (hover only highlights — a rail that follows the pointer flickers). Escape
  * clears an active search/filter first, else closes.
+ *
+ * SCALE: above LARGE_MAP_MIN notes the map is drawn and paced differently
+ * (and only then — a small map is untouched). Ordinary dots, links and
+ * arrowheads are a handful of batched `<path>`s memoized on the layout version
+ * and the zoom; the notes that matter right now (open, selected, hovered,
+ * focused) are drawn in full on top, as on a small map. The pointer is
+ * hit-tested in code. The layout steps against a clock, paints a few times a
+ * second in frames of their own, and holds still while the user moves the
+ * camera or the pointer. Measured at 2,000 notes under 4× CPU throttling, the
+ * per-element map took 10s to its first frame and 80s to settle, with 78s of
+ * that blocked main thread (e2e/cases/perf-map.mjs).
  */
 function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, onExport, headingsFor, onOpenHeading, unresolved }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -225,6 +211,9 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const camSmoothRef = useRef(false);
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  /** A large map draws only a few notes as their own (focusable) element; the
+   *  one holding keyboard focus must stay one of them. */
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(activeDocId ?? null);
   const [railOpen, setRailOpen] = useState(isWideViewport);
 
@@ -264,6 +253,11 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     () => rankByDegree(graph.nodes, -1).map((n) => n.id),
     [graph.nodes]
   );
+  /** …and the notes that ranking leaves out (zero-degree), in library order. */
+  const unranked = useMemo(() => {
+    const ranked = new Set(byImportance);
+    return graph.nodes.map((n) => n.id).filter((id) => !ranked.has(id));
+  }, [graph.nodes, byImportance]);
   const orphanDocs = useMemo(
     () => graph.nodes.filter((n) => orphanSet.has(n.id)).sort((a, b) => a.title.localeCompare(b.title)),
     [graph.nodes, orphanSet]
@@ -281,167 +275,24 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   );
 
   // ── Simulation ───────────────────────────────────────────────────────────────
+  /** Bumped whenever a position moves (a step, a drag, a re-seed): the key the
+   *  large map's batched layers are memoized on, so a pan, a hover or a
+   *  selection does not rebuild paths for a layout that has not changed. */
+  const layoutVersionRef = useRef(0);
   const stepOnce = useCallback(() => {
-    const ps = Array.from(posRef.current.values());
-    const edges = graphRef.current.edges;
-    const { w, h } = worldRef.current;
-    const cx = w / 2, cy = h / 2;
-    const alpha = alphaRef.current;
-    // Spread scales with the NUMBER of notes, not the world area: world size
-    // already grows with the node count, so scaling by area double-counted it
-    // (10× the repulsion at 25 notes) and stretched out the relaxation.
-    const spread = Math.max(1, Math.min(5, ps.length / 6));
-    const repulsion = REPULSION * spread * alpha;
-    const springLen = Math.max(70, Math.min(170, Math.min(w, h) / 4));
-    const minX = PAD, maxX = Math.max(PAD + 1, w - PAD);
-    const minY = PAD, maxY = Math.max(PAD + 1, h - PAD);
-
     const meta = metaRef.current;
-    const radiusOf = (id: string) => meta.radius.get(id) ?? 7;
-    const labelOf = (id: string) => meta.label.get(id) ?? "";
-    // Half the drawn width of each node's own name — how much horizontal room
-    // that note needs to be readable.
-    const halfW = ps.map((p) => Math.max(radiusOf(p.id), labelWidth(labelOf(p.id)) / 2));
-
-    for (let i = 0; i < ps.length; i++) {
-      for (let j = i + 1; j < ps.length; j++) {
-        const a = ps[i]!, b = ps[j]!;
-        let dx = b.x - a.x, dy = b.y - a.y;
-        let d2 = dx * dx + dy * dy;
-        if (d2 < 1) { d2 = 1; dx = (Math.random() - 0.5) * 0.1; dy = (Math.random() - 0.5) * 0.1; }
-        const d = Math.sqrt(d2);
-        const f = repulsion / d2;
-        const fx = (dx / d) * f, fy = (dy / d) * f;
-        a.vx -= fx; a.vy -= fy;
-        b.vx += fx; b.vy += fy;
-        // Radial repulsion alone is blind to TEXT: two notes a comfortable
-        // distance apart can still have names that run straight through each
-        // other. Resolve the label boxes on whichever axis they overlap least.
-        const needX = halfW[i]! + halfW[j]!;
-        const ax = Math.abs(dx), ay = Math.abs(dy);
-        if (ax < needX && ay < TEXT_ROOM_Y) {
-          const ox = needX - ax, oy = TEXT_ROOM_Y - ay;
-          if (ox / needX <= oy / TEXT_ROOM_Y) {
-            const push = ox * TEXT_SEPARATION * alpha * (dx < 0 ? -1 : 1);
-            a.vx -= push; b.vx += push;
-          } else {
-            const push = oy * TEXT_SEPARATION * alpha * (dy < 0 ? -1 : 1);
-            a.vy -= push; b.vy += push;
-          }
-        }
-      }
-    }
-    for (const e of edges) {
-      const a = posRef.current.get(e.source), b = posRef.current.get(e.target);
-      if (!a || !b) continue;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      const f = (d - springLen) * SPRING_K * alpha;
-      const fx = (dx / d) * f, fy = (dy / d) * f;
-      a.vx += fx; a.vy += fy;
-      b.vx -= fx; b.vy -= fy;
-    }
-    // Cohesion holds a folder's members together…
-    for (const folder of foldersRef.current) {
-      if (folder.docIds.length < 2) continue;
-      const pts: Pt[] = [];
-      let fcx = 0, fcy = 0;
-      for (const id of folder.docIds) {
-        const p = posRef.current.get(id);
-        if (p) { pts.push(p); fcx += p.x; fcy += p.y; }
-      }
-      if (pts.length < 2) continue;
-      fcx /= pts.length; fcy /= pts.length;
-      for (const p of pts) {
-        p.vx += (fcx - p.x) * FOLDER_COHESION * alpha;
-        p.vy += (fcy - p.y) * FOLDER_COHESION * alpha;
-      }
-    }
-
-    let maxV = 0;
-    for (const p of ps) {
-      p.vx += (cx - p.x) * GRAVITY * alpha;
-      p.vy += (cy - p.y) * GRAVITY * alpha;
-      if (dragRef.current?.id === p.id) { p.vx = 0; p.vy = 0; continue; }
-      p.vx *= DAMPING; p.vy *= DAMPING;
-      p.x = Math.max(minX, Math.min(maxX, p.x + p.vx));
-      p.y = Math.max(minY, Math.min(maxY, p.y + p.vy));
-      const v = Math.abs(p.vx) + Math.abs(p.vy);
-      if (v > maxV) maxV = v;
-    }
-
-    // ── Hard container constraints ───────────────────────────────────────────
-    // Applied to POSITIONS after integration, and deliberately NOT scaled by
-    // alpha. As a velocity nudge this lost: springs pulling two linked folders
-    // together simply out-pulled it, and whatever overlap was left when the
-    // forces cooled was the overlap the user saw. As a positional constraint it
-    // is the last word each frame, so the resting layout always satisfies it —
-    // and once alpha has decayed there is nothing left to fight it.
-    const clusterRects = () => folderRects({
-      folders: foldersRef.current,
+    const maxV = stepLayout({
       positions: posRef.current,
-      radius: radiusOf,
-      label: labelOf,
-      k: 1,
+      edges: graphRef.current.edges,
+      folders: foldersRef.current,
+      world: worldRef.current,
+      alpha: alphaRef.current,
+      radius: (id) => meta.radius.get(id) ?? 7,
+      label: (id) => meta.label.get(id) ?? "",
+      pinned: dragRef.current?.id ?? null,
     });
-    const shift = (p: Pt, dx: number, dy: number) => {
-      p.x = Math.max(minX, Math.min(maxX, p.x + dx));
-      p.y = Math.max(minY, Math.min(maxY, p.y + dy));
-    };
-    for (let pass = 0; pass < 3; pass++) {
-      const rects = clusterRects();
-      if (!rects.length) break;
-      const members = rects.map((r) => r.docIds.map((id) => posRef.current.get(id)).filter((q): q is Pt => !!q));
-      // Container ↔ container.
-      for (let i = 0; i < rects.length; i++) {
-        for (let j = i + 1; j < rects.length; j++) {
-          const A = rects[i]!, B = rects[j]!;
-          const ox = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0) + FOLDER_GAP;
-          const oy = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0) + FOLDER_GAP;
-          if (ox <= 0 || oy <= 0) continue;
-          const horizontal = ox <= oy;
-          const dir = horizontal
-            ? ((A.x0 + A.x1) <= (B.x0 + B.x1) ? 1 : -1)
-            : ((A.y0 + A.y1) <= (B.y0 + B.y1) ? 1 : -1);
-          const step = (horizontal ? ox : oy) / 2;
-          for (const p of members[i]!) shift(p, horizontal ? -step * dir : 0, horizontal ? 0 : -step * dir);
-          for (const p of members[j]!) shift(p, horizontal ? step * dir : 0, horizontal ? 0 : step * dir);
-        }
-      }
-      // Container ↔ outsider: measured with the outsider's own label footprint,
-      // so a foreign NAME cannot lie across a container it has nothing to do with.
-      for (const p of ps) {
-        const hw = Math.max(radiusOf(p.id), labelWidth(labelOf(p.id)) / 2) + FOLDER_SLACK;
-        const vh = radiusOf(p.id) + LABEL_GAP + LABEL_H + FOLDER_SLACK;
-        const violating = rects.filter((rect, i) =>
-          !members[i]!.some((q) => q.id === p.id)
-          && p.x + hw > rect.x0 && p.x - hw < rect.x1
-          && p.y + vh > rect.y0 && p.y - vh < rect.y1
-        );
-        if (!violating.length) continue;
-        const own = new Set<string>();
-        rects.forEach((rect, i) => { if (members[i]!.some((q) => q.id === p.id)) own.add(rect.id); });
-        const inAny = (x: number, y: number) => rects.some((rect) =>
-          !own.has(rect.id)
-          && x + hw > rect.x0 && x - hw < rect.x1 && y + vh > rect.y0 && y - vh < rect.y1
-        );
-        const rect = violating[0]!;
-        // All four walls, nearest first — but a wall is only worth using if the
-        // node does not land inside the NEXT container along. A note wedged in
-        // the corridor between two clusters was otherwise shoved back and forth
-        // between them and stayed inside one of the two.
-        const exits: { dx: number; dy: number; d: number }[] = [
-          { dx: -(p.x + hw - rect.x0), dy: 0, d: p.x + hw - rect.x0 },
-          { dx: rect.x1 - (p.x - hw), dy: 0, d: rect.x1 - (p.x - hw) },
-          { dx: 0, dy: -(p.y + vh - rect.y0), d: p.y + vh - rect.y0 },
-          { dx: 0, dy: rect.y1 - (p.y - vh), d: rect.y1 - (p.y - vh) },
-        ].sort((a, b) => a.d - b.d);
-        const best = exits.find((e) => !inAny(p.x + e.dx, p.y + e.dy)) ?? exits[0]!;
-        shift(p, best.dx, best.dy);
-      }
-    }
-
-    alphaRef.current = alpha * ALPHA_DECAY;
+    alphaRef.current *= ALPHA_DECAY;
+    layoutVersionRef.current += 1;
     return maxV;
   }, []);
 
@@ -532,22 +383,56 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   }, [contentBox, focusActive, fitToContent]);
 
   const framesRef = useRef(0);
+  const lastPaintRef = useRef(0);
+  /** Until when a large map's layout holds still for the camera (CAMERA_HOLD_MS). */
+  const cameraHoldRef = useRef(0);
   const loop = useCallback(() => {
     // `framesRef` counts STEPS, not rendered frames, so MAX_FRAMES stays the
     // same hard budget on the simulation however many steps a frame takes.
-    const steps = stepsPerFrame(graphRef.current.nodes.length);
-    let maxV = 0;
-    for (let i = 0; i < steps; i++) {
-      maxV = stepOnce();
-      framesRef.current += 1;
-      if (maxV <= SETTLE_V || alphaRef.current <= ALPHA_MIN || framesRef.current >= MAX_FRAMES) break;
+    const n = graphRef.current.nodes.length;
+    const large = isLargeMap(n);
+    if (large && runningRef.current && performance.now() < cameraHoldRef.current) {
+      // The user is moving the camera: no step this frame (nothing decays and
+      // nothing is spent from the step budget — the layout simply waits).
+      rafRef.current = requestAnimationFrame(loop);
+      return;
     }
-    // Keep the frame on the content WHILE it spreads out, un-animated. Fitting
-    // only once the layout had stopped meant an unsettled graph stayed framed on
-    // the ring it started from, parked in a corner of an otherwise empty canvas.
-    recenter(false);
-    render();
-    if (maxV > SETTLE_V && alphaRef.current > ALPHA_MIN && runningRef.current && framesRef.current < MAX_FRAMES) {
+    if (large && runningRef.current && performance.now() - lastPaintRef.current >= PAINT_EVERY_MS) {
+      // A large map's paint and its steps go in DIFFERENT frames. Measured at
+      // 2,000 notes under 4× throttling, one frame carrying both — a step and
+      // the React render of the moved layout — ran 300-440ms; either alone is
+      // well under 200ms. The steps are not lost, they run next frame.
+      lastPaintRef.current = performance.now();
+      recenter(false);
+      render();
+      rafRef.current = requestAnimationFrame(loop);
+      return;
+    }
+    const started = performance.now();
+    const steps = stepsPerFrame(n);
+    let frozen = false;
+    for (let i = 0; i < steps; i++) {
+      const maxV = stepOnce();
+      framesRef.current += 1;
+      if (shouldFreeze(maxV, alphaRef.current, framesRef.current)) { frozen = true; break; }
+      // A large map budgets by the clock: at 2,000 notes one step is ~50-90ms
+      // under 4× throttling, so the fixed six a frame was a 300-500ms task.
+      if (large && performance.now() - started >= SLICE_MS) break;
+    }
+    const done = frozen || !runningRef.current;
+    // A large map paints its moving layout only every PAINT_EVERY_MS (above),
+    // in a frame of its own; the steps between are the same steps, so the
+    // resting layout is the same. A small map paints every frame.
+    if (!large || done) {
+      lastPaintRef.current = performance.now();
+      // Keep the frame on the content WHILE it spreads out, un-animated. Fitting
+      // only once the layout had stopped meant an unsettled graph stayed framed
+      // on the ring it started from, parked in a corner of an otherwise empty
+      // canvas.
+      recenter(false);
+      render();
+    }
+    if (!done) {
       rafRef.current = requestAnimationFrame(loop);
     } else {
       runningRef.current = false;
@@ -556,22 +441,58 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     }
   }, [stepOnce, recenter]);
 
+  /** While a reduced-motion settle of a LARGE map is in flight: what is drawn
+   *  instead of the moving layout (empty on a first open — nothing is drawn
+   *  until the layout rests). Null the rest of the time: the map draws the live
+   *  `posRef`. This is a display copy only; the physics never reads it. */
+  const drawPosRef = useRef<Map<string, Pt> | null>(null);
+  const settleTimerRef = useRef<number | null>(null);
+
   /** Run the layout to its resting state without painting a single intermediate
    *  frame — same steps, same resulting positions, the user simply never sees
    *  the ring explode into a graph. This is the ONE piece of motion in the app
    *  that `styles.css`'s reduced-motion guard cannot reach: it is neither a CSS
    *  animation nor a transition but node positions advanced by rAF. (The 450ms
    *  camera move looks like the same problem and is not — it is an inline CSS
-   *  transition, which the stylesheet's `!important` duration already beats.) */
+   *  transition, which the stylesheet's `!important` duration already beats.)
+   *
+   *  A large map's settle is seconds of work under a slow CPU, so it runs in
+   *  slices between which the page stays responsive — and paints nothing that
+   *  moves: the map keeps drawing `drawPosRef` until the layout rests, then
+   *  shows the result in one step. */
   const settleImmediately = useCallback(() => {
     runningRef.current = false;
-    while (framesRef.current < MAX_FRAMES) {
-      const maxV = stepOnce();
-      framesRef.current += 1;
-      if (maxV <= SETTLE_V || alphaRef.current <= ALPHA_MIN) break;
+    if (settleTimerRef.current != null) { clearTimeout(settleTimerRef.current); settleTimerRef.current = null; }
+    if (!isLargeMap(graphRef.current.nodes.length)) {
+      while (framesRef.current < MAX_FRAMES) {
+        const maxV = stepOnce();
+        framesRef.current += 1;
+        if (shouldFreeze(maxV, alphaRef.current, framesRef.current)) break;
+      }
+      recenter();
+      render();
+      return;
     }
-    recenter();
-    render();
+    if (!drawPosRef.current) {
+      drawPosRef.current = new Map([...posRef.current].map(([id, p]) => [id, { ...p }]));
+    }
+    const slice = () => {
+      settleTimerRef.current = null;
+      const started = performance.now();
+      for (;;) {
+        const maxV = stepOnce();
+        framesRef.current += 1;
+        if (shouldFreeze(maxV, alphaRef.current, framesRef.current)) {
+          drawPosRef.current = null;
+          recenter();
+          render();
+          return;
+        }
+        if (performance.now() - started >= SLICE_MS) break;
+      }
+      settleTimerRef.current = window.setTimeout(slice, 0);
+    };
+    slice();
   }, [stepOnce, recenter]);
 
   /** Restart the loop. `alpha` is the temperature: 1 for a fresh layout, a small
@@ -593,7 +514,9 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
 
   // (Re)initialise positions when the SET of node ids changes; run the sim (the
   // overlay is only mounted while open, so "always" == "while visible").
-  const nodeKey = graph.nodes.map((n) => n.id).sort().join("|");
+  // Memoized: sorting every id on every render cost more than the render at
+  // library scale, and the answer only changes with the node list.
+  const nodeKey = useMemo(() => graph.nodes.map((n) => n.id).sort().join("|"), [graph.nodes]);
   useEffect(() => {
     const cur = posRef.current;
     const next = new Map<string, Pt>();
@@ -608,8 +531,17 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       next.set(node.id, { id: node.id, x: w / 2 + r * Math.cos(angle), y: h / 2 + r * Math.sin(angle), vx: 0, vy: 0 });
     });
     posRef.current = next;
+    layoutVersionRef.current += 1;
+    // A large map settling under reduced motion draws NOTHING until it rests
+    // (see settleImmediately) — not the ring it starts from.
+    drawPosRef.current = isLargeMap(graph.nodes.length) && prefersReducedMotion() ? new Map() : null;
     reheat();
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); runningRef.current = false; };
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (settleTimerRef.current != null) clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+      runningRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeKey]);
 
@@ -724,6 +656,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       };
       camTouchedRef.current = true;
       camSmoothRef.current = false;
+      cameraHoldRef.current = performance.now() + CAMERA_HOLD_MS;
       render();
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
@@ -742,6 +675,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     };
     camTouchedRef.current = true;
     camSmoothRef.current = false;
+    cameraHoldRef.current = performance.now() + CAMERA_HOLD_MS;
     render();
   }, []);
   const handleFit = useCallback(() => {
@@ -767,6 +701,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
         };
         camTouchedRef.current = true;
         camSmoothRef.current = false;
+        cameraHoldRef.current = performance.now() + CAMERA_HOLD_MS;
         render();
         return;
       }
@@ -784,6 +719,11 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       const { w, h } = worldRef.current;
       const p = posRef.current.get(drag.id);
       if (p) { p.x = Math.max(PAD, Math.min(w - PAD, x)); p.y = Math.max(PAD, Math.min(h - PAD, y)); p.vx = 0; p.vy = 0; }
+      // The dragged note follows the pointer even while the rest of a large map
+      // is held still for a reduced-motion settle.
+      const shown = drawPosRef.current?.get(drag.id);
+      if (p && shown) { shown.x = p.x; shown.y = p.y; }
+      layoutVersionRef.current += 1;
       reheat(0.25);
       render();
     };
@@ -822,7 +762,11 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const orphanCount = orphanSet.size;
   const brokenCount = brokenList.length;
 
-  const positions = posRef.current;
+  // What is DRAWN: the live layout, except while a large map settles under
+  // reduced motion (then the positions it had before, or nothing at all).
+  const positions = drawPosRef.current ?? posRef.current;
+  const large = isLargeMap(graph.nodes.length);
+  const layoutVersion = layoutVersionRef.current;
   const detail = (selectedId && graph.nodes.find((n) => n.id === selectedId)) || null;
 
   // ── Rail data for the selected node ───────────────────────────────────────
@@ -890,6 +834,12 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     }
     return both;
   }, [graph.edges]);
+  /** The same, per link index — a large map rebuilds its links on every zoom
+   *  step, and a key string per link per rebuild is avoidable work. */
+  const twoWayAt = useMemo(
+    () => graph.edges.map((e) => reciprocal.has(`${e.source}|${e.target}`)),
+    [graph.edges, reciprocal]
+  );
 
   // Everything the map DRAWS is sized in screen pixels and divided by `k`, so
   // only POSITIONS scale with the camera. Sizing the glyphs in world units made
@@ -977,12 +927,11 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const forcedLabels = new Set(
     [selectedId, activeDocId ?? null, hoveredId].filter((v): v is string => !!v)
   );
-  const rankedSet = new Set(byImportance);
   const labelPlacements = placeLabels({
     order: [
       ...forcedLabels,
       ...byImportance.filter((id) => !forcedLabels.has(id)),
-      ...graph.nodes.map((n) => n.id).filter((id) => !forcedLabels.has(id) && !rankedSet.has(id)),
+      ...unranked.filter((id) => !forcedLabels.has(id)),
     ],
     forced: forcedLabels,
     positions: anyFilter
@@ -996,6 +945,134 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     reject: crossesForeignFolder,
     limit: LABEL_CANDIDATES,
   });
+
+  // ── Large map: batched layers, the notes drawn in full, hit-testing ────────
+  // Filter dimming as a memo key: null while no filter is active, so selecting
+  // a note does not rebuild the batched layers (`isVisible` changes identity
+  // with the selection).
+  const dimKey = anyFilter ? isVisible : null;
+  /** Every ordinary dot, link and arrowhead of a large map, as path data. Keyed
+   *  on the LAYOUT (`layoutVersion`, bumped by every step and drag) and the zoom
+   *  — never on the camera's position — so a pan, a hover or a selection costs
+   *  no rebuild. Hover and selection are drawn ON TOP (the full per-note
+   *  elements and the hot links below), which is why nothing here depends on
+   *  them. */
+  const batched = useMemo(() => {
+    if (!large) return null;
+    const links: string[] = [], linksDim: string[] = [], arrows: string[] = [], arrowsDim: string[] = [];
+    for (let i = 0; i < graph.edges.length; i++) {
+      const edge = graph.edges[i]!;
+      const a = positions.get(edge.source), b = positions.get(edge.target);
+      if (!a || !b) continue;
+      const g = edgeGeometry(a, b,
+        ((radiusById.get(edge.source) ?? 7) + 2) / k,
+        ((radiusById.get(edge.target) ?? 7) + 9) / k,
+        twoWayAt[i]!);
+      if (!g) continue;
+      const dim = !!dimKey && (!dimKey(edge.source) || !dimKey(edge.target));
+      (dim ? linksDim : links).push(edgeD(g));
+      (dim ? arrowsDim : arrows).push(arrowD(g.x2, g.y2, g.tx, g.ty, k));
+    }
+    const layer = () => ({ d: [] as string[], ids: [] as string[] });
+    const dots = { plain: layer(), orphan: layer(), plainDim: layer(), orphanDim: layer(), broken: layer(), brokenDim: layer() };
+    for (const node of graph.nodes) {
+      const p = positions.get(node.id);
+      if (!p) continue;
+      const r = (radiusById.get(node.id) ?? 7) * dotScale;
+      const dim = !!dimKey && !dimKey(node.id);
+      const into = orphanSet.has(node.id) ? (dim ? dots.orphanDim : dots.orphan) : (dim ? dots.plainDim : dots.plain);
+      into.d.push(circleD(p.x, p.y, r / k));
+      into.ids.push(node.id);
+      if (brokenHi && brokenSources.has(node.id)) {
+        const ring = dim ? dots.brokenDim : dots.broken;
+        ring.d.push(circleD(p.x, p.y, (r + 4) / k));
+        ring.ids.push(node.id);
+      }
+    }
+    const out = (l: { d: string[]; ids: string[] }) => ({ d: l.d.join(""), ids: l.ids.join(" ") });
+    return {
+      version: layoutVersion,
+      links: links.join(""), linksDim: linksDim.join(""), arrows: arrows.join(""), arrowsDim: arrowsDim.join(""),
+      plain: out(dots.plain), orphan: out(dots.orphan), plainDim: out(dots.plainDim), orphanDim: out(dots.orphanDim),
+      broken: out(dots.broken), brokenDim: out(dots.brokenDim),
+    };
+  }, [large, layoutVersion, positions, k, dotScale, graph.edges, graph.nodes, radiusById, twoWayAt, dimKey, orphanSet, brokenHi, brokenSources]);
+
+  /** The notes a large map draws as full elements — interactive, focusable,
+   *  ringed — on top of the batched dots: selection, the open note, hover and
+   *  keyboard focus. In library order, as a small map would paint them. */
+  const nodeIndex = useMemo(() => new Map(graph.nodes.map((n, i) => [n.id, i])), [graph.nodes]);
+  const fullNodes = large
+    ? [...new Set([selectedId, activeDocId ?? null, hoveredId, focusedId])]
+      .filter((id): id is string => !!id && nodeIndex.has(id))
+      .sort((a, b) => nodeIndex.get(a)! - nodeIndex.get(b)!)
+      .map((id) => graph.nodes[nodeIndex.get(id)!]!)
+    : graph.nodes;
+  const fullSet = large ? new Set(fullNodes.map((n) => n.id)) : null;
+
+  /** Where each drawn note IS, for hit-testing a large map's batched dots. A
+   *  copy taken at render time: positions keep moving between paints, and a
+   *  click must land on the dot the user can see. */
+  const hitIndex = useMemo(() => {
+    if (!large) return null;
+    const ids: string[] = [], xs: number[] = [], ys: number[] = [], rs: number[] = [];
+    const cells = new Map<number, number[]>();
+    for (const [id, p] of positions) {
+      const i = ids.length;
+      ids.push(id); xs.push(p.x); ys.push(p.y); rs.push(radiusById.get(id) ?? 7);
+      const key = Math.floor(p.x / HIT_CELL) * 1048576 + Math.floor(p.y / HIT_CELL);
+      const list = cells.get(key);
+      if (list) list.push(i); else cells.set(key, [i]);
+    }
+    return { version: layoutVersion, ids, xs, ys, rs, cells };
+  }, [large, layoutVersion, positions, radiusById]);
+  const hitIndexRef = useRef(hitIndex);
+  hitIndexRef.current = hitIndex;
+  /** A 2px screen dash, in the batched layer's path units. */
+  const dash = `${(2 * BATCH_UNITS) / k} ${(2 * BATCH_UNITS) / k}`;
+  /** The note under the pointer on a large map: the nearest dot whose grab
+   *  radius — its drawn radius + 12px, a small map's invisible hit circle —
+   *  holds the point. */
+  const hitTest = useCallback((clientX: number, clientY: number): string | null => {
+    const idx = hitIndexRef.current;
+    if (!idx || !svgRef.current) return null;
+    const { x, y } = toView(clientX, clientY);
+    const zk = camRef.current.k;
+    const ds = zk >= 1 ? 1 : 0.6 + 0.4 * zk;
+    const reach = (MAX_NODE_RADIUS * ds + 12) / zk;
+    let best: string | null = null, bestD = Infinity;
+    for (let gx = Math.floor((x - reach) / HIT_CELL); gx <= Math.floor((x + reach) / HIT_CELL); gx++) {
+      for (let gy = Math.floor((y - reach) / HIT_CELL); gy <= Math.floor((y + reach) / HIT_CELL); gy++) {
+        for (const i of idx.cells.get(gx * 1048576 + gy) ?? []) {
+          const d = Math.hypot(idx.xs[i]! - x, idx.ys[i]! - y);
+          if (d <= (idx.rs[i]! * ds + 12) / zk && d < bestD) { bestD = d; best = idx.ids[i]!; }
+        }
+      }
+    }
+    return best;
+  }, [toView]);
+  const onLargePointerMove = useCallback((e: React.PointerEvent) => {
+    if (dragRef.current || panRef.current) return;
+    // Pointing at a moving layout is a moving target — and every hover change
+    // over one rebuilds the batched paths. Hold it still while the pointer moves.
+    cameraHoldRef.current = performance.now() + CAMERA_HOLD_MS;
+    const id = hitTest(e.clientX, e.clientY);
+    setHoveredId((prev) => (prev === id ? prev : id));
+  }, [hitTest]);
+
+  /** Keyboard/SR fallback for opening documents — one button per note, so it is
+   *  built only when the notes change, not on every paint of the layout. */
+  const openList = useMemo(() => (
+    <ul className="sr-only">
+      {graph.nodes.map((node) => (
+        <li key={node.id}>
+          <button type="button" onClick={() => onNavigate(node.id)}>
+            Open {node.title} ({node.backlinks || 0} inbound, {node.forwardLinks || 0} outbound links)
+          </button>
+        </li>
+      ))}
+    </ul>
+  ), [graph.nodes, onNavigate]);
 
   // ── Header ────────────────────────────────────────────────────────────────────
   const header = (
@@ -1152,11 +1229,24 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       className="h-full w-full touch-none select-none"
       role="group"
       aria-label={`Relationship map: ${graph.nodes.length} documents, ${graph.edges.length} links`}
-      style={{ cursor: dragRef.current || panRef.current?.moved ? "grabbing" : "default" }}
+      style={{ cursor: dragRef.current || panRef.current?.moved ? "grabbing" : large && hoveredId ? "grab" : "default" }}
       onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
+        // A large map's ordinary dots are one batched path that takes no
+        // pointer events: find the note under the pointer in code.
+        if (large) {
+          const id = hitTest(e.clientX, e.clientY);
+          if (id) { onNodeDown(e, id); return; }
+        }
         panRef.current = { sx: e.clientX, sy: e.clientY, tx0: camRef.current.tx, ty0: camRef.current.ty, moved: false };
       }}
+      onPointerMove={large ? onLargePointerMove : undefined}
+      onPointerLeave={large ? () => setHoveredId(null) : undefined}
+      onDoubleClick={large ? (e) => {
+        if (e.target !== e.currentTarget) return;
+        const id = hitTest(e.clientX, e.clientY);
+        if (id) onNavigate(id);
+      } : undefined}
     >
       <defs>
         <marker
@@ -1198,11 +1288,27 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
           );
         })}
 
+        {/* A large map's links and arrowheads: a few batched paths (see
+            `batched`). Hot links are drawn again, individually, below. */}
+        {large && batched && (
+          <g className="pointer-events-none" data-map-layer="links" transform={`scale(${1 / BATCH_UNITS})`}>
+            <path d={batched.links} fill="none" className="stroke-muted-foreground/35" strokeWidth={BATCH_UNITS / k} />
+            <path d={batched.arrows} className="fill-muted-foreground/50" />
+            {batched.linksDim && (
+              <g opacity={0.07}>
+                <path d={batched.linksDim} fill="none" className="stroke-muted-foreground/35" strokeWidth={BATCH_UNITS / k} />
+                <path d={batched.arrowsDim} className="fill-muted-foreground/50" />
+              </g>
+            )}
+          </g>
+        )}
+
         {graph.edges.map((edge, i) => {
           const a = positions.get(edge.source), b = positions.get(edge.target);
           if (!a || !b) return null;
           const hot = edge.source === selectedId || edge.target === selectedId
             || edge.source === hoveredId || edge.target === hoveredId;
+          if (large && !hot) return null;
           const dim = anyFilter && (!isVisible(edge.source) || !isVisible(edge.target));
           // Trim the segment to the node borders so the arrowhead lands on the
           // target's edge instead of under its dot (it used to rely on a fixed
@@ -1265,7 +1371,41 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
           );
         })}
 
-        {graph.nodes.map((node) => {
+        {/* A large map's ordinary notes: batched dots (ids in draw order, so
+            the geometry stays measurable — see `parseCircles`) and their names.
+            The notes it draws in full (`fullNodes`) are painted on top. */}
+        {large && batched && (
+          <g className="pointer-events-none" data-map-layer="notes" data-layout-version={batched.version} transform={`scale(${1 / BATCH_UNITS})`}>
+            <g opacity={0.12}>
+              <path d={batched.brokenDim.d} fill="none" className="stroke-amber-500" strokeWidth={(1.5 * BATCH_UNITS) / k} strokeDasharray={dash} />
+              <path d={batched.plainDim.d} data-doc-ids={batched.plainDim.ids} className="pf-node-dots fill-muted-foreground/30" />
+              <path d={batched.orphanDim.d} data-doc-ids={batched.orphanDim.ids} className="pf-node-dots fill-muted-foreground/15 stroke-muted-foreground/40" strokeWidth={BATCH_UNITS / k} strokeDasharray={dash} />
+            </g>
+            <path d={batched.broken.d} fill="none" className="stroke-amber-500" strokeWidth={(1.5 * BATCH_UNITS) / k} strokeDasharray={dash} />
+            <path d={batched.plain.d} data-doc-ids={batched.plain.ids} className="pf-node-dots fill-muted-foreground/30" />
+            <path d={batched.orphan.d} data-doc-ids={batched.orphan.ids} className="pf-node-dots fill-muted-foreground/15 stroke-muted-foreground/40" strokeWidth={BATCH_UNITS / k} strokeDasharray={dash} />
+          </g>
+        )}
+        {large && [...labelPlacements].map(([id, place]) => {
+          const p = positions.get(id);
+          if (!p || fullSet?.has(id)) return null;
+          return (
+            <g key={`label-${id}`} className="pointer-events-none" data-label-for={id} transform={`translate(${p.x} ${p.y}) scale(${1 / k})`}>
+              <text
+                x={place.dx} y={place.dy}
+                textAnchor={place.anchor}
+                paintOrder="stroke"
+                strokeWidth={3.5}
+                strokeLinejoin="round"
+                className="pf-node-label pointer-events-none stroke-background text-[11px] fill-muted-foreground"
+              >
+                {place.text}
+              </text>
+            </g>
+          );
+        })}
+
+        {fullNodes.map((node) => {
           const p = positions.get(node.id);
           if (!p) return null;
           const isSelected = node.id === selectedId;
@@ -1284,10 +1424,12 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               tabIndex={0}
               aria-label={`${node.title} — ${node.backlinks || 0} inbound, ${node.forwardLinks || 0} outbound links. Enter to open.`}
               onPointerDown={(e) => onNodeDown(e, node.id)}
-              onMouseEnter={() => setHoveredId(node.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              onFocus={() => setHoveredId(node.id)}
-              onBlur={() => setHoveredId(null)}
+              // A large map hit-tests hover in code (`onLargePointerMove`): a
+              // note drawn in full there must not fight it with its own.
+              onMouseEnter={large ? undefined : () => setHoveredId(node.id)}
+              onMouseLeave={large ? undefined : () => setHoveredId(null)}
+              onFocus={() => { setHoveredId(node.id); if (large) setFocusedId(node.id); }}
+              onBlur={() => { setHoveredId(null); if (large) setFocusedId(null); }}
               onDoubleClick={() => onNavigate(node.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") { e.preventDefault(); onNavigate(node.id); }
@@ -1367,6 +1509,13 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
           );
         })}
       </g>
+      {/* A large map settling under reduced motion draws nothing until the
+          layout rests; say so, on the canvas itself. */}
+      {large && drawPosRef.current?.size === 0 && (
+        <text x={dims.w / 2} y={dims.h / 2} textAnchor="middle" className="fill-muted-foreground text-xs">
+          Laying out {graph.nodes.length} notes…
+        </text>
+      )}
     </svg>
   );
 
@@ -1612,15 +1761,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       </div>
 
       {/* Keyboard/SR fallback for opening documents. */}
-      <ul className="sr-only">
-        {graph.nodes.map((node) => (
-          <li key={node.id}>
-            <button type="button" onClick={() => onNavigate(node.id)}>
-              Open {node.title} ({node.backlinks || 0} inbound, {node.forwardLinks || 0} outbound links)
-            </button>
-          </li>
-        ))}
-      </ul>
+      {openList}
     </div>
   );
 }
