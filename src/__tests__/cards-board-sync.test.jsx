@@ -292,14 +292,23 @@ describe("the editor shell no longer force-closes overlays (A057)", () => {
     // Source pin — PerssonifyEditor cannot be mounted here. That listener ran
     // before every other handler on the page and closed the overlay whenever
     // focus was OUTSIDE it: exactly where dialogs, menus and the library live.
-    const pe = readFileSync(join(process.cwd(), "src/PerssonifyEditor.tsx"), "utf8")
+    // The effect is useOverlayInert (src/editor/useWorkspaceViews.ts); the
+    // editor runs it for the overlay shell.
+    const codeOnly = (p) => readFileSync(join(process.cwd(), p), "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/^\s*\/\/.*$/gm, "");
-    const start = pe.indexOf("const anyOverlayOpen");
-    const effect = pe.slice(start, pe.indexOf("}, [anyOverlayOpen]);", start));
+    const views = codeOnly("src/editor/useWorkspaceViews.ts");
+    const start = views.indexOf("export function useOverlayInert");
+    const effect = views.slice(start, views.indexOf("}, [anyOverlayOpen]);", start));
+    expect(start).toBeGreaterThan(-1);
     expect(effect.length).toBeGreaterThan(100);
     expect(effect).not.toMatch(/addEventListener\(\s*"keydown"/);
     expect(effect).toContain('setAttribute("inert", "")'); // the rest of the effect stays
+    // …and it is the only overlay effect: the editor delegates to it rather
+    // than keeping a second one (which could grow the listener back).
+    const pe = codeOnly("src/PerssonifyEditor.tsx");
+    expect(pe).toContain("useOverlayInert(overlayRef, anyOverlayOpen)");
+    expect(pe).not.toMatch(/addEventListener\(\s*"keydown"/);
   });
 });
 

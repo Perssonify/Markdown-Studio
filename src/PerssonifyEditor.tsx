@@ -30,6 +30,7 @@ import { exportGraph } from "./store/link-index";
 import { headingLinkHtml } from "./formatting/heading-link";
 import { StorageQuotaError } from "./store/storage-adapter";
 import type { PerssonifyEditorProps } from "./editor/props";
+import { useOverlayInert, useWorkspaceViews } from "./editor/useWorkspaceViews";
 import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
 import { extractHeadings, findHeadingByAnchor } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
@@ -205,56 +206,13 @@ export function PerssonifyEditor({
     }))
   );
 
-  // Graph visibility: URL-controlled by the standalone app (onGraphOpenChange
-  // provided) or falls back to the UI store's internal toggle for embedders.
-  const graphControlled = onGraphOpenChange != null;
-  const graphVisible = graphControlled ? !!graphOpen : showGraph;
-  const setGraphVisible = useCallback((v: boolean) => {
-    if (onGraphOpenChange) onGraphOpenChange(v);
-    else setShowGraph(v);
-  }, [onGraphOpenChange, setShowGraph]);
-
-  // Cards board visibility. Local (not URL-controlled) so embedders get it for
-  // free; like the graph it is an OVERLAY — the editor stays mounted beneath.
-  const [cardsVisible, setCardsVisible] = useState(false);
-
-  /** The workspace surface currently covering the editor.
-   *
-   *  Map and Cards are PEERS — two full-canvas views of the same library — so
-   *  they are ONE exclusive selection, not two independent booleans. They used
-   *  to be exactly that, and both could mount at once: two `aria-modal` dialogs
-   *  stacked at the same z-index, the second one invisible underneath the first
-   *  (opening the map while Cards was up looked like a dead menu item), sharing
-   *  a single `overlayRef` so focus landed on whichever mounted last.
-   *
-   *  Route the graph through `setGraphVisible` (not `setShowGraph`) so the
-   *  standalone app's /graph URL control keeps working. */
-  const workspaceView: "editor" | "map" | "cards" =
-    cardsVisible ? "cards" : graphVisible ? "map" : "editor";
-  const setWorkspaceView = useCallback((view: "editor" | "map" | "cards") => {
-    setCardsVisible(view === "cards");
-    setGraphVisible(view === "map");
-  }, [setGraphVisible]);
-  /** Keyboard shortcuts stay TOGGLES — ⌘⇧K pressed twice should put you back —
-   *  even though the on-screen control is a three-way radio where Editor is its
-   *  own option rather than "the other two are off". */
-  const toggleWorkspaceView = useCallback((view: "map" | "cards") => {
-    setWorkspaceView(workspaceView === view ? "editor" : view);
-  }, [setWorkspaceView, workspaceView]);
-
-  /** Picking a layout (Markdown / Rich / Split) implies you want the editor:
-   *  those panes are invisible under an overlay, so a mode change there would
-   *  otherwise be a control that silently does nothing. */
-  const handleSetMode = useCallback((m: string) => {
-    setMode(m);
-    setWorkspaceView("editor");
-  }, [setMode, setWorkspaceView]);
-
-  // Shared overlay shell for the graph / cards boards. Takes focus on mount and
-  // marks the editor behind it inert so its controls are neither tabbable nor
-  // clickable while covered. Escape is each surface's own (bubble phase, and
-  // only when pressed inside it — see ui/overlay-escape.ts).
-  const overlayRef = useRef<HTMLDivElement | null>(null);
+  // The workspace surfaces — editor, relationship map, Cards — are ONE
+  // exclusive selection (useWorkspaceViews). The graph half is routed through
+  // the controlled setter, so the standalone app's /graph URL keeps driving it.
+  const {
+    graphVisible, cardsVisible, workspaceView, setWorkspaceView, handleSetMode, overlayRef,
+    showMapView, showCardsView, showEditorView, toggleGraphCb, toggleCardsCb,
+  } = useWorkspaceViews({ graphOpen, onGraphOpenChange, showGraph, setShowGraph, setMode });
 
 
   const [showSettings, setShowSettings] = useState(false);
@@ -763,9 +721,6 @@ export function PerssonifyEditor({
   const openVersionHistory = useCallback(() => setShowVersionHistory(true), []);
   const openLinkBuilder = useCallback(() => setShowLinkBuilder(true), []);
   const openWorkspacePanel = useCallback(() => setShowSidebar(true), [setShowSidebar]);
-  const showMapView = useCallback(() => setWorkspaceView("map"), [setWorkspaceView]);
-  const showCardsView = useCallback(() => setWorkspaceView("cards"), [setWorkspaceView]);
-  const showEditorView = useCallback(() => setWorkspaceView("editor"), [setWorkspaceView]);
   const showOutlineTab = useCallback(() => {
     setShowSidebar(true);
     setWorkspaceTab("outline");
@@ -1820,15 +1775,14 @@ export function PerssonifyEditor({
     setFrMode("replace");
     setShowFindReplace(true);
   }, [setShowFindReplace]);
-  // Hoisted, not inline: these three are dependencies of the shortcut hook's
-  // effect, which registers a CAPTURE-phase keydown listener on `document`. As
-  // inline arrows they changed identity on every render of this 2,500-line
+  // Hoisted, not inline: this and the two view toggles (toggleGraphCb /
+  // toggleCardsCb, from useWorkspaceViews) are dependencies of the shortcut
+  // hook's effect, which registers a CAPTURE-phase keydown listener on
+  // `document`. As inline arrows they changed identity on every render of this
   // shell, so the listener was removed and re-added on the hottest path in the
   // app — once per keystroke-driven render. Every other callback at this call
   // site was already stabilised for the same reason.
   const openSearchCb = useCallback(() => setShowSearch(true), [setShowSearch]);
-  const toggleGraphCb = useCallback(() => toggleWorkspaceView("map"), [toggleWorkspaceView]);
-  const toggleCardsCb = useCallback(() => toggleWorkspaceView("cards"), [toggleWorkspaceView]);
   useKeyboardShortcuts(containerRef as RefObject<HTMLElement>, {
     dispatch, updateFormats, save: handleSave, newDoc: handleNewDoc,
     toast, toggleFind: openFind, openReplace,
@@ -2490,42 +2444,11 @@ export function PerssonifyEditor({
   );
 
 
-  // E4: focus + Escape + inert handling for the full-screen overlays.
+  // E4: focus + inert handling for the full-screen overlays (useOverlayInert).
+  // Called LAST among the effects, where it always ran: when a surface opens it
+  // captures the element to restore focus to AFTER the surface-open flush above.
   const anyOverlayOpen = workspaceView !== "editor";
-  useEffect(() => {
-    if (!anyOverlayOpen) return;
-    const node = overlayRef.current;
-    const restoreTo = document.activeElement as HTMLElement | null;
-    node?.focus();
-
-    // Make the COVERED editor genuinely unreachable. It stays mounted (a hard
-    // invariant — the live TipTap editor is the canonical source of truth), so
-    // without this its panes, bubble menus and buttons were still tabbable and
-    // clickable underneath an opaque overlay: Tab from Cards walked the cursor
-    // into an editor nobody could see. Applied imperatively to <main>'s other
-    // children because React 18 does not pass `inert` through as a prop.
-    const covered: Element[] = [];
-    const main = node?.parentElement;
-    if (main) {
-      for (const child of Array.from(main.children)) {
-        if (child === node) continue;
-        child.setAttribute("inert", "");
-        covered.push(child);
-      }
-    }
-
-    // No Escape listener here any more (A057). This used to force-close the
-    // overlay from a CAPTURE-phase document listener whenever focus was
-    // outside it — which is exactly where the delete-confirmation dialog, the
-    // library's rename box and every menu live, so their Escape closed the
-    // overlay instead (and the rename box's blur then committed the rename
-    // being cancelled). Cards and the map each close themselves on an Escape
-    // pressed inside them or with nothing focused (overlayShouldHandleEscape).
-    return () => {
-      for (const child of covered) child.removeAttribute("inert");
-      if (restoreTo && document.body.contains(restoreTo)) restoreTo.focus?.();
-    };
-  }, [anyOverlayOpen]);
+  useOverlayInert(overlayRef, anyOverlayOpen);
 
   // A082. Without a `dir` prop, sonner's <Toaster> reads
   // getComputedStyle(document.documentElement).direction on EVERY render — and
