@@ -111,6 +111,10 @@ class SnapshotStore {
   private db: IDBDatabase | null = null;
   private ready: Promise<void> | null = null;
   private usable = true;
+  /** The database this ring lives in (namespaced per host — see configure). */
+  private dbName = DB_NAME;
+  /** False: a host turned version history off — nothing is recorded at all. */
+  private enabled = true;
   /** In-memory fallback ring when IndexedDB is unavailable. */
   private mem: SnapshotRecord[] = [];
   /**
@@ -135,13 +139,14 @@ class SnapshotStore {
   private open(): Promise<void> {
     if (this.ready) return this.ready;
     this.ready = new Promise<void>((resolve) => {
-      if (typeof indexedDB === "undefined") {
+      // Disabled by the host: do not even create the database.
+      if (!this.enabled || typeof indexedDB === "undefined") {
         this.usable = false;
         resolve();
         return;
       }
       try {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        const req = indexedDB.open(this.dbName, DB_VERSION);
         req.onupgradeneeded = (e) => {
           const db = (e.target as IDBOpenDBRequest).result;
           if (!db.objectStoreNames.contains(STORE)) {
@@ -170,6 +175,44 @@ class SnapshotStore {
     return this.ready;
   }
 
+  /**
+   * Where version history lives, and whether it exists at all.
+   *
+   * The ring used to be one database per ORIGIN whatever storage a host
+   * injected, so on a shared device user A's content showed up in user B's
+   * Version history. A host that namespaces its documents namespaces this too
+   * (the editor derives the name from `storageConfig`), or turns it off. The
+   * standalone app's database name is unchanged.
+   */
+  configure(opts: { dbName?: string; enabled?: boolean } = {}): void {
+    const dbName = opts.dbName || DB_NAME;
+    const enabled = opts.enabled !== false;
+    if (dbName === this.dbName && enabled === this.enabled) return;
+    this.db?.close();
+    this.db = null;
+    this.ready = null;
+    this.usable = true;
+    this.mem = [];
+    this.lastAutoAt.clear();
+    this.dbName = dbName;
+    this.enabled = enabled;
+    this.emit();
+  }
+
+  /** Erase every snapshot, stored and in memory (see clearLocalData). */
+  async clearAll(): Promise<void> {
+    await this.open();
+    this.mem = [];
+    this.lastAutoAt.clear();
+    if (this.usable && this.db) {
+      try {
+        const tx = this.db.transaction(STORE, "readwrite");
+        await idbRequest(tx.objectStore(STORE).clear());
+      } catch { /* best effort */ }
+    }
+    this.emit();
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -191,7 +234,7 @@ class SnapshotStore {
     oldCanonical: unknown,
     newCanonical: unknown
   ): Promise<void> {
-    if (!docId || isBlank(oldCanonical)) return Promise.resolve();
+    if (!this.enabled || !docId || isBlank(oldCanonical)) return Promise.resolve();
     const oldChars = (computeCounts(oldCanonical as PMNode).chars) || 0;
     const newChars = isBlank(newCanonical) ? 0 : (computeCounts(newCanonical as PMNode).chars || 0);
     const shrink = oldChars > 0 && newChars <= oldChars * SHRINK_TRIGGER_RATIO;
@@ -215,7 +258,7 @@ class SnapshotStore {
     canonical: unknown,
     reason: SnapshotReason
   ): Promise<void> {
-    if (!docId || isBlank(canonical)) return;
+    if (!this.enabled || !docId || isBlank(canonical)) return;
     await this.open();
     const serialized = serialize(canonical);
     const hash = quickHash(serialized);
@@ -352,22 +395,30 @@ class SnapshotStore {
       .slice(MAX_PER_DOC)
       .forEach((r) => doomed.add(r.id));
 
-    // 2) Age cap (keep the newest per doc regardless of age).
+    // 2) Age cap (keep the newest per doc regardless of age — unless that
+    //    newest one is the doc's PRE-DELETE copy). A deleted document's last
+    //    snapshot used to be exempt from every cap, so deleted content lived
+    //    in the browser forever. It is recoverable for the age window, like
+    //    everything else, and then it goes.
     const seenNewest = new Set<string>();
     const cutoff = Date.now() - MAX_AGE_MS;
     for (const r of all) {
       const isNewestForDoc = !seenNewest.has(r.docId);
       seenNewest.add(r.docId);
-      if (!isNewestForDoc && r.ts < cutoff) doomed.add(r.id);
+      const keep = isNewestForDoc && r.reason !== "pre-delete";
+      if (!keep && r.ts < cutoff) doomed.add(r.id);
     }
 
-    // 3) Global byte budget over what survives — evict oldest (never a doc's
-    //    newest) until under.
+    // 3) Global byte budget over what survives — evict oldest (never a live
+    //    doc's newest) until under.
     const live = all.filter((r) => !doomed.has(r.id)); // still newest first
     let total = live.reduce((s, r) => s + r.bytes, 0);
     if (total > MAX_TOTAL_BYTES) {
       const newestIdByDoc = new Map<string, number>();
-      for (const r of live) if (!newestIdByDoc.has(r.docId)) newestIdByDoc.set(r.docId, r.id);
+      for (const r of live) {
+        if (!newestIdByDoc.has(r.docId) && r.reason !== "pre-delete") newestIdByDoc.set(r.docId, r.id);
+        else if (!newestIdByDoc.has(r.docId)) newestIdByDoc.set(r.docId, -Infinity); // a deleted doc: not protected
+      }
       // Walk oldest→newest, evicting until under budget.
       for (let i = live.length - 1; i >= 0 && total > MAX_TOTAL_BYTES; i--) {
         const r = live[i]!;
@@ -440,6 +491,8 @@ class SnapshotStore {
     this.mem = [];
     this.memSeq = -1;
     this.insertSeq = 0;
+    this.dbName = DB_NAME;
+    this.enabled = true;
     this.lastAutoAt.clear();
     if (opts.useIndexedDB) {
       this.usable = true;

@@ -44,6 +44,10 @@ interface DocumentLifecycleParams {
   toast: { show: (message: string, type: "info" | "success" | "error" | "warning") => void };
   confirm: (options: { title: string; description?: string; confirmLabel?: string; destructive?: boolean }) => Promise<boolean>;
   confirmUnsaved: () => Promise<UnsavedChangesResult>;
+  /** Tell the user a document was deleted. Given, it replaces the plain
+   *  "Deleted" toast — the editor uses it to offer erasing the document's
+   *  version history too (a recoverable copy is otherwise kept). */
+  onDocDeleted?: (docId: string, title: string) => void;
 }
 
 
@@ -74,6 +78,7 @@ export function useDocumentLifecycle({
   toast,
   confirm,
   confirmUnsaved,
+  onDocDeleted,
 }: DocumentLifecycleParams) {
   const mdDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const htmlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -812,14 +817,17 @@ export function useDocumentLifecycle({
     if (mdDebounceRef.current) { clearTimeout(mdDebounceRef.current); mdDebounceRef.current = null; }
     if (htmlDebounceRef.current) { clearTimeout(htmlDebounceRef.current); htmlDebounceRef.current = null; }
     historyCache.drop(docId); // deleted docs must not linger in the history cache
+    const title = useDocumentStore.getState().documents.find((d) => d.id === docId)?.title ?? "Untitled";
     const editor = tiptapRef.current?.getEditor?.();
     const switchedDoc = await deleteDoc(docId, editor);
+    // The delete happened whichever path owns the editor now — say so.
+    if (onDocDeleted) onDocDeleted(docId, title);
+    else toast.show("Deleted", "info");
     if (switchGenRef.current !== myGen) return;
     if (switchedDoc?.canonical) {
       hydrateEditorWithDoc(switchedDoc.id, switchedDoc.canonical);
     }
-    toast.show("Deleted", "info");
-  }, [deleteDoc, resetHashes, setCanonical, handleCanonicalChange, toast, tiptapRef, confirm, endCompositions, claimEditorGeneration]);
+  }, [deleteDoc, resetHashes, setCanonical, handleCanonicalChange, toast, tiptapRef, confirm, endCompositions, claimEditorGeneration, onDocDeleted, hydrateEditorWithDoc]);
 
   /**
    * Restore a snapshot INTO the active document. The current live content is

@@ -28,7 +28,10 @@ import {
 } from "./storage-adapter";
 import type { StorageMetrics } from "./idb-storage-adapter";
 import { snapshotStore } from "./snapshot-store";
-import { takeStashed, type RecoveryEntry } from "./crash-recovery";
+import { clearStash, configureRecovery, takeStashed, type RecoveryEntry } from "./crash-recovery";
+import { historyCache } from "./history-cache";
+import { useFolderStore } from "./folders";
+import { safeStorage } from "../utils/safe-storage";
 
 /**
  * A canonical doc is "blank" when it holds no real content — an empty/absent
@@ -318,7 +321,18 @@ interface DocumentState {
   revertActiveDoc: () => Promise<DocumentRecord | null>;
   switchToDoc: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
   closeTab: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
-  deleteDoc: (docId: string, tiptapEditor: TiptapEditorLike | null) => Promise<DocumentRecord | null>;
+  /**
+   * Delete a document. A recoverable "pre-delete" copy is kept in version
+   * history (for the snapshot age window) unless `purgeHistory` is set, in
+   * which case every version of the document is erased with it.
+   */
+  deleteDoc: (
+    docId: string,
+    tiptapEditor: TiptapEditorLike | null,
+    opts?: { purgeHistory?: boolean }
+  ) => Promise<DocumentRecord | null>;
+  /** Erase every version-history snapshot of one document. */
+  purgeDocHistory: (docId: string) => Promise<void>;
   renameDoc: (docId: string, newTitle: string) => Promise<void>;
   /** Patch an arbitrary document by id (may be non-active) and persist, without
    *  changing the active doc/editor. Used by the host bridge's updateDocument /
@@ -493,6 +507,91 @@ async function applyTitleOnly(
   return stored;
 }
 
+/**
+ * Point the editor's OTHER browser stores — version history (the snapshot
+ * database) and the crash-recovery stash — at a host's namespace, or turn them
+ * off. Both used to belong to the whole ORIGIN whatever storage a host
+ * injected: on a shared device user A's text showed up in user B's Version
+ * history, and one user's unsaved draft could be adopted by the next user's
+ * editor. The namespace defaults to a host's own `dbName`; with no config the
+ * standalone app's names are unchanged. Must run before initialize() — a
+ * change afterwards is ignored, like an adapter swap.
+ */
+export function configureLocalStores(
+  config?: Pick<IDBStorageConfig, "dbName" | "namespace" | "snapshots" | "crashRecovery">
+): void {
+  if (initialized) return;
+  const ns = config?.namespace || (config?.dbName && config.dbName !== "perssonify-docs" ? config.dbName : "");
+  snapshotStore.configure?.({
+    dbName: ns ? `perssonify-snapshots:${ns}` : undefined,
+    enabled: config?.snapshots !== false,
+  });
+  configureRecovery({
+    key: ns ? `pf:recovery:${ns}` : undefined,
+    enabled: config?.crashRecovery !== false,
+  });
+}
+
+/** localStorage keys other parts of the app keep that describe the LIBRARY
+ *  (not preferences), and so must go with it. `pf:library-canary` records how
+ *  many documents this origin had, so a later boot can tell "the browser wiped
+ *  the library" from a first run; left behind by a deliberate erase it would
+ *  report exactly that — falsely — and suppress the starter documents. */
+const LIBRARY_KEYS = ["pf:library-canary"];
+
+/**
+ * Erase everything this editor keeps in the browser: every document (with the
+ * document list and the adapter's prefs — which hold folder names), all
+ * version-history snapshots, the crash-recovery stash, parked drafts and undo
+ * stacks. For "erase my data", and for a host's logout on a shared device.
+ * `preferences: true` also removes the editor's own `pf:` settings (theme,
+ * fonts, panel sizes…) from localStorage.
+ *
+ * The store is reset FIRST — nothing active, nothing hydrated — so a save
+ * already waiting on its pre-write read cannot put a document back. The one
+ * editor per page shares this store (see useDocumentStore), so the open editor
+ * is left showing "No document open".
+ */
+export async function clearLocalData(opts: { preferences?: boolean } = {}): Promise<void> {
+  ++switchSeq;
+  cancelReadyReset();
+  incompatibleDocs.clear();
+  blankSaveAllowedFor = null;
+  useDocumentStore.setState({
+    documents: [], activeDoc: null, activeDocId: null, hydratedDocId: null, openTabs: [],
+    saveStatus: "ready", saveError: null, schemaLock: null, fidelityReport: null,
+    counts: { words: 0, chars: 0 }, _unsavedEdits: new Map(), _draftBases: new Map(),
+  });
+  historyCache.clear();
+  useFolderStore.getState().setInitialTree({});
+  clearStash();
+  for (const key of LIBRARY_KEYS) safeStorage.remove(key);
+
+  const adapter = storage;
+  if (typeof adapter.clear === "function") {
+    await adapter.clear();
+  } else {
+    for (const d of await adapter.list()) await adapter.delete(d.id);
+    await adapter.setPrefs({ lastActiveDocId: null, folderTree: null }).catch(() => {});
+  }
+  await snapshotStore.clearAll?.();
+
+  if (opts.preferences) {
+    const keys: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("pf:")) keys.push(k);
+      }
+    } catch { /* storage blocked — nothing to remove */ }
+    for (const k of keys) safeStorage.remove(k);
+  }
+  refreshMetrics(
+    (partial) => useDocumentStore.setState(partial),
+    () => useDocumentStore.getState()
+  );
+}
+
 // ─── Metrics refresh helper ───────────────────────────────────────────────────
 
 export function sameMetrics(a: StorageMetrics | null, b: StorageMetrics | null): boolean {
@@ -588,6 +687,24 @@ function scheduleReadyReset(
   }, delay);
 }
 
+/**
+ * The document store.
+ *
+ * ONE EDITOR PER PAGE. This store — like the UI, editor and folder stores,
+ * the injected storage adapter, the snapshot ring and the crash-stash
+ * configuration — is a MODULE SINGLETON, shared by every `PerssonifyEditor`
+ * mounted in the same JavaScript realm. Two editors on one page share the
+ * active document, the hydration mark, parked drafts and whichever storage
+ * was injected first (`initStorage` after `initialize` is ignored): typing in
+ * one can be saved as the other's document. Isolation is per realm — mount
+ * one editor per page, or give each its own iframe (the embed build).
+ *
+ * A single editor may be UNMOUNTED and mounted again: unmount releases the
+ * editor (see useDocumentLifecycle.releaseEditor) and a second `initialize`
+ * re-activates the open document for the new instance. Switching to a
+ * different storage requires a page load; for a logout on a shared device,
+ * call `clearLocalData()`.
+ */
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   documents: [],
   activeDoc: null,
@@ -638,6 +755,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       storage = adapterOrConfig as StorageAdapter;
     } else {
       storage = new IndexedDBStorageAdapter(adapterOrConfig as IDBStorageConfig);
+      configureLocalStores(adapterOrConfig as IDBStorageConfig);
     }
   },
 
@@ -1176,7 +1294,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   // ── Delete ─────────────────────────────────────────────────────────────────
-  deleteDoc: async (docId, tiptapEditor) => {
+  deleteDoc: async (docId, tiptapEditor, opts) => {
     // Claim the deletion up front so an autosave that is already suspended on
     // its own `await storage.get` cannot write this document back after
     // `storage.delete` commits. Cleared in `finally` once the tab is closed.
@@ -1184,11 +1302,17 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
     // Snapshot the doc's content BEFORE deleting it, so a deleted document is
     // recoverable from the version-history dialog (restore as a new document).
-    try {
-      const doomed = await storage.get(docId);
-      if (doomed) await snapshotStore.record(docId, doomed.title, doomed.canonical, "pre-delete");
-    } catch { /* best effort — never block a delete on the snapshot net */ }
+    // Unless the user asked for its history to go too: then no copy is kept.
+    if (!opts?.purgeHistory) {
+      try {
+        const doomed = await storage.get(docId);
+        if (doomed) await snapshotStore.record(docId, doomed.title, doomed.canonical, "pre-delete");
+      } catch { /* best effort — never block a delete on the snapshot net */ }
+    }
     await storage.delete(docId);
+    if (opts?.purgeHistory) {
+      try { await snapshotStore.deleteForDoc?.(docId); } catch { /* best effort */ }
+    }
     get().clearIncompatible(docId);
     // Purge any cached draft for the deleted doc: a later import that reuses
     // the same id (e.g. restoring an exported .json) would otherwise resurrect
@@ -1203,6 +1327,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     } finally {
       deletingDocs.delete(docId);
     }
+  },
+
+  purgeDocHistory: async (docId) => {
+    await snapshotStore.deleteForDoc?.(docId);
+    get().storageFreed();
   },
 
   // ── Rename ─────────────────────────────────────────────────────────────────

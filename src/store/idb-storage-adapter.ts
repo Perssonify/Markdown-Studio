@@ -50,6 +50,19 @@ export interface IDBStorageConfig {
   /** IndexedDB database name. Defaults to "perssonify-docs". */
   dbName?: string;
   /**
+   * Namespace for the editor's OTHER browser stores — the version-history
+   * database and the crash-recovery stash — which otherwise belong to the
+   * whole ORIGIN whatever storage a host uses. On a shared device that put
+   * user A's content in user B's Version history. Defaults to `dbName` when a
+   * host sets one; the standalone app's names are unchanged
+   * ("perssonify-snapshots", "pf:recovery").
+   */
+  namespace?: string;
+  /** Keep version history (the snapshot database). Default true. */
+  snapshots?: boolean;
+  /** Keep the crash-recovery stash (localStorage, written on unload). Default true. */
+  crashRecovery?: boolean;
+  /**
    * An optional HARD cap on document bytes, for a host that wants one. Unset
    * (the default), the browser's own quota is the limit. There used to be a
    * self-imposed 50 MB default measured as characters × 2, which stopped a
@@ -652,6 +665,18 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
       }
     );
 
+    await this._recomputeMetrics();
+    await this._refreshEstimate(true);
+  }
+
+  /** Erase both stores — every document, the list, and the prefs (which hold
+   *  folder names) — in one transaction. See clearLocalData. */
+  async clear(): Promise<void> {
+    await this._readyPromise;
+    await idbTransaction(this._db_(), [STORE_DOCS, STORE_META], "readwrite", async (tx) => {
+      await idbRequest(tx.objectStore(STORE_DOCS).clear());
+      await idbRequest(tx.objectStore(STORE_META).clear());
+    });
     await this._recomputeMetrics();
     await this._refreshEstimate(true);
   }

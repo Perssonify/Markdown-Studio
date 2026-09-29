@@ -12,18 +12,18 @@ import { buildContextPrompt } from "./integration/prompt-builder";
 import type { DocumentRecord } from "./store/document";
 import { extractText, resolveDocTitle } from "./store/document";
 import { AUTOSAVE_MS } from "./constants";
-import { collectUnloadStash, ConflictError, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "./store/documentStore";
+import { clearLocalData, collectUnloadStash, configureLocalStores, ConflictError, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "./store/documentStore";
 import { snapshotStore } from "./store/snapshot-store";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { captureIngestHeadless } from "./store/headless-ingest";
 import { buildZipAsync, readDocuments } from "./store/zip-builder";
 import { carryBlockAttrs } from "./store/card-save";
-import { canonicalMisfit, CURRENT_SCHEMA_VERSION, isNewerSchema } from "./store/schema-version";
+import { canonicalMisfit, isNewerSchema } from "./store/schema-version";
 import { computeFidelity } from "./store/fidelity";
 import { useEditorStore } from "./store/editorStore";
 import type { IDBStorageConfig, StorageMetrics } from "./store/idb-storage-adapter";
-import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, getFileContentAndFormat } from "./store/import-export";
+import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, getFileContentAndFormat, toExportEnvelope } from "./store/import-export";
 import { printHtmlDocument } from "./store/print-export";
 import type { IngestFormat } from "./store/ingest";
 import { sanitizeForIngest } from "./store/ingest";
@@ -217,6 +217,15 @@ interface PerssonifyEditorProps {
   fitParent?: boolean;
 }
 
+/**
+ * The dual-pane Markdown editor.
+ *
+ * ONE PER PAGE: its stores are module singletons (see `useDocumentStore`), so
+ * two instances in the same page share the active document and storage. Use
+ * one instance per page or per iframe (the embed build). Unmounting and
+ * remounting a single instance is supported; switching `storageAdapter` /
+ * `storageConfig` needs a page load — use `clearLocalData()` for a logout.
+ */
 export function PerssonifyEditor({
   _integrationRef,
   _onIntegrationChange,
@@ -472,6 +481,22 @@ export function PerssonifyEditor({
   const toast = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const { confirmUnsaved, UnsavedChangesDialog } = useUnsavedChangesConfirm();
+  // A deleted document keeps a recoverable copy in version history. Say so,
+  // and offer to erase that too — the only way it could otherwise go was to
+  // wait out the snapshot age cap.
+  const onDocDeleted = useCallback((docId: string, title: string) => {
+    toastSonner("Deleted — a recoverable copy is kept in Version history", {
+      duration: 8000,
+      action: {
+        label: "Erase history",
+        onClick: () => {
+          void useDocumentStore.getState().purgeDocHistory(docId)
+            .then(() => toastSonner.success(`Version history of “${title}” erased`))
+            .catch(() => toastSonner.error("Version history could not be erased"));
+        },
+      },
+    });
+  }, []);
   const { prompt: promptText, promptState, handlePromptClose, equation: equationPrompt, equationState, handleEquationClose } = useDialogs();
   // Single dialog surface handed to all children via context (see DialogProvider).
   const dialogApi = React.useMemo<DialogApi>(
@@ -646,7 +671,7 @@ export function PerssonifyEditor({
     resetHashes, setCanonical, setFromHtml, switchToDoc, closeTab,
     createDoc, deleteDoc, finalizeDoc, revertActiveDoc, saveActiveDoc,
     setDirty, handleCanonicalChange, pasteStyled, setPasteStyled,
-    syncMode, setSyncMode, toast, confirm, confirmUnsaved,
+    syncMode, setSyncMode, toast, confirm, confirmUnsaved, onDocDeleted,
   });
 
   // Unmount is a document-leaving path (see releaseEditor). A LAYOUT cleanup,
@@ -1317,6 +1342,9 @@ export function PerssonifyEditor({
     // would have written into the newly-active doc.
     openDocument: (id: string) => handleSwitchDoc(id),
     exportAs: async (format: string) => handleAction?.(`export-${format}`),
+    /** Erase everything the editor keeps in this browser (see clearLocalData)
+     *  — for a host's logout on a shared device. */
+    clearLocalData: (opts?: { preferences?: boolean }) => clearLocalData(opts),
   }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical, hydrateEditorWithDoc, prepareToLeaveActiveDoc, activateAndCapture]);
 
   // ── Inject storage adapter before init (runs once, synchronously before engine) ──
@@ -1325,6 +1353,10 @@ export function PerssonifyEditor({
     storageInjectedRef.current = true;
     if (storageAdapter) {
       initStorage(storageAdapter);
+      // With a host's own adapter, storageConfig still decides where the
+      // editor's OTHER browser stores go (version history, the crash stash) —
+      // or that they are off (see configureLocalStores).
+      if (storageConfig) configureLocalStores(storageConfig);
     } else if (storageConfig) {
       initStorage(storageConfig);
     }
@@ -2178,27 +2210,9 @@ export function PerssonifyEditor({
           // Full-fidelity backup entry: the `perssonify-document` envelope so
           // title/id/tags/metadata/created/updated all round-trip on re-import
           // (the pmjson ingest reads this envelope), not just the PM content.
-          files[path] = JSON.stringify(
-            {
-              _format: "perssonify-document",
-              _version: "1.1.0",
-              // So a build OLDER than the one that wrote this opens it
-              // read-only instead of blank (see schema-version.ts).
-              schemaVersion: Math.max(rec.schemaVersion ?? 0, CURRENT_SCHEMA_VERSION),
-              id: rec.id,
-              title: resolvedTitle,
-              canonical: rec.canonical,
-              origin: rec.origin,
-              residuals: rec.residuals,
-              ingestReport: rec.ingestReport,
-              metadata: rec.metadata,
-              tags: rec.tags,
-              created: rec.created,
-              updated: rec.updated,
-            },
-            null,
-            2
-          );
+          // (Carries schemaVersion, and leaves out the imported raw text and
+          // clipboard copies — see toExportEnvelope.)
+          files[path] = JSON.stringify(toExportEnvelope(rec, resolvedTitle), null, 2);
         }
       }
       // An unreadable document is reported, never silently left out of what

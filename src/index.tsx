@@ -9,6 +9,6 @@ export { useSyncEngine } from "./engine/useSyncEngine";
 export { BlockId, FieldBlock, TransclusionBlock } from "./extensions/index";
 export { createAssociationStore, createEditorClient, createHostBridge, formatDocumentForPrompt, formatDocumentsForPrompt, mergeGraphWithAssociations, PerssonifyEditorIntegration } from "./integration/index";
 export { PerssonifyEditor } from "./PerssonifyEditor";
-export { computeFidelity, createDocument, createStorageAdapter, ingest, useDocumentStore } from "./store/index";
+export { clearLocalData, computeFidelity, createDocument, createStorageAdapter, ingest, useDocumentStore } from "./store/index";
 export { createTheme } from "./theme/index";
 

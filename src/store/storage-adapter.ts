@@ -80,6 +80,10 @@ export interface StorageAdapter {
   search(query: string): Promise<DocumentSummary[]>;
   getPrefs(): Promise<Record<string, unknown>>;
   setPrefs(prefs: Record<string, unknown>): Promise<void>;
+  /** Erase EVERYTHING this adapter stores — documents, the list, and the
+   *  editor's prefs (which hold folder names). Used by clearLocalData(); an
+   *  adapter without it has its documents deleted one by one instead. */
+  clear?(): Promise<void>;
 }
 
 /**
@@ -222,6 +226,17 @@ export class WindowStorageAdapter implements StorageAdapter {
       );
     } catch (e) {
       console.warn("[Storage] Failed to save prefs:", e);
+    }
+  }
+
+  /** window.storage cannot enumerate keys: delete what the list names. */
+  async clear(): Promise<void> {
+    const manifest = await this._getManifest();
+    for (const d of manifest.documents) {
+      try { await window.storage!.delete(PREFIX + d.id); } catch { /* absent */ }
+    }
+    for (const key of [MANIFEST_KEY, MANIFEST_KEY + ".unreadable", PREFS_KEY]) {
+      try { await window.storage!.delete(key); } catch { /* absent */ }
     }
   }
 }
@@ -388,6 +403,16 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
   }
 
+  /** Every key this adapter owns — documents, the list, the prefs. */
+  async clear(): Promise<void> {
+    const mine: string[] = [];
+    for (let k = 0; k < localStorage.length; k++) {
+      const key = localStorage.key(k);
+      if (key && key.startsWith(PREFIX)) mine.push(key);
+    }
+    for (const key of mine) localStorage.removeItem(key);
+  }
+
   /** Evict the oldest document when storage is full */
   _getManifestSync(): StorageManifest {
     try {
@@ -443,6 +468,10 @@ export class MemoryStorageAdapter implements StorageAdapter {
   }
 
   async setPrefs(): Promise<void> {}
+
+  async clear(): Promise<void> {
+    this._docs.clear();
+  }
 }
 
 /**
