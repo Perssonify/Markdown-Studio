@@ -14,7 +14,7 @@
 // and reduced motion is emulated so the layout rests without depending on frame
 // timing — the physics is the same either way.
 //
-// Usage: DIR=<dist> SIZES=3,12,25,40,153,2000 node e2e/probes/map-overlap.mjs
+// Usage: DIR=<dist> SIZES=3,12,25,40,153,2000 [FOLDERS=0] node e2e/probes/map-overlap.mjs
 import { serve, open, boot, APP_DIR } from "../lib.mjs";
 import { mapLibrary, seedFresh } from "../map-library.mjs";
 import { measureMap } from "../map-measure.mjs";
@@ -28,7 +28,7 @@ const srv = await serve(DIR);
 let failures = 0;
 for (const n of SIZES) {
   for (const [vpName, viewport] of VIEWPORTS) {
-    const { docs, folderTree } = mapLibrary(n);
+    const { docs, folderTree } = mapLibrary(n, { folders: process.env.FOLDERS !== "0" });
     const rig = await open(srv.port, { cdp: true, viewport });
     const { page: pg, cdp } = rig;
     await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
