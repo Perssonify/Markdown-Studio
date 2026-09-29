@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { act, render } from "@testing-library/react";
+import postcss from "postcss";
 import React, { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorLayout } from "../ui/EditorPanes";
@@ -121,6 +122,18 @@ describe("the print stylesheet prints the document, not the app (A100)", () => {
   it("releases the viewport lock so the text flows across pages", () => {
     expect(print).toMatch(/\.pf-shell,[\s\S]*?overflow: visible !important/);
     expect(print).toContain('[data-print-pane="rich"]');
+  });
+
+  it("touches only the app and embed pages — never a library host's own print", () => {
+    // Unlayered and !important: unscoped, `[role="dialog"] { display:none }`
+    // would hide a HOST page's dialogs whenever the host printed.
+    const selectors = [];
+    postcss.parse(readFileSync(join(process.cwd(), "src/styles.css"), "utf8")).walkAtRules("media", (at) => {
+      if (at.params.trim() === "print") at.walkRules((r) => selectors.push(...r.selectors));
+    });
+    expect(selectors.length).toBeGreaterThan(10);
+    const unscoped = selectors.filter((s) => !s.startsWith(".pf-app ") && s !== "html.pf-app");
+    expect(unscoped).toEqual([]);
   });
 
   it("marks the chrome it hides in the components that render it", () => {

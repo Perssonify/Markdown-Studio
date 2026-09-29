@@ -1683,9 +1683,12 @@ img[src$="#gh-light-mode-only"] { display: revert; }
    The dropdown primitive grows its rows to 44px on coarse pointers; the
    generated context-menu primitive never did, so the long-press menu on a
    library row was 28px rows under a thumb. Restated here rather than by
-   editing the generated file (src/components/ui is regenerated, not edited). */
+   editing the generated file (src/components/ui is regenerated, not edited).
+   Scoped to `.pf-app` (the app and embed pages): unlayered, it would
+   otherwise also resize a library HOST's own shadcn context menus, which
+   carry the same data-slot names. */
 @media (pointer: coarse) {
-  :where([data-base-ui-portal]) :is([data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]) {
+  :where(.pf-app) [data-base-ui-portal] :is([data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]) {
     min-height: 2.75rem;
     gap: 0.625rem;
     padding: 0.625rem 0.75rem;
@@ -1746,31 +1749,36 @@ img[src$="#gh-light-mode-only"] { display: revert; }
    screen, the status bar. A print is of the DOCUMENT. The chrome is hidden, the
    viewport lock is released so the text flows across pages, and the RICH pane
    is what prints — it is the rendered document — even in Markdown-only view:
-   both panes stay mounted by design, so it is always current. */
+   both panes stay mounted by design, so it is always current.
+
+   Every selector is under `.pf-app`, which only the app and embed pages
+   carry: those own their page. A library HOST owns its page and its print
+   styles, and these (unlayered, !important) would otherwise hide the host's
+   own dialogs and portals when IT printed. */
 @media print {
-  [data-print-hide],
-  [data-tour="menubar"],
-  [data-pane-header],
-  [data-workspace-overlay],
-  [data-sonner-toaster],
-  [data-base-ui-portal],
-  [data-pf-portal],
-  [role="dialog"],
-  [role="alertdialog"],
-  [data-print-pane="md"] {
+  .pf-app [data-print-hide],
+  .pf-app [data-tour="menubar"],
+  .pf-app [data-pane-header],
+  .pf-app [data-workspace-overlay],
+  .pf-app [data-sonner-toaster],
+  .pf-app [data-base-ui-portal],
+  .pf-app [data-pf-portal],
+  .pf-app [role="dialog"],
+  .pf-app [role="alertdialog"],
+  .pf-app [data-print-pane="md"] {
     display: none !important;
   }
-  .pf-shell,
-  .pf-shell-editor,
-  .perssonify-editor,
-  .pf-tray-region,
-  .pf-editor-row,
-  .pf-editor-row > main,
-  [data-tour="editor"],
-  [data-print-pane="rich"],
-  [data-print-pane="rich"] > *,
-  .tiptap-preview,
-  .tiptap-preview > * {
+  .pf-app .pf-shell,
+  .pf-app .pf-shell-editor,
+  .pf-app .perssonify-editor,
+  .pf-app .pf-tray-region,
+  .pf-app .pf-editor-row,
+  .pf-app .pf-editor-row > main,
+  .pf-app [data-tour="editor"],
+  .pf-app [data-print-pane="rich"],
+  .pf-app [data-print-pane="rich"] > *,
+  .pf-app .tiptap-preview,
+  .pf-app .tiptap-preview > * {
     display: block !important;
     position: static !important;
     width: auto !important;
@@ -1781,12 +1789,12 @@ img[src$="#gh-light-mode-only"] { display: revert; }
     flex: none !important;
   }
   /* Ink for paper whatever the theme. Browsers drop backgrounds when printing
-     by default, so a dark theme printed light-grey text on white. */
-  :root,
-  .dark,
-  [data-theme="dark"],
-  [data-pf-theme="dark"],
-  [data-theme="light"] {
+     by default, so a dark theme printed light-grey text on white. (html
+     carries both .pf-app and .dark; `html.pf-app` outranks `.dark`.) */
+  html.pf-app,
+  .pf-app [data-theme="dark"],
+  .pf-app [data-pf-theme="dark"],
+  .pf-app [data-theme="light"] {
     color-scheme: light;
     --background: #fff;
     --foreground: #111;
@@ -1795,19 +1803,19 @@ img[src$="#gh-light-mode-only"] { display: revert; }
     --border: #bbb;
     --primary-strong: var(--accent-text-light, color-mix(in srgb, var(--primary) 50%, #000));
   }
-  .ProseMirror {
+  .pf-app .ProseMirror {
     max-width: none !important;
     padding: 0 !important;
     color: var(--foreground);
   }
-  .ProseMirror pre {
+  .pf-app .ProseMirror pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .ProseMirror :is(h1, h2, h3, h4, h5, h6) {
+  .pf-app .ProseMirror :is(h1, h2, h3, h4, h5, h6) {
     break-after: avoid;
   }
-  .ProseMirror :is(pre, table, blockquote, img, figure, [data-type="callout"]) {
+  .pf-app .ProseMirror :is(pre, table, blockquote, img, figure, [data-type="callout"]) {
     break-inside: avoid;
   }
 }
