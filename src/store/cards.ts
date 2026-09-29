@@ -434,6 +434,40 @@ export function partitionPinned<T extends CardDocLike>(
   return { pinned, others };
 }
 
+// ── Keeping the board in step with the library ───────────────────────────────
+
+/**
+ * What a card needs reloading on: its edit time AND the presentation metadata
+ * the board draws. Pin and colour are written with `touchUpdated: false` (so a
+ * pinned note does not jump the board as if it had been edited), which means
+ * `updated` alone never changes for them — keyed on `id:updated`, the board
+ * never noticed a pin or a colour change until it was reopened (A056). A
+ * listing that carries no metadata simply contributes the defaults.
+ */
+export function cardSyncSignature(doc: CardDocLike): string {
+  return `${doc.updated ?? ""}|${isCardPinned(doc) ? 1 : 0}|${getCardColor(doc)}`;
+}
+
+/**
+ * Which cards to (re)load and which to drop, given the library listing and the
+ * signature each loaded card was read at. The board used to reload EVERY
+ * document on any change and blank itself to skeletons while it did (A087);
+ * only new or changed cards are read now, and merged in place.
+ */
+export function planCardReload(
+  docs: readonly CardDocLike[],
+  loadedSignatures: ReadonlyMap<string, string>
+): { load: string[]; drop: string[] } {
+  const load: string[] = [];
+  const present = new Set<string>();
+  for (const d of docs) {
+    present.add(d.id);
+    if (loadedSignatures.get(d.id) !== cardSyncSignature(d)) load.push(d.id);
+  }
+  const drop = [...loadedSignatures.keys()].filter((id) => !present.has(id));
+  return { load, drop };
+}
+
 // ── Quick capture ────────────────────────────────────────────────────────────
 
 /**
