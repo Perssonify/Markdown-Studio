@@ -1679,6 +1679,139 @@ img[src$="#gh-light-mode-only"] { display: revert; }
   }
 }
 
+/* ── Context-menu rows on touch (A100) ──────────────────────────────────────
+   The dropdown primitive grows its rows to 44px on coarse pointers; the
+   generated context-menu primitive never did, so the long-press menu on a
+   library row was 28px rows under a thumb. Restated here rather than by
+   editing the generated file (src/components/ui is regenerated, not edited). */
+@media (pointer: coarse) {
+  :where([data-base-ui-portal]) :is([data-slot="context-menu-item"], [data-slot="context-menu-sub-trigger"]) {
+    min-height: 2.75rem;
+    gap: 0.625rem;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* ── Short viewports, including 400% zoom (A091) ────────────────────────────
+   The standalone shell is viewport-locked (h-dvh, overflow hidden) so caret
+   scrolling cannot drift the chrome off-screen. Below ~450px of HEIGHT that
+   lock is the defect: at 1366×768 and 400% zoom the viewport is 192 CSS px
+   tall and the chrome alone is ~206px, so the editor got ZERO height and the
+   status bar and Settings were clipped out of reach (WCAG 1.4.10).
+
+   Collapsing the chrome cannot fix that — the menu bar plus a one-line status
+   bar still leaves ~120px — and hiding toolbar controls removes function. So
+   below that height the page SCROLLS: the chrome keeps its natural height, the
+   editor row gets one full viewport of its own (scroll down and it fills the
+   screen), and the tray and status bar follow it, all reachable. The
+   workspace panel stays inside that row, so a long library scrolls in its own
+   list rather than making the page thousands of pixels tall.
+
+   Scoped to `.pf-shell`, the standalone app's shell: an embed or a library
+   mount keeps the height its host gives it. The hooks (`pf-tray-region`,
+   `pf-editor-row`) are the two PerssonifyEditor containers between the shell
+   and the editor. Unlayered, so these beat the h-full / flex-1 /
+   overflow-hidden utilities they override. */
+@media (max-height: 449px) {
+  .pf-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .pf-shell-editor,
+  .pf-shell .pf-tray-region {
+    flex: none;
+    overflow: visible;
+  }
+  .pf-shell .perssonify-editor {
+    height: auto;
+    overflow: visible;
+  }
+  .pf-shell .pf-editor-row {
+    flex: none;
+    height: 100dvh;
+  }
+  /* The page scrolls now; show that it does. */
+  html.pf-app {
+    scrollbar-width: thin;
+  }
+  html.pf-app::-webkit-scrollbar {
+    display: block;
+  }
+}
+
+/* ── Print (A100) ───────────────────────────────────────────────────────────
+   Ctrl+P printed the application: menu bar, toolbar, both panes clipped to one
+   screen, the status bar. A print is of the DOCUMENT. The chrome is hidden, the
+   viewport lock is released so the text flows across pages, and the RICH pane
+   is what prints — it is the rendered document — even in Markdown-only view:
+   both panes stay mounted by design, so it is always current. */
+@media print {
+  [data-print-hide],
+  [data-tour="menubar"],
+  [data-pane-header],
+  [data-workspace-overlay],
+  [data-sonner-toaster],
+  [data-base-ui-portal],
+  [data-pf-portal],
+  [role="dialog"],
+  [role="alertdialog"],
+  [data-print-pane="md"] {
+    display: none !important;
+  }
+  .pf-shell,
+  .pf-shell-editor,
+  .perssonify-editor,
+  .pf-tray-region,
+  .pf-editor-row,
+  .pf-editor-row > main,
+  [data-tour="editor"],
+  [data-print-pane="rich"],
+  [data-print-pane="rich"] > *,
+  .tiptap-preview,
+  .tiptap-preview > * {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+  /* Ink for paper whatever the theme. Browsers drop backgrounds when printing
+     by default, so a dark theme printed light-grey text on white. */
+  :root,
+  .dark,
+  [data-theme="dark"],
+  [data-pf-theme="dark"],
+  [data-theme="light"] {
+    color-scheme: light;
+    --background: #fff;
+    --foreground: #111;
+    --card: #fff;
+    --muted-foreground: #444;
+    --border: #bbb;
+    --primary-strong: var(--accent-text-light, color-mix(in srgb, var(--primary) 50%, #000));
+  }
+  .ProseMirror {
+    max-width: none !important;
+    padding: 0 !important;
+    color: var(--foreground);
+  }
+  .ProseMirror pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .ProseMirror :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+  }
+  .ProseMirror :is(pre, table, blockquote, img, figure, [data-type="callout"]) {
+    break-inside: avoid;
+  }
+}
+
 /* ── Reduced motion ─────────────────────────────────────────────────────────
    The app previously honored `prefers-reduced-motion` NOWHERE: with the OS
    setting on, the boot pulse, autosave spinner, the infinite drop-overlay
