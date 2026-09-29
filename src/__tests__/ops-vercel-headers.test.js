@@ -15,7 +15,7 @@
  * "a missing chunk 404s" are asserted as routing facts, not string contents.
  */
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -73,9 +73,12 @@ describe("CSP hashes track the real inline scripts", () => {
     for (const h of listed) expect(HASHES, `stale hash ${h} — no inline script has it`).toContain(h);
   });
 
-  it("the build does not alter the inline scripts (checked when dist-app/ exists)", () => {
+  it("the build does not alter the inline scripts (checked when a CURRENT dist-app/ exists)", () => {
     const built = join(process.cwd(), "dist-app", "index.html");
     if (!existsSync(built)) return; // CI re-runs this file after build:app
+    // A local dist-app older than index.html predates the edit being tested;
+    // judging it would report the old build, not this change.
+    if (statSync(built).mtimeMs < statSync(join(process.cwd(), "index.html")).mtimeMs) return;
     for (const h of inlineScriptHashes(readFileSync(built, "utf8").replace(/\r\n/g, "\n"))) {
       expect(HASHES, `built index.html has an inline script the policy does not allow: ${h}`).toContain(h);
     }
