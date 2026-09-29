@@ -12,7 +12,7 @@ import { buildContextPrompt } from "./integration/prompt-builder";
 import type { DocumentRecord } from "./store/document";
 import { extractText, resolveDocTitle } from "./store/document";
 import { AUTOSAVE_MS } from "./constants";
-import { collectUnloadStash, isBlankCanonical, useDocumentStore } from "./store/documentStore";
+import { collectUnloadStash, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "./store/documentStore";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { useEditorStore } from "./store/editorStore";
@@ -1682,7 +1682,15 @@ export function PerssonifyEditor({
     // "Saved" while silently missing those keystrokes).
     flushPendingSync();
     try {
-      await saveActiveDoc(editor);
+      // Resolution is not a commit (see saveActiveDoc): a refused blank write,
+      // an ownership abort and a swallowed write error all resolve. Only a
+      // committed write may say "Changes saved" or tell the host it happened.
+      const committed = await saveActiveDoc(editor);
+      if (!committed) {
+        const { message, type } = describeUncommittedSave(useDocumentStore.getState());
+        toast.show(message, type);
+        return;
+      }
       toast.show("Changes saved", "success");
       if (onSave && activeDoc) {
         const markdown = cmRef.current?.getValue() || "";
