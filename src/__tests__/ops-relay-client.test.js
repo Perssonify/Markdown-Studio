@@ -7,11 +7,18 @@
  * importing a 6 MB Drive file was told something untrue and never learned the
  * actual limit.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TOO_LARGE_MESSAGE } from "../../api/import.js";
-import { fetchImportResource } from "../store/url-import";
+import { fetchImportResource as fetchImport } from "../store/url-import";
 
 const DRIVE_VIEW = "https://drive.google.com/file/d/12a4D7oHxJ7bKlkJV6hpQMS5FX8iPXSnD/view?usp=sharing";
+
+// The relay is used only with the visitor's consent (pf:import-relay, asked
+// once). These cases are about what happens AFTER the visitor agreed, so they
+// grant it — both ways the importer can learn it.
+beforeEach(() => localStorage.setItem("pf:import-relay", "allow"));
+afterEach(() => localStorage.removeItem("pf:import-relay"));
+const fetchImportResource = (url, opts) => fetchImport(url, { ...opts, confirmRelay: async () => true });
 
 /** Direct fetch blocked by CORS; the relay answers with `relay`. */
 const blockedThenRelay = (relay) => async (href) => {
