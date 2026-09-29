@@ -55,7 +55,7 @@ export function ConsolePanel({ ctx }: ConsolePanelProps) {
           <ul className="space-y-2">
             {history.map((entry, i) => (
               <li key={i}>
-                <div className="flex items-center gap-1.5 text-primary">
+                <div className="flex items-center gap-1.5 text-primary-strong">
                   <span className="opacity-60">›</span>
                   <span className="font-semibold">{entry.input}</span>
                 </div>

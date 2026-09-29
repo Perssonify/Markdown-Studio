@@ -283,7 +283,7 @@ export function UrlImportDialog({
                 <div className="flex gap-3 text-xs">
                   <button
                     type="button"
-                    className="text-primary hover:underline"
+                    className="text-primary-strong hover:underline"
                     onClick={() => setSelected(new Set(resource.entries.map((e) => e.path)))}
                   >
                     Select all

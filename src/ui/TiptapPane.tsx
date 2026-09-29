@@ -319,6 +319,9 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
           "data-md-preview": "",
           "data-theme": isDark ? "dark" : "light",
           spellcheck: String(spellcheck),
+          // A089: a bare contenteditable has no role or name. Repeated in the
+          // theme effect below, which REPLACES this object.
+          role: "textbox", "aria-multiline": "true", "aria-label": "Rich text",
         },
         // See CodeMirrorPane: the composition's own begin/end events own the
         // liveness stamp, so it can never be stale when the next one starts.
@@ -358,6 +361,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
             "data-md-preview": "",
             "data-theme": isDark ? "dark" : "light",
             spellcheck: String(spellcheck),
+            role: "textbox", "aria-multiline": "true", "aria-label": "Rich text",
           },
         },
       });

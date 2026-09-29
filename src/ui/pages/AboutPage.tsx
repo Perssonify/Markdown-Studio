@@ -45,7 +45,7 @@ export function AboutPage({ onClose }: AboutPageProps) {
             href={APP_URL}
             target="_blank"
             rel="noreferrer"
-            className="mt-3 text-sm font-medium text-primary hover:underline"
+            className="mt-3 text-sm font-medium text-primary-strong hover:underline"
           >
             {APP_DOMAIN}
           </a>

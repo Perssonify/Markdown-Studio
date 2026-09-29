@@ -63,29 +63,31 @@ runCase("surfaces-deep", async (rep, onClose) => {
   const trayState = () => pg.evaluate(() => {
     const strip = [...document.querySelectorAll("div")].find((d) =>
       d.style.gridTemplateRows === "1fr" || d.style.gridTemplateRows === "0fr");
-    return strip ? { rows: strip.style.gridTemplateRows, h: Math.round(strip.getBoundingClientRect().height) } : null;
+    // `inert` (A093): the collapsed tray stays mounted, so aria-hidden alone left
+    // its buttons in the Tab order.
+    return strip ? { rows: strip.style.gridTemplateRows, h: Math.round(strip.getBoundingClientRect().height), inert: strip.hasAttribute("inert") } : null;
   });
 
-  rep.check("the tray starts collapsed at zero height",
-    await until(async () => { const v = await trayState(); return v && v.rows === "0fr" && v.h < 1 ? v : null; }),
+  rep.check("the tray starts collapsed at zero height, and inert",
+    await until(async () => { const v = await trayState(); return v && v.rows === "0fr" && v.h < 1 && v.inert ? v : null; }),
     JSON.stringify(await trayState()));
 
-  await pg.locator('button[aria-label="Expand bottom tray"]').first().click();
+  await pg.locator('button[aria-label="Panel tray"][aria-expanded="false"]').first().click();
   const expanded = await until(async () => {
     const v = await trayState();
-    return v && v.rows === "1fr" && v.h > 40 ? v : null;
+    return v && v.rows === "1fr" && v.h > 40 && !v.inert ? v : null;
   });
-  rep.check("the tray opens on a tall window", !!expanded, JSON.stringify(expanded ?? await trayState()));
+  rep.check("the tray opens on a tall window, and is no longer inert", !!expanded, JSON.stringify(expanded ?? await trayState()));
   rep.check("its Document Links tab is there once open",
     await until(async () => (await pg.locator('button:has-text("Document Links")').first().isVisible().catch(() => false))));
 
   // …and collapses back to genuinely zero height, the documented invariant.
-  await pg.locator('button[aria-label="Collapse bottom tray"]').first().click();
+  await pg.locator('button[aria-label="Panel tray"][aria-expanded="true"]').first().click();
   const collapsed = await until(async () => {
     const v = await trayState();
-    return v && v.rows === "0fr" && v.h < 1 ? v : null;
+    return v && v.rows === "0fr" && v.h < 1 && v.inert ? v : null;
   });
-  rep.check("the tray collapses to zero height", !!collapsed, JSON.stringify(collapsed ?? await trayState()));
+  rep.check("the tray collapses to zero height, and is inert again", !!collapsed, JSON.stringify(collapsed ?? await trayState()));
 
   // ── the Outline tab ─────────────────────────────────────────────────────
   await menuItem("View", "Outline");
