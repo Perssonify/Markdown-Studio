@@ -5,7 +5,7 @@ import type { Marked } from 'marked';
 import TurndownService from 'turndown';
 import { preprocessMarkdown, normalizeMarkdown } from './preprocessor';
 import { cleanHtmlForTurndown } from './html-cleaner';
-import { addBaseRules, addInlineStyleRule } from './turndown-rules';
+import { addBaseRules, addInlineStyleRule, installEscape, type EscapeOptions } from './turndown-rules';
 import { buildMarked } from './build-marked';
 import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
 import { useUIStore } from '../store/uiStore';
@@ -179,12 +179,26 @@ export function createMarkdownEngine(
   // front matter.
   const options = { headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*", hr: "---" } as const;
 
+  // Escape exactly what the CURRENT settings give meaning to (turndown-rules.ts
+  // escapeMarkdownText): `$` only while maths is on, `~~` only while
+  // strikethrough is, `{` only while the curly syntax is.
+  const escapeOptions = (): EscapeOptions => {
+    const f = getFeatures();
+    return {
+      math: f.math,
+      strikethrough: f.flavor !== "commonmark" && f.strikethrough,
+      curly: f.curlyBraceFormatting === true,
+    };
+  };
+
   const tdInline = new TurndownService(options);
   addBaseRules(tdInline);
   addInlineStyleRule(tdInline);
+  installEscape(tdInline, escapeOptions);
 
   const tdClean = new TurndownService(options);
   addBaseRules(tdClean);
+  installEscape(tdClean, escapeOptions);
 
   return {
     mdToHtml: (md: string) => {

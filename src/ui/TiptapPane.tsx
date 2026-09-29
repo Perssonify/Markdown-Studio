@@ -29,6 +29,7 @@ import { Callout } from "../extensions/Callout";
 import { Details, Summary } from "../extensions/Details";
 import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
+import { TableCellAlign } from "../extensions/TableCellAlign";
 import { ThemeImage } from "../extensions/ThemeImage";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
@@ -307,7 +308,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         Placeholder.configure({ placeholder: "Start typing rich text..." }),
         TextAlign.configure({ types: ["heading", "paragraph"], alignments: ["left", "center", "right", "justify"] }),
         Table.configure({ resizable: false }),
-        TableRow, TableCell, TableHeader,
+        TableRow, TableCell, TableHeader, TableCellAlign,
         SearchHighlightExtension,
       ],
       content: defaultValue || "",

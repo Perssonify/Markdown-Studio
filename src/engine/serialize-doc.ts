@@ -20,6 +20,7 @@ import { Callout } from "../extensions/Callout";
 import { Details, Summary } from "../extensions/Details";
 import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
+import { TableCellAlign } from "../extensions/TableCellAlign";
 import { ThemeImage } from "../extensions/ThemeImage";
 
 /**
@@ -60,6 +61,7 @@ export const SERIALIZE_EXTENSIONS = [
   TableRow,
   TableCell,
   TableHeader,
+  TableCellAlign,
 ];
 
 export function canonicalToHtml(canonical: unknown): string {
