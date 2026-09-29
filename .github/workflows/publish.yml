@@ -1,0 +1,76 @@
+name: Publish to npm
+
+# Publishes @perssonify/editor when a version tag is pushed (vX.Y.Z), from CI
+# only — never from a laptop — with npm provenance, so every published tarball
+# is attested to this repository, this workflow and this commit.
+#
+# Owner setup (docs/deployment.md ▸ Publishing the npm package):
+#   - claim the @perssonify scope on npm and require 2FA for the org;
+#   - create an automation or granular token scoped to @perssonify/editor and
+#     store it as the repository secret NPM_TOKEN (or switch to npm trusted
+#     publishing, which removes the token entirely);
+#   - create the `npm` GitHub environment with required reviewers, so a pushed
+#     tag waits for a human before anything is published.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  id-token: write # npm provenance signs with GitHub's OIDC token
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.4.0"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Set up Node (npm CLI with provenance support)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: The tag matches package.json
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json ($version)." >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The same gate CI runs on every PR: nothing is published that would not
+      # have merged.
+      - name: Type-check
+        run: bunx tsc --noEmit
+
+      - name: Test
+        run: bun run test
+
+      - name: Build (library)
+        run: bun run build
+
+      - name: What will be published
+        run: npm pack --dry-run
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
