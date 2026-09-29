@@ -1,0 +1,58 @@
+<!doctype html>
+<!--
+  A HOST PAGE framing the iframe embed, speaking the bridge protocol by hand.
+  Deliberately hand-written rather than importing `createEditorClient`: what is
+  under test is the SHIPPED embed's half of the wire, and a client from the same
+  repo could agree with a bridge that is wrong.
+
+  The embed derives its allowlist from `document.referrer` when no
+  `allowed_origin` is given — so being framed from a different origin (a
+  different port is a different origin) is the case, not a complication.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>Embed host</title>
+<style>html,body{margin:0;height:100%}iframe{width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<script>
+  const params = new URLSearchParams(location.search);
+  const src = params.get("embed");
+
+  window.__events = [];          // every event the embed pushed us
+  window.__responses = [];       // every response frame, for inspection
+  const pending = new Map();
+  let seq = 0;
+
+  window.addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || m.type !== "perssonify") return;
+    if (m.event === "response") {
+      window.__responses.push({ origin: e.origin, payload: m.payload });
+      const p = pending.get(m.payload?.requestId);
+      if (p) { pending.delete(m.payload.requestId); p(m.payload); }
+      return;
+    }
+    window.__events.push({ origin: e.origin, event: m.event, payload: m.payload });
+  });
+
+  const frame = document.createElement("iframe");
+  frame.id = "editor";
+  frame.src = src;
+  document.body.appendChild(frame);
+
+  /** Send one action and resolve with its response payload, or null on timeout. */
+  window.__call = (action, payload = {}, timeout = 8000) =>
+    new Promise((resolve) => {
+      const requestId = `r${++seq}`;
+      pending.set(requestId, resolve);
+      setTimeout(() => { if (pending.delete(requestId)) resolve(null); }, timeout);
+      frame.contentWindow.postMessage(
+        { type: "perssonify", version: "1.0", action, payload, requestId },
+        new URL(src, location.href).origin
+      );
+    });
+
+  window.__sawEvent = (name) => window.__events.some((e) => e.event === name);
+</script>
+</body>
+</html>

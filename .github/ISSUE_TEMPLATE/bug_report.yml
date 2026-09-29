@@ -1,0 +1,94 @@
+name: Bug report
+description: Something in Markdown Studio behaves incorrectly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Do not use this form for security issues** —
+        see [SECURITY.md](https://github.com/SolutionPath/markdown-studio/blob/main/SECURITY.md)
+        for private disclosure.
+
+        If a document of yours looks wrong or truncated, please **do not delete
+        it** — Tools ▸ Version history keeps recent versions and may let you
+        recover it, and the broken state is useful evidence.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a new document
+        2. Paste …
+        3. Switch to Split view
+        4. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample Markdown (if the bug involves specific content)
+      description: >
+        The smallest input that still reproduces it. This will be rendered as a
+        code block — no need to escape anything.
+      render: markdown
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did you hit it?
+      options:
+        - Standalone app (markdownstudio.com)
+        - Installed PWA
+        - Iframe embed
+        - The npm package (@perssonify/editor) in my own app
+        - Local dev checkout
+    validations:
+      required: true
+
+  - type: dropdown
+    id: pane
+    attributes:
+      label: Which pane / view?
+      options:
+        - Markdown pane
+        - Rich text pane
+        - Split view
+        - Relationship map
+        - Cards board
+        - Workspace panel (Files / Outline)
+        - Import or export
+        - Not pane-specific / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown in Help ▸ About, or the `version` in package.json for a local checkout.
+      placeholder: "1.70.0"
+
+  - type: input
+    id: env
+    attributes:
+      label: Browser and OS
+      placeholder: "Safari 18.4 on iOS 18 / Chrome 140 on Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: Anything red in the browser devtools console, if you can check.
+      render: text

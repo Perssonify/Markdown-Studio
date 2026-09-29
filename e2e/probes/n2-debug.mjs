@@ -1,0 +1,38 @@
+import { serve, open, boot, seed, mdText, richText, APP_DIR } from "../lib.mjs";
+import { proseDoc } from "../docs.mjs";
+const MARK = "QQCOMPOSEDQQ";
+const srv = await serve(APP_DIR);
+const { browser, page: pg, cdp, errors } = await open(srv.port, { cdp: true });
+await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
+await seed(pg, [proseDoc("aaa", "Alpha doc", 1)]);
+await boot(pg, srv.port, { mode: "Split", settle: 6000 });
+await pg.locator(".cm-content").first().click();
+await pg.keyboard.press("Control+End");
+await pg.keyboard.press("Enter");
+await pg.waitForTimeout(300);
+await pg.evaluate(() => { window.__c = { start: 0, end: 0, update: 0 };
+  document.addEventListener("compositionstart", () => window.__c.start++, true);
+  document.addEventListener("compositionupdate", () => window.__c.update++, true);
+  document.addEventListener("compositionend", () => window.__c.end++, true); });
+const show = async (t) => console.log(t.padEnd(28), JSON.stringify(await pg.evaluate(() => window.__c)), "md:", JSON.stringify((await mdText(pg)).slice(-40)), "rich:", JSON.stringify((await richText(pg)).slice(-40)));
+for (const n of [4, 8, MARK.length]) {
+  const t = MARK.slice(0, n);
+  await cdp.send("Input.imeSetComposition", { text: t, selectionStart: t.length, selectionEnd: t.length });
+  await pg.waitForTimeout(60);
+}
+await show("during composition");
+await pg.keyboard.press("Control+z");
+await pg.waitForTimeout(400);
+await show("after Ctrl+Z");
+await cdp.send("Input.insertText", { text: MARK });
+await pg.waitForTimeout(500);
+await show("right after commit");
+await pg.waitForTimeout(3000);
+await show("+3s");
+await pg.waitForTimeout(5000);
+await show("+8s");
+await pg.keyboard.type("!");
+await pg.waitForTimeout(3000);
+await show("after one more keystroke");
+console.log("errors", errors);
+await browser.close(); srv.close();

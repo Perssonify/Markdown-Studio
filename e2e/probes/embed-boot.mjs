@@ -1,0 +1,11 @@
+import { serve, open, EMBED_DIR } from "../lib.mjs";
+const srv = await serve(EMBED_DIR);
+const { browser, page: pg, errors } = await open(srv.port);
+pg.on("console", (m) => console.log("[console]", m.type(), m.text().slice(0, 200)));
+await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "networkidle" });
+await pg.waitForTimeout(8000);
+console.log("ProseMirror:", await pg.locator(".ProseMirror").count());
+console.log("cm-content:", await pg.locator(".cm-content").count());
+console.log("body:", JSON.stringify((await pg.evaluate(() => document.body.innerText)).slice(0, 300)));
+console.log("errors:", errors);
+await browser.close(); srv.close();

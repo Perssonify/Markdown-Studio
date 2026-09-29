@@ -1,0 +1,74 @@
+<!doctype html>
+<!--
+  A HOST PAGE — an application that already has its own styles and then imports
+  the published `@perssonify/editor` stylesheet.
+
+  Tailwind's preflight is a GLOBAL reset. That is right for the app and the
+  iframe embed, which own their document, and wrong for a stylesheet a consumer
+  drops into a page they already styled. Measured unscoped in a browser, it took
+  this page's h1 from 32px/700 to 16px/400, removed its links' underline, took
+  16px of margin and 40px of padding off its list, and switched every element to
+  border-box with a solid border-style.
+
+  `build/scope-css.mjs` confines the base layer to `:where(.pf-app, …)`. The
+  unit test pins the TRANSFORM; this page is the claim itself — nothing outside
+  a `.pf-app` subtree may move, and everything inside one still must.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Host page</title>
+<style>
+  /* The host's own design system. Deliberately relies on UA defaults for some
+     of it (list padding, the link underline) — that is what a reset destroys. */
+  body { margin: 8px; font-family: Georgia, serif; }
+  h1 { font-size: 32px; font-weight: 700; }
+  .brand { color: rgb(10, 20, 30); }
+</style>
+</head>
+<body>
+  <h1 id="host-h1" class="brand">Host heading</h1>
+  <p id="host-p">Host paragraph with <a id="host-a" href="#x">a link</a>.</p>
+  <ul id="host-ul"><li id="host-li">Host list item</li></ul>
+  <button id="host-btn">Host button</button>
+  <table id="host-table"><tbody><tr><td>cell</td></tr></tbody></table>
+
+  <!-- The editor's own subtree. The reset SHOULD reach everything in here. -->
+  <div class="pf-app">
+    <h1 id="pf-h1">Editor heading</h1>
+    <ul id="pf-ul"><li id="pf-li">Editor list item</li></ul>
+    <a id="pf-a" href="#y">editor link</a>
+  </div>
+
+  <script>
+    // Snapshot the properties a global reset would move, before and after the
+    // published stylesheet loads. The page reports both so the case can assert
+    // "the host did not move" and "the editor's subtree did".
+    const PROPS = [
+      "font-size", "font-weight", "margin-top", "margin-block-start",
+      "padding-left", "padding-inline-start", "text-decoration-line",
+      "box-sizing", "border-top-style", "list-style-type", "font-family",
+    ];
+    const snap = () => {
+      const out = {};
+      for (const id of ["host-h1","host-p","host-a","host-ul","host-li","host-btn","host-table","pf-h1","pf-ul","pf-li","pf-a"]) {
+        const el = document.getElementById(id);
+        const cs = getComputedStyle(el);
+        out[id] = Object.fromEntries(PROPS.map((p) => [p, cs.getPropertyValue(p)]));
+      }
+      out.body = { margin: getComputedStyle(document.body).marginTop };
+      return out;
+    };
+    window.__before = snap();
+    window.__loadEditorCss = () =>
+      new Promise((resolve, reject) => {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "./styles.css";
+        link.onload = () => requestAnimationFrame(() => resolve((window.__after = snap())));
+        link.onerror = () => reject(new Error("styles.css failed to load"));
+        document.head.appendChild(link);
+      });
+  </script>
+</body>
+</html>

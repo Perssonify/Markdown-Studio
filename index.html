@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!-- `pf-app` opts this page in to the app-level styling (body typography and
+     background, html scrollbars, the in-app-webview pins). Those rules are scoped
+     to this class so that importing the library stylesheet cannot repaint a
+     consumer's whole page. -->
+<html lang="en" class="pf-app">
+
+<head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover exposes env(safe-area-inset-*) so the chrome can dodge
+         notches / home indicators in full-screen in-app webviews (WhatsApp, Slack,
+         Telegram, Claude, ChatGPT). interactive-widget=resizes-content shrinks the
+         layout when the on-screen keyboard opens instead of letting it cover the
+         editor. No maximum-scale — pinch-zoom stays available for accessibility. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <script>
+        // Pre-paint theme + palette. next-themes only applies `.dark` in a
+        // post-mount effect, so without this the browser painted the LIGHT
+        // default first: measured 183ms of full-viewport cream on desktop and
+        // 895ms on a throttled mid-range phone before the dark theme landed.
+        // Must stay BLOCKING and above the stylesheet.
+        (function () {
+            try {
+                var t = localStorage.getItem("perssonify-theme") || "system";
+                var d = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+                var r = document.documentElement;
+                r.classList.add(d ? "dark" : "light");
+                r.style.colorScheme = d ? "dark" : "light";
+                var p = localStorage.getItem("perssonify-palette");
+                if (p) r.setAttribute("data-palette", p);
+            } catch (e) { }
+        })();
+    </script>
+<title>Markdown Studio</title>
+    <script>
+        // Boot watchdog — self-heals blank first loads. If the app bundle
+        // fails to boot within 8s (classic cause: a stale service worker
+        // serving old HTML whose hashed entry script no longer exists on the
+        // current deploy → hard blank with no error hook), unregister every
+        // service worker, drop all caches, and reload once for a clean,
+        // network-fresh start. Inline so it works even when NO bundle loads.
+        // A sessionStorage stamp prevents any reload loop.
+        (function () {
+            var KEY = "pf:boot-recover-at";
+            setTimeout(function () {
+                if (window.__PF_BOOTED) return;
+                var last = 0;
+                try { last = Number(sessionStorage.getItem(KEY) || "0"); } catch (e) { }
+                if (Date.now() - last < 30000) return; // recovered recently — don't loop
+                try { sessionStorage.setItem(KEY, String(Date.now())); } catch (e) { }
+                var cleanup = [];
+                try {
+                    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                        cleanup.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+                            return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                        }));
+                    }
+                    if (window.caches && caches.keys) {
+                        cleanup.push(caches.keys().then(function (ks) {
+                            return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+                        }));
+                    }
+                } catch (e) { }
+                Promise.all(cleanup).catch(function () { }).then(function () {
+                    location.reload();
+                });
+            }, 8000);
+        })();
+    </script>
+</head>
+
+<body class="pf-app">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

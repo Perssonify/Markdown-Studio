@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a capability or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Markdown Studio is deliberately **client-only**: no account, no backend,
+        nothing uploaded. Proposals that require a server, sync service, or
+        user accounts are very unlikely to land — please say how yours fits
+        inside the browser.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem or workflow, not the solution yet.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried instead?
+      description: Existing features, other editors, workarounds — and why they fall short.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the app?
+      options:
+        - Editing and formatting
+        - Markdown parsing / round-trip fidelity
+        - Library, folders, organization
+        - Wiki links, backlinks, relationship map
+        - Import / export
+        - Appearance and typography
+        - Keyboard shortcuts
+        - The embed or the npm package
+        - Something else
+    validations:
+      required: true

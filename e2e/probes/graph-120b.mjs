@@ -1,0 +1,22 @@
+import { serve, open, boot, seed, APP_DIR } from "../lib.mjs";
+import { library } from "../docs.mjs";
+const N = Number(process.env.N || 120);
+const srv = await serve(APP_DIR);
+const { browser, page: pg, errors } = await open(srv.port);
+pg.on("pageerror", (e) => console.log("[pageerror]", String(e).slice(0, 300)));
+pg.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") console.log("[c]", m.type(), m.text().slice(0, 200)); });
+await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
+await seed(pg, library(N, { kb: 1 }));
+await boot(pg, srv.port, { mode: "Split", settle: 14000 });
+const mapBtn = pg.locator('button:has-text("Map")').first();
+console.log("N =", N, "| aria-pressed before:", await mapBtn.getAttribute("aria-pressed"));
+await mapBtn.click();
+await pg.waitForTimeout(4000);
+console.log("aria-pressed after:", await mapBtn.getAttribute("aria-pressed"));
+console.log("dots:", await pg.locator(".pf-node-dot").count());
+console.log("dialog/overlay:", await pg.evaluate(() => {
+  const o = document.querySelector('[role="region"], [aria-label*="map" i], [aria-label*="Relationship" i]');
+  return o ? { tag: o.tagName, label: o.getAttribute("aria-label"), text: o.innerText.slice(0, 160) } : null;
+}));
+console.log("url:", pg.url());
+await browser.close(); srv.close();
