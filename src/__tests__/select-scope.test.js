@@ -60,16 +60,19 @@ describe("selectScopeCM — headings", () => {
     "#NotAHeading",
   ].join("\n");
 
-  it("selects every heading", () => {
+  // A054: the heading's TEXT, never its `#` marker. Selecting the marker was
+  // the bug — Select ▸ All headings then Bold made `**## Section**`, which is a
+  // paragraph, not a heading.
+  it("selects every heading's text", () => {
     const v = viewOf(doc);
     expect(selectScopeCM(v, "headings")).toBe(3);
-    expect(v.selected()).toEqual(["# Title", "## Section", "### Deeper"]);
+    expect(v.selected()).toEqual(["Title", "Section", "Deeper"]);
   });
 
   it("selects one level at a time", () => {
     const v = viewOf(doc);
     expect(selectScopeCM(v, "h2")).toBe(1);
-    expect(v.selected()).toEqual(["## Section"]);
+    expect(v.selected()).toEqual(["Section"]);
   });
 
   it("requires the space after the hashes", () => {
@@ -101,19 +104,19 @@ describe("selectScopeCM — lists", () => {
     // it or every task item is selected twice over, under two different scopes.
     const v = viewOf(doc);
     expect(selectScopeCM(v, "bulletList")).toBe(2);
-    expect(v.selected()).toEqual(["- plain bullet", "* another bullet"]);
+    expect(v.selected()).toEqual(["plain bullet", "another bullet"]);
   });
 
   it("selects task items, checked and unchecked alike", () => {
     const v = viewOf(doc);
     expect(selectScopeCM(v, "taskList")).toBe(2);
-    expect(v.selected()).toEqual(["- [ ] unchecked task", "- [x] checked task"]);
+    expect(v.selected()).toEqual(["unchecked task", "checked task"]);
   });
 
   it("selects numbered items", () => {
     const v = viewOf(doc);
     expect(selectScopeCM(v, "orderedList")).toBe(2);
-    expect(v.selected()).toEqual(["1. first", "2. second"]);
+    expect(v.selected()).toEqual(["first", "second"]);
   });
 });
 
@@ -132,7 +135,7 @@ describe("selectScopeCM — fenced code", () => {
   it("ignores markdown-looking lines inside a fence", () => {
     const v = viewOf(doc);
     expect(selectScopeCM(v, "headings")).toBe(1);
-    expect(v.selected()).toEqual(["## Real heading"]);
+    expect(v.selected()).toEqual(["Real heading"]);
     expect(selectScopeCM(v, "bulletList")).toBe(0);
   });
 
@@ -176,14 +179,18 @@ describe("selectScopeCM — paragraphs and tables", () => {
     expect(v.selected()).toEqual(["Real paragraph.", "Another paragraph."]);
   });
 
-  it("selects every table row, separator included", () => {
+  it("selects each table cell's content, skipping the delimiter row", () => {
+    // A054: a whole row wrapped as one unit (`**| A | B |**`) breaks its pipes,
+    // and the `| --- |` delimiter row is not content at all.
     const v = viewOf("| A | B |\n| --- | --- |\n| 1 | 2 |\n\nafter");
-    expect(selectScopeCM(v, "table")).toBe(3);
+    expect(selectScopeCM(v, "table")).toBe(4);
+    expect(v.selected()).toEqual(["A", "B", "1", "2"]);
   });
 
-  it("selects blockquote lines", () => {
+  it("selects blockquote lines' text", () => {
     const v = viewOf("> one\n> two\n\nnot a quote");
     expect(selectScopeCM(v, "blockquote")).toBe(2);
+    expect(v.selected()).toEqual(["one", "two"]);
   });
 });
 

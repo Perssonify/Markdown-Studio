@@ -5,10 +5,11 @@
  * These functions take a CM6 EditorView directly (no React refs).
  */
 
+import { EditorSelection, type EditorState, type SelectionRange, type ChangeSpec } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 
 /**
- * Wrap or unwrap the current selection with markdown markers.
+ * Wrap or unwrap EVERY selected range with markdown markers.
  *
  * Toggle behavior:
  *   - If selection is already wrapped with the markers, unwrap
@@ -33,28 +34,62 @@ export function mdWrap(
   before: string,
   after: string
 ): void {
-  const { from, to } = view.state.selection.main;
-  const selected = view.state.sliceDoc(from, to);
+  mdWrapBy(view, () => [before, after]);
+}
+
+/**
+ * `mdWrap` with the markers chosen PER RANGE (inline code vs a fenced block
+ * depends on whether that range spans lines).
+ *
+ * Every range of the selection is wrapped, not just `selection.main`. The
+ * multi-range selections come from Select ▸ All headings / list items / Find
+ * all, whose whole point is to format every match at once — and a formatter
+ * that read only the main range bolded the first heading and silently ignored
+ * the rest.
+ */
+export function mdWrapBy(
+  view: EditorView,
+  markersFor: (selected: string) => [string, string]
+): void {
+  const { state } = view;
+  view.dispatch(
+    state.changeByRange((range) => {
+      const [before, after] = markersFor(state.sliceDoc(range.from, range.to));
+      return wrapRange(state, range, before, after);
+    })
+  );
+}
+
+/** Wrap or unwrap ONE range. Changes are in the start document's coordinates;
+ *  the returned range is in the coordinates this range's own change produces
+ *  (CodeMirror maps it through the other ranges' changes). */
+function wrapRange(
+  state: EditorState,
+  range: SelectionRange,
+  before: string,
+  after: string
+): { changes: ChangeSpec; range: SelectionRange } {
+  const { from, to } = range;
+  const selected = state.sliceDoc(from, to);
 
   const beforeLen = before.length;
   const afterLen = after.length;
 
   // Check if already wrapped — unwrap if so
-  if (from >= beforeLen && to + afterLen <= view.state.doc.length) {
-    const outerBefore = view.state.sliceDoc(from - beforeLen, from);
-    const outerAfter = view.state.sliceDoc(to, to + afterLen);
+  if (from >= beforeLen && to + afterLen <= state.doc.length) {
+    const outerBefore = state.sliceDoc(from - beforeLen, from);
+    const outerAfter = state.sliceDoc(to, to + afterLen);
     if (outerBefore === before && outerAfter === after) {
       // Submarker check for single-char markers
-      if (!isSubmarker(view, from, to, before, after)) {
+      if (!isSubmarker(state, from, to, before, after)) {
         // Unwrap
-        view.dispatch({
+        return {
           changes: [
             { from: from - beforeLen, to: from, insert: "" },
             { from: to, to: to + afterLen, insert: "" },
           ],
-          selection: { anchor: from - beforeLen, head: to - beforeLen },
-        });
-        return;
+          range: EditorSelection.range(from - beforeLen, to - beforeLen),
+        };
       }
     }
   }
@@ -81,22 +116,82 @@ export function mdWrap(
 
   // If the entire selection was whitespace, wrap it as-is (nothing to format)
   if (inner === "") {
-    view.dispatch({
+    return {
       changes: { from, to, insert: before + selected + after },
-      selection: { anchor: from + beforeLen, head: to + beforeLen },
-    });
-    return;
+      range: EditorSelection.range(from + beforeLen, to + beforeLen),
+    };
   }
 
   const insert = leadingSpaces + before + inner + after + trailingSpaces;
-  view.dispatch({
+  const innerFrom = from + leadingSpaces.length + beforeLen;
+  return {
     changes: { from, to, insert },
     // Place selection over the wrapped inner content
-    selection: {
-      anchor: from + leadingSpaces.length + beforeLen,
-      head: from + leadingSpaces.length + beforeLen + inner.length,
-    },
-  });
+    range: EditorSelection.range(innerFrom, innerFrom + inner.length),
+  };
+}
+
+// Private-use delimiters for masked spans (as in case-transform.ts): never in
+// real text, and unlike bare digits they cannot collide with numbers on restore.
+const M0 = "";
+const M1 = "";
+
+/** Inline FORMATTING tags — unwrapped, their text kept. Anything else (img,
+ *  br, details, picture, a…) is content or structure and is left alone. */
+const FORMAT_TAG = /<\/?(?:u|sub|sup|s|del|strike|mark|b|strong|i|em|span)(?:\s[^>]*)?>/gi;
+
+/**
+ * Markdown-pane "Clear formatting": remove emphasis, strikethrough and the
+ * inline formatting tags from `src`, and nothing else.
+ *
+ * It used to be five regexes run over the raw text, the last of which was
+ * `<[^>]+>` → "": it DELETED `<img>` tags, `<https://…>` autolinks and every
+ * other tag, and `\*(.+?)\*` ate the multiplication signs in `5 * 3 * 2`,
+ * list bullets, and the contents of code spans. The rich pane's version only
+ * removes marks; this one now only removes formatting:
+ *  - code spans, images, link destinations, autolinks, bare URLs, inline math
+ *    and every non-formatting tag are masked first, so nothing inside them can
+ *    be read as a delimiter (and none of them is removed);
+ *  - emphasis must be BALANCED and flanking the CommonMark way: `* 3 *` (a
+ *    delimiter followed by a space) is not emphasis, `snake_case_name` is not,
+ *    a list bullet is not;
+ *  - it works line by line — an unmatched `**` cannot pair with one on a later
+ *    line and strip everything in between.
+ * Code spans are kept (unwrapping one could turn its literal `*a*` into
+ * emphasis — clearing formatting must not create it), and so are links (the
+ * URL is content).
+ */
+export function clearMdFormatting(src: string): string {
+  const store: string[] = [];
+  const stash = (m: string) => M0 + (store.push(m) - 1) + M1;
+  let t = src
+    .replace(/(`+)[\s\S]*?\1/g, stash)                         // code spans
+    .replace(/!\[[^\]\n]*\]\([^)\n]*\)/g, stash)                // images, whole
+    .replace(/\]\([^)\n]*\)/g, stash)                           // link destinations
+    .replace(/<(?:https?:\/\/|mailto:)[^>\s]+>/gi, stash)       // autolinks
+    .replace(/\bhttps?:\/\/[^\s<>)]+/g, stash)                  // bare URLs
+    .replace(/\$[^$\n]+\$/g, stash);                            // inline math
+  t = t.replace(FORMAT_TAG, "").replace(/<[^>\n]+>/g, stash);   // unwrap formatting, keep the rest
+
+  const passes: [RegExp, string][] = [
+    [/\*\*(?![\s*])([^\n]*?[^\s*])\*\*/g, "$1"],
+    [/(?<![\p{L}\p{N}_])__(?![\s_])([^\n]*?[^\s_])__(?![\p{L}\p{N}_])/gu, "$1"],
+    [/~~(?!\s)([^\n]*?\S)~~/g, "$1"],
+    [/(?<!\*)\*(?![\s*])([^\n*]*?[^\s*])\*(?!\*)/g, "$1"],
+    [/(?<![\p{L}\p{N}_])_(?![\s_])([^\n_]*?[^\s_])_(?![\p{L}\p{N}_])/gu, "$1"],
+  ];
+  // `***x***` peels one layer per round.
+  for (let round = 0; round < 6; round++) {
+    const before = t;
+    for (const [re, rep] of passes) t = t.replace(re, rep);
+    if (t === before) break;
+  }
+  const unmask = new RegExp(`${M0}(\\d+)${M1}`, "g");
+  // Masks can nest (a code span inside a link destination), so restore to a fixpoint.
+  for (let round = 0; round < 4 && t.includes(M0); round++) {
+    t = t.replace(unmask, (_m, i) => store[Number(i)] ?? "");
+  }
+  return t;
 }
 
 /**
@@ -127,7 +222,7 @@ export function isWrapped(
   if (outerBefore !== before || outerAfter !== after) return false;
 
   // Submarker check
-  return !isSubmarker(view, from, to, before, after);
+  return !isSubmarker(view.state, from, to, before, after);
 }
 
 /**
@@ -137,7 +232,7 @@ export function isWrapped(
  * @internal
  */
 function isSubmarker(
-  view: EditorView,
+  state: EditorState,
   from: number,
   to: number,
   before: string,
@@ -147,7 +242,7 @@ function isSubmarker(
 
   let runBefore = 0;
   let p = from - 1;
-  while (p >= 0 && view.state.sliceDoc(p, p + 1) === before) {
+  while (p >= 0 && state.sliceDoc(p, p + 1) === before) {
     runBefore++;
     p--;
   }
@@ -155,8 +250,8 @@ function isSubmarker(
   let runAfter = 0;
   p = to;
   while (
-    p < view.state.doc.length &&
-    view.state.sliceDoc(p, p + 1) === after
+    p < state.doc.length &&
+    state.sliceDoc(p, p + 1) === after
   ) {
     runAfter++;
     p++;
