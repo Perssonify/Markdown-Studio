@@ -1,7 +1,7 @@
 /**
  * vercel.json's security and caching headers (A068, A012, A016, A014).
  *
- * The CSP allows the app's two inline <script>s (and the embed's one) by
+ * The CSP allows the app's three inline <script>s (and the embed's two) by
  * SHA-256 hash. A hash is only right for the exact bytes it was computed from,
  * so editing an inline script without updating vercel.json would silently
  * block it the day the policy is enforced. This recomputes every hash from the
@@ -62,8 +62,8 @@ const HASHES = [...inlineScriptHashes(read("index.html")), ...inlineScriptHashes
 
 describe("CSP hashes track the real inline scripts", () => {
   it("finds the inline scripts it is guarding", () => {
-    expect(inlineScriptHashes(read("index.html"))).toHaveLength(2); // theme pre-paint + boot watchdog
-    expect(inlineScriptHashes(read("embed.html"))).toHaveLength(1);
+    expect(inlineScriptHashes(read("index.html"))).toHaveLength(3); // theme pre-paint + browser floor + boot watchdog
+    expect(inlineScriptHashes(read("embed.html"))).toHaveLength(2); // theme pre-paint + browser floor
   });
 
   it.each(["/", "/embed.html"])("the policy on %s allows every inline script and nothing stale", (path) => {
