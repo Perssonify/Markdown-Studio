@@ -39,6 +39,8 @@ import { normalizeMarkdownFeatures } from "./store/settings";
 import { useUIStore } from "./store/uiStore";
 import { MenuBar } from "./ui/MenuBar";
 import { AdUnit } from "./ui/AdUnit";
+import { DurabilityNotices } from "./ui/DurabilityNotices";
+import { noteLibraryAtBoot, recordFullBackup } from "./store/storage-durability";
 import { BacklinksPanel } from "./ui/BacklinksPanel";
 import { BottomTray } from "./ui/BottomTray";
 import { trayFits } from "./ui/tray-fit";
@@ -172,6 +174,14 @@ interface PerssonifyEditorProps {
   /** Controlled graph visibility (paired with onGraphOpenChange). */
   graphOpen?: boolean;
   onGraphOpenChange?: (open: boolean) => void;
+  /**
+   * Standalone app only: storage-durability notices for the app's own library
+   * (backup reminder, wiped-library explanation, moved-domain banner, Safari
+   * install tip) plus the boot check that stops a library the browser has
+   * emptied from being re-seeded as if new. See store/storage-durability.ts.
+   * The "not saving" warning shows without it.
+   */
+  durabilityNotices?: boolean;
 
   /**
    * Open the URL importer PRE-FILLED with this source (the standalone app
@@ -226,6 +236,7 @@ export function PerssonifyEditor({
   onStartTour,
   graphOpen,
   onGraphOpenChange,
+  durabilityNotices = false,
   initialImportUrl,
   readOnly: readOnlyProp,
   fitParent = false,
@@ -388,7 +399,7 @@ export function PerssonifyEditor({
   const [findSeed, setFindSeed] = useState("");
   // Stable indirection to the multi-doc zip exporter (defined below handleAction),
   // so handleAction can trigger "export all" without a forward dependency.
-  const exportDocsRef = useRef<(ids: string[], zipName: string, opts?: { canonical?: boolean }) => void>(() => {});
+  const exportDocsRef = useRef<(ids: string[], zipName: string, opts?: { canonical?: boolean }) => Promise<number> | void>(() => {});
 
   // ── Engine
   const { ready: engineReady, engine, configVersion } = useMarkdownEngine();
@@ -1529,7 +1540,13 @@ export function PerssonifyEditor({
         }
 
         const existingDoc = await initialize();
-        
+        // A library the BROWSER emptied (eviction, a cleared or damaged
+        // database) must not be greeted as a first visit: seeding the starter
+        // documents would dress the loss up as a fresh install. Read-only — it
+        // only decides whether to seed; the notice explains (A017).
+        const libraryWiped =
+          durabilityNotices && noteLibraryAtBoot(useDocumentStore.getState().documents.length);
+
         if (existingDoc) {
           setEditorReady(true);
           const editor = await waitForEditor();
@@ -1571,7 +1588,7 @@ export function PerssonifyEditor({
             useDocumentStore.getState().markHydrated(existingDoc.id);
           }
           toastSonner.success("Restored: " + existingDoc.title, { id: loadingId, duration: 3000 });
-        } else if (initialDocument) {
+        } else if (initialDocument && !libraryWiped) {
           // No stored documents — seed with the provided initial document.
           let doc = createDoc(initialDocument.content, "markdown", "api", { mdToHtml: engine.mdToHtml });
           if (doc) {
@@ -1985,7 +2002,10 @@ export function PerssonifyEditor({
       // Full backup: canonical JSON per doc (styled content round-trips exactly),
       // in folders, timestamped. Re-import restores the same library state.
       const ids = useDocumentStore.getState().documents.map((d) => d.id);
-      exportDocsRef.current(ids, "perssonify-backup", { canonical: true });
+      // The backup reminder needs the time of the last RESTORABLE backup, so a
+      // non-empty one is recorded (storage-durability, A017).
+      void Promise.resolve(exportDocsRef.current(ids, "perssonify-backup", { canonical: true }))
+        .then((count) => { if (typeof count === "number" && count > 0) recordFullBackup(); });
       return;
     }
     if (type === "export-pdf" && activeDoc) {
@@ -2229,6 +2249,12 @@ export function PerssonifyEditor({
     handleAction("import", files);
   }, [handleAction]);
 
+  // The storage-durability notices and Settings ▸ Storage & backup run the
+  // SAME full backup as File ▸ Export, so it is recorded the same way.
+  const handleBackupNow = useCallback(() => {
+    void handleAction("export-backup-zip");
+  }, [handleAction]);
+
   const handleExportFolder = useCallback(async (folderId: string, opts: { canonical?: boolean } = {}) => {
     const { folders, docParents } = useFolderStore.getState();
     const root = folders.find((f) => f.id === folderId);
@@ -2287,8 +2313,8 @@ export function PerssonifyEditor({
 
   // Export an explicit set of document IDs (from sidebar multi-select, or all
   // documents) as a ZIP, preserving each doc's folder path within the archive.
-  const handleExportDocs = useCallback(async (docIds: string[], zipName: string, opts: { canonical?: boolean } = {}) => {
-    if (docIds.length === 0) { toast.show("No documents selected", "warning"); return; }
+  const handleExportDocs = useCallback(async (docIds: string[], zipName: string, opts: { canonical?: boolean } = {}): Promise<number> => {
+    if (docIds.length === 0) { toast.show("No documents selected", "warning"); return 0; }
     const { folders, docParents } = useFolderStore.getState();
     const byId = new Map(folders.map((f) => [f.id, f]));
     const pathOf = (folderId: string | undefined): string[] => {
@@ -2309,7 +2335,8 @@ export function PerssonifyEditor({
     try {
       const count = await exportDocsToZip(entries, zipName, opts);
       toast.show(`Exported ${count} document(s)`, "success");
-    } catch { toast.show("Export failed", "error"); }
+      return count;
+    } catch { toast.show("Export failed", "error"); return 0; }
   }, [exportDocsToZip, toast]);
   exportDocsRef.current = handleExportDocs;
 
@@ -2641,7 +2668,7 @@ export function PerssonifyEditor({
 
 
         <div ref={trayRegionRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-            <SettingsSheet open={showSettings} onOpenChange={setShowSettings} />
+            <SettingsSheet open={showSettings} onOpenChange={setShowSettings} onBackup={handleBackupNow} />
             <MemorySheet open={showMemory} onOpenChange={setShowMemory} />
             <VersionHistorySheet
               open={showVersionHistory}
@@ -2795,6 +2822,18 @@ export function PerssonifyEditor({
               </button>
             )}
             </div>
+
+            {/* Storage-durability notices (A017/A022/A004): one slim strip in
+                the flow above the status bar, never over the document. */}
+            {chrome !== "none" && (
+              <DurabilityNotices
+                appNotices={durabilityNotices}
+                checkStorage={!storageAdapter}
+                onBackup={handleBackupNow}
+                onImportFiles={handleFileDropImport}
+                onOpenVersionHistory={openVersionHistory}
+              />
+            )}
 
             {/* B1: in FLOW above the tray/status bar. It used to be position:fixed
                 bottom-0, which covered every status-bar control on phones and the
