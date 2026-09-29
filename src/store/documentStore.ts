@@ -637,7 +637,16 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   // ── Initialize ─────────────────────────────────────────────────────────────
   initialize: async () => {
-    if (initialized) return null;
+    // A SECOND call is a remount — a host unmounting the editor and mounting
+    // it again. This store is a module singleton and survives the unmount, but
+    // the new editor instance starts EMPTY. This used to return null: the
+    // editor then seeded `initialDocument` again (one more copy per remount),
+    // or, with no seed, kept saying document X was active AND hydrated over an
+    // empty editor, so the first keystroke saved over X. A remount now
+    // re-activates the current document, UNHYDRATED, for the new editor to
+    // hydrate exactly as a fresh boot does. (The unload stash is one-shot per
+    // page load and is not taken again.)
+    const firstBoot = !initialized;
     initialized = true;
 
     const list = await storage.list();
@@ -656,7 +665,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // restore older content over newer as a "draft".
     const storedAt = new Map(list.map((d) => [d.id, Date.parse(d.updated) || 0]));
     const titleOf = new Map(list.map((d) => [d.id, d.title]));
-    for (const entry of takeStashed()) {
+    for (const entry of firstBoot ? takeStashed() : []) {
       if (!storedAt.has(entry.docId)) continue;
       if (entry.at <= (storedAt.get(entry.docId) ?? 0)) {
         // Older than disk. A stash that was already in CONFLICT when it was
@@ -680,6 +689,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     const prefs = await storage.getPrefs();
     const lastDocId = prefs["lastActiveDocId"] as string | undefined;
+    // On a remount, the document that was open stays the one that opens.
+    const current = firstBoot ? null : get().activeDocId;
 
     // Activating a document at boot must honour a recovered draft the same way
     // switchToDoc does, or the stash above would be adopted and then ignored.
@@ -704,6 +715,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       set({
         activeDoc: record,
         activeDocId: doc.id,
+        // Nothing is in the editor yet — the caller hydrates it.
+        hydratedDocId: null,
         openTabs: [{ id: doc.id, title: doc.title }],
         counts: computeCounts(canonical),
         saveStatus: conflicted ? "conflict" : draft ? "editing" : "ready",
@@ -716,10 +729,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // cannot be READ is skipped rather than taking the whole boot down with it;
     // if none can be read, the failure is reported (an empty result would read
     // as "no documents yet").
-    const candidates = [
+    const candidates = [...new Set([
+      ...(current && list.some((d) => d.id === current) ? [current] : []),
       ...(lastDocId && list.some((d) => d.id === lastDocId) ? [lastDocId] : []),
-      ...list.map((d) => d.id).filter((id) => id !== lastDocId),
-    ];
+      ...list.map((d) => d.id),
+    ])];
     let readError: unknown = null;
     for (const id of candidates) {
       try {
@@ -732,6 +746,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     }
     if (readError) throw readError;
 
+    // Nothing to open. On a remount, whatever the store still claimed is stale.
+    if (!firstBoot) {
+      set({ activeDoc: null, activeDocId: null, hydratedDocId: null, openTabs: [], saveStatus: "ready", saveError: null });
+    }
     return null;
   },
 

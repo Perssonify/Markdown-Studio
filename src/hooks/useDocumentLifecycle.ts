@@ -4,7 +4,8 @@ import { nextSyncCost, nextSyncWait } from "./sync-schedule";
 import { cleanPasteHtml, sanitizePastedHtml } from "../engine/html-cleaner";
 import { historyCache } from "../store/history-cache";
 import type { IngestFormat, IngestSource } from "../store/ingest";
-import { useDocumentStore } from "../store/documentStore";
+import { collectUnloadStash, useDocumentStore } from "../store/documentStore";
+import { stashUnsaved } from "../store/crash-recovery";
 import { useUIStore } from "../store/uiStore";
 import { createDocument } from "../store/document";
 import { snapshotStore, type SnapshotMeta } from "../store/snapshot-store";
@@ -972,6 +973,38 @@ export function useDocumentLifecycle({
     await autosaveOnLeave();
   }, [flushAndCacheIfDirty, captureHistoryFor, autosaveOnLeave]);
 
+  /**
+   * The EDITOR is going away (a host unmounting the component) — a
+   * document-leaving path like any other, but synchronous, because the panes
+   * are about to be destroyed. Must run while they still exist (a layout
+   * cleanup: React runs a parent's before its children's).
+   *
+   * The store is a module singleton and outlives the editor. It used to keep
+   * `hydratedDocId` pointing at the open document while the NEXT editor
+   * instance started empty — every guard passed, and the first keystroke in the
+   * remounted editor saved over that document. So: flush the pending
+   * projection and cache the draft as every leaving path does, release the
+   * hydration mark, stash the draft synchronously (the page may close while
+   * no editor — and so no unload handler — exists), and write it through.
+   */
+  const releaseEditor = useCallback(() => {
+    flushAndCacheIfDirty();
+    const s = useDocumentStore.getState();
+    const id = s.activeDocId;
+    const draft = id && s.hydratedDocId === id ? s.getUnsavedEdit(id) : undefined;
+    if (id && draft) stashUnsaved(collectUnloadStash(s, draft, Date.now()));
+    s.markHydrated(null);
+    useUIStore.getState().setEditorReady(false); // no typing into an editor nobody hydrated
+    if (id && draft) {
+      s.patchDocById(id, { canonical: draft })
+        .then(() => {
+          const now = useDocumentStore.getState();
+          if (now.getUnsavedEdit(id) === draft) now.clearUnsavedEdit(id);
+        })
+        .catch(() => { /* the draft stays cached (and stashed) for the next mount */ });
+    }
+  }, [flushAndCacheIfDirty]);
+
   return {
     handleMdChange,
     handleHtmlChange,
@@ -988,5 +1021,6 @@ export function useDocumentLifecycle({
     restoreSnapshotAsNew,
     cancelPendingSync,
     flushPendingSync,
+    releaseEditor,
   };
 }
