@@ -312,7 +312,12 @@ async function fetchDirectOrProxy(
   try {
     return { res: await attempt(url.href, timeoutMs), viaProxy: false };
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") {
+    // AbortSignal.timeout() rejects with a "TimeoutError", not an
+    // "AbortError" (only the setTimeout fallback aborts plainly), so a slow
+    // origin read as a CORS failure: the user was asked to allow the relay
+    // for a site that simply had not answered yet.
+    const name = (e as { name?: unknown } | null)?.name;
+    if (name === "AbortError" || name === "TimeoutError") {
       throw new UrlImportError("The request timed out.");
     }
     // Direct cross-origin fetch blocked (CORS) or a network error. Retry through
