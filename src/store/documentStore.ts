@@ -293,6 +293,12 @@ interface DocumentState {
   ) => DocumentWithIngestHtml | null;
   finalizeDoc: (doc: DocumentRecord, tiptapEditor: TiptapEditorLike | null, skipPersist?: boolean) => Promise<DocumentRecord>;
   /**
+   * Persist a NEW document without activating it (import). Unlike finalizeDoc
+   * it leaves the open document, the editor and the switch sequence alone, so
+   * a long import never pulls the store off whatever the user opens meanwhile.
+   */
+  saveNewDoc: (doc: DocumentRecord) => Promise<void>;
+  /**
    * Persist the live editor's content for the active document. Resolves
    * `true` ONLY when the write committed. Resolution is not a commit: the
    * blank-over-content refusal, an ownership abort (a switch or delete landed
@@ -832,6 +838,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     }
 
     return doc;
+  },
+
+  saveNewDoc: async (doc) => {
+    await storage.save(doc);
+    const list = await storage.list();
+    set({ documents: list });
+    refreshMetrics(set, get);
   },
 
   // ── Save ───────────────────────────────────────────────────────────────────
