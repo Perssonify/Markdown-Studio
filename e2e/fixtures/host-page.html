@@ -14,7 +14,7 @@
   unit test pins the TRANSFORM; this page is the claim itself — nothing outside
   a `.pf-app` subtree may move, and everything inside one still must.
 -->
-<html lang="en">
+<html lang="en" class="dark">
 <head>
 <meta charset="utf-8">
 <title>Host page</title>
@@ -24,6 +24,13 @@
   body { margin: 8px; font-family: Georgia, serif; }
   h1 { font-size: 32px; font-weight: 700; }
   .brand { color: rgb(10, 20, 30); }
+  /* A shadcn / Tailwind host defines the SAME token names on :root and .dark
+     (unlayered, exactly like this). The editor's stylesheet used to overwrite
+     them, recolouring the host's whole page. */
+  :root { --background: rgb(1, 2, 3); --primary: rgb(4, 5, 6); --radius: 3px; }
+  .dark { --background: rgb(7, 8, 9); }
+  /* The host page scrolls, and its scrollbar is its own business. */
+  html { scrollbar-width: auto; }
 </style>
 </head>
 <body>
@@ -39,6 +46,17 @@
     <ul id="pf-ul"><li id="pf-li">Editor list item</li></ul>
     <a id="pf-a" href="#y">editor link</a>
   </div>
+
+  <!-- The library integration's wrapper, LIGHT under a dark host, with a host accent applied
+       inline — and the editor container nested inside it, which must inherit
+       both rather than re-declare the light defaults over them. -->
+  <div id="pf-wrapper" data-pf-root="" data-theme="light" style="display: contents; --primary: rgb(11, 22, 33)">
+    <div class="perssonify-editor" id="pf-editor">editor</div>
+  </div>
+
+  <!-- A menu Base UI portals to <body>, outside every editor container. It
+       must still resolve the editor's tokens. -->
+  <div data-base-ui-portal="" id="pf-portal"><div id="pf-menu">menu</div></div>
 
   <script>
     // Snapshot the properties a global reset would move, before and after the
@@ -57,6 +75,17 @@
         out[id] = Object.fromEntries(PROPS.map((p) => [p, cs.getPropertyValue(p)]));
       }
       out.body = { margin: getComputedStyle(document.body).marginTop };
+      const tokens = (el) => {
+        const cs = getComputedStyle(el);
+        return Object.fromEntries(["--background", "--primary", "--radius", "--border"]
+          .map((v) => [v, cs.getPropertyValue(v).trim()]));
+      };
+      out.tokens = {
+        root: tokens(document.documentElement),
+        editor: tokens(document.getElementById("pf-editor")),
+        menu: tokens(document.getElementById("pf-menu")),
+      };
+      out.htmlScrollbar = getComputedStyle(document.documentElement).scrollbarWidth;
       return out;
     };
     window.__before = snap();

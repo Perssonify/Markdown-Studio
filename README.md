@@ -50,8 +50,8 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 | HTML-to-Markdown | Turndown 7 |
 | State | Zustand 5 |
 | Persistence | IndexedDB (local, no server) |
-| Positioning | @floating-ui/dom |
-| Build Tool | Vite 6 |
+| UI primitives | Base UI (menus, dialogs, popovers) |
+| Build Tool | Vite 8 |
 | Test Framework | Vitest 4 + Testing Library |
 | Package Manager | Bun |
 | Deployment | Vercel (static SPA) |
@@ -63,7 +63,9 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) (canonical — `bun.lock` is committed and Vercel builds with Bun)
+- [Bun](https://bun.sh) (canonical — `bun.lock` is committed and Vercel builds with Bun),
+  at the version pinned by `packageManager` in `package.json`. Install with
+  `bun install --frozen-lockfile` to get exactly the locked tree.
 - Node.js 20+
 
 ### Install and Run
@@ -77,6 +79,9 @@ bun run dev
 
 # Run tests
 bun run test
+
+# Lint (must report zero errors; warnings are the tracked backlog)
+bun run lint
 
 # Build the standalone app
 bun run build:app
@@ -396,9 +401,37 @@ The editor can be embedded in external applications via the library build.
 > authoritative reference for **autosave/persistence, theming, default view mode,
 > and deep links**. Read it first if you're integrating the editor into a host app.
 
+### Install
+
+```bash
+npm install @perssonify/editor
+```
+
+The package ships ES and CommonJS builds, TypeScript declarations and one
+stylesheet. React 18, Tiptap 3 (3.31 or later, as one matching set), CodeMirror 6,
+lucide-react, next-themes and zustand are **peer dependencies**: npm 7+ installs
+them for you; with pnpm, Yarn or `--legacy-peer-deps`, add them yourself
+(`npm view @perssonify/editor peerDependencies` lists the exact ranges). The
+Markdown and rendering libraries — marked, turndown, KaTeX, Mermaid, abcjs, docx,
+mammoth and the rest — are ordinary dependencies that your bundler resolves and
+dedupes against any copy you already have; the heavy renderers stay lazy chunks
+that load the first time a document needs them.
+
+Import two stylesheets once, at your app root:
+
+```js
+import '@perssonify/editor/styles.css';  // the editor — safe to import, see "Style isolation"
+import 'katex/dist/katex.min.css';       // math: without it every formula renders twice, unstyled
+```
+
+`katex` is installed as a dependency of this package. Under pnpm's strict
+`node_modules` layout your own code cannot import it until you add it to your
+dependencies (`pnpm add katex@^0.18`).
+
 ```jsx
 import { PerssonifyEditorIntegration } from '@perssonify/editor';
 import '@perssonify/editor/styles.css';   // safe to import: see "Style isolation" below
+import 'katex/dist/katex.min.css';
 
 function App() {
   return (
@@ -439,7 +472,7 @@ editorRef.current.getGraph()              // Link graph (wiki + associations)
 editorRef.current.getDocuments() / .getActiveDocument() / .getAssociations(docId?)
 editorRef.current.importContent(content, format) / .setDocuments(docs)
 editorRef.current.setTheme('dark'|'light'|bool) / .setMode('split'|'md'|'html') / .setAccent(id)
-editorRef.current.setFieldSchemas(...) / .setAssociations(...)
+editorRef.current.setAssociations(...)
 editorRef.current.exportAs(format) / .copyAsPrompt(opts)
 ```
 
@@ -454,16 +487,30 @@ confines everything in the `base` layer to the editor's own subtrees:
 | Scope root | What it covers |
 | --- | --- |
 | `.perssonify-editor` | the editor container itself, on every mount |
+| `[data-pf-root]` | the `PerssonifyEditorIntegration` wrapper around it (carries `isDark`, `accent`, `accentColor`, `themeVars`) |
 | `.pf-app` | the standalone app and iframe embed shells |
 | `[data-base-ui-portal]`, `[data-sonner-toaster]` | menus, dialogs, sheets, tooltips, toasts — these portal to `document.body`, outside the container |
 | `[data-pf-portal]` | the few surfaces the editor attaches to `document.body` itself |
 
 Your headings keep their size and weight, your links keep their underline, your
-elements keep their margins and `box-sizing`. Design tokens are deliberately *not*
-scoped: they stay on `:root`, which is where the portalled surfaces read them from.
+elements keep their margins and `box-sizing`.
+
+The editor's **design tokens** (`--background`, `--primary`, `--border`,
+`--radius`, … and Tailwind's own theme variables) are *defined on those roots*,
+never on your `:root` or `.dark` — so a shadcn / Tailwind app keeps its own tokens
+of the same names, and your `<html class="dark">` does not recolour itself with the
+editor's palette. The portalled menus and dialogs are roots too, so they are themed
+along with the editor. Theme the editor through its props (`isDark`, `accent`,
+`accentColor`, `themeVars`) rather than by setting those names on `:root`. Rules
+that only make sense for a page the editor owns — hiding the page scrollbar, for
+one — apply only where `<html>` carries `.pf-app`, which a host page does not.
+
+One limit: `[data-base-ui-portal]` and `[data-sonner-toaster]` are attributes those
+libraries put on *every* portal, so if your own app also uses Base UI or sonner,
+your menus and toasts sit inside the scope as well.
 
 The scoping is applied by the library build only, and is pinned by
-`src/__tests__/scope-css.test.js`.
+`src/__tests__/scope-css.test.js` and the browser case `e2e/cases/library.mjs`.
 
 ### Integration Props
 
@@ -481,10 +528,23 @@ The scoping is applied by the library build only, and is pinned by
 | `onStorageMetricsChange` / `onStorageQuotaExceeded` | callbacks | Storage usage / quota |
 | `onChange` | `(data) => void` | Canonical-change event (fires on every edit) |
 | `onLinkClick` | `(e) => boolean\|void` | All link activations (`{kind:"doc"\|"external"}`); return `true` to handle deep links yourself |
-| `onGraphUpdate` / `onFieldChange` / `onExport` | callbacks | Graph / field / export events |
+| `onGraphUpdate` | `(graph) => void` | The link graph changed |
 | `onReady` | `(handle) => void` | Receives the imperative handle |
-| `fieldSchemas` / `associations` / `linkResolver` | data / fn | Field defs / external edges / outbound link resolution |
+| `associations` | data | External edges merged into `getGraph()` |
 | `allowedOrigins` | `string[]` | postMessage origins for iframe embeds (default `[]` = deny all cross-origin host messages) |
+
+#### Deprecated — accepted, but they do nothing
+
+Kept so existing hosts still compile; each logs one console warning in development
+builds when used, and will be removed in a future major version.
+
+| API | Status |
+|-----|--------|
+| `fieldSchemas` prop, `setFieldSchemas()` | No effect — the editor has no field-schema feature. |
+| `linkResolver` prop | Never called — wiki links resolve against the editor's own documents. Map a link into your app from `onLinkClick` (`kind: "doc"` carries the target title and id). |
+| `onFieldChange`, `onExport` props | Never fired. `exportAs()` resolves when its download has been triggered. |
+| `documents` prop | Never read — seed documents with `addDocuments()`. |
+| `BlockId`, `FieldBlock`, `TransclusionBlock` exports | Not registered by the editor, and block ids do not survive a Markdown round trip. They still work in a Tiptap editor of your own. |
 
 For the iframe `postMessage` bridge (`createHostBridge` / `createEditorClient`), see [src/integration/host-bridge.ts](src/integration/host-bridge.ts), [docs/integration-guide.md](docs/integration-guide.md#cross-origin-iframe-embeds), and [docs/architecture.md](docs/architecture.md#embedding--integration).
 
@@ -622,8 +682,9 @@ Annotated map and a "where does X live?" table: [docs/codebase-tour.md](docs/cod
 ## Testing
 
 ```bash
-bun run test         # Run all tests once
-bun run test:watch   # Watch mode
+bun run test           # Run all tests once
+bun run test:watch     # Watch mode
+bun run test:coverage  # Coverage over ALL of src/ (generated shadcn primitives excluded); html in coverage/
 ```
 
 > Test files must be named `*.test.js` or `*.test.jsx` — the Vitest `include` glob is
