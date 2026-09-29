@@ -12,7 +12,7 @@ import { buildContextPrompt } from "./integration/prompt-builder";
 import type { DocumentRecord } from "./store/document";
 import { extractText, resolveDocTitle } from "./store/document";
 import { AUTOSAVE_MS } from "./constants";
-import { isBlankCanonical, useDocumentStore } from "./store/documentStore";
+import { collectUnloadStash, isBlankCanonical, useDocumentStore } from "./store/documentStore";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
 import { useEditorStore } from "./store/editorStore";
@@ -1854,33 +1854,22 @@ export function PerssonifyEditor({
       // the autosave window and it was on neither pane nor disk afterwards.
       // localStorage is the only store that completes while the page is being
       // torn down; documentStore.initialize adopts it on the next boot.
-      const stash: RecoveryEntry[] = [];
-      const at = Date.now();
       // The editor's JSON belongs to hydratedDocId, not activeDocId — stashing
       // it under the wrong id is the cross-document overwrite every other path
       // in this file guards against.
       const owns = !!s.activeDocId && s.hydratedDocId === s.activeDocId;
       const live = owns ? getCanonicalRef.current() : null;
-      if (s.activeDocId && live && !isBlankCanonical(live)) {
-        stash.push({ docId: s.activeDocId, canonical: live, at });
-      }
-      for (const [docId, canonical] of drafts) {
-        if (docId === s.activeDocId) continue;
-        // Honour the blank-over-content backstop here too. `patchDocById` has no
-        // such guard (a host clearing a document through the bridge is a
-        // legitimate write), so a blank canonical that `saveActiveDoc` had
-        // deliberately REFUSED — parking a terminal "blocked" status — was
-        // cached as that document's draft and then written to disk anyway on tab
-        // close, with no pre-clear snapshot to recover from. The exact wipe the
-        // backstop exists to prevent, taking the long way round.
-        if (isBlankCanonical(canonical)) {
-          const stored = s.documents.find((d) => d.id === docId);
-          // `documents` carries list summaries; a non-zero word count is proof
-          // the stored document is not itself blank.
-          if (!stored || (stored.wordCount ?? 0) > 0) continue;
-        }
-        s.patchDocById(docId, { canonical }).catch(() => {});
-        stash.push({ docId, canonical, at });
+      // Which entries (and the revision each was written against — without it a
+      // reload laundered a two-tab conflict) is decided by collectUnloadStash,
+      // which also applies the blank-over-content backstop to parked drafts.
+      const stash: RecoveryEntry[] = collectUnloadStash(
+        s, live && !isBlankCanonical(live) ? live : null, Date.now()
+      );
+      for (const entry of stash) {
+        if (entry.docId === s.activeDocId) continue;
+        // Parked drafts are also written directly (best effort; the stash is
+        // the copy that survives when this write does not land).
+        s.patchDocById(entry.docId, { canonical: entry.canonical as DocumentRecord["canonical"] }).catch(() => {});
       }
       stashUnsaved(stash);
       e.preventDefault();
@@ -1888,7 +1877,7 @@ export function PerssonifyEditor({
     // `pagehide` as well as `beforeunload`: iOS Safari does not fire
     // beforeunload at all when the tab is swiped away or the app is
     // backgrounded, and a bfcache eviction skips it too. The handler is
-    // idempotent — the stash is a whole-value overwrite.
+    // idempotent — the stash merges per document, the newest entry winning.
     const handlePageHide = () => handleBeforeUnload(new Event("pagehide") as BeforeUnloadEvent);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);

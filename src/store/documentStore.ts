@@ -27,7 +27,7 @@ import {
 } from "./storage-adapter";
 import type { StorageMetrics } from "./idb-storage-adapter";
 import { snapshotStore } from "./snapshot-store";
-import { takeStashed } from "./crash-recovery";
+import { takeStashed, type RecoveryEntry } from "./crash-recovery";
 
 /**
  * A canonical doc is "blank" when it holds no real content — an empty/absent
@@ -44,6 +44,78 @@ export function isBlankCanonical(c: any): boolean {
     return !!n && n.type === "paragraph" && (!n.content || n.content.length === 0);
   }
   return false;
+}
+
+/**
+ * How far the stored `updated` may run ahead of the revision this tab's content
+ * is based on before it counts as ANOTHER tab's write. Absorbs same-tab stamp
+ * wobble from adapters stamping `updated` on save.
+ */
+export const CONFLICT_TOLERANCE_MS = 2000;
+
+/** True when `storedUpdated` is meaningfully newer than `baseUpdated` — i.e.
+ *  somebody else wrote the record after the revision this content came from. */
+export function isNewerThanBase(
+  storedUpdated: string | null | undefined,
+  baseUpdated: string | null | undefined
+): boolean {
+  if (!storedUpdated || !baseUpdated) return false;
+  const drift = new Date(storedUpdated).getTime() - new Date(baseUpdated).getTime();
+  return drift > CONFLICT_TOLERANCE_MS;
+}
+
+/** The message a refused multi-tab write carries (the UI matches on its start). */
+export const CONFLICT_MESSAGE =
+  "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload.";
+
+/**
+ * What the unload handler stashes (see crash-recovery.ts), as a pure function
+ * of the store state and the live editor canonical, so the exact set a reload
+ * will adopt can be tested without a page to unload.
+ *
+ * Every entry carries the revision it was written against (`base`). The active
+ * document's is `activeDoc.updated` — the revision the editor content is based
+ * on, which a refused conflict never advanced — and a parked draft's is its
+ * `_draftBases` entry. `live` must already be the canonical of the document the
+ * editor HOLDS (the caller checks `hydratedDocId`); a blank one is never
+ * stashed, and a blank parked draft only when the stored copy is blank too.
+ */
+export function collectUnloadStash(
+  s: Pick<
+    DocumentState,
+    "activeDocId" | "hydratedDocId" | "activeDoc" | "saveStatus" | "_unsavedEdits" | "_draftBases" | "documents"
+  >,
+  live: DocumentRecord["canonical"] | null,
+  at: number
+): RecoveryEntry[] {
+  const stash: RecoveryEntry[] = [];
+  const owns = !!s.activeDocId && s.hydratedDocId === s.activeDocId;
+  if (s.activeDocId && owns && live && !isBlankCanonical(live)) {
+    stash.push({
+      docId: s.activeDocId,
+      canonical: live,
+      at,
+      base: s.activeDoc?.id === s.activeDocId ? s.activeDoc.updated : undefined,
+      ...(s.saveStatus === "conflict" ? { conflict: true } : {}),
+    });
+  }
+  for (const [docId, canonical] of s._unsavedEdits) {
+    if (docId === s.activeDocId) continue;
+    // Honour the blank-over-content backstop here too. `patchDocById` has no
+    // such guard (a host clearing a document through the bridge is a
+    // legitimate write), so a blank canonical that `saveActiveDoc` had
+    // deliberately REFUSED — parking a terminal "blocked" status — was cached
+    // as that document's draft and then written to disk anyway on tab close,
+    // with no pre-clear snapshot to recover from.
+    if (isBlankCanonical(canonical)) {
+      const stored = s.documents.find((d) => d.id === docId);
+      // `documents` carries list summaries; a non-zero word count is proof
+      // the stored document is not itself blank.
+      if (!stored || (stored.wordCount ?? 0) > 0) continue;
+    }
+    stash.push({ docId, canonical, at, base: s._draftBases.get(docId) });
+  }
+  return stash;
 }
 
 //  Public types
@@ -430,10 +502,27 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // saves that happened after it was written, and adopting one then would
     // restore older content over newer as a "draft".
     const storedAt = new Map(list.map((d) => [d.id, Date.parse(d.updated) || 0]));
+    const titleOf = new Map(list.map((d) => [d.id, d.title]));
     for (const entry of takeStashed()) {
       if (!storedAt.has(entry.docId)) continue;
-      if (entry.at <= (storedAt.get(entry.docId) ?? 0)) continue;
+      if (entry.at <= (storedAt.get(entry.docId) ?? 0)) {
+        // Older than disk. A stash that was already in CONFLICT when it was
+        // written is the one version of that text that exists anywhere: the
+        // tab had refused to save it. Keep it recoverable in Version history
+        // rather than dropping it on the floor. Best effort, never awaited.
+        if (entry.conflict) {
+          void snapshotStore
+            .record(entry.docId, titleOf.get(entry.docId) ?? "Untitled", entry.canonical, "autosave")
+            ?.catch?.(() => {});
+        }
+        continue;
+      }
       get().cacheUnsavedEdit(entry.docId, entry.canonical as DocumentRecord["canonical"]);
+      // Restore the revision the draft was written against. Adopting it
+      // WITHOUT its base let `activate` below take `updated` from the record
+      // now on disk — another tab's — so the multi-tab guard saw zero drift and
+      // the first autosave silently replaced that tab's work.
+      if (entry.base) get()._draftBases.set(entry.docId, entry.base);
     }
 
     const prefs = await storage.getPrefs();
@@ -444,15 +533,27 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const activate = (doc: DocumentRecord): DocumentRecord => {
       const draft = get().getUnsavedEdit(doc.id);
       const canonical = draft ?? doc.canonical;
+      // A recovered draft keeps its OWN provenance (see switchToDoc): the
+      // record's `updated` may be another tab's write.
+      const draftBase = draft ? get()._draftBases.get(doc.id) : undefined;
+      // Already known to conflict: saving could only be refused again, so say
+      // so now instead of arming an autosave to discover it.
+      const conflicted = !!draft && isNewerThanBase(doc.updated, draftBase);
       const record: DocumentRecord = draft
-        ? ({ ...doc, canonical, _persistedCanonical: doc.canonical } as DocumentRecord)
+        ? ({
+            ...doc,
+            canonical,
+            updated: draftBase ?? doc.updated,
+            _persistedCanonical: doc.canonical,
+          } as DocumentRecord)
         : doc;
       set({
         activeDoc: record,
         activeDocId: doc.id,
         openTabs: [{ id: doc.id, title: doc.title }],
         counts: computeCounts(canonical),
-        saveStatus: draft ? "editing" : "ready",
+        saveStatus: conflicted ? "conflict" : draft ? "editing" : "ready",
+        saveError: conflicted ? "Changed in another tab" : null,
       });
       return record;
     };
@@ -569,18 +670,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     let storedReadFailed = false;
     try {
       stored = await storage.get(activeDoc.id);
-      if (stored?.updated && activeDoc.updated) {
-        const drift = new Date(stored.updated).getTime() - new Date(activeDoc.updated).getTime();
-        if (drift > 2000) {
-          // Park a TERMINAL "conflict" status so the UI can surface it
-          // persistently (the status bar) instead of it flickering through the
-          // generic transient "error". Set before throwing so it survives the
-          // caller's catch. A later real edit (setDirty → "editing") resumes.
-          set({ saveStatus: "conflict", saveError: "Changed in another tab" });
-          throw new Error(
-            "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload."
-          );
-        }
+      if (isNewerThanBase(stored?.updated, activeDoc.updated)) {
+        // Park a TERMINAL "conflict" status so the UI can surface it
+        // persistently (the status bar) instead of it flickering through the
+        // generic transient "error". Set before throwing so it survives the
+        // caller's catch. A later real edit (setDirty → "editing") resumes.
+        set({ saveStatus: "conflict", saveError: "Changed in another tab" });
+        throw new Error(CONFLICT_MESSAGE);
       }
     } catch (e) {
       if (e instanceof Error && e.message.startsWith("This document was changed")) throw e;
