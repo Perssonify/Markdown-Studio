@@ -48,7 +48,11 @@ export default defineConfig({
       // build never produced, so consumers rendered completely unstyled).
       cssFileName: 'styles',
     },
-    minify: 'esbuild',
+    // Vite 8 minifies with oxc (bundled). `'esbuild'` needs esbuild installed
+    // separately, which only resolved while an unrelated package happened to
+    // pull it into node_modules; the dependency cleanup removed that, and a
+    // clean `bun install --frozen-lockfile` could no longer build the library.
+    minify: 'oxc',
     target: 'es2020',
     // Maps are written for local debugging but not referenced from the output
     // and not published (package.json `files` excludes them): they were 416 of
