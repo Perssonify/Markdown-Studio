@@ -256,6 +256,34 @@ describe("runFind — the regex runs off the main thread, with a timeout", () =>
     expect(r.results[0].matches).toHaveLength(1);
   });
 
+  it("a worker that ANSWERED before and then dies is not replaced by a main-thread run", async () => {
+    // The main-thread fallback is for a Worker that never started (a CSP
+    // block). One that ran and then died was killed by the pattern itself —
+    // running that pattern on the main thread is what the Worker prevents.
+    let jobs = 0;
+    const made = [];
+    __setFindWorkerFactoryForTests(() => {
+      const w = {
+        onmessage: null, onerror: null, terminate() { w.dead = true; },
+        postMessage(msg) {
+          jobs++;
+          if (jobs === 2) { setTimeout(() => w.onerror?.(new Error("out of memory")), 0); return; }
+          const scope = { postMessage: (m) => setTimeout(() => w.onmessage?.({ data: m }), 0) };
+          new Function("self", findWorkerSource())(scope);
+          scope.onmessage({ data: msg });
+        },
+      };
+      made.push(w);
+      return w;
+    });
+    const q = compileFindQuery("a", RX, "md");
+    await expect(runFind(q, ["aa"], { isRegex: true, maxMatches: 10 })).resolves.toBeTruthy();
+    await expect(runFind(q, ["aa"], { isRegex: true, maxMatches: 10 })).rejects.toThrow(/could not be run/);
+    // …and the next job gets a fresh Worker rather than the main thread.
+    await expect(runFind(q, ["aa"], { isRegex: true, maxMatches: 10 })).resolves.toBeTruthy();
+    expect(made.length).toBe(2);
+  });
+
   it("without a worker, refuses the classic catastrophic shape rather than hang", async () => {
     __setFindWorkerFactoryForTests(null);
     await expect(
