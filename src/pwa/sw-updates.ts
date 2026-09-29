@@ -27,8 +27,18 @@ export type RegisterSW = (options: {
   onNeedRefresh?: () => void;
   onNeedReload?: () => void;
   onOfflineReady?: () => void;
+  onRegisteredSW?: (swUrl: string, registration: { update(): Promise<unknown> } | undefined) => void;
   onRegisterError?: (error: unknown) => void;
 }) => (reloadPage?: boolean) => Promise<void>;
+
+/**
+ * How often an open tab asks the server for a new worker. The browser only
+ * checks by itself on NAVIGATIONS, and this app's route changes are
+ * history.pushState, which are not navigations — so a tab left open for days
+ * (an installed PWA, typically) never learned a deploy had happened. One
+ * conditional fetch of sw.js (served no-cache) an hour is the price.
+ */
+export const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
 export type UpdateNotice =
   | "ready" // a new version is waiting
@@ -46,6 +56,8 @@ export interface SwUpdateEnv {
   /** Subscribe to the moments a waiting decision should be re-taken. */
   onChance(cb: () => void): () => void;
   setTimeout(cb: () => void, ms: number): unknown;
+  /** Run `cb` every `ms` for the life of the page. */
+  every(ms: number, cb: () => void): unknown;
 }
 
 const browserEnv = (): SwUpdateEnv => ({
@@ -64,6 +76,7 @@ const browserEnv = (): SwUpdateEnv => ({
     };
   },
   setTimeout: (cb, ms) => window.setTimeout(cb, ms),
+  every: (ms, cb) => window.setInterval(cb, ms),
 });
 
 export interface SwUpdateController {
@@ -119,6 +132,15 @@ export function setupServiceWorkerUpdates(registerSW: RegisterSW, env: SwUpdateE
         watching = true;
         env.onChance(consider);
       }
+    },
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return;
+      env.every(UPDATE_CHECK_MS, () => {
+        // Offline the fetch can only fail; hidden, nobody would see the prompt
+        // (the next visible check, or the browser's own on navigation, finds it).
+        if (!env.online() || env.hidden()) return;
+        registration.update().catch((error: unknown) => recordDiagnostic({ kind: "sw", error, name: "ServiceWorkerUpdateCheck" }));
+      });
     },
     onRegisterError(error) {
       recordDiagnostic({ kind: "sw", error, name: "ServiceWorkerRegistration" });
