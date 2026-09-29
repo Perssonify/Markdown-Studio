@@ -37,21 +37,36 @@
     </script>
 <title>Markdown Studio</title>
     <script>
-        // Boot watchdog — self-heals blank first loads. If the app bundle
-        // fails to boot within 8s (classic cause: a stale service worker
-        // serving old HTML whose hashed entry script no longer exists on the
-        // current deploy → hard blank with no error hook), unregister every
-        // service worker, drop all caches, and reload once for a clean,
-        // network-fresh start. Inline so it works even when NO bundle loads.
+        // Boot watchdog — self-heals a load that can never boot. Classic cause:
+        // a stale service worker or cache serving HTML whose hashed entry
+        // script no longer exists on the current deploy → a hard blank page with
+        // no error hook. Recovery = unregister every service worker, drop all
+        // caches, note why (the app reads pf:boot-recovered into its diagnostics)
+        // and reload once. Inline so it works even when NO bundle loads.
+        //
+        // It acts only on EVIDENCE and only ONLINE. It used to fire on a timer
+        // alone (8s), so a slow phone — the startup bundle does not load in 8s
+        // on slow 3G — lost its offline cache and was reloaded, and offline it
+        // then landed on the browser's error page: the caches it deleted were
+        // the only copy of the app there was. Evidence is a <script> or <link>
+        // that failed to load (a 404, or HTML served where a module was
+        // expected) or an uncaught error before the app booted; the grace period
+        // lets a non-fatal failure (a stylesheet) finish booting anyway.
         // A sessionStorage stamp prevents any reload loop.
         (function () {
             var KEY = "pf:boot-recover-at";
-            setTimeout(function () {
-                if (window.__PF_BOOTED) return;
+            var GRACE_MS = 4000;
+            var failed = "";
+            var timer = 0;
+            function check() {
+                timer = 0;
+                if (window.__PF_BOOTED || !failed) return;
+                if (navigator.onLine === false) return; // retried on "online"
                 var last = 0;
                 try { last = Number(sessionStorage.getItem(KEY) || "0"); } catch (e) { }
                 if (Date.now() - last < 30000) return; // recovered recently — don't loop
-                try { sessionStorage.setItem(KEY, String(Date.now())); } catch (e) { }
+                try { sessionStorage.setItem(KEY, String(Date.now())); } catch (e) { return; }
+                try { localStorage.setItem("pf:boot-recovered", JSON.stringify({ t: Date.now(), reason: failed })); } catch (e) { }
                 var cleanup = [];
                 try {
                     if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
@@ -59,16 +74,25 @@
                             return Promise.all(rs.map(function (r) { return r.unregister(); }));
                         }));
                     }
-                    if (window.caches && caches.keys) {
-                        cleanup.push(caches.keys().then(function (ks) {
-                            return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+                    if (window.caches && window.caches.keys) {
+                        cleanup.push(window.caches.keys().then(function (ks) {
+                            return Promise.all(ks.map(function (k) { return window.caches.delete(k); }));
                         }));
                     }
                 } catch (e) { }
                 Promise.all(cleanup).catch(function () { }).then(function () {
                     location.reload();
                 });
-            }, 8000);
+            }
+            window.addEventListener("error", function (e) {
+                if (window.__PF_BOOTED || failed) return;
+                var t = e && e.target;
+                if (t && t !== window && (t.tagName === "SCRIPT" || t.tagName === "LINK")) failed = "failed-to-load:" + t.tagName.toLowerCase();
+                else if (e && (e.error || e.message)) failed = "boot-error";
+                else return;
+                if (!timer) timer = setTimeout(check, GRACE_MS);
+            }, true);
+            window.addEventListener("online", check);
         })();
     </script>
 </head>
