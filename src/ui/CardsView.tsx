@@ -560,13 +560,13 @@ export function CardsView({
                   >
                     {item.checked && <Check className="size-2.5" />}
                   </span>
-                  <span className={cn("wrap-anywhere", item.checked && "line-through opacity-60")}>
+                  <span className={cn("wrap-anywhere", item.checked && "line-through opacity-85")}>
                     {item.text}
                   </span>
                 </li>
               ))}
               {c.checklist.overflow > 0 && (
-                <li className="pl-5 text-xs opacity-60">+{c.checklist.overflow} more</li>
+                <li className="pl-5 text-xs opacity-85">+{c.checklist.overflow} more</li>
               )}
               </ul>
             </>
@@ -578,10 +578,10 @@ export function CardsView({
               dangerouslySetInnerHTML={{ __html: c.previewHtml }}
             />
           ) : (
-            <p className="text-xs italic opacity-50">Empty note</p>
+            <p className="text-xs italic opacity-85">Empty note</p>
           )}
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] opacity-60">
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] opacity-85">
             {folder && <span className="rounded bg-foreground/10 px-1.5 py-0.5">{folder}</span>}
             {c.checklist.total > 0 && (
               <span>
@@ -651,7 +651,7 @@ export function CardsView({
                       )}
                       style={swatch ? { backgroundColor: swatch } : undefined}
                     >
-                      {!swatch && <span className="text-[9px] opacity-60">∅</span>}
+                      {!swatch && <span className="text-[9px] opacity-60" aria-hidden>∅</span>}
                     </button>
                   );
                 })}
@@ -744,7 +744,7 @@ export function CardsView({
                   it out of tab order, so checklist capture was reachable by
                   pointer only. A button nested in a button is also invalid
                   HTML. */
-              <div className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm opacity-80 shadow-sm transition-shadow hover:shadow-md">
+              <div className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm opacity-85 shadow-sm transition-shadow hover:shadow-md">
                 <button
                   type="button"
                   onClick={openComposer}
@@ -823,7 +823,7 @@ export function CardsView({
                     <ListTodo className="size-3.5" />
                     Checklist
                   </Button>
-                  <span className="ml-auto hidden text-[10px] opacity-50 sm:inline">
+                  <span className="ml-auto hidden text-[10px] opacity-85 sm:inline">
                     ⌘↵ to save
                   </span>
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelComposer}>
@@ -851,10 +851,10 @@ export function CardsView({
         ) : cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <StickyNote className="size-8 opacity-40" aria-hidden />
-            <p className="text-sm font-medium opacity-70">
+            <p className="text-sm font-medium opacity-85">
               {query ? "No notes match your search" : "No notes yet"}
             </p>
-            <p className="text-xs opacity-50">
+            <p className="text-xs opacity-85">
               {query ? "Try a different word." : "Use “Take a note…” above to capture your first one."}
             </p>
             {query && (
@@ -867,12 +867,12 @@ export function CardsView({
           <>
             {shownPinned.length > 0 && (
               <>
-                <h3 className="mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-50">
+                <h3 className="mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-85">
                   Pinned
                 </h3>
                 <Masonry items={shownPinned} cols={colCount} render={renderCard} />
                 {shownOthers.length > 0 && (
-                  <h3 className="mt-4 mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-50">
+                  <h3 className="mt-4 mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-85">
                     Others
                   </h3>
                 )}
@@ -1036,7 +1036,7 @@ function CardEditor({
     >
       {text.trim()
         ? <div dangerouslySetInnerHTML={{ __html: html }} />
-        : <p className="text-sm italic opacity-50">Empty note</p>}
+        : <p className="text-sm italic opacity-85">Empty note</p>}
     </div>
   );
 
@@ -1137,7 +1137,7 @@ function CardEditor({
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-3 py-2">
-          <span className="mr-auto hidden text-[10px] opacity-50 sm:inline">
+          <span className="mr-auto hidden text-[10px] opacity-85 sm:inline">
             {effectiveView === "preview" ? "Rendered" : "Markdown"} · ⌘↵ or Esc to close
           </span>
           <Button size="sm" className="h-7 text-xs" onClick={finish}>
