@@ -2,7 +2,8 @@
 
 ## Symptoms
 - The **Uptime** workflow (`.github/workflows/uptime.yml`, every 30 min) is red,
-  or an external monitor alerts.
+  or an external monitor alerts. It is red by design until the domain points
+  at the Vercel project (A001, an owner action).
 - Users report the site will not load, shows a parking / "domain for sale" page,
   a Vercel error page, or a certificate warning.
 - Installed users mostly do NOT notice: the service worker serves the app from
@@ -47,7 +48,8 @@
   — a Firewall kill switch may be active.
 
 ## After
-- Confirm the Uptime workflow is green again (Actions ▸ Uptime ▸ Run workflow).
+- Confirm the Uptime workflow is green again (Actions ▸ **Uptime —
+  markdownstudio.com** ▸ Run workflow).
 - If the outage came from a domain or registrar change, record who owns the
   registrar account and when it renews ([deployment.md](../deployment.md)).
 

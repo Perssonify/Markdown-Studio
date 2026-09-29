@@ -11,23 +11,34 @@ before changing code.
 
 - **Repo:** `SolutionPath/markdown-studio`
 - **Archived predecessor:** [`SolutionPath/Markdown-Editor-V3`](https://github.com/SolutionPath/Markdown-Editor-V3)
-- **Package/version:** `@perssonify/editor` **v1.72.0** — single-sourced from
-  `package.json` (Vite injects `__APP_VERSION__`; `src/constants.ts` re-exports it as
-  `VERSION`). Bump `package.json` only.
-- **Package manager:** **Bun** (`bun install`, `bun run …`). Do not use npm/yarn.
+- **Package/version:** `@perssonify/editor` **v1.77.0**, plus the unreleased fixes for
+  the September 2026 production-readiness audit (`CHANGELOG.md` ▸ Unreleased) —
+  single-sourced from `package.json` (Vite injects `__APP_VERSION__`;
+  `src/constants.ts` re-exports it as `VERSION`). Bump `package.json` only.
+- **Before launch:** read **`docs/audit-2026-09.md`** — the audit's 114 findings, what
+  is done, the owner actions that are not code (domain, CI gate, npm scope, legal
+  pages…) and the deferred engineering work.
+- **Package manager:** **Bun 1.4.0** (pinned by `packageManager`; always
+  `bun install --frozen-lockfile`). Do not use npm/yarn.
 - **Deploy:** the standalone app auto-deploys to **Vercel** (preview per branch,
   production on `main`). It's a static SPA; the only server code is one same-origin
-  serverless relay (`api/import.js` — see `docs/import-relay.md`).
-- **CI:** `.github/workflows/ci.yml` runs the full verify gate on every PR to `main`.
+  serverless relay (`api/import.js` — see `docs/import-relay.md`), used only after
+  the user agrees. Open tabs are PROMPTED to update, never force-reloaded.
+- **CI:** `.github/workflows/ci.yml` runs the full verify gate and the browser campaign
+  on every PR to `main` and every push to it — but nothing yet stops a red build
+  from deploying: branch protection and Vercel deployment checks are owner steps
+  (`docs/deployment.md`).
 
 ### Verify gate (run before every commit; CI runs the same)
 ```bash
-bun install
-bunx tsc --noEmit      # type gate — must be clean (strict mode is the de-facto linter)
-bun run test           # Vitest — must pass (69 suites / 705 tests)
-bun run build:app      # standalone app build (dist-app/)
+bun install --frozen-lockfile
+bunx tsc --noEmit      # type gate — must be clean
+bun run lint           # ESLint + React hook rules — 0 errors
+bun run test           # Vitest — must pass (196 files / 2,126 tests)
+bun run build:app      # standalone app build (dist-app/) + third-party licence notice
 bun run build          # library build (dist/)
 bun run build:embed    # iframe-embed build (dist-embed/)
+bun run e2e            # browser campaign, incl. the csp and pwa suites (e2e/README.md)
 ```
 Everything must be green. Ship incrementally: implement → verify → bump `package.json`
 → commit → push.
@@ -38,9 +49,10 @@ Everything must be green. Ship incrementally: implement → verify → bump `pac
 
 `@perssonify/editor` is a **dual-pane, bidirectionally-synced Markdown editor**: a
 **CodeMirror 6** raw-markdown pane and a **TipTap/ProseMirror** rich pane kept in sync.
-It is **client-only** — no backend, no login, no database to provision. Documents persist
-locally (IndexedDB → a `window.storage` shim → localStorage → in-memory, chosen by
-`createStorageAdapter`). It ships three ways: an embeddable npm **library** (`dist/`), a
+There is no account, no login and no database to provision; the only server code is
+the opt-in URL-import relay. Documents persist in the browser (IndexedDB → a
+`window.storage` shim → localStorage → in-memory, chosen by `createStorageAdapter`;
+the in-memory fallback shows a permanent "Not saving" banner). It ships three ways: an embeddable npm **library** (`dist/`), a
 standalone **app** (`dist-app/`, on Vercel), and an **iframe embed** entry (`dist-embed/`).
 
 **The canonical source of truth is ProseMirror JSON** inside the live TipTap editor.
@@ -53,9 +65,12 @@ Authoritative reading, in order:
 2. `docs/gotchas.md` — the landmines.
 3. `docs/architecture.md` (ADRs), `docs/data-pipeline.md`, `docs/database.md`.
 4. `docs/features.md` — feature-by-feature with entry points and edge cases.
-5. `docs/v1-to-current-changelog.md` — the full v1→current delta (hand this to builders).
-6. `docs/backlog.md` — planned features + deferred findings + the state-machine decision.
-7. `docs/integration-guide.md` — for host apps embedding the library/iframe.
+5. `docs/audit-2026-09.md` — **what remains before launch**: the September 2026
+   production-readiness audit register (all 114 findings and their status), the owner
+   actions that are not code, and the deferred engineering work.
+6. `docs/v1-to-current-changelog.md` — the full v1→current delta (hand this to builders).
+7. `docs/backlog.md` — planned features + earlier audits' findings + the state-machine decision.
+8. `docs/integration-guide.md` — for host apps embedding the library/iframe.
 
 ---
 
@@ -75,7 +90,8 @@ Authoritative reading, in order:
 | Panes | `src/ui/CodeMirrorPane.tsx`, `TiptapPane.tsx`, `EditorPanes.tsx` | The two editors + split/scroll-sync. |
 | Workspace panel | `src/ui/WorkspacePanel.tsx`, `FolderTree.tsx` | Left-docked Files / Outline tabs (the library + single-doc outline). |
 | Graph | `src/ui/GraphView.tsx`, `src/store/graph-metrics.ts`, `doc-outline.ts` | **Map-only** full-screen relationship overlay + orphan/broken-link metrics. |
-| Find/Replace | `src/ui/FindReplace.tsx` | Floating draggable panel; MD scope filters; scrollbar markers. |
+| Find/Replace | `src/ui/FindReplace.tsx`, `src/formatting/find-engine.ts`, `find-worker.ts` | Floating draggable panel; ONE matcher; a regex runs in a terminable Web Worker. |
+| Durability & ops | `src/store/storage-durability.ts`, `crash-recovery.ts`, `src/pwa/sw-updates.ts`, `src/utils/*` | Wipe detection, backup reminder, unload stash, prompted updates, diagnostics ring, dev-only gates. |
 | Extensions | `src/extensions/*` | Custom TipTap nodes (math, diagrams, callouts, details, task lists, background-color, wiki-link, sized/theme images, emoji, frontmatter). |
 | UI pages/dialogs | `src/ui/pages/*`, `src/ui/*Sheet.tsx`, `Dialogs.tsx` | Help/About, Settings, Memory, Version History, Link builder, etc. |
 | Relay | `api/import.js` | The ONLY server code: a hardened same-origin import proxy. |
@@ -103,6 +119,12 @@ commit subjects after v1.35 carry their `(vX.Y.Z)` tag). The broad strokes:
   diagnostics console, incremental link index, IME/dictation-aware sync.
 - **v1.54–v1.59** — the **unified Workspace panel** (Files / Outline), mobile touch sizing,
   and the graph settling on a **map-only relationship overlay**.
+- **v1.60–v1.77** — the Markdown Studio rename and migration (history-clean import at
+  v1.70.0), the Cards board, and a string of data-loss fixes from outside reviews.
+- **September 2026** — an external **production-readiness audit** of v1.77.0 (114
+  findings). The unreleased fixes cover content fidelity, multi-tab safety, storage
+  eviction, prompted updates, the relay's consent and limits, accessibility, the npm
+  package and CI; what remains is in `docs/audit-2026-09.md`.
 
 The throughline: this is a **data-integrity-sensitive** app (users lose real work if the
 save/switch/sync layer misbehaves). Most hardening effort went into making unintentional,
@@ -112,8 +134,8 @@ out-of-user-control data loss impossible, and into recoverability when preventio
 
 ## 4. The knowledge graph (current design)
 
-`src/ui/GraphView.tsx` is a **map-only, full-screen relationship overlay** (toggled from
-View ▸ Relationship map, the graph button, the status bar, or **⌘⇧G**):
+`src/ui/GraphView.tsx` is a **map-only, full-screen relationship overlay** (opened from
+the top-bar Editor · Cards · Map switcher, View ▸ Relationship map, or **⌘⇧G**):
 
 - Documents are nodes, `[[wiki links]]` are edges, folders are labeled dashed clusters.
 - It opens **directly on the map** with the active doc highlighted and its neighbourhood
@@ -122,7 +144,8 @@ View ▸ Relationship map, the graph button, the status bar, or **⌘⇧G**):
   chips** highlight isolated/unresolved nodes (broken-link targets shown as off-by-default
   ghost nodes, excluded from the sim).
 - Node interactions: click = select; double-click / Enter = open (closes overlay);
-  drag = rearrange; wheel/buttons/Fit = camera. Escape clears search/filter, else closes.
+  drag = rearrange; wheel/buttons/Fit = camera. Escape clears search/filter, else closes
+  — handled in the bubble phase, so a dialog or rename box keeps its own Escape.
 - Physics is a **single-ref force loop that FREEZES on settle** — do **not** reintroduce a
   per-loop snapshot (jump/drift bug).
 
@@ -161,6 +184,17 @@ refuses when the editor's content doesn't belong to the active doc. Every path t
 content into the editor must `markHydrated(docId)`; every path that changes `activeDocId`
 without pushing must leave it null. Read `getLifecycleState()` when debugging this layer.
 
+The September 2026 audit added more around these four (each a `CLAUDE.md` invariant):
+stored content reaches the editor only through `hydrateEditorWithDoc`, which opens a
+document from a newer build read-only instead of blank (A021); a failed storage read is
+an error, never "not found", and the save fails closed (A029); the unload stash carries
+each draft's base revision, so a reload cannot launder a two-tab conflict (A018); a
+library the browser emptied is detected and never re-seeded (A017); `"full"` joins
+`"blocked"` and `"conflict"` as a terminal save status (A086); and `saveActiveDoc`
+resolves `true` only when the write committed (A026). One gap is known and open: an
+editor unmounted by a host writes its cached draft with no blank check
+(`releaseEditor`, see `docs/audit-2026-09.md`).
+
 **Deferred (recorded in `docs/backlog.md`):** a full doc-lifecycle state-machine rewrite.
 This is the highest-blast-radius code; it is now protected by the four layers + documented
 invariants + a regression suite, at a good risk-adjusted optimum. Do the FSM extraction the
@@ -191,9 +225,15 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
 - **`src/components/ui/*` are generated** — regenerate via the shadcn CLI, don't hand-edit.
 - **Turndown checks later-added rules first (LIFO)** — order matters in `turndown-rules.ts`.
 - **Base UI `DropdownMenuLabel` must sit inside a `DropdownMenuGroup`** (Base UI #31).
-- **Security invariants**: the relay must not reflect upstream `Content-Type`; `?import_url=`
-  never auto-fetches; host CSS colors go through `sanitizeCssColor`; `htmlToCanonical` uses
-  an inert `DOMParser`; archive paths go through `normalizeArchivePath`. Do not regress.
+- **Security invariants**: the relay must not reflect upstream `Content-Type`, is used only
+  after the user agrees, and connects only to public addresses; `?import_url=` never
+  auto-fetches; host CSS colors go through `sanitizeCssColor` and every style value through
+  `css-safety.ts`; `htmlToCanonical` uses an inert `DOMParser`; archive paths go through
+  `normalizeArchivePath`; editing an inline `<script>` means updating its CSP hash in
+  `vercel.json`. Do not regress.
+- **Document chords need the caret in a pane, and AltGr is never a shortcut** — no new
+  keymap may bind Ctrl+Alt plus a character (A025, A052).
+- **The service worker prompts; it never force-reloads a tab** (A008).
 
 ---
 
@@ -204,23 +244,34 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   and timing-sensitive. Change it surgically, keep the four layers intact, re-run the
   hydration-guard tests.
 - **Multi-tab:** no live cross-tab refresh (tabs don't see each other's edits until reload);
-  after tab B saves, tab A parks a terminal `"conflict"` status by design. This is the
-  natural trigger for the save-FSM work (§5).
+  after tab B saves, tab A parks a terminal `"conflict"` status by design, and a reload
+  keeps the other tab's work (A018). Live invalidation is the natural trigger for the
+  save-FSM work (§5).
+- **Large documents:** every edit still re-converts the whole document; the audit's cheap
+  fixes made it linear, not incremental (A083).
 - **Graph performance:** the force sim is O(n²) per tick while running (it freezes on
-  settle). Fine for typical libraries; consider Barnes-Hut/quadtree only if a very large
-  library becomes a real complaint.
+  settle). Fine for typical libraries; untested at ~2,000 notes (A088).
 - **`PerssonifyEditor.tsx`** is a very large orchestrator. It works and is carefully
   memoized, but it's the hardest file to onboard to. Splitting it is worthwhile but delicate
-  (many refs/effects with ordering constraints — read the comments first).
-- **Bundle size:** the embed build warns about >500 kB chunks (mermaid/abcjs/katex are
-  heavy). They're lazy-loaded where it matters; revisit only if load time is a complaint.
+  (many refs/effects with ordering constraints — read the comments first); the audit
+  recommends doing it as its own pull request (A110), and it is still thinly covered by
+  behavioural tests (A108).
+- **Browsers:** the e2e campaign runs Chromium only; Firefox and WebKit are unverified
+  (A100), and Safari before 16.4 cannot run the app (Tailwind v4 needs 16.4; A097).
+- **Bundle size:** the startup payload is ~680 KiB gzip; mermaid, abcjs and katex load
+  lazily and are precached for offline use.
 
 ---
 
 ## 8. Suggested next work (candidates, not commitments)
 
-- **Multi-tab conflict handling** (`BroadcastChannel` invalidation + the terminal `conflict`
-  save status) — closes the biggest deferred gap and is the FSM trigger.
+- **Launch blockers first:** the owner actions and deferred engineering in
+  `docs/audit-2026-09.md` — above all the domain, the CI gate on deploys and the old
+  origin's move banner — and the defects found while reconciling the docs, listed in
+  the same file (the `/embed.html` framing gap and the broken first-run `[[Welcome]]`
+  links first).
+- **Live multi-tab invalidation** (`BroadcastChannel`; the terminal `conflict` status
+  already exists) — closes the biggest deferred gap and is the FSM trigger.
 - **Full-document LaTeX / multi-file projects** — content/engine-layer if single-doc; a
   data-model change (and the right moment for the FSM extraction) if Overleaf-style projects.
 - **Backlog features** (`docs/backlog.md`): Markdown format detection + settings suggestion,
@@ -240,7 +291,8 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
 
 ## 10. Fast orientation checklist
 
-1. `bun install && bunx tsc --noEmit && bun run test` — confirm a green baseline.
+1. `bun install --frozen-lockfile && bunx tsc --noEmit && bun run lint && bun run test`
+   — confirm a green baseline.
 2. Read `CLAUDE.md` (map + invariants) and `docs/gotchas.md`.
 3. Skim `src/store/documentStore.ts` and `src/hooks/useDocumentLifecycle.ts` with §5 open
    beside them — that's the delicate core.

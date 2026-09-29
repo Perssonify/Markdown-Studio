@@ -4,18 +4,25 @@
 The standalone app registers a service worker (`vite-plugin-pwa`,
 `registerType: "prompt"`). After a deploy:
 
-1. An open tab's browser finds the new `sw.js` (it is served `no-cache`) and
-   installs the new worker in the background, precaching every chunk.
-2. The new worker **waits**. The tab shows **"A new version of Markdown Studio is
-   ready — Reload"**. Nothing reloads by itself.
+1. The browser finds the new `sw.js` (it is served `no-cache`) on a navigation,
+   or through the open tab's own check, which runs every hour while the tab is
+   online and visible — the app's route changes are `pushState`, not
+   navigations, so without it a long-lived tab never looked. The new worker
+   installs in the background, precaching every chunk.
+2. The new worker **waits**. The tab shows a notice, **"A new version of
+   Markdown Studio is ready"**, with a **Reload** button. Nothing reloads by
+   itself; pressed offline, Reload waits for a connection.
 3. It takes over when the user presses **Reload**, or when every tab of the app
-   has been closed. Other open tabs are then told "updated in another tab"; one
-   reloads by itself only when it is online, has nothing unsaved and is in the
-   background ([src/pwa/sw-updates.ts](../../src/pwa/sw-updates.ts)).
+   has been closed. Other open tabs are then told "Markdown Studio was updated
+   in another tab"; one reloads by itself only when it is online, has nothing
+   unsaved and is in the background
+   ([src/pwa/sw-updates.ts](../../src/pwa/sw-updates.ts)).
 
 So "I don't see the new version" in an open tab is usually step 2 working as
-designed. Navigations are network-first, so a *fresh* page load online always
-gets the current HTML; offline, the worker serves its own precached shell.
+designed. Navigations are network-first, so a *fresh* page load online gets the
+current HTML; when the network fails, takes more than 3 s or answers 5xx, the
+worker serves its own precached shell
+([public/sw-recover.js](../../public/sw-recover.js)).
 
 ## Symptoms that are NOT working as designed
 - A blank page that stays blank after reloads.
@@ -46,11 +53,14 @@ Ask for **Copy diagnostics** (entries of kind `sw` = registration/update errors;
   storage** — i.e. clear only *Cache storage*. Never tell a user to "clear site
   data" wholesale: that deletes their documents.
 - **Blank page after a deploy, many users**: the inline boot watchdog recovers
-  automatically when it has EVIDENCE (a script or stylesheet that failed to
-  load, or an error before boot) and the browser is online: it unregisters the
-  worker, clears Cache Storage (never documents), leaves a `pf:boot-recovered`
-  note and reloads once (at most every 30 s). If blank pages persist, it is a
-  broken deploy: [deploy-broken.md](deploy-broken.md) — roll back first.
+  automatically when it has EVIDENCE — a script or stylesheet that failed to
+  load, or an uncaught error from the app's own bundle (a file under
+  `/assets/`) before boot — and, after a 4 s grace period, only while the
+  browser is online: it unregisters the worker, clears Cache Storage (never
+  documents), leaves a `pf:boot-recovered` note and reloads once (at most every
+  30 s). A slow load with no such evidence is left alone. If blank pages
+  persist, it is a broken deploy: [deploy-broken.md](deploy-broken.md) — roll
+  back first.
 - **A broken worker shipped**: deploy a fixed build. Navigations are network
   first, so pages load the new HTML online even while the old worker controls
   them; the new worker installs and prompts. In an emergency a *self-destroying*

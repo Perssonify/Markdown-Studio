@@ -20,6 +20,7 @@ request log has the IP).
 
 | Signal | Meaning |
 |---|---|
+| `sfs:"same-origin"` | Normally the app itself: a browser only reaches the relay after its user agreed to it once (Settings ▸ Privacy ▸ Import relay). A script can send the same value, so volume still counts. |
 | many `sfs:"none"` | A browser only sends `none` on a direct navigation, which the app never does — almost always a script. |
 | `reason:"blocked_address"` / `"blocked_host"` | Someone probing for SSRF (internal addresses, metadata). Refused; worth watching, not an incident by itself. |
 | `reason:"rate_limited"` in bursts | One IP over 40 req/min on a warm instance. |

@@ -9,7 +9,7 @@ escalation.**
 |---------|-----------|
 | [documents-disappeared.md](documents-disappeared.md) | A user says their documents vanished — check Version history and the unload stash before saying "gone" |
 | [sync-loop-or-frozen-editor.md](sync-loop-or-frozen-editor.md) | The editor freezes, spikes CPU, or panes flicker |
-| [storage-quota-exceeded.md](storage-quota-exceeded.md) | Saving fails / a quota error appears |
+| [storage-quota-exceeded.md](storage-quota-exceeded.md) | The status bar says "Storage full — not saving" / a quota error appears |
 | [deploy-broken.md](deploy-broken.md) | The Vercel deploy fails or serves a blank page |
 | [stuck-service-worker.md](stuck-service-worker.md) | "The new version never arrives", or a blank page that survives reloads |
 | [hosting-outage.md](hosting-outage.md) | markdownstudio.com is down, parked, or shows a Vercel/TLS error |

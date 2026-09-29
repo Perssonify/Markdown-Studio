@@ -5,17 +5,29 @@ implementation. Each entry states the goal, an initial design sketch, open
 questions, and a rough complexity/risk read. Nothing here is committed to a
 release yet.
 
+> **What remains before launch is NOT tracked here.** The September 2026
+> production-readiness audit (114 findings, A001–A114) has its own register,
+> [`audit-2026-09.md`](audit-2026-09.md): every finding's status, the owner actions
+> that are not code, and the deferred engineering work. It is the authoritative
+> list; this file keeps the design backlog and the earlier audits, whose statuses
+> were reconciled against the code on 2026-09-29 (audit A111).
+
 ---
 
 ## 1. Console / automation & diagnostics tray
 
-**Status.** ✅ **Diagnostics console SHIPPED** (Admin-gated, read-only curated
-registry — `src/ui/ConsolePanel.tsx` + `src/store/console-commands.ts`,
-`consoleEnabled`/`pf:console`, a third bottom-tray tab). Commands: `help`,
-`diag.lifecycle`, `diag.storage`, `docs.list`, `doc.outline`, `doc.links`,
-`graph.stats`. **Automation / mutating commands remain backlog** (below).
+**Status.** ✅ **Diagnostics console SHIPPED** (read-only curated registry —
+`src/ui/ConsolePanel.tsx` + `src/store/console-commands.ts`,
+`consoleEnabled`/`pf:console`, the bottom tray's second tab after Document Links).
+It is switched on from the Settings **Admin** section, which production builds
+hide unless `localStorage["pf:admin"]` is `"1"`; while the section is hidden the
+switch falls back to off (audit A081). Commands: `help`, `diag.lifecycle`,
+`diag.storage`, `docs.list`, `doc.outline`, `doc.links`, `graph.stats`.
+**Automation / mutating commands remain backlog** (below). User-facing
+diagnostics — the redacted error ring behind "Copy diagnostics" on the crash
+screen and the About page — shipped separately (audit A009).
 
-**Shipped design.** A tray tab (next to Document Links / Outline) with a REPL-style
+**Shipped design.** A tray tab (next to Document Links) with a REPL-style
 input + scrollback. Commands run against a **curated command registry** — NOT
 `eval` — over a typed, READ-ONLY `ConsoleContext` of getters. `console-commands.ts`
 is pure and unit-tested.
@@ -74,6 +86,17 @@ for suggestions needs care to avoid nagging.
 
 ## 3. DOCX import → Markdown (on the fly)
 
+**Status.** ✅ **SHIPPED for file import.** `src/store/docx-import.ts` converts a
+`.docx` to HTML with `mammoth`, lazy-loaded in its own chunk; the import loop routes
+`.docx` files there before the text path and feeds the result to the ordinary
+`html` ingest (sanitise + residual report), for File ▸ Open and for files dropped
+on the editor or the Files tab. Best-effort, as sketched below: headings,
+emphasis, lists, tables and raster images (inlined as `data:` URIs) convert; Word
+equations (OMML), text boxes and complex layout do not. A hostile `.docx` can no
+longer stall the tab through mammoth's XML parser (audit A071). URL import does
+not convert `.docx` — a fetched one is read as a ZIP archive. The design notes
+below are kept as the record of the decision.
+
 **Goal.** Import `.docx` files and convert to Markdown on import. Research-gated —
 **skip if too complex.**
 
@@ -117,7 +140,8 @@ inspiration from Overleaf (https://www.overleaf.com/) and similar.
     references section) — large; likely its own project.
   - Theorem/lemma/proof environments; captions; labels.
   - Section auto-numbering; a table of contents node.
-  - Better equation authoring (already have KaTeX; add an equation panel/preview).
+  - Better equation authoring — ✅ done: Insert ▸ Formula opens an equation dialog
+    with a live KaTeX preview (`EquationDialog`, `src/ui/Dialogs.tsx`).
   - Templates (article/report/two-column paper).
 
 **Open questions.**
@@ -141,7 +165,7 @@ the real code, and every fix is covered by a test confirmed to fail before it.
 
 | ID | Severity | Verdict |
 |---|---|---|
-| K1 (their F001) | High · data-loss | ✅ **RESOLVED (1.77.0)** — active close prompted only on `saveStatus === "editing"`, so the TERMINAL `conflict` and `blocked` states (and `error`/`saving`) fell through to the background-tab branch, which only looks for a cached draft. Ordinary typing never caches one, and the close path — unlike `handleNewDoc` — never calls `flushAndCacheIfDirty`. Closing a document whose save was in conflict therefore discarded live content with no prompt, nothing on disk, nothing cached and history dropped. `saveActiveDoc` resolving is also not proof of a commit, so the post-save branch now checks the resulting status. |
+| K1 (their F001) | High · data-loss | ✅ **RESOLVED (1.77.0)** — active close prompted only on `saveStatus === "editing"`, so the TERMINAL `conflict` and `blocked` states (and `error`/`saving`) fell through to the background-tab branch, which only looks for a cached draft. Ordinary typing never caches one, and the close path — unlike `handleNewDoc` — never calls `flushAndCacheIfDirty`. Closing a document whose save was in conflict therefore discarded live content with no prompt, nothing on disk, nothing cached and history dropped. `saveActiveDoc` resolving is also not proof of a commit, so the post-save branch now checks the resulting status. Since then the prompt also covers the terminal `full` status (audit A086), and `saveActiveDoc` resolves `true` only for a committed write (audit A026). |
 | K2 (their F002) | High · data-loss | ✅ **RESOLVED (1.77.0)** — `saveActiveDoc` and `renameDoc` cleared the cached draft unconditionally after their `await storage.list()`. A draft cached by a switch DURING that window belonged to newer content the write never persisted, and deleting it removed the only recovery copy when the later leave-save failed. Both sites now retire a draft only when its JSON equals the canonical that operation actually wrote. |
 | K3 (their F003) | High · data-loss | ✅ **RESOLVED (1.77.0)** — returned with no patch and a "repair contract"; implemented here as `_draftBases`. `switchToDoc` rebuilt `activeDoc` by spreading the freshly-read record, so another tab's `updated` became the baseline for a draft written against the older revision: drift collapsed to zero and a conflict the guard had already refused went through on the next save. See the CLAUDE.md invariant. |
 | K4 (their F004) | Medium · parity | ✅ **RESOLVED (1.77.0)** — `createEditorClient` filtered inbound messages by ORIGIN only. Two editors embedded on one host page share an origin, so either could resolve the other's pending requests and reach its listeners. Now bound to the iframe's own `contentWindow`. |
@@ -170,9 +194,10 @@ onto live editor content — Phase 1); **switch-generation guard** (Phase 4); an
 **recoverable snapshot net** (Phase 5, sidecar IndexedDB version history). The remaining
 findings are lower-severity/narrower and are deferred with notes:
 
-- **Deliberate rename to `Untitled`/`Untitled N` reverts on next save** (`document.ts`
-  `resolveDocTitle` placeholder-healing regex can't tell a legacy auto-pin from a real
-  rename). Fix needs title provenance (`titlePinnedByUser`) instead of string matching.
+- ~~**Deliberate rename to `Untitled`/`Untitled N` reverts on next save**~~ — **FIXED.**
+  `DocumentRecord.titlePinnedByUser` records whether `userTitle` is a genuine rename;
+  `resolveDocTitle` honours a flagged pin verbatim and heals only an unflagged legacy
+  "Untitled N" pin.
 - ~~**`renameDoc` of the ACTIVE doc races autosave**~~ — **FIXED (Phase 1).** `renameDoc`
   (and `patchDocById`) now merge the new title onto the LIVE editor canonical via
   `registerLiveCanonical`, so a rename can't rewind unsaved edits and no longer writes a
@@ -180,15 +205,23 @@ findings are lower-severity/narrower and are deferred with notes:
 - ~~**Rapid A→B→C doc switches can settle on a stale doc**~~ — **FIXED (Phase 4).**
   `handleSwitchDoc` stamps each switch with a monotonic `switchGenRef` and aborts any
   hydration whose generation is stale.
-- **Multi-tab**: no live cross-tab refresh (tabs don't see each other's edits until
-  reload); after tab B saves, tab A is permanently save-blocked (by design) with no live
-  indication. Non-IDB fallback `setPrefs` read-merge-write can drop keys. Consider a
-  `BroadcastChannel`/`storage`-event invalidation + a terminal `"conflict"` save status.
-  **← This is the natural trigger for the FSM extraction below** (adding `conflict` funnels
-  cleanly through a save transition function).
-- **Minor:** `getMetrics()` returns a fresh object each call (spurious re-renders);
-  history-cache `undefined`-canonical hash edge; `beforeunload` parked-draft write can't
-  complete (largely covered by autosave-on-switch).
+- **Multi-tab** — partly done. A save that would overwrite another tab's newer write
+  parks the terminal `"conflict"` status (status bar: "Changed in another tab — not
+  saving"); a reload after a conflict keeps the other tab's work (audits A018, A027),
+  and rename, card pin/colour and bridge patches respect the conflict (audit A028).
+  Still open: no live cross-tab refresh — no `BroadcastChannel`/`storage`-event
+  invalidation — so a tab learns of another's edits only when it next saves or
+  reloads; and the non-IndexedDB fallbacks' `setPrefs` still reads, merges and writes
+  across an `await`, so two overlapping calls can drop a key (the IndexedDB adapter
+  merges inside one transaction).
+- ~~**Minor:** `getMetrics()` returns a fresh object each call~~ — **FIXED**
+  (`refreshMetrics` publishes only when `sameMetrics` sees a change). The history-cache
+  `undefined`-canonical edge is unreachable: capture always passes the live document's
+  JSON and restore is skipped when there is none (the cache itself still hashes
+  `undefined` as `""`). The `beforeunload` parked-draft write is covered by the
+  synchronous localStorage stash (`src/store/crash-recovery.ts`, written on
+  `beforeunload` and `pagehide`, adopted on the next start; entries carry their base
+  revision and conflict flag — audits A018, A027).
 
 ### Architectural note — an explicit doc-lifecycle state machine
 Both reviewers concluded the recurring data-integrity bug class stems from "the document"
@@ -201,16 +234,22 @@ sentinels, the debounce refs, `initDoneRef`, `_unsavedEdits`, `_persistedCanonic
 highest-blast-radius code in the app; it is now protected by four prevention/recovery
 layers, documented invariants, and a regression suite, and sits at a good risk-adjusted
 optimum. Full-document LaTeX and nearly all backlog items are content/engine-layer and do
-not push on this layer. A read-only **`getLifecycleState()`** selector (documentStore) now
-exposes the store-owned flags as one object for debugging / a future `diag.*` console tab —
-the low-risk slice of the maintainability upside — WITHOUT changing any write path.
+not push on this layer. A read-only **`getLifecycleState()`** selector (documentStore)
+exposes the store-owned flags as one object (`activeDocId`, `hydratedDocId`, `hydrated`,
+`saveStatus`, `hasActiveDoc`, `unsavedDraftCount`, `docCount`), and the admin console's
+`diag.lifecycle` prints it — the low-risk slice of the maintainability upside — WITHOUT
+changing any write path.
 
-**Refactor-on-next-touch trigger.** Do the two-machine extraction — (a) **editor-occupancy**
+**Refactor-on-next-touch trigger.** The two-machine extraction — (a) **editor-occupancy**
 `{docId, phase: none|hydrating|hydrated}` mutated only by the hydration ritual, and (b) a
-**save** FSM with terminal `blocked`/`conflict` — the NEXT time this layer is substantively
-changed (most likely the multi-tab `conflict` work above, or a multi-file/Overleaf-style
-project model), folding it into that change so the risk is amortized against work already
-being tested. Not before.
+**save** FSM with terminal `blocked`/`conflict`/`full` — was meant for the next substantive
+change to this layer. The September 2026 production-readiness fixes were that change
+(audits A018, A021, A024, A026, A028, A029, A032, A086) and did not extract the machines;
+the terminal `conflict` and `full` statuses shipped without them, and the layer gained more
+state (`saveError`, the `schemaLock`, `_draftBases`, `deletingDocs`, a fifth representation
+in the unload stash). The remaining natural triggers are live cross-tab invalidation or a
+multi-file/Overleaf-style project model; splitting `PerssonifyEditor.tsx` (audit A110) is
+the other place it could be folded in. Not speculatively.
 
 ## Ported UI/UX audit backlog (v1.70.0 migration)
 
@@ -224,6 +263,17 @@ being tested. Not before.
 Fully fixed and not ported: `A2`, `A3`, `A4`, `B1`, `B5`, `C3`, `D2`,
 `E1`, `E2`, `E11`, `F1`, `F2`, `F9`, `H3`, `H5`, `I1`.
 
+> **Reading these entries (reconciled 2026-09-29, audit A111).** Each entry's
+> **Status** line is the current verdict, re-checked against the code after the
+> September 2026 production-readiness audit — which found statuses here that were
+> wrong in both directions (items marked RESOLVED that were broken, STALE that were
+> present, OPEN that were fixed). The "v1.70.0 revalidation" and "Original
+> independently verified finding" blocks are HISTORY: they describe the code at the
+> predecessor SHA and are kept for their measurements. Where they disagree with the
+> Status line, the Status line wins. For everything the 2026-09 audit found, and for
+> what remains before launch, [`audit-2026-09.md`](audit-2026-09.md) is the
+> authoritative list.
+
 ### A1. Bottom tray collapses both editor panes to zero height
 
 **Priority:** high · **Audit severity:** critical · **Status:** ✅ **RESOLVED (1.75.0)**
@@ -232,10 +282,14 @@ The floors alone could not fix this: because the editor's `min-h-[10rem]` is not
 shrinkable inside an `overflow-hidden` column, the overflow moved to the tray and
 the status bar — the app was clipped rather than the editor zeroed. `trayFits`
 (`src/ui/tray-fit.ts`, unit-tested) now refuses to open the tray, with a toast,
-when the remaining editor height would fall below its floor; both the status-bar
-chevron and the links chip consult it, and closing is never blocked.
+when the region the editor, tray and status bar share is under 280px (the 160px
+editor floor plus a nominal 120px tray); both the status-bar chevron and the
+links chip consult it, and closing is never blocked. It is a threshold, not an
+exact fit — the tray opens at up to `min(35dvh, 16rem)` — so a library mount in a
+short container on a tall page can still clip the status bar (unmeasured). In the
+standalone app a window under 450px tall now scrolls instead (audit A091).
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -263,10 +317,14 @@ plus a guard that refuses to open (or auto-collapses) when the remaining editor 
 The folder row and BOTH document lists (the tree and the flat search/select list)
 carry `title` now — pinned by `truncated-titles.test.js`, which covers both so
 the tooltip cannot appear and disappear depending on whether the user has typed
-in the search box. The link bubble's `max-w-[220px]` href and the graph's
-JS-sliced node labels remain.
+in the search box — and so does the map's details-rail heading. Still clipped
+with no tooltip: the link bubble's href (`max-w-[220px]`, `LinkBubbleMenu.tsx`);
+the map's node labels, cut by `truncateLabel` with no SVG `<title>` (the node's
+`aria-label` does carry the full name); the Document Links tray's titles and its
+one-line context preview (`BacklinksPanel.tsx`); search-result titles
+(`SearchPanel.tsx`); and Memory's document titles (`MemorySheet.tsx`).
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -292,7 +350,7 @@ narrow window. Long unbroken strings now have somewhere to break
 (`table-layout: fixed`). Pinned by `backlog-sweep.test.js`.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -308,14 +366,19 @@ The live panes only wrap because prosemirror-view injects `word-wrap: break-word
 
 ### A7. Menu popups pinned to exactly 200px → wrapped rows on Windows/Linux
 
-**Priority:** low · **Audit severity:** low · **Status:** ⚠️ **STALE — the finding was wrong**
+**Priority:** low · **Audit severity:** low · **Status:** **OPEN** — the earlier "STALE" verdict misread the code (audit A111)
 
-Revalidated at HEAD: the popups carry `min-w-[200px]`, a MINIMUM, not a fixed
-width. Content wider than 200px grows the popup; nothing is pinned. The audit
-read the utility as a width. No change made.
+That verdict read `min-w-[200px]` in isolation. The popup's width comes from the
+primitive's `w-(--anchor-width)` (`src/components/ui/dropdown-menu.tsx`) — the
+~40px trigger — which the minimum only raises to 200px, and `overflow-x-hidden`
+then stops content widening it: every top-level menu is a fixed box of
+max(trigger width, 200px), and a longer row wraps (View ▸ "Toggle workspace
+panel" + `Ctrl+Shift+D` on Windows/Linux). Fix: `w-auto` at the call site in
+`MenuBar.tsx` — tailwind-merge lets it replace the primitive's width, and
+`src/components/ui` is generated, not hand-edited.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -333,11 +396,12 @@ read the utility as a width. No change made.
 **Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (1.76.0)**
 
 The title used `leading-none`, which makes the line box exactly the font size —
-so with `truncate`'s `overflow: hidden` a tall diacritic (Å, Ą) or a descender
-was clipped. `leading-tight` gives it the pixel of leading it needed.
+so with `truncate`'s `overflow: hidden` the top pixel of a stacked diacritic (Ẫ,
+Ẵ) was clipped (descenders were measured unclipped). `leading-tight` gives it the
+pixel of leading it needed.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -353,17 +417,23 @@ was clipped. `leading-tight` gives it the pixel of leading it needed.
 
 ### A9. Stacked-split second pane header wastes 44px of `pl-11`
 
-**Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (1.76.0)**
+**Priority:** low · **Audit severity:** low · **Status:** **PARTIAL** — the 1.76.0 fix left a gap (reconciled 2026-09)
 
 The 44px of left padding exists to clear the floating workspace trigger, which is
 absolutely positioned at the EDITOR's top-left — so exactly one header sits under
 it. It was applied to both, spending 44px of the second pane's width on a phone,
 which is where width is scarcest and where the panes stack so the second header
-is nowhere near the trigger. `PaneHeaderProps.clearsTrigger` now marks the one
-header that does.
+is nowhere near the trigger. `PaneHeaderProps.clearsTrigger` now marks the
+Markdown pane's header — the one under the button in Markdown and Split views.
+What remains: the flag is hard-wired to that pane, while the button sits over
+whichever header is top-left. In Rich-text-only view the Markdown pane is hidden,
+the rich header is top-left with `pl-4`, and below 768px its icon sits under the
+reopen button whenever the panel is closed (the phone default). The flag should
+follow the visible top-left pane. (At 768px and up no header clears the button —
+`md:pl-4` — which predates this fix.)
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -379,20 +449,26 @@ header that does.
 
 ### B2. Toasts cover the status bar on phones
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (1.76.0)**
+**Priority:** medium · **Audit severity:** medium · **Status:** **OPEN** — fixed on desktop only (reconciled 2026-09)
 
-`<Toaster position="bottom-right" offset={48} …>`. A bottom-right toast landed on
-the status bar, which is where the save state and the fidelity warning live.
+`<Toaster position="bottom-right" offset={48} …>` lifts a desktop toast clear of
+the status bar. But at 600px wide and below, sonner positions the toaster from
+`mobileOffset`, which defaults to 16px when not given — so on a phone, the case
+this finding measured, a full-width toast still lands on the 36px coarse-pointer
+status bar. Needs `mobileOffset={{ bottom: … }}` clearing the bar plus the
+safe-area inset, and a phone-width measurement: the browser case below runs only
+at 1440x900, and `backlog-sweep.test.js` only checks that `offset=` is set.
 
 Measured rather than reasoned about, in `e2e/cases/surfaces-deep.mjs`: a settled
 toast at 1440x900 sits at bottom 852 against a status bar whose top is 872. The
 case has to wait for the toast to come to REST — sonner animates it in from below
 the viewport, and a first attempt read it mid-flight at bottom 884, reporting an
 overlap that does not exist. Mutation-tested by restoring sonner's default 24px
-offset, which puts the toast's bottom at 876 and turns the case red.
+offset, which puts the toast's bottom at 876 and turns the case red. Nothing
+measures a phone, where `offset` does not apply.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -439,7 +515,7 @@ At 740×360 the canvas is ~156px of usable height and the detail card measures t
 
 ### B4. Toast close button renders outside the toast
 
-**Priority:** low · **Audit severity:** low · **Status:** ⚠️ **PARTLY STALE — measured, and the real finding is different**
+**Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (1.76.0)** — the overhang is sonner's deliberate corner placement; the real defect, a 20x20 target, is padded to 26x26
 
 The finding as recorded is literally true and is NOT a defect. Measured in a real
 browser (`e2e/cases/surfaces-deep.mjs`): sonner straddles the close button across
@@ -458,7 +534,7 @@ resize separators. The prescribed `closeButton` classNames override was not
 applied: it would move a control that measurement says is fine.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -481,7 +557,7 @@ list-nested headings are collected like the rich side's rendered `h1`-`h6`. It
 also retires the hand-rolled fence tracker and picks up a case neither had:
 indented code blocks, whose `#` lines the old scanner counted as headings.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -497,16 +573,20 @@ The original implementation detected Markdown headings with a raw `^#{1,6}\s` li
 
 ### C2. Workspace width clamp is an absolute 720px with no viewport awareness
 
-**Priority:** high · **Audit severity:** high · **Status:** ✅ **RESOLVED (1.75.0)**
+**Priority:** high · **Audit severity:** high · **Status:** **PARTIAL** — one path remains (reconciled 2026-09)
 
 The load-time clamp had already closed the localStorage-poisoning path (this
 entry was stale on that). The live path — resize the window and the panel keeps
-its old width — is closed by a `resize` listener re-applying the current width
+its old width — is closed, while the panel is open, by a `resize` listener re-applying the current width
 through the existing setter, so there is no second copy of the bounds. Those
 bounds are exported (`DOCNAV_WIDTH_MIN`, `docNavWidthMax()`) and feed the
-separator's `aria-valuemax`, which would otherwise report a flat 720.
+separator's `aria-valuemax`, which would otherwise report a flat 720. What
+remains: the listener exists only while the panel is mounted and nothing
+re-clamps on mount, so narrowing the window while the panel is closed and then
+reopening it brings the panel back at its old stored width (up to 720px) beside a
+squeezed editor until the next resize.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -533,7 +613,7 @@ ResizeObserver for the `scrollHeight` baked into every fraction — and bumps a
 revision the marker effect depends on. Both are needed: an edit can move matches
 without changing the height, and a reflow can change the height with no edit.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -549,16 +629,20 @@ Every dep is a persisted option or an identity-stable `useCallback` except `matc
 
 ### C5. "Reading width" Narrow/Medium/Wide is inert in the default split layout
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (1.75.0)**
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** — the recorded case is still inert (reconciled 2026-09)
 
-The options are character measures (65/80/100) emitted as `ch`, so they bind in a
-half-width pane and scale with the font-size preference — a pixel cap was the
-wrong unit for a reading measure regardless of where it was applied. Stored px
-values migrate (`migrateReadingWidth`). The setting's description now states the
-remaining case rather than overclaiming: a pane already narrower than the measure
-is left alone.
+The options are character measures (65/80/100) emitted as `ch`, so they scale
+with the font-size preference and bind wherever the pane is wider than the
+measure — a pixel cap was the wrong unit for a reading measure regardless of where
+it was applied. Stored px values migrate (`migrateReadingWidth`). The case this
+entry recorded is still inert: in the default layout (Split, workspace panel open)
+at 1280px each pane's text column is about 440px, narrower than even Narrow's 65ch
+(roughly 500–600px at the default 15px font), so Narrow, Medium and Wide render
+identically to Full there. The control is not disabled; its description only
+warns that it may have no visible effect. Exact thresholds need a browser
+measurement.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -580,9 +664,13 @@ CSS *transition*, which the stylesheet's `transition-duration: 0.01ms !important
 already beat. What genuinely ignored the preference is the force SIMULATION,
 which advances node positions from rAF where no stylesheet can reach it; it now
 settles in one step under the preference. The stylesheet's own comment claimed a
-JS gate existed when none did, and has been corrected.
+JS gate existed when none did, and has been corrected. Explicit
+`behavior: "smooth"` scrolls (outline and heading jumps, the Help page's section
+links) also ignored the preference — the CSS guard only decides what `"auto"`
+means — until audit A096 routed them through `scrollBehavior()`
+(`src/utils/reduced-motion.ts`).
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -615,7 +703,7 @@ transition on everything. next-themes' `disableTransitionOnChange` in both shell
 the `transition: background-color` that could never reach a `background-image`
 gradient is gone.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -638,7 +726,7 @@ The `transition` was declared inside the `.pf-focus` rule, so it existed only
 while the class did. It now sits on the unqualified selectors, with only
 `opacity: 0.25` under `.pf-focus`.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -657,12 +745,16 @@ plus narrow the toolbar to `transition-colors duration-300`.
 
 ### D5. Graph search/filter dimming never applies to edges
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (1.75.0 revalidation)**
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** — ghost links are never dimmed (reconciled 2026-09)
 
 Edges are dimmed alongside nodes in `GraphView.tsx` — `const dim = anyFilter &&
-(!isVisible(edge.source) || !isVisible(edge.target))`.
+(!isVisible(edge.source) || !isVisible(edge.target))` — and the edge path no
+longer carries an opacity utility, so `opacity={dim ? 0.07 : 1}` takes effect. The
+broken-link ghost stubs the finding also cited have no dimming at all: with "Show
+on map" on, a search or Isolate leaves the amber stubs and labels of hidden notes
+at full strength. No test covers edge dimming.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -690,7 +782,7 @@ Animated `grid-template-rows` 0fr ↔ 1fr, which keeps the documented "collapsed
 costs zero vertical space" invariant. The trade is that the active tab's content
 stays mounted while collapsed.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -720,8 +812,10 @@ also works inside a checklist (`taskItem`), which hardcoding `listItem` had left
 dead. `keyboard-shortcuts.test.js`
 drives the rich-pane branch — every earlier test passed `{ current: null }`, so the
 early return that decided the fate of half these shortcuts never once executed.
+Since audit A025 these chords act only with the caret in a pane and the Editor view
+on screen, and since A052 AltGr input is never treated as a chord.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -749,11 +843,15 @@ All of these work in the Markdown pane, so the feature looks randomly broken. Al
 
 **Priority:** high · **Audit severity:** high · **Status:** ✅ **RESOLVED (1.75.0 revalidation)**
 
-**Resolved, and two of this entry's four prescriptions are now WRONG.** At
-v1.74.1 the workspace overlay focuses itself, handles Escape in the capture
-phase, sets `inert` on every sibling of the overlay inside `<main>` (which is
-the editor), and restores focus to the trigger on close; `PageChrome` does the
-same plus `role="dialog" aria-modal="true"`.
+**Resolved, and two of this entry's four prescriptions are now WRONG.** The
+workspace overlay focuses itself when it opens, sets `inert` on every sibling of
+the overlay inside `<main>` (which is the editor), and restores focus to the
+trigger on close; `PageChrome` does the same plus `role="dialog" aria-modal="true"`.
+Escape is no longer a capture-phase force-close: since audit A057 the map and
+Cards each handle it in the bubble phase through `overlayShouldHandleEscape`
+(`src/ui/overlay-escape.ts`) — only when it was pressed inside the overlay or with
+nothing focused, and no dialog, menu or listbox outside it is open — so a delete
+confirmation, a rename box or a menu keeps its own Escape.
 
 The two that must NOT be implemented: **"trap focus while open"** and
 **`aria-modal` on the workspace overlay**. `CLAUDE.md` records that both were
@@ -763,7 +861,7 @@ workspace panel and surface switcher beside it are meant to stay reachable, and
 entry was followed verbatim once during planning and would have undone a
 deliberate decision; it is left here with that warning rather than deleted.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -790,7 +888,7 @@ second pointer reaching the element. `touch-none` closes the same bug from the
 other end — the reclaim that fires the cancel — and a `pointer-coarse:` `::before`
 gives a ≥24px hit area without touching the separator's own box.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -807,16 +905,20 @@ gives a ≥24px hit area without touching the separator's own box.
 
 ### E6. Dropping a file anywhere except the Files tab silently does nothing
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (1.74.0)**
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** — the panes and the Files tab only (reconciled 2026-09)
 
 `EditorLayout` carries `onDragOver`/`onDrop` routing to PE's
 `handleFileDropImport`, so a file dropped on either pane imports instead of
 navigating the tab away — which was the more serious half of this, since that
 navigation took the current autosave window with it. Only drags carrying `Files`
 are intercepted, so a text drag inside the document still belongs to CodeMirror
-and ProseMirror. Pinned by `editor-file-drop.test.js`.
+and ProseMirror. Pinned by `editor-file-drop.test.js`. Still unhandled: the menu
+bar, toolbar, status bar and tray, the Outline tab and panel header, the Cards and
+map overlays and the About/Help pages — a file dropped there is not imported, and
+the browser default (open the file in the tab) is not prevented. The finding's
+minimum fix, a document-level `dragover`/`drop` `preventDefault`, is not in place.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -831,15 +933,20 @@ Native CDP drags: dropping `drop-test.md` on `aside` imports it (1 → 2 documen
 
 ### E7. Mobile menu rows are two different heights in the same menu
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ⚠️ **STALE — the mechanics have moved on**
+**Priority:** medium · **Audit severity:** medium · **Status:** **OPEN** — the earlier "STALE" verdict was wrong (audit A111)
 
-The flat dump of all seven sections the finding measured no longer exists. The
-mobile menu DRILLS DOWN (`mobileSection`, `closeOnClick={false}` on the navigation
-rows), so a level shows one section's items plus a back row rather than seven
-sections' worth of mixed row types. Re-checked at HEAD; no change made.
+That verdict checked how the menu is navigated, not how tall its rows are. The
+drill-down changed how many rows a level shows, not their height:
+`DropdownMenuCheckboxItem` and `DropdownMenuRadioItem` still lack the
+`pointer-coarse:min-h-11 …` sizing that `DropdownMenuItem` and
+`DropdownMenuSubTrigger` carry, so ☰ ▸ View still mixes 44px rows (the back row,
+Toggle workspace panel, Outline, Appearance) with 28px ones (Markdown / Rich text
+/ Split, Editor / Cards / Relationship map, Read-only mode, Focus mode).
+`src/components/ui` is generated, so restate the sizing in `styles.css` under
+`(pointer: coarse)`, as audit A100 did for the context-menu rows.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -863,7 +970,7 @@ touch viewport clears 24px, asserted rather than counted
 (`e2e/cases/surfaces.mjs`).
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -878,14 +985,18 @@ Measured 390×844: `{x:358, y:142.3, width:16, height:16}` — right edge at 374
 
 ### E9. Two menu items named "Clear formatting" run different commands; one is a silent no-op
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED**
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** — the no-op is fixed; the naming is not (reconciled 2026-09)
 
-**Resolved (1.74.0).** `dispatchToMd` has a `clearFormatting` case, so the Edit and
-right-click entries act in the Markdown pane instead of warning to the console.
-The naming half of the original fix (Edit ▸ "Clear character formatting" vs
-Format ▸ "Clear all formatting") is NOT done and stays open below.
+1.74.0 gave `dispatchToMd` a `clearFormatting` case, so the Edit and right-click
+entries act in the Markdown pane instead of warning to the console, and since
+audit A055 that markdown-pane clear keeps content. The naming half is not done:
+Edit ▸ Clear formatting and right-click ▸ Clear formatting dispatch
+`clearFormatting` (rich pane: marks only) while Format ▸ Clear formatting
+dispatches `removeFormat` (marks and block types) — one label, two outcomes in
+the rich pane. The fix is still the rename: Edit ▸ "Clear character formatting",
+Format ▸ "Clear all formatting".
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -904,9 +1015,12 @@ Format ▸ "Clear all formatting") is NOT done and stays open below.
 
 **Resolved (1.74.0).** `EditorContextMenu` takes a `promptInsert(kind)` from
 PerssonifyEditor and awaits the same prompt/equation dialog the toolbar and menu
-bar use, so all three call sites behave identically.
+bar use, so all three call sites behave identically. Audit A096 then made all three
+ask for alt text after the URL (`promptImage`, `src/formatting/image-insert.ts`;
+empty = decorative) and fixed the Markdown side, which had ignored the URL and
+written an `![alt text](image-url)` placeholder.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -921,17 +1035,23 @@ The toolbar (`Toolbar.tsx:524`) and menu bar (`MenuBar.tsx:258`) prompt first; t
 
 ### E12. Guided tour: four defects
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ⚠️ **STALE — re-measured at HEAD**
+**Priority:** medium · **Audit severity:** medium · **Status:** **OPEN** — the earlier "STALE" verdict was wrong (audit A111)
 
-The tour already re-measures its spotlight on resize and handles Escape with
-containment; the mechanics the finding describes are not the current ones. It is
-also now DRIVEN rather than assumed: `e2e/cases/surfaces-deep.mjs` starts the
-tour, asserts the spotlight has found a real element (a step whose anchor has
-moved to another file would leave the highlight at 0x0), and asserts Escape ends
-it. No change made.
+All four defects are present in `src/ui/Walkthrough.tsx`: clicking the dimmed area
+does nothing (only the spotlight carries `onClick={next}`, despite a comment
+saying "click anywhere outside to advance"); the phone copy keys off
+`innerWidth < 640` instead of the 768px breakpoint; the dot row and Next/Done count
+all seven steps while the workspace step's target is unmounted on phones (the
+panel starts closed there), so the tour ends on a "Next" with a dot never filled;
+and the "Two panes" step still tells phones — whose panes stack — about left/right
+and "drag the divider". What the tour does do: it re-measures its spotlight on
+resize and scroll, contains Escape, and (audit A094) leaves Enter on Skip / Back /
+Close to that button. `e2e/cases/surfaces-deep.mjs` proves only that it starts,
+finds a real anchor and ends on Escape — none of the four defects is covered.
+Under forced colours the spotlight disappears entirely (see J1).
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -945,7 +1065,7 @@ it. No change made.
 2. **`:22` — wrong phone breakpoint.** `innerWidth < 640` vs the menu bar's actual `MOBILE_BREAKPOINT = 768` (`src/hooks/use-mobile.ts:3`). From 640–767px the tour spotlights the single ☰ button while reading *"Every command lives here — File, Edit, Insert, View, Format, Tools and Help"*.
 3. **`:55` + `:195` — six dots, five steps on phones.** Step 6 targets `[data-tour="workspace"]`, which is unmounted (`uiStore.ts:112` defaults `showSidebar` false below 768). `useLayoutEffect` (`:87-95`) silently advances past it and calls `finish()`. The sixth dot never fills, the final button still reads "Next", and phone users are never told the Files/Outline panel exists — the very panel closed by default on their device.
 4. **`:51-52` — step 5 describes a layout phones don't have.** *"Type Markdown on the left or rich text on the right… Drag the divider"* while the panes are stacked. Steps 1 and 2 both have mobile variants; this one is the odd one out.
-**Fix:** (1) put `onClick={next}` on the outer wrapper, or render an explicit full-screen backdrop behind the spotlight; (2) import `MOBILE_BREAKPOINT`; (3) render the dot row from resolvable steps only, and give the workspace step a phone fallback spotlighting the reopen button (`PerssonifyEditor.tsx:2101`); (4) add a mobile body string. See also **J2** — the whole spotlight vanishes in forced-colors mode.
+**Fix:** (1) put `onClick={next}` on the outer wrapper, or render an explicit full-screen backdrop behind the spotlight; (2) import `MOBILE_BREAKPOINT`; (3) render the dot row from resolvable steps only, and give the workspace step a phone fallback spotlighting the reopen button (`PerssonifyEditor.tsx:2101`); (4) add a mobile body string. See also **J1** — the whole spotlight vanishes in forced-colors mode.
 
 ### E13. Both resize separators are unreachable by keyboard
 
@@ -956,7 +1076,7 @@ Home / End handling. Worth noting this was more than missing keyboard support:
 `role="separator"` reporting no value is invalid ARIA, so the elements were
 announced as unoperable even once focusable.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -978,7 +1098,7 @@ CSS. The entry missed a second defect: the else branch added
 `text-muted-foreground` on every blur, accumulating a class that had never been
 there.
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -993,13 +1113,20 @@ The code removes a class that was never applied (the applied one is `text-muted-
 
 ### F3. Broken wiki links are styled identically to working ones
 
-**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (1.76.0)**
+**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (audit A058)** — the 1.76.0 fix never worked (rich pane only)
 
 A `[[link]]` pointing at a document that does not exist rendered IDENTICALLY to
-one that works, so the only way to find a broken link was to click it. The index
-already knows — `linkIndex.unresolved` is what drives the map's broken-link chip
-— so `useLinkIndex` marks unresolved anchors with `data-unresolved` and
-`styles.css` draws them dashed and muted in both panes.
+one that works, so the only way to find a broken link was to click it. The 1.76.0
+fix — `useLinkIndex` writing `data-unresolved` into the DOM — never once marked a
+link: it compared `String()` of `{ target, displayText }` objects (`"[object
+Object]"`) against the link targets, and it wrote into DOM that ProseMirror owns.
+This entry called it RESOLVED anyway. Broken links are now a ProseMirror
+decoration (`src/extensions/UnresolvedWikiLinks.ts`), recomputed on every edit
+and every re-index and judged with the same resolver as clicks, the map and
+backlinks (`createWikiResolver`, audit A059); `styles.css` draws the link dashed
+and muted through `:has()`. Nothing is marked before the library loads. The
+Markdown pane shows the `[[…]]` source unmarked, and card previews are not
+marked. `links-resolution.test.js` drives it against a real editor.
 
 Deliberately NOT baked into the mark: whether a link resolves depends on OTHER
 documents, so storing it would make a link's own data depend on its neighbours and
@@ -1008,7 +1135,7 @@ because a link written before its target exists is a normal state in note-taking
 not an error.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1033,7 +1160,7 @@ fall back to, not a rename. Same principle as `createFolder`'s `startNaming` —
 programmatic creation must not leave traces only a user's action should.
 
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1048,9 +1175,18 @@ A Ctrl+N document given `# Project Notes` retitles itself everywhere within one 
 
 ### F5. Stale and inconsistent in-product copy
 
-**Priority:** low · **Audit severity:** low · **Status:** PARTIAL
+**Priority:** low · **Audit severity:** low · **Status:** **PARTIAL** (reconciled 2026-09)
 
-#### Current v1.70.0 revalidation
+Fixed: the welcome document names the relationship map and lists `.docx`; Help
+has a Cards section; the map's header says "Relationship map"; the view buttons
+are named "Rich text" / "Split view" (audit A096). Remaining: Help's Select bullet
+still says Select can "Copy, Delete, or apply a style" though the submenu only
+selects; the toolbar magnifier is still "Search & Replace (⌘F)" and its tooltips
+stay Title Case ("Strike", "Bullet List", "Clear Format", "Del Row"); Cards and
+Help spell "colour"/"neighbours" beside "color" elsewhere; the shortcut lists
+still say "Toggle relationship graph".
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1073,9 +1209,14 @@ Import/help copy is updated (`MenuBar.tsx:494`, `help-content.ts:138-141,200`), 
 
 ### F6. Shortcut reference data errors
 
-**Priority:** low · **Audit severity:** low · **Status:** PARTIAL
+**Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (by 1.77.0)** — this entry was still marked PARTIAL (audit A111)
 
-#### Current v1.70.0 revalidation
+`SHORTCUT_GROUPS` has one "Toggle cards board" row, and `COMMON_SHORTCUTS` lists
+Find ⌘F and Find & Replace ⌥⌘F (`src/data/shortcuts.ts`); `shortcuts.test.js`
+fails on a duplicate action within a group. Still inconsistent, outside this
+finding: the Edit menu hints Replace as ⌘H, which macOS never delivers.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1094,7 +1235,7 @@ Mac replace key fixed at `src/data/shortcuts.ts:53`, but duplicate Cards rows re
 
 **Priority:** low · **Audit severity:** low · **Status:** OPEN
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1114,9 +1255,13 @@ Mac replace key fixed at `src/data/shortcuts.ts:53`, but duplicate Cards rows re
 
 ### F8. Graph header pluralises wrongly in the one-document state
 
-**Priority:** low · **Audit severity:** low · **Status:** OPEN
+**Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (by 1.77.0)** — this entry was still marked OPEN (audit A111)
 
-#### Current v1.70.0 revalidation
+The header reads "N note(s) · N link(s)", singular for one, and a library with
+notes but no links gets "One note, nothing linked yet". The canvas's accessible
+name is still unpluralised ("2 documents, 1 links").
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1131,9 +1276,16 @@ A brand-new user opening the graph reads **"KNOWLEDGE GRAPH · 1 docs, 0 links"*
 
 ### F10. About page's credits omit two shipped dependencies and mis-state the licenses
 
-**Priority:** low · **Audit severity:** low · **Status:** OPEN
+**Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (audit A077)**
 
-#### Current v1.70.0 revalidation
+The credits add mammoth (BSD-2-Clause) and @zip.js/zip.js (BSD-3-Clause), so
+"Licenses in use" includes both BSD variants; the About page presents the credits
+as highlights and links the complete notice generated from the build
+(`/third-party-licenses.txt`), which covers `@tiptap/extension-code-block-lowlight`
+and every other shipped package. `g4-third-party-licenses.test.js` pins each
+credited runtime package to that notice at its credited version.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1148,9 +1300,15 @@ A brand-new user opening the graph reads **"KNOWLEDGE GRAPH · 1 docs, 0 links"*
 
 ### F11. Byte formatter has no GB tier
 
-**Priority:** low · **Audit severity:** low · **Status:** OPEN
+**Priority:** low · **Audit severity:** low · **Status:** **OPEN** — and wider since audit A086
 
-#### Current v1.70.0 revalidation
+`formatEstBytes` and `formatSnapshotBytes` still stop at MB. Since the storage
+limit became the browser's quota (audit A086), three more MB-only formatters meet
+gigabyte values: the "Storage quota exceeded" error text, the status bar's
+storage tooltip and the console's `diag.storage`. Settings ▸ Storage already has a
+GB tier.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1167,7 +1325,7 @@ The Memory sheet reads *"JS heap 44.3 MB of **4095.8 MB**"* for a 4 GB `jsHeapSi
 
 **Priority:** low · **Audit severity:** low · **Status:** OPEN
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1184,7 +1342,7 @@ Every sibling skip branch (`:1512`, `:1517`, `:1531`, `:1534`) pushes to `skippe
 
 **Priority:** high · **Audit severity:** high · **Status:** OPEN
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1201,7 +1359,7 @@ The selector matches every `<img>` in the editor, including ProseMirror's own ze
 
 **Priority:** medium · **Audit severity:** medium · **Status:** OPEN
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1217,9 +1375,16 @@ The selector matches every `<img>` in the editor, including ProseMirror's own ze
 
 ### G3. Welcome doc's remote S3 images: 72px content jump and no offline caching
 
-**Priority:** medium · **Audit severity:** medium · **Status:** OPEN
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** — the offline half is fixed (reconciled 2026-09)
 
-#### Current v1.70.0 revalidation
+The Welcome document's images are same-origin files under `/brand/`, which the
+service worker precaches, so they show offline and nothing is fetched from S3 —
+that was the half the medium rating rested on. The header logo still declares
+`width="84"` without a `height` (the file is 1024×1024), so its box has no height
+until the image decodes; how far the text still moves on first load now that the
+file is local needs a browser measurement.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1235,9 +1400,15 @@ The header `<img … width="84">` has no `height`, so with `height:auto` its box
 
 ### G4. Install/home-screen icons and browser chrome colour are wrong
 
-**Priority:** low · **Audit severity:** low · **Status:** OPEN
+**Priority:** low · **Audit severity:** low · **Status:** **OPEN**
 
-#### Current v1.70.0 revalidation
+The manifest icons are now declared `purpose: "any maskable"` but are still the
+transparent, edge-to-edge glyph (opaque pixels reach 3.6% from the top and
+bottom), so the maskable crop clips it; `apple-touch-icon.png` is still
+transparent; `theme_color`/`background_color` are still `#0a0a0a`, and
+`index.html` has one unconditional dark `theme-color` with no runtime updater.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1254,9 +1425,16 @@ The header `<img … width="84">` has no `height`, so with `height:auto` its box
 
 ### H1. Split panes stack by viewport **width** only — landscape phones get 37–69px editors
 
-**Priority:** medium · **Audit severity:** medium · **Status:** OPEN
+**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (audit A100)**
 
-#### Current v1.70.0 revalidation
+Split stacks only below 768px wide AND when there is room for two panes: a touch
+device held upright, or a viewport at least 500px tall (`splitShouldStack`,
+`src/ui/split-layout.ts`). A landscape phone keeps the panes side by side; unit
+tests and the `surfaces` e2e tier (667×375, each editor over 150px) pin it. An
+upright phone ignores its keyboard-shrunk height, so opening the keyboard does not
+flip the layout.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1279,9 +1457,15 @@ So a viewport 25px taller gets 3× the usable height by going side-by-side; the 
 
 ### H2. Mobile workspace drawer: no scrim, no dismiss, no animation, invisible loading state
 
-**Priority:** medium · **Audit severity:** medium · **Status:** OPEN
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** (reconciled 2026-09)
 
-#### Current v1.70.0 revalidation
+The phone drawer now takes focus when it opens, closes on Escape and hands focus
+back (audit A094). Still missing: a scrim or tap-outside dismiss; `max-w-sm` still
+leaves a ~6px strip of editor at 390px; it appears with no animation; and its
+loading fallback is `hidden` below `md`, so the first tap on a slow connection
+shows nothing.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1301,12 +1485,14 @@ Three defects on one surface:
 
 **Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED**
 
-**Resolved (1.74.0).** The graph header WRAPS rather than hiding: Fit, the
-orphan/broken filter chips and the JSON export are present at every width. Pinned
-at 375px by the `surfaces` e2e tier. (The map's colour LEGEND in the footer strip
-is still `md:flex` — it is a decorative key, not an affordance.)
+**Resolved (1.74.0).** The graph header WRAPS rather than hiding: the
+unlinked/broken filter chips and the JSON export are present at every width (the
+chip labels collapse to icon + count below `md`), pinned at 375px by the
+`surfaces` e2e tier. Fit sits with the zoom controls in the map's docked footer
+strip, also at every width. (The colour LEGEND in that strip is still `md:flex` —
+a decorative key, not an affordance.)
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1321,9 +1507,16 @@ At 360–390px the graph header contains only the search input, Zoom out, Zoom i
 
 ### H6. Ctrl+P prints one page of chrome — 94% of the document is missing
 
-**Priority:** medium · **Audit severity:** medium · **Status:** OPEN
+**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (audit A100)**
 
-#### Current v1.70.0 revalidation
+An `@media print` block hides the chrome, releases the viewport lock and prints
+the rich pane dark-on-white — even in Markdown-only view, since both panes are
+always mounted — keeping headings with their text and not breaking inside code,
+tables, quotes or images. It is scoped to `.pf-app`, so a library host's own
+printing is untouched. The `surfaces` e2e tier emulates print and checks the
+chrome is hidden and the document unclipped; the page count is not measured.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1340,7 +1533,7 @@ No `@media print` rule exists in `src/`; viewport-locked shell remains `src/App.
 
 **Priority:** medium · **Audit severity:** medium · **Status:** OPEN
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1358,7 +1551,7 @@ CSS custom properties inherit down the tree; portaled content is not a descendan
 
 **Priority:** medium · **Audit severity:** medium · **Status:** OPEN
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1373,9 +1566,17 @@ Delete the last document: `<main>` correctly shows *"No document open"* and `.Pr
 
 ### J1. Windows High Contrast (forced colors) erases three state indicators
 
-**Priority:** medium · **Audit severity:** medium · **Status:** OPEN
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** (reconciled 2026-09)
 
-#### Current v1.70.0 revalidation
+A forced-colors block (audit A095) repaints every pressed / selected / current /
+highlighted control in `Highlight`, so the active view button is visible, and
+gives switches a bordered track and a visible thumb in both states; the `surfaces`
+e2e tier checks the pressed view button and the focus outline under forced
+colours. Still open: the tour spotlight is only a box-shadow dimmer plus a
+`ring-2`, both of which forced colours remove, so first-run High Contrast users
+still get captions over an unmarked UI.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1392,9 +1593,15 @@ No forced-colors rule in `src/`; color-only mode variant remains `ModeSwitcher.t
 
 ### J2. The entire status bar is one `aria-live` region containing the live word/char counters
 
-**Priority:** medium · **Audit severity:** medium · **Status:** OPEN
+**Priority:** medium · **Audit severity:** medium · **Status:** ✅ **RESOLVED (by 1.77.0; narrowed further by audit A096)** — this entry was still marked OPEN (audit A111)
 
-#### Current v1.70.0 revalidation
+The `<footer>` carries no role or live region, so it keeps its `contentinfo`
+landmark and the counters are silent. The one live region is a visually hidden
+`role="status"` that speaks only when saving starts failing, fails differently or
+recovers (`src/ui/save-announcer.ts`); `a11y-save-announcer.test.jsx` asserts it
+is the only live region and stays quiet through routine autosaves.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1411,7 +1618,7 @@ No forced-colors rule in `src/`; color-only mode variant remains `ModeSwitcher.t
 
 **Priority:** medium · **Audit severity:** medium · **Status:** OPEN
 
-#### Current v1.70.0 revalidation
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1426,9 +1633,16 @@ No forced-colors rule in `src/`; color-only mode variant remains `ModeSwitcher.t
 
 ### J4. Color contrast failures
 
-**Priority:** medium · **Audit severity:** medium · **Status:** OPEN
+**Priority:** medium · **Audit severity:** medium · **Status:** **PARTIAL** (reconciled 2026-09)
 
-#### Current v1.70.0 revalidation
+(a) Blue and emerald fills now take near-black ink, (b) violet and rose declare a
+lighter dark-mode accent for text, and (d) `--muted-foreground` was darkened to
+40% lightness (5.05:1 on `--muted`); `a11y-contrast.test.js` measures every
+palette in both themes (audits A092, A095). Still open: (c) the two empty-state
+hints ("Add headings…" in the Outline, "Create notes and link them…" in the map)
+keep `opacity-70` on muted text — about 3:1 by the token values, unmeasured.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
@@ -1448,9 +1662,14 @@ No forced-colors rule in `src/`; color-only mode variant remains `ModeSwitcher.t
 
 ### J5. Bottom-tray tabs use `aria-selected` on plain buttons
 
-**Priority:** low · **Audit severity:** low · **Status:** OPEN
+**Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (audit A093)**
 
-#### Current v1.70.0 revalidation
+The tray's tabs are a real tablist: `role="tab"` buttons with `aria-selected` and
+`aria-controls` inside a `role="tablist"`, one `role="tabpanel"`, one tab stop
+with arrow keys that move and activate; the collapsed tray is `inert`. Pinned by
+`a11y-tray-inert.test.jsx`.
+
+#### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
