@@ -17,6 +17,14 @@ export const APP_BRAND = "labs.perssonify";
 /** Public home of the product. */
 export const APP_DOMAIN = "markdownstudio.com";
 export const APP_URL = `https://${APP_DOMAIN}`;
+/**
+ * Where the product lived before the move to APP_DOMAIN. Browser storage is
+ * per-ORIGIN, so libraries created there stay there: a visitor on this host is
+ * shown a "we've moved — download a full backup, import it there" banner
+ * (see store/storage-durability.ts). Serving the current build on this host is
+ * what makes that banner reach them; retiring the host strands their data.
+ */
+export const LEGACY_APP_HOST = "markdowneditor.perssonify.com";
 // Single source of truth: injected from package.json "version" via Vite
 // `define` (see vite.config.ts / vite.app.config.ts). Falls back for tests.
 declare const __APP_VERSION__: string;
@@ -90,7 +98,7 @@ export const DEFAULT_CONTENT = `<img src="/brand/markdown.webp" alt="Markdown St
 
 We build custom technology solutions for companies that need to move fast without breaking things: applications, AI integrations, and automation systems.
 
-**Markdown Studio** is one of those tools — write **Markdown on the left**, see polished **rich text on the right**, always in sync and entirely in your browser. Nothing is uploaded and there is no account to make. Home: [markdownstudio.com](https://markdownstudio.com) · Built by [Perssonify](https://perssonify.com/).
+**Markdown Studio** is one of those tools — write **Markdown on the left**, see polished **rich text on the right**, always in sync and running in your browser. Your documents are stored on this device and there is no account to make. Home: [markdownstudio.com](https://markdownstudio.com) · Built by [Perssonify](https://perssonify.com/).
 
 > **New here?** Everything below is live and editable — change either pane and the other updates instantly. Open **Help** in the menu bar for the full guide, or **Help → Take a guided tour**.
 
@@ -222,7 +230,7 @@ import { PerssonifyEditor } from "@perssonify/editor";
 - **Export** — Markdown, HTML, ProseMirror JSON, Word (\`.docx\`), PDF (print), or your whole library as a \`.zip\`.
 - **Appearance** — Light / Dark / **System** theme plus an accent palette (including Mono), from **View → Appearance** or **Settings**.
 - **Markdown flavors** — CommonMark, GitHub, or Markdown Extra, with per-feature toggles (tables, footnotes, math, emoji…), in **Settings**.
-- **Offline &amp; private** — install it as an app from your browser; everything is stored locally and never uploaded.
+- **Offline &amp; private** — install it as an app from your browser; your documents are stored locally, in this browser, so keep a full backup (**File → Export**).
 
 ---
 

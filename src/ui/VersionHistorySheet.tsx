@@ -9,16 +9,19 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { History, RotateCcw, Trash2, FilePlus2 } from "lucide-react";
+import { AlertCircle, History, RotateCcw, Trash2, FilePlus2 } from "lucide-react";
 import React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTickWhileActive } from "../hooks/useTickWhileActive";
+import { useDocumentStore } from "../store/documentStore";
 import {
   formatSnapshotBytes,
   snapshotStore,
   type SnapshotMeta,
   type SnapshotReason,
 } from "../store/snapshot-store";
+import { useUIStore } from "../store/uiStore";
+import { useDialog, type ConfirmOptions } from "./DialogProvider";
 
 interface VersionHistorySheetProps {
   open: boolean;
@@ -38,6 +41,29 @@ const REASON_LABEL: Record<SnapshotReason, string> = {
   "pre-restore": "Before a restore",
   manual: "Manual snapshot",
 };
+
+/**
+ * What deleting one snapshot costs, said plainly. Deleting a version used to be
+ * a single un-confirmed click — and for a document that is no longer in the
+ * library, its snapshots (the "pre-delete" one above all) are the ONLY copies
+ * left anywhere, so that click could destroy the last trace of it.
+ */
+export function snapshotDeleteConfirm(
+  meta: Pick<SnapshotMeta, "title">,
+  opts: { docInLibrary: boolean; remainingForDoc: number },
+): ConfirmOptions {
+  const title = meta.title || "Untitled";
+  let description: string;
+  if (opts.docInLibrary) {
+    description =
+      "This saved version is removed from Version history for good. The document itself is not changed.";
+  } else if (opts.remainingForDoc <= 1) {
+    description = `This is the last remaining copy of “${title}”, which is no longer in your library. Once it is deleted, the document cannot be recovered.`;
+  } else {
+    description = `“${title}” is no longer in your library, so its saved versions are the only copies left. This one cannot be recovered once it is deleted.`;
+  }
+  return { title: "Delete this version?", description, confirmLabel: "Delete version", destructive: true };
+}
 
 function formatWhen(ts: number): string {
   const d = new Date(ts);
@@ -66,6 +92,13 @@ function VersionHistorySheetInner({
 }: VersionHistorySheetProps) {
   const [byDoc, setByDoc] = useState<Map<string, SnapshotMeta[]>>(new Map());
   const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { confirm } = useDialog();
+  // Restoring writes a document and deleting a version destroys recoverable
+  // data; read-only mode gates every mutation, and these are two of them.
+  const readOnly = useUIStore((s) => s.readOnly);
+  const documents = useDocumentStore((s) => s.documents);
+  const libraryIds = useMemo(() => new Set(documents.map((d) => d.id)), [documents]);
   // `formatWhen` reads Date.now() at render, so the relative timestamps need a
   // reason to re-render while the sheet is open — see useTickWhileActive.
   useTickWhileActive(open, 30_000);
@@ -76,6 +109,7 @@ function VersionHistorySheetInner({
 
   useEffect(() => {
     if (!open) return;
+    setError(null);
     void reload();
     return snapshotStore.subscribe(() => { void reload(); });
   }, [open, reload]);
@@ -84,14 +118,38 @@ function VersionHistorySheetInner({
   const others = Array.from(byDoc.entries()).filter(([id]) => id !== activeDocId);
 
   const doRestoreInPlace = async (m: SnapshotMeta) => {
+    if (readOnly) return;
     setBusy(m.id);
     try { await onRestoreInPlace(m.id); onOpenChange(false); }
     finally { setBusy(null); }
   };
   const doRestoreAsNew = async (m: SnapshotMeta) => {
+    if (readOnly) return;
     setBusy(m.id);
     try { await onRestoreAsNew(m); onOpenChange(false); }
     finally { setBusy(null); }
+  };
+  // Confirmed, awaited, and reported. It was one un-confirmed click whose
+  // promise nobody awaited, so a failure vanished and a success could remove
+  // the only surviving copy of a deleted document without a word.
+  const doDelete = async (m: SnapshotMeta) => {
+    if (readOnly || busy != null) return;
+    const ok = await confirm(
+      snapshotDeleteConfirm(m, {
+        docInLibrary: libraryIds.has(m.docId),
+        remainingForDoc: byDoc.get(m.docId)?.length ?? 1,
+      }),
+    );
+    if (!ok) return;
+    setBusy(m.id);
+    setError(null);
+    try {
+      await snapshotStore.deleteOne(m.id);
+    } catch {
+      setError("That version could not be deleted. It is still listed below.");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const row = (m: SnapshotMeta, opts: { inPlace: boolean }, i: number) => (
@@ -109,8 +167,8 @@ function VersionHistorySheetInner({
         <Button
           size="sm"
           variant="outline"
-          className="h-7 shrink-0 gap-1 text-xs"
-          disabled={busy != null}
+          className="h-7 shrink-0 gap-1 text-xs pointer-coarse:h-9"
+          disabled={busy != null || readOnly}
           onClick={() => doRestoreInPlace(m)}
         >
           <RotateCcw className="size-3.5" /> Restore
@@ -119,8 +177,8 @@ function VersionHistorySheetInner({
       <Button
         size="sm"
         variant={opts.inPlace ? "ghost" : "outline"}
-        className="h-7 shrink-0 gap-1 text-xs"
-        disabled={busy != null}
+        className="h-7 shrink-0 gap-1 text-xs pointer-coarse:h-9"
+        disabled={busy != null || readOnly}
         onClick={() => doRestoreAsNew(m)}
         title="Restore this version as a new document"
       >
@@ -129,10 +187,10 @@ function VersionHistorySheetInner({
       <Button
         size="icon"
         variant="ghost"
-        className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
-        aria-label="Delete this snapshot"
-        disabled={busy != null}
-        onClick={() => snapshotStore.deleteOne(m.id)}
+        className="size-6 shrink-0 text-muted-foreground hover:text-destructive pointer-coarse:size-9"
+        aria-label="Delete this version"
+        disabled={busy != null || readOnly}
+        onClick={() => void doDelete(m)}
       >
         <Trash2 className="size-3.5" />
       </Button>
@@ -155,6 +213,17 @@ function VersionHistorySheetInner({
         <Separator />
         <ScrollArea className="h-[calc(100vh-8.5rem)]">
           <div className="space-y-6 px-5 py-4">
+            {readOnly && (
+              <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Read-only mode is on. Turn it off (View menu or Settings) to restore or delete versions.
+              </p>
+            )}
+            {error && (
+              <p role="alert" className="flex items-start gap-1.5 text-xs text-destructive">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                <span>{error}</span>
+              </p>
+            )}
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 This document
@@ -181,6 +250,9 @@ function VersionHistorySheetInner({
                     <div key={docId}>
                       <p className="mb-1 truncate text-[11px] font-medium text-muted-foreground">
                         {snaps[0]?.title || "Untitled"}
+                        {!libraryIds.has(docId) && (
+                          <span className="ml-1.5 rounded bg-muted px-1 py-px text-[10px] uppercase tracking-wide">deleted</span>
+                        )}
                       </p>
                       <ul className="overflow-hidden rounded-md border border-border">
                         {snaps.map((m, i) => row(m, { inPlace: false }, i))}
