@@ -243,6 +243,24 @@ describe("the phone drawer manages focus (A094)", () => {
     opener.remove();
   });
 
+  it("falls back to the reopen control when the opener no longer exists", () => {
+    // The editor's "Open workspace panel" button unmounts while the panel is
+    // open, so the element that opened the drawer is gone by the time it closes.
+    asPhone(true);
+    setTree();
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    act(() => opener.focus());
+    const { unmount } = mountPanel();
+    opener.remove(); // what the editor does to its reopen button
+    const reopen = document.createElement("button");
+    reopen.setAttribute("aria-label", "Open workspace panel");
+    document.body.append(reopen); // …and what it mounts when the panel closes
+    unmount();
+    expect(document.activeElement).toBe(reopen);
+    reopen.remove();
+  });
+
   it("does neither when docked beside the editor on a wide screen", () => {
     asPhone(false);
     setTree();
