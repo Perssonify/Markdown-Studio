@@ -13,7 +13,7 @@ For a homepage grid. Each is a genuine differentiator, not table stakes.
 | **Two panes, always in sync** | Raw Markdown and formatted rich text, side by side — edit either, both update |
 | **Everything round-trips** | Math, diagrams, tables and callouts all come back as clean Markdown |
 | **Linked notes and a live map** | `[[wiki links]]` plus a relationship map you can explore and click through |
-| **Nothing leaves your browser** | No account, no server, no upload — and it works offline |
+| **Your documents stay in your browser** | No account, no server copy, no analytics — and it works offline |
 | **Hard to lose work** | Autosave, per-document undo, version snapshots, blank-overwrite protection |
 | **Leaves as easily as it arrives** | Export to Markdown, HTML, Word, PDF, JSON, or your whole library as a ZIP |
 
@@ -28,8 +28,9 @@ For a homepage grid. Each is a genuine differentiator, not table stakes.
   headings H1–H6, lists, quotes, alignment, text and highlight colour, fonts
 - Tables with a grid picker, per-cell rich formatting, and row/column operations
 - Interactive task lists (`- [ ]`) with tick-boxes that work, including nesting
-- Code blocks with syntax highlighting
-- Images with drag-to-resize, and theme-aware images that swap for light/dark
+- Code blocks with a language tag and a copy button
+- Images that keep their width and height, and theme-aware images that swap for
+  light/dark
 - Right-click context menu for formatting, insertion and linking
 - Change case (UPPER / lower / Title), with a content-only mode that skips code
 - Structured selection: select every heading, paragraph, list item, code block,
@@ -76,11 +77,12 @@ For a homepage grid. Each is a genuine differentiator, not table stakes.
   metadata and timestamps intact
 - **Import** Markdown, HTML, plain text, Word documents, or ZIP/TAR archives —
   including password-protected ZIPs
-- **Import from a URL** — Google Drive, GitHub, Dropbox or any direct link,
-  through a hardened first-party relay (never a third-party proxy)
+- **Import from a URL** — Google Drive, GitHub, Dropbox or any direct link. Your
+  browser fetches it directly; if a site blocks that, the app asks before using
+  its own hardened relay (never a third-party proxy)
 - **Import fidelity you can read** — if a source contains something the editor
   cannot represent, it says so, and shows you exactly what and why
-- Every export filename is timestamped
+- ZIP exports are timestamped in their filenames
 
 ## Keeping your work
 
@@ -91,6 +93,23 @@ For a homepage grid. Each is a genuine differentiator, not table stakes.
 - **Version history** — recoverable snapshots in a separate database; restore in
   place or as a new document
 - **Multi-tab conflict detection** — two windows can't silently overwrite each other
+- **Persistent storage** — the app asks the browser not to clear your library,
+  and Settings shows whether it agreed and how much space the library uses
+- **Backup reminder** — a nudge when your last full backup is more than a week old
+- **Wiped-library detection** — if the browser ever empties your library, the app
+  says so and offers to restore a backup instead of quietly starting over
+
+## Privacy
+
+- Documents are stored only in your browser — no account, no server copy
+- No analytics, tracking or telemetry; error diagnostics stay on the device
+  until you copy them
+- **Import from a URL** asks before using the app's relay, and remembers your answer
+- **Block remote images** — stop images hosted elsewhere from loading, and from
+  telling their host when you open a document
+- No referrer is sent with image or import requests
+- **Erase all local data** — one confirmed button removes every document,
+  version and setting from this browser
 
 ## Look and feel
 
@@ -100,7 +119,7 @@ For a homepage grid. Each is a genuine differentiator, not table stakes.
 - Full keyboard shortcuts, listed in-app and switchable between Mac and
   Windows/Linux notation
 - Responsive from phone to desktop, with touch-sized controls
-- Installable as an app, and fully functional offline
+- Installable as an app; works offline after one online visit, installed or not
 
 ## For developers
 

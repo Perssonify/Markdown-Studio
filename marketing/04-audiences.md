@@ -11,12 +11,12 @@ matter to *them* — resist listing all of them.
 
 You already write Markdown. What you don't have is a way to see the rendered
 result without switching tabs, and a way to fix a broken table without counting
-pipes. Markdown Studio gives you the rendered page as an editable surface: drag
-a column width, tick a checkbox, drop in a Mermaid diagram — and the Markdown
+pipes. Markdown Studio gives you the rendered page as an editable surface: add
+a table row, tick a checkbox, drop in a Mermaid diagram — and the Markdown
 stays clean enough to commit.
 
 **What matters to them:** syntax-highlighted Markdown pane · Mermaid and LaTeX
-that round-trip · code blocks with highlighting · front matter · scoped Find &
+that round-trip · fenced code blocks · front matter · scoped Find &
 Replace (only headings, only code) · GitHub-flavoured callouts and task lists ·
 export straight to Markdown · embeddable.
 
@@ -28,7 +28,7 @@ collapse on round-trip.
 
 ## Researchers and academics
 
-**Hook:** Equations, diagrams and citations, without a LaTeX toolchain.
+**Hook:** Equations, diagrams and footnotes, without a LaTeX toolchain.
 
 Write `$$\int_0^\infty e^{-x} dx = 1$$` and see it typeset immediately.
 Compose an equation in a dialog with a live preview if you'd rather not write
@@ -39,10 +39,10 @@ connections between them are visible rather than remembered.
 **What matters to them:** KaTeX math inline and display · equation dialog with
 live preview · footnotes · document outline · wiki links and backlinks ·
 relationship map · export to Word for a co-author, or PDF for a submission ·
-everything stays on your machine.
+your documents stay on your machine.
 
-**Proof line:** No account and no upload — which for unpublished work is not a
-feature, it's a requirement.
+**Proof line:** No account, and no server stores or reads your documents — which
+for unpublished work is not a feature, it's a requirement.
 
 ---
 
@@ -71,20 +71,29 @@ drifting tells you before it becomes unusable.
 
 **Hook:** Write something you'd rather not upload.
 
-Markdown Studio has no account, no server and no sync service. Your documents
-are stored by your browser, on your device. Nothing you type is transmitted —
-not for rendering, not for backup, not for analytics. Turn off the network and
-it keeps working.
+Markdown Studio has no account and no sync service, and no server stores or
+reads your documents. They are stored by your browser, on your device, and
+rendered there — no server takes part in writing or saving. There are no
+analytics or tracking at all. Once it has loaded, turn off the network and it
+keeps working.
 
-**What matters to them:** entirely client-side · no account · works offline ·
+Two features touch the network, and both are under the writer's control.
+Importing from a link fetches that link, and the app asks before routing a
+blocked one through its own server (which keeps no copy). Images hosted on
+other sites load from those sites, and Settings ▸ Privacy can block them.
+
+**What matters to them:** documents stored only in the browser · no account ·
+no analytics or tracking · remote images can be blocked · works offline ·
 installable as an app · one-click full-library export so *you* hold the backups ·
-version history and undo held locally.
+version history and undo held locally · erase all local data in one step.
 
-**Proof line:** There is no server to trust, which is a stronger guarantee than
-a privacy policy.
+**Proof line:** There is no server copy of your documents to leak — a stronger
+guarantee than any privacy policy.
 
 **Be honest with them:** local-only means device-only. Moving to a new machine
-is an export and an import, and clearing site data clears your library. Say so.
+is an export and an import. Clearing site data clears your library — and a
+browser can clear it too (Safari does after seven days without a visit, unless
+the app is on the Home Screen or Dock). Say so.
 
 ---
 

@@ -20,20 +20,34 @@ It's free.
 No. There's nothing to sign up for.
 
 **Where are my documents stored?**
-In your browser's own storage (IndexedDB), on your device. They are not uploaded
-anywhere.
+In your browser's own storage (IndexedDB), on your device. There is no account,
+and no server stores or reads them.
 
 **Does it work offline?**
-Yes. You can install it as an app and use it with no network at all.
+Yes, after your first visit: the whole app is cached in the background, so it
+opens and works with no network, whether or not you install it. Only importing
+from a URL and images hosted on other sites need a connection. Installing it —
+Add to Home Screen, or Add to Dock on a Mac — also protects your library from
+Safari's rule of clearing a site's storage after seven days without a visit.
+
+**Does it send anything over the network?**
+Your documents stay in your browser; no server stores or reads them. Three
+things do use the network: loading the app (and, while it is open, an hourly
+check for a new version); importing from a URL, which fetches the link you
+enter — and if that site blocks browsers, the app asks before fetching it
+through its own server, which passes the file straight back without keeping
+it; and images in a document, which load from wherever they are hosted unless
+you turn on Settings ▸ Privacy ▸ Block remote images. There are no analytics,
+tracking or telemetry.
 
 ---
 
 ## The editing model
 
 **Is the right pane just a preview?**
-No — it's a full editor. Tick a checkbox, drag an image's size, use the table
-grid picker, format inside a table cell. Everything you do there comes back as
-Markdown.
+No — it's a full editor. Tick a checkbox, use the table grid picker, format
+inside a table cell, edit a formula in place. Everything you do there comes back
+as Markdown.
 
 **Will it mangle my Markdown?**
 This is the question the product is built around. Neither the Markdown text nor
@@ -86,7 +100,8 @@ collaboration is a requirement, this isn't the tool.
 **Does it sync between my devices?**
 No. Documents live in the browser you wrote them in. To move them, export
 (one click for the whole library) and import on the other device. This is the
-direct consequence of having no server — the same reason nothing is uploaded.
+direct consequence of keeping your documents off any server: there is no server
+copy to sync from.
 
 **What if I clear my browser data?**
 Your library goes with it. Local-only storage means the backups are yours to
@@ -94,9 +109,17 @@ keep: export the library ZIP periodically. The app also keeps recoverable
 version snapshots, but those are local too, so they don't survive clearing site
 data.
 
+A browser can also clear a site's storage on its own — Safari after seven days
+without a visit (unless the app is on your Home Screen or Dock), other browsers
+when the disk runs low. So the app asks the browser to keep your library
+(Settings ▸ Storage & backup shows whether it agreed), reminds you when your
+last full backup is more than a week old, and tells you if your library ever
+comes back empty instead of quietly starting over.
+
 **Can I use it on my phone?**
-Yes — the interface adapts down to phone widths with touch-sized controls. The
-two panes stack rather than sitting side by side on narrow screens. It's
+Yes — the interface adapts down to phone widths with touch-sized controls. On a
+phone held upright the two panes stack, one above the other; turned on its
+side, where two stacked panes would be too short, they sit side by side. It's
 genuinely usable, though a large document is more comfortable on a bigger
 display.
 
@@ -104,7 +127,8 @@ display.
 There are several layers: autosave, per-document undo history, a backstop that
 refuses to let a blank editor overwrite a document with content, recoverable
 version snapshots in a separate database, and multi-tab conflict detection. None
-of that survives clearing your browser storage, which is why the export exists.
+of that survives your browser's storage being cleared, which is why the export
+exists.
 
 **How big a library does it handle?**
 Hundreds of documents is fine for writing and browsing. The relationship map is
@@ -136,8 +160,9 @@ Yes. The storage layer is a pluggable adapter, so you can persist wherever your
 app already does.
 
 **Does it need a backend?**
-No. The one server-side piece is an optional relay used for importing from a
-URL, and only if you use that feature.
+No. The one server-side piece is an optional relay that Import from URL falls
+back to when a site blocks browsers — used only if the user agrees. Without it,
+that import points the user to downloading the file and dropping it in instead.
 
 **What's the package called?**
 `@perssonify/editor`. The npm coordinate hasn't changed with the product name —

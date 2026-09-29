@@ -1,11 +1,12 @@
 # Security Policy
 
-Markdown Studio (npm package `@perssonify/editor`) is a client-only Markdown
-editor: documents are created, converted and stored entirely in the visitor's
-browser, with no account and no document upload. The one server-side component
+Markdown Studio (npm package `@perssonify/editor`) is a browser-based Markdown
+editor: documents are converted in the visitor's browser and stored there
+(IndexedDB), with no account and no server copy. The one server-side component
 is `api/import.js` — a first-party "import relay" that fetches a user-supplied
 URL on the app's own origin so the browser can import from hosts that send no
-CORS headers.
+CORS headers. The app uses it only after the visitor has agreed to it (asked
+once, remembered, changeable in Settings ▸ Privacy).
 
 We take reports about that relay, about the import/ingest path, and about the
 embed's host-supplied parameters seriously. Thank you for looking.
@@ -19,8 +20,8 @@ embed's host-supplied parameters seriously. Thank you for looking.
 | Latest published `@perssonify/editor` on npm       | Yes       |
 | Any older tag, release or npm version              | No        |
 
-The app is continuously deployed from `main` and holds no server-side user
-data, so there is nothing to back-port to: fixes land on `main`, ship to the
+The app is continuously deployed from `main` and stores no documents on a
+server, so there is nothing to back-port to: fixes land on `main`, ship to the
 live deployment, and go out in the next npm release. Please reproduce against
 the live site or a current `main` build before reporting.
 
@@ -86,8 +87,9 @@ hardened; anything that gets past one of these controls is a valid report:
   are CORS-restricted to the two production origins exactly. This does **not**
   stop a non-browser client, which can send any header it likes: to a script
   the relay is a bounded proxy (public destinations, ports 80/443, ≤ 4 MB,
-  ≤ 20 s), and volume is limited at the platform. Using it as that bounded proxy
-  is known and not a finding; getting it to exceed one of those bounds is.
+  ≤ 20 s), and volume limits belong at the platform (a firewall rule the
+  operator configures). Using it as that bounded proxy is known and not a
+  finding; getting it to exceed one of those bounds is.
 - **Response neutralisation.** The upstream `Content-Type`/`Content-Disposition`
   are never reflected; responses are forced to
   `application/octet-stream` + `Content-Disposition: attachment` +
@@ -95,8 +97,8 @@ hardened; anything that gets past one of these controls is a valid report:
   same-origin navigation to `/api/import?url=…` cannot render attacker HTML on
   our origin.
 - **Resource bounds.** A 4 MB response cap, request timeout, redirect-hop cap and
-  a best-effort per-IP rate limit, with the durable rate limit in the platform
-  firewall.
+  a best-effort per-IP rate limit (in memory, per warm instance). The durable
+  rate limit is a platform firewall rule, set up by the operator.
 
 **The import / ingest path (client side).** Content arriving from a file, an
 archive, a URL import or a paste is untrusted:
@@ -129,11 +131,13 @@ execution in the host page.
 
 ## Not in scope
 
-- **The visitor's own browser storage.** Documents live in `localStorage`
-  (`pf:` keys) and IndexedDB (including the `perssonify-snapshots` sidecar) in
-  plain text, by design — there is no server and no encryption at rest. Anyone
-  with access to the device, the browser profile, or devtools on the page can
-  read them. That is the product's threat model, not a vulnerability.
+- **The visitor's own browser storage.** Documents live in IndexedDB
+  (including the `perssonify-snapshots` version-history sidecar), and the unload
+  stash, drafts and preferences in `localStorage` (`pf:` keys) — in plain text,
+  by design: there is no server copy and no encryption at rest. Anyone with
+  access to the device, the browser profile, or devtools on the page can read
+  them. That is the product's threat model, not a vulnerability. (Settings ▸
+  Local data ▸ Erase all local data removes them.)
 - **Self-XSS in your own document.** You can author raw HTML in your own
   editor; content you type into your own browser is not a cross-user issue.
   Content that arrives via *import* is a different matter and is in scope.

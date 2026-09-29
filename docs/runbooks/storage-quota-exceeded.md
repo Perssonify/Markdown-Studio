@@ -1,29 +1,69 @@
 # Runbook — Storage Quota Exceeded
 
 ## Symptoms
-- A save fails; the user sees a quota/storage error toast.
-- `saveStatus` sticks on `"error"` ([src/store/documentStore.ts](../../src/store/documentStore.ts)).
-- Console shows a `StorageQuotaError`.
+- The status bar reads **"Storage full — not saving"** ("Storage full" on a
+  narrow screen). That is the save status `full`
+  ([`SaveStatus`](../../src/store/documentStore.ts#L190)), and it is TERMINAL:
+  autosave stops retrying it on a timer.
+- A toast, at most once every 30 s: "Storage is full — your latest changes are
+  NOT saved. Free space by deleting documents or old versions (Tools ▸ Version
+  history), then keep typing to retry." ⌘S shows the quota error itself.
+- In a host app that passes `onStorageQuotaExceeded`, the host gets the
+  `StorageQuotaError` instead of the toast.
+- The typed text is still on screen; nothing has been lost yet.
 
 ## Diagnosis
-1. The adapter projects usage **before** writing and throws if it would exceed the cap ([src/store/idb-storage-adapter.ts:287](../../src/store/idb-storage-adapter.ts#L287)). Default cap is **50 MB** ([:67](../../src/store/idb-storage-adapter.ts#L67)).
-2. Inspect current usage:
+1. **Whose limit?** There is no app-level cap. The IndexedDB adapter's limit is
+   the browser's quota for this site, read from `navigator.storage.estimate()`;
+   a `QuotaExceededError` from the browser becomes a
+   [`StorageQuotaError`](../../src/store/idb-storage-adapter.ts#L76)
+   ([`isQuotaExceeded`](../../src/store/idb-storage-adapter.ts#L164)). A host can
+   set an optional HARD cap, `storageConfig`'s
+   [`maxBytes`](../../src/store/idb-storage-adapter.ts#L71), which is checked
+   inside the write transaction. The localStorage fallback (used only
+   where IndexedDB is missing) is bounded by the browser's ~5 MB localStorage
+   allowance.
+2. **How full?** Settings ▸ **Storage & backup** shows "Using X of about Y this
+   browser allows for this site" and whether storage is persistent. From the
+   console on the app's origin:
    ```js
-   // app-level metrics (if exposed)
-   navigator.storage.estimate().then(console.log);   // browser-level quota/usage
+   navigator.storage.estimate().then(console.log);   // { usage, quota } for the whole origin
    ```
-   Or read the store's `storageMetrics` (`usedBytes`, `maxBytes`, `pct`, `docCount`).
-3. Find the culprit doc — usually one with large **base64 images** pasted/imported (images embed as data URLs, [src/store/import-export.ts](../../src/store/import-export.ts) `importImage`). Big tables/JSON also add up.
+   The store's `storageMetrics` holds the same numbers (`usedBytes`,
+   `maxBytes`, `pct`, `docCount`, `available`, `limitKnown`). The estimate
+   covers the WHOLE origin: documents, version history (`perssonify-snapshots`,
+   up to ~12 MB) and the service worker's precache of the app itself (~8 MB).
+3. **Find the large document.** Usually one with pasted or imported **images**:
+   they are stored inside the document as base64 data URLs
+   ([src/store/import-export.ts](../../src/store/import-export.ts) `importImage`).
+   Storing images as separate blobs is not built yet (A086, partial).
 
 ## Remediation
-- **Free space:** Delete unneeded documents, or export-then-delete large ones (JSON export is lossless).
-- **Shrink a doc:** Remove large embedded images; link to external images instead of pasting data URLs.
-- **Raise the cap (deliberate):** the cap is configurable via the editor's `storageConfig` prop ([src/PerssonifyEditor.tsx](../../src/PerssonifyEditor.tsx) props) which feeds `maxBytes`. Raising it only helps up to the **browser's** real quota — `navigator.storage.estimate()` tells you the ceiling.
-- **Handle it gracefully in an embed:** wire `onStorageQuotaExceeded` ([src/PerssonifyEditor.tsx](../../src/PerssonifyEditor.tsx)) to surface a host-app message.
+- **Keep a copy first:** File ▸ Export ▸ **Full backup (.zip) — restorable**.
+  Exporting downloads a file and does not need space in browser storage.
+- **Free space:** delete documents you do not need. A delete retries the parked
+  save by itself ([`storageFreed`](../../src/store/documentStore.ts#L1180)); so
+  does **Erase history** in the toast that follows a delete. Deleting old
+  versions in Tools ▸ Version history also frees space; then press **Save**
+  (the toolbar's Save is enabled in the `full` state) or keep typing.
+- **Shrink a document:** replace embedded images with links to hosted ones.
+- **A host's cap:** raise or remove `storageConfig.maxBytes`. Beyond that, the
+  browser's quota is the ceiling.
+- **In an embed:** wire `onStorageQuotaExceeded` to show a message in the host
+  app.
 
 ## Prevention
-- Discourage pasting large images; consider downscaling on import.
-- Surface `storageMetrics.pct` in the UI so users see they're approaching the limit before a hard failure.
+- The status bar shows a storage indicator once usage passes 60 % of a known
+  limit. Where the browser gives no estimate (`limitKnown: false`), it never
+  shows.
+- Discourage pasting large images.
 
 ## Escalation
-If the projected-usage math is wrong (rejecting saves that should fit), that's a bug in `_recomputeMetrics`/quota check ([src/store/idb-storage-adapter.ts:226](../../src/store/idb-storage-adapter.ts#L226)). File an issue with `storageMetrics` values and the failing doc size.
+If saves are refused while the estimate shows plenty of room, file an issue
+with the `storageMetrics` values, the `navigator.storage.estimate()` output and
+the size of the failing document. The code is the save path in
+[src/store/idb-storage-adapter.ts](../../src/store/idb-storage-adapter.ts)
+(`save`, `_refreshEstimate`, `isQuotaExceeded`) and the `full` handling in
+`saveActiveDoc` ([src/store/documentStore.ts](../../src/store/documentStore.ts)).
+Note that a `full` save is not recorded in Copy diagnostics; only failed,
+refused and conflicted saves are.

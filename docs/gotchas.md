@@ -7,9 +7,9 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## The sync engine callbacks must have empty dependency arrays
 
 - **Symptom:** After "improving" `useSyncEngine`, the app freezes, the CPU spikes, or the two panes flicker endlessly.
-- **Cause:** `forceSyncMdToHtml` / `forceSyncHtmlToMd` deliberately use **empty dependency arrays** and call the current sync function through a ref ([src/engine/useSyncEngine.ts:98-110](../src/engine/useSyncEngine.ts#L98-L110)). Adding any dependency makes the callbacks change identity on render, which re-triggers effects that call sync, which re-renders… an infinite [echo loop](domain-glossary.md#echo-loop).
-- **Fix/Workaround:** Don't add dependencies. If you need fresh values inside, reach them via refs, as the existing code does. The `quickHash` guards ([src/engine/useSyncEngine.ts:62](../src/engine/useSyncEngine.ts#L62), [:124](../src/engine/useSyncEngine.ts#L124)) and the `syncing` ref ([:28](../src/engine/useSyncEngine.ts#L28)) are the other two legs of the stool — leave all three intact.
-- **Related:** [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts), [architecture.md ADR-2](architecture.md#adr-2--hash-guarded-debounced-bidirectional-sync).
+- **Cause:** `forceSyncMdToHtml` / `forceSyncHtmlToMd` deliberately use **empty dependency arrays** and call the current sync function through a ref ([src/engine/useSyncEngine.ts:190-202](../src/engine/useSyncEngine.ts#L190-L202)). Adding any dependency makes the callbacks change identity on render, which re-triggers effects that call sync, which re-renders… an infinite [echo loop](domain-glossary.md#echo-loop).
+- **Fix/Workaround:** Don't add dependencies. If you need fresh values inside, reach them via refs, as the existing code does. The `quickHash` guards ([src/engine/useSyncEngine.ts:62](../src/engine/useSyncEngine.ts#L62), [:124](../src/engine/useSyncEngine.ts#L124) — the rich side checks its doc node's identity, `lastHtmlDoc`, before it hashes) and the `syncing` ref ([:28](../src/engine/useSyncEngine.ts#L28)) are the other two legs of the stool — leave all three intact.
+- **Related:** [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts), [architecture.md ADR-2](architecture.md#adr-2--echo-gated-debounced-bidirectional-sync).
 
 ## ~~`bun run dev` references a `.js` config that doesn't exist~~ (RESOLVED)
 
@@ -40,7 +40,9 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   This is a secure-by-default change from the old `["*"]`.
 - **Fix/Workaround:** When embedding, **pass an explicit allowlist** of host
   origins, or `["*"]` to intentionally accept any origin. With no allowlist the
-  bridge will ignore incoming messages.
+  bridge will ignore incoming messages. The shipped iframe embed never uses
+  `"*"`: it resolves its allowlist from the real framer (see "The embed's
+  `allowedOrigins` is the PARENT's origin" below).
 - **Related:** [auth.md#common-auth-gotchas](auth.md#common-auth-gotchas).
 
 ## ~~Two version numbers that aren't synced~~ (RESOLVED — single-sourced)
@@ -51,51 +53,75 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   `package.json` only — the in-app/About version follows automatically.
 - **Related:** [workflows.md#release--deployment](workflows.md#release--deployment).
 
-## Some markdown features don't round-trip through the rich pane
+## A construct survives the rich pane only if the schema or a turndown rule carries it
 
-- **Symptom:** You type `:smile:` (or a `[^1]` footnote) in the markdown pane; it
-  renders in the rich pane, but after editing in the rich pane the markdown comes
-  back as the emoji glyph (or the footnote as a plain link/list) rather than the
-  original shortcode/syntax.
-- **Cause:** The canonical source of truth is ProseMirror JSON. Features that are
-  **not** modeled as TipTap nodes get flattened when HTML is parsed into the
-  schema. Math (`$…$`/`$$…$$`) and code-fence diagrams (`mermaid`/`abc`) **do**
-  round-trip because they have dedicated nodes ([MathNodes.tsx](../src/extensions/MathNodes.tsx))
-  or are real code blocks. Emoji collapses to its unicode glyph; **footnotes** are
-  effectively display-only (rendered, not reconstructed).
-- **Fix/Workaround:** For footnote-heavy or shortcode-sensitive docs, edit in the
-  markdown pane (its text is preserved as-is until you edit the rich pane). A
-  future emoji/footnote TipTap node would make these fully round-trip.
-- **Related:** [build-marked.ts](../src/engine/build-marked.ts), [features.md](features.md).
+- **Symptom:** You type something in the markdown pane, edit in the rich pane,
+  and it comes back written differently — or the fidelity indicator warns about it.
+- **Cause:** The canonical source of truth is ProseMirror JSON. A construct
+  survives a rich-pane edit only if the schema models it, or a turndown rule can
+  rebuild it from what the schema keeps. Most now do: maths (`$…$`/`$$…$$`) and
+  code-fence diagrams (`mermaid`/`abc`) have dedicated nodes
+  ([MathNodes.tsx](../src/extensions/MathNodes.tsx)) or are real code blocks;
+  an emoji shortcode is an inline `emoji` node that carries its name, so
+  `:smile:` is written back as `:smile:` ([EmojiNode.ts](../src/extensions/EmojiNode.ts));
+  **footnotes** have no node — the rich pane shows the renderer's numbered link and
+  "Footnotes" list — but their hrefs carry the label, so turndown rules rebuild
+  `[^label]` and `[^label]: text`, named labels and multi-paragraph definitions
+  included (A043); table column alignment is a cell attribute (A044). What still
+  cannot survive:
+  - **text alignment** — it has no Markdown or inline-HTML carrier; the fidelity
+    report counts it;
+  - **a list or a second paragraph inside a table cell, and merged cells** — a GFM
+    cell is one line, so these flatten; the fidelity report flags them;
+  - **two-space hard breaks in exported Markdown** — the app reads a single newline
+    as a line break (marked's `breaks: true`), so a hard break is written back as a
+    plain newline. It round-trips inside the app, but a strict CommonMark reader of
+    the exported file joins the lines (A051, deferred until that dialect is decided);
+  - **tabs inside a fenced code block** — see below.
+- **Fix/Workaround:** For a document that must stay byte-for-byte as typed, edit
+  in the markdown pane (its text is preserved until you edit the rich pane), and
+  use Styled mode for colour, highlight and font.
+- **Related:** [build-marked.ts](../src/engine/build-marked.ts),
+  [turndown-rules.ts](../src/engine/turndown-rules.ts), [fidelity.ts](../src/store/fidelity.ts),
+  `converter-roundtrip.test.js`.
 
-## Table-cell rich formatting round-trips again (was silently stripped)
+## A table cell's Markdown comes from the document's own conversion — there is no cell converter
 
-- **Symptom (historical):** Styled spans / underline / math / emoji inside a GFM
-  table cell were stripped to plain text on HTML→markdown.
-- **Cause:** The per-cell turndown instance was created via `window.TurndownService`,
-  a global that was **never set**, so the code always hit its tag-stripping
-  fallback. Fixed by importing `TurndownService` directly in
-  [turndown-rules.ts](../src/engine/turndown-rules.ts).
-- **Related:** [src/engine/turndown-rules.ts](../src/engine/turndown-rules.ts).
+- **Symptom (historical):** Styled spans, underline, maths or emoji inside a GFM
+  table cell were stripped to plain text on HTML→markdown; later, cells dropped
+  strikethrough and image sizes (and kept colour spans even in Clean mode) while
+  the fidelity report called the table lossless.
+- **Cause:** Cells were re-converted by a separate, smaller turndown instance —
+  first one built from a `window.TurndownService` global that was never set (so it
+  always fell back to stripping tags), then a hand-kept subset of the rules that
+  drifted from the real ones.
+- **Fix:** That instance is gone. The `gfmTableCell` rule records the Markdown the
+  ONE document conversion already produced for each cell, and `gfmTable` lays the
+  rows out from it ([turndown-rules.ts](../src/engine/turndown-rules.ts)) — so a
+  cell gets every rule, the escaper and Clean/Styled parity automatically. Every
+  pipe in a cell is written `\|`; line breaks in a cell become `<br>`.
+- **Watch for:** a per-cell `turndown()` call creeping back in. What a GFM cell
+  cannot hold is reported by `fidelity.ts`, not silently dropped.
+- **Guard:** `converter-roundtrip.test.js` ("A044 — tables keep alignment and in-cell formatting").
 
 ## Decorative formatting silently lost in Clean mode
 
 - **Symptom:** You apply text color/highlight/font, switch to Clean mode, and it vanishes from the markdown.
-- **Cause:** Clean mode strips non-GFM styling by design ([src/engine/useSyncEngine.ts:76](../src/engine/useSyncEngine.ts#L76)). The toolbar warns ([src/ui/Toolbar.tsx:200](../src/ui/Toolbar.tsx#L200)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
+- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:149](../src/engine/useSyncEngine.ts#L149)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
 - **Fix/Workaround:** Use Styled mode to preserve styling, or export as JSON for a lossless copy.
 - **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/fidelity.ts](../src/store/fidelity.ts).
 
 ## IndexedDB transactions abort if you await the wrong thing
 
 - **Symptom:** A storage write silently fails / the transaction aborts mid-operation.
-- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented at [src/store/idb-storage-adapter.ts:169](../src/store/idb-storage-adapter.ts#L169).
+- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented above `idbTransaction` ([src/store/idb-storage-adapter.ts:188](../src/store/idb-storage-adapter.ts#L188)). The same rule applies to the version-history database: read first, in its own transaction, then open the write.
 - **Fix/Workaround:** Keep all awaits inside a transaction limited to `idbRequest` wrappers; do any other async work before/after the transaction.
 - **Related:** [database.md#invariants](database.md#invariants).
 
 ## Importing the same file twice creates duplicate documents
 
 - **Symptom:** Re-importing a file yields two copies.
-- **Cause:** Ingest mints a **new id** every call ([src/store/ingest.ts](../src/store/ingest.ts), `generateId`); there's no dedup by content or filename.
+- **Cause:** Ingest mints a **new id** for every import (`generateId`, [src/store/document.ts](../src/store/document.ts)); there's no dedup by content or filename. A `perssonify-document` envelope (a JSON export or a backup ZIP) carries its own id, but if that id is already in the library `createDoc` mints a fresh one, so the import sits beside the stored document instead of overwriting it.
 - **Fix/Workaround:** Expected behavior. Delete the dupe, or add dedup if your feature needs it.
 - **Related:** [data-pipeline.md#idempotency](data-pipeline.md#idempotency).
 
@@ -119,14 +145,16 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   unconditionally — not only under `pedantic` — so fence CONTENT is expanded
   along with block-structure indentation. CommonMark preserves tabs in code
   content, so this is a marked deviation, not the spec.
-- **Fix/Workaround:** not fixed. `preprocessMarkdown` already masks fenced code
-  for its own semantic passes, but it restores the code BEFORE marked runs, so
-  marked still sees the tabs. The fix is to carry a mask across marked itself —
-  stash fence bodies in `hooks.preprocess` and restore them, HTML-escaped, in
-  `hooks.postprocess`, both configured in `build-marked.ts`. That is a change to
-  the whole md→html path and wants its own verification pass. Pinned as an
-  `it.fails` case in `fenced-code-roundtrip.test.js`, which will start failing
-  (i.e. telling you) the moment it is fixed.
+- **Fix/Workaround:** not fixed. `preprocessMarkdown` masks fenced code (found by
+  `findFencedCodeRanges`) for its own passes, but it restores the code BEFORE
+  marked runs, so marked still sees the tabs. The fix is to carry a mask across
+  marked itself — stash fence bodies in `hooks.preprocess` and restore them,
+  HTML-escaped, in `hooks.postprocess`, both configured in `build-marked.ts`. That
+  is a change to the whole md→html path and wants its own verification pass. Pinned
+  in `fenced-code-roundtrip.test.js` by a case that asserts today's behaviour (a
+  tab comes back as four spaces), so it fails — and names the reason — the moment
+  the behaviour changes. (It used to be an `it.fails`, which vitest would have
+  reported as a failure on the day someone fixed the bug.)
 - **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
   [src/engine/preprocessor.ts](../src/engine/preprocessor.ts),
   [src/__tests__/fenced-code-roundtrip.test.js](../src/__tests__/fenced-code-roundtrip.test.js).
@@ -199,23 +227,24 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 ## The library stylesheet is scoped at BUILD time, not in source
 
-- **Symptom:** You change `src/styles.css`, and the app looks right but a library consumer's page gets reset — or vice versa.
-- **Cause:** `src/styles.css` is shared by all three builds. Tailwind's preflight is global there **on purpose** (the app and the iframe embed own their document). Only the **library** build confines the `base` layer to the editor's subtrees, via `scopeLibraryBaseLayer` in [build/scope-css.mjs](../build/scope-css.mjs), wired into `vite.config.ts` **only**.
-- **Watch for:** anything the editor attaches to `document.body` outside its container must carry `data-pf-portal`, or the reset will not reach it in a library mount. Base UI portals get `data-base-ui-portal` for free; sonner gets `data-sonner-toaster`.
-- **Related:** [integration-guide.md](integration-guide.md#the-stylesheet-and-why-importing-it-is-safe), `src/__tests__/scope-css.test.js`.
+- **Symptom:** You change `src/styles.css`, and the app looks right but a library consumer's page gets reset or recoloured — or vice versa.
+- **Cause:** `src/styles.css` is shared by all three builds. Tailwind's preflight is global there, and the design tokens sit on `:root`, **on purpose** (the app and the iframe embed own their document). Only the **library** build rewrites the stylesheet, in two passes in [build/scope-css.mjs](../build/scope-css.mjs) run by the `scopeLibraryStylesheet` Vite plugin (wired into `vite.config.ts` **only**): `scopeBaseLayer` confines the `base` layer to the editor's subtrees, and `scopeTokens` moves every rule that declares only custom properties from `:root` / `.dark` / the palette switches onto the editor's own roots (`TOKEN_SCOPE`), so a shadcn/Tailwind host's `--background`, `--primary` or `--radius` of the same name are left alone. Page-level rules outside the base layer (the hidden scrollbar, for one) apply only to `html.pf-app`, which a host page never carries.
+- **Watch for:** anything the editor attaches to `document.body` outside its container must carry `data-pf-portal`, or neither the reset nor the tokens reach it in a library mount. Base UI portals get `data-base-ui-portal` for free; sonner gets `data-sonner-toaster`. The integration's `display: contents` wrapper carries `data-pf-root` and sits OUTSIDE its error boundary, so the crash card still gets the tokens. Beyond those passes the build rewrites nothing, so an unlayered rule that must not reach a host page is scoped by hand (the focus ring to the editor roots; the print and coarse-pointer menu rules to `.pf-app`).
+- **Related:** [integration-guide.md](integration-guide.md#the-stylesheet-and-why-importing-it-is-safe), `src/__tests__/scope-css.test.js`, `e2e/cases/library.mjs`.
 
 ## `bun run dev` does not serve `/api` — the import relay is invisible in local dev
 
 - **Symptom:** "Import from URL" behaves differently locally than in production; the relay never seems to run.
 - **Cause:** `bun run dev` is Vite only. A request to `/api/import?url=…` falls through to the SPA and returns **HTTP 200 with `text/html`** (the app shell), so the client's `res.ok` check passes and it tries to ingest the index page.
-- **Fix/Workaround:** exercise the handler directly (`bun run test src/__tests__/import-relay.test.js`), or run `npx vercel dev` if you need the real function. Note that `curl`-ing a deployed relay is *supposed* to return 403 — it sends no `Sec-Fetch-Site`.
+- **Fix/Workaround:** exercise the handler directly (`bun run test src/__tests__/import-relay.test.js`), or run `npx vercel dev` if you need the real function. Note that `curl`-ing a deployed relay is *supposed* to return 403 — it sends no `Sec-Fetch-Site`. The relay is also opt-in: the client uses it only after the one-time consent question, whose answer is remembered in `pf:import-relay` — remove that key (or change Settings ▸ Privacy) to be asked again.
 - **Related:** [import-relay.md](import-relay.md#running-and-testing-it).
 
 ## Browser storage eviction can wipe documents
 
 - **Symptom:** A user reports their documents "disappeared."
-- **Cause:** There is no backend; everything is in IndexedDB, which browsers may evict under storage pressure or when the user clears site data. The app does not request persistent storage.
-- **Fix/Workaround:** Encourage periodic JSON export. See the runbook.
+- **Cause:** There is no server copy; documents exist only in this origin's IndexedDB, which browsers may evict under storage pressure (Chromium, for a "best-effort" origin), delete after seven days without a visit (Safari, unless the app is installed), discard on closing a private window, or lose when the user clears site data.
+- **What the app does about it** (standalone app, [src/store/storage-durability.ts](../src/store/storage-durability.ts)): after the first successful save it asks the browser to keep its storage (`navigator.storage.persist()`), and Settings ▸ Storage & backup shows whether it is persisted and how much is used; a reminder appears when the last full backup is over 7 days old; Safari/iOS users get a tip to install the app. A localStorage canary (`pf:library-canary`) remembers how many documents the origin held — if IndexedDB comes back empty while the canary remembers documents, the starter documents are NOT seeded (which would make a wipe look like a first visit) and a notice explains the loss. A wipe that also takes localStorage is indistinguishable from a new visitor.
+- **Fix/Workaround:** Encourage regular full backups (File ▸ Export ▸ Full backup). See the runbook, which starts with Version history and the unload stash.
 - **Related:** [runbooks/documents-disappeared.md](runbooks/documents-disappeared.md), [architecture.md ADR-5](architecture.md#adr-5--local-first-no-backend).
 
 ## A composition guard belongs to the pane the projection WRITES
@@ -237,14 +266,15 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Symptom:** Type a sentence and reload within the autosave window; the text is gone.
 - **Cause:** The unload handler fires a best-effort autosave, but `saveActiveDoc` **awaits a read** before it writes. The page is gone before the write is issued, and the in-memory draft cache does not survive a reload.
 - **Fix:** the handler also writes a synchronous localStorage stash (`src/store/crash-recovery.ts`, `pf:recovery`), which `documentStore.initialize` adopts into the ordinary unsaved-draft cache before activating a document. It is deliberately ONE-SHOT — a stash that survived its own restore would keep resurrecting itself over newer content.
-- **Watch for:** stash the live canonical only when `hydratedDocId === activeDocId`; the editor's JSON belongs to the document it holds, not to whichever is active. Also wired to `pagehide` (iOS never fires `beforeunload` on a swipe-away).
+- **Watch for:** stash the live canonical only when `hydratedDocId === activeDocId`; the editor's JSON belongs to the document it holds, not to whichever is active. Also wired to `pagehide` (iOS never fires `beforeunload` on a swipe-away). Each entry carries the revision its draft was based on and whether the tab was in conflict — without them, reloading a conflicted tab turned the refused save into an overwrite of the other tab's work — and `stashUnsaved` read-merge-writes the shared key per document, so a second tab's unload cannot erase the first tab's stash. A host's `storageConfig` can namespace or disable the stash (`configureRecovery`).
 - **Guard:** `crash-recovery.test.js`, `e2e/cases/faults.mjs`.
 
 ## "Unsaved changes" can mean "saving is failing"
 
 - **Symptom:** The status bar reads *Unsaved changes* while every save is in fact failing.
 - **Cause:** A failed autosave is routed `error → editing` after 3s so the re-arm effect fires again — so for most of each retry cycle the status is `editing`, and `editing` rendered the reassuring message.
-- **Fix:** `saveError` in `documentStore` outlives that transition (cleared only by a write that lands) and the bar reads *Save failed — retrying*. The terminal `blocked` status (the blank-over-content refusal) has its own branch now too; it previously had none and was invisible except for one 30s-throttled toast.
+- **Fix:** `saveError` in `documentStore` outlives that transition (cleared only by a write that lands) and the bar reads *Save failed — retrying*. The terminal `blocked` status (the blank-over-content refusal) has its own branch now too; it previously had none and was invisible except for one 30s-throttled toast. Running out of space is its own terminal status, `full` (*Storage full — not saving*), rather than an endless *Save failed — retrying*.
+- **Watch for:** resolving `saveActiveDoc` is not proof of a commit — it resolves `true` only when the write committed, and ⌘S reports success (and fires a host's `onSave`) only then.
 
 ## A `ClipboardEvent` has no `shiftKey` — take the modifier from the view
 
@@ -271,16 +301,17 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 ## Activating a document and capturing the editor is two awaits apart
 
-- **Symptom:** After an import, a host `addDocuments` call, or a Cards quick capture, one document ends up holding another's content.
-- **Cause:** activate → persist → read `editor.getJSON()` spans at least two awaits, and IndexedDB is slow enough that a document switch lands in between routinely. A pre-await ownership snapshot is stale by the time the capture runs.
-- **Fix:** one helper, `activateAndCapture` (PerssonifyEditor), re-checks ownership after every await (`stillOurs()`), the same chokepoint `saveActiveDoc` and `isEditorTargeting` re-assert. Quick capture is additionally a document-LEAVING path — `prepareToLeaveActiveDoc()` first, switch back to the previous document after.
+- **Symptom:** After an import, a host `addDocuments` call, or a Cards quick capture, one document ends up holding another's content — or an import is saved as an empty "Untitled".
+- **Cause:** activate → push the HTML into the editor → read `editor.getJSON()` back spans awaits and a frame, and IndexedDB is slow enough that a document switch (or a click in the library) lands in between routinely. The capture then read, or the fallback persisted, the wrong content.
+- **Fix:** don't borrow the editor to convert. Imports are converted HEADLESSLY — `captureIngestHeadless` parses the ingest HTML against the live editor's schema, or the identical `headlessSchema()` when no editor is mounted — and persisted with `saveNewDoc` without being activated; the first import is then opened through `handleSwitchDoc`. `activateAndCapture` (PerssonifyEditor, used by `addDocuments`, the host `importContent` and Cards quick capture) converts headlessly too, and hydrates through the usual ritual only if, after its awaits, `activeDocId` is still the new document — the same post-await chokepoint `saveActiveDoc` and `isEditorTargeting` re-assert. Import, `importContent` and quick capture are document-LEAVING paths — `prepareToLeaveActiveDoc()` first; quick capture switches back to the previous document after.
 - **Watch for:** any new path that calls `finalizeDoc`/`switchToDoc` and then reads the editor.
 
 ## The embed's `allowedOrigins` is the PARENT's origin, not its own
 
 - **Symptom:** The shipped iframe build ignores every message a host sends it.
 - **Cause:** `allowedOrigins` was set to the editor's own origin — which is never the sender — so the bridge rejected everything. In the other direction `createEditorClient` defaulted to `"*"`, i.e. it would post the document to any window that answered.
-- **Fix:** `resolveAllowedOrigins` ([src/embed.tsx](../src/embed.tsx)) takes a validated `?allowed_origin=` (a literal `"*"` is rejected), else the origin of `document.referrer`, else `[]` — deny-all is the safe failure. `resolveEditorOrigin` ([src/integration/host-bridge.ts](../src/integration/host-bridge.ts)) derives the target from the iframe's own `src`.
+- **Fix:** `resolveEmbedAllowedOrigins` ([src/integration/embed-origins.ts](../src/integration/embed-origins.ts), called from [src/embed.tsx](../src/embed.tsx)) decides, in order: a deploy-time allowlist (`VITE_EMBED_ALLOWED_ORIGINS`, baked in at build) filters everything; where the browser reports the real framer (`location.ancestorOrigins`), a requested origin must BE that framer, and a page that is not framed gets no partner; the requested origins are a validated `?allowed_origin=` (a literal `"*"` is rejected), else the reported framer, else the origin of `document.referrer`; otherwise `[]` — deny-all is the safe failure. Any page that frames the embed used to get a bridge that can read and overwrite every document the embed sees; set the deploy-time allowlist. `resolveEditorOrigin` ([src/integration/host-bridge.ts](../src/integration/host-bridge.ts)) derives the target from the iframe's own `src`.
+- **Watch for:** the embed still stores its documents in the default database (`perssonify-docs`); renaming it would orphan every existing embed user's library ([decisions.md](decisions.md)).
 - **Guard:** `embed-origin.test.js`.
 
 ## A converter that throws must not leave the echo gate claiming agreement
@@ -310,7 +341,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Symptom:** A format applied in the rich pane disappears as soon as the panes sync, and is missing from every markdown export. No error, no fidelity warning.
 - **Cause:** Turndown's core implements CommonMark only, and this project does **not** load `turndown-plugin-gfm`. An element no rule matches falls through to the default behaviour — keep the text, drop the tag. Strikethrough shipped this way: TipTap's Strike renders `<s>`, nothing in [turndown-rules.ts](../src/engine/turndown-rules.ts) matched it, and `fidelity.ts` counts strike as a NATIVE mark so it was never flagged as a loss either.
 - **Fix:** write the rule. Check what a node or mark actually SERIALIZES to (`editor.getHTML()`), not what you assume it emits.
-- **Watch for:** anything GFM — strikethrough, tables, task lists, autolinks — and any new TipTap extension. Test BOTH directions: `strikethrough.test.js` covered md → html across several releases while the reverse destroyed the format.
+- **Watch for:** anything GFM — strikethrough, tables, task lists, autolinks — and any new TipTap extension. Test BOTH directions: `strikethrough.test.js` covered md → html across several releases while the reverse destroyed the format. The mirror image bites too: LITERAL text that would read back as markup (`&lt;br&gt;`, text about `<details>`, `1)` at a line start, a `$` that would open a formula) must be escaped, and turndown's own escaper covers CommonMark only — `escapeMarkdownText` in the same file handles the rest (`converter-escape.test.js`).
 - **Guard:** `strikethrough.test.js` ("strikethrough survives html → markdown").
 
 ## "Indent" cannot mean paragraph indent in a markdown editor
@@ -342,7 +373,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Symptom:** With "reduce motion" on, the relationship map still animates the whole graph exploding out of a ring.
 - **Cause:** The global `@media (prefers-reduced-motion: reduce)` guard flattens CSS animations and transitions — which covers more than it looks like, including the graph's *inline* 450ms camera transition (an `!important` stylesheet declaration beats a normal inline one). What it cannot touch is node positions advanced from `requestAnimationFrame`. No `.tsx` in the repo consulted the query at all, and `styles.css` carried a comment asserting one did.
 - **Fix:** [`prefersReducedMotion`](../src/utils/reduced-motion.ts), read at call time (the preference can change mid-session) and failing open where `matchMedia` is missing. The graph settles in one step instead of animating.
-- **Watch for:** the inverse error this entry started as — assuming a *transition* needs a JS gate. Check whether the stylesheet already wins before writing one.
+- **Watch for:** the inverse error this entry started as — assuming a *transition* needs a JS gate. Check whether the stylesheet already wins before writing one. A JavaScript smooth scroll (`scrollIntoView({ behavior: "smooth" })`) is one the stylesheet cannot reach either; outline, heading and Help jumps take their behaviour from `scrollBehavior()` in the same module.
 - **Guard:** `reduced-motion.test.js`, including a case that the stylesheet no longer makes the false claim.
 
 ## A control that persists and highlights can still do nothing
@@ -352,3 +383,18 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Fix:** express the measure in the unit it actually is — characters (`ch`) — so it binds in a narrow pane and scales with the font-size preference. Migrate stored values; say in the UI where it still cannot bind rather than overclaiming.
 - **Watch for:** any setting whose only feedback is its own selected state. That is not evidence it did anything.
 - **Guard:** `reading-width.test.js`.
+
+## On Windows, Ctrl+Alt is how half of Europe types `[`, `]` and `\`
+
+- **Symptom:** On a German, Nordic, Swiss, Spanish or French layout, `[`, `]` or `\` cannot be typed — the keystroke indents, outdents, opens Find & Replace or turns a paragraph into a heading instead. Markdown links, task lists and `[[wiki links]]` become untypeable.
+- **Cause:** Windows delivers AltGr as Ctrl+Alt, so any handler that reads "Ctrl (or Meta) plus a key" as a chord swallows AltGr typing. Three layers did: the shortcut hook, CodeMirror's default keymap (`Mod-Alt-\` is `indentSelection`) and TipTap's own `Mod-Alt-0…6` / `Mod-Alt-c` bindings.
+- **Fix:** `isAltGraphInput` ([src/utils/alt-graph.ts](../src/utils/alt-graph.ts)) is the one predicate: the AltGraph modifier, or — off the Mac, without Meta — Ctrl+Alt that produced anything other than the key's own Latin letter. The shortcut hook and the Find panel bail on it, `dropAltGraphChords` filters CodeMirror's Ctrl+Alt bindings, and `AltGraphPassthrough` makes ProseMirror skip its keymaps for it without `preventDefault`, so the character is still typed.
+- **Watch for:** any new Ctrl+Alt binding, including one arriving with a dependency bump — Tiptap 3.31 silently gave Tab a new meaning after a list, which `ListKeymapNoTab` undoes.
+- **Guard:** `editor-altgraph.test.js`, `e2e/probes/g2-audit-fixes.mjs` (real AltGr key events through CDP).
+
+## A regex lookbehind LITERAL in the entry chunk blanks the app on older Safari
+
+- **Symptom:** The app is a blank page on Safari/iOS before 16.4, with a `SyntaxError` in the console.
+- **Cause:** A lookbehind (`(?<=…)` / `(?<!…)`) in a regex LITERAL is a parse-time error on those engines, and one in any module the entry chunk loads stops the whole bundle from parsing — before any error boundary exists.
+- **Fix:** keep the entry chunk free of them. Where one is needed, compile it from a string at runtime inside a `try`, with a fallback (Clear formatting in the markdown pane does this, and its fallback is pinned equal to the primary passes).
+- **Guard:** `converter-escape.test.js` ("A097 — no lookbehind in the modules the entry chunk loads"), which asks the TypeScript parser for real regex literals; `formatting-clear-fallback.test.js`.
