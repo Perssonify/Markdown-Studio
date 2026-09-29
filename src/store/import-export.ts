@@ -271,19 +271,26 @@ ${body}
 }
 
 /**
- * Export document as canonical JSON (ProseMirror JSON + origin + residuals).
+ * The `perssonify-document` envelope a document is exported (and backed up)
+ * as — ONE definition for the single-file JSON export and the backup ZIP.
+ *
+ * The origin record is exported WITHOUT its payloads. `origin.raw` is the
+ * whole input exactly as it was first imported, and `alternates` the
+ * clipboard copies of a paste (HTML, plain text, RTF): text the user may have
+ * DELETED since, travelling inside a file they share. Nothing reads either on
+ * import; the provenance (format, source, time) stays.
  */
-export function exportAsJson(doc: DocumentRecord): { filename: string } {
-  const exported = {
+export function toExportEnvelope(doc: DocumentRecord, title: string = doc.title) {
+  return {
     _format: "perssonify-document",
     _version: "1.1.0",
     // Read on import: an OLDER build opens content from a newer one read-only
     // instead of blank (see schema-version.ts).
     schemaVersion: Math.max(doc.schemaVersion ?? 0, CURRENT_SCHEMA_VERSION),
     id: doc.id,
-    title: doc.title,
+    title,
     canonical: doc.canonical,
-    origin: doc.origin,
+    origin: doc.origin ? { ...doc.origin, raw: null, alternates: null } : doc.origin,
     residuals: doc.residuals,
     ingestReport: doc.ingestReport,
     metadata: doc.metadata,
@@ -291,6 +298,13 @@ export function exportAsJson(doc: DocumentRecord): { filename: string } {
     created: doc.created,
     updated: doc.updated,
   };
+}
+
+/**
+ * Export document as canonical JSON (ProseMirror JSON + origin + residuals).
+ */
+export function exportAsJson(doc: DocumentRecord): { filename: string } {
+  const exported = toExportEnvelope(doc);
 
   const filename = sanitizeFilename(doc.title) + ".json";
   const json = JSON.stringify(exported, null, 2);

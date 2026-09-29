@@ -19,6 +19,7 @@ import {
 import { useUIStore } from "../store/uiStore";
 import { MODES } from "../constants";
 import { AccentCircleRow, ThemeCircleRow } from "./ThemeControls";
+import { EraseLocalDataSection } from "./EraseLocalData";
 
 const FLAVORS: { id: MarkdownFlavor; label: string; desc: string }[] = [
   {
@@ -372,6 +373,10 @@ function SettingsSheetInner({
                 <Switch id="pref-ads" checked={showAds} onCheckedChange={setShowAds} />
               </div>
             </section>
+
+            {/* Local data — erase everything the editor keeps in this browser
+                (its own section, last; see EraseLocalData.tsx). */}
+            <EraseLocalDataSection />
           </div>
         </ScrollArea>
       </SheetContent>
