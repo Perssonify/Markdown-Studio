@@ -547,6 +547,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             _persistedCanonical: doc.canonical,
           } as DocumentRecord)
         : doc;
+      ++switchSeq; // an activation, like finalizeDoc — see there
       set({
         activeDoc: record,
         activeDocId: doc.id,
@@ -612,6 +613,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // When an editor instance was provided, its content IS this doc's canonical
     // (completeIngest captured it) — mark hydrated; otherwise leave hydration
     // to whoever pushes content into the editor later.
+    //
+    // Claim the switch sequence: this is an activation, and a switchToDoc whose
+    // storage read is still in flight must not settle on top of it. Without
+    // the bump, New document during a slow switch left activeDocId on the
+    // switch's target and hydratedDocId on the new document — every save
+    // refused, and leaving the document cached nothing.
+    ++switchSeq;
     set((s) => ({
       activeDoc: { ...doc },
       activeDocId: doc.id,
@@ -915,6 +923,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       } else {
         // No document remains — the editor holds nothing meaningful, so the
         // hydration mark must not linger (stale marks are guard landmines).
+        // Claim the switch sequence too (see finalizeDoc): a pending switch
+        // settling after this would re-activate a document nobody hydrates.
+        ++switchSeq;
         set({ activeDoc: null, activeDocId: null, saveStatus: "ready", saveError: null, hydratedDocId: null });
       }
     }
