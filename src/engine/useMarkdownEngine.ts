@@ -5,7 +5,7 @@ import type { Marked } from 'marked';
 import TurndownService from 'turndown';
 import { preprocessMarkdown, normalizeMarkdown } from './preprocessor';
 import { cleanHtmlForTurndown } from './html-cleaner';
-import { addBaseRules, addInlineStyleRule, installEscape, type EscapeOptions } from './turndown-rules';
+import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
 import { buildMarked } from './build-marked';
 import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
 import { useUIStore } from '../store/uiStore';
@@ -233,8 +233,10 @@ export function createMarkdownEngine(
         html = html.replace(/<li(?![^>]*data-type="taskItem")(?=[\s>])/g, '<li style="display:list-item;margin-bottom:2px"');
       return html;
     },
-    htmlToMd: (html: string) => normalizeMarkdown(tdInline.turndown(cleanHtmlForTurndown(html))),
-    htmlToCleanMd: (html: string) => normalizeMarkdown(tdClean.turndown(cleanHtmlForTurndown(html))),
+    // turndownLinear, not td.turndown: the plain conversion is quadratic in
+    // document length (turndown-rules.ts).
+    htmlToMd: (html: string) => normalizeMarkdown(turndownLinear(tdInline, cleanHtmlForTurndown(html))),
+    htmlToCleanMd: (html: string) => normalizeMarkdown(turndownLinear(tdClean, cleanHtmlForTurndown(html))),
   };
 }
 
