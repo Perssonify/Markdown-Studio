@@ -28,6 +28,7 @@ import { printHtmlDocument } from "./store/print-export";
 import type { IngestFormat } from "./store/ingest";
 import { sanitizeForIngest } from "./store/ingest";
 import { exportGraph } from "./store/link-index";
+import { headingLinkHtml } from "./formatting/heading-link";
 import type { StorageAdapter } from "./store/storage-adapter";
 import { StorageQuotaError } from "./store/storage-adapter";
 import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
@@ -838,7 +839,7 @@ export function PerssonifyEditor({
       const editor = tiptapRef.current?.getEditor?.();
       if (!editor) return;
       editor.chain().focus().insertContent(
-        `<a data-doc-link="" data-anchor="${anchor.replace(/"/g, "&quot;")}" class="wiki-link" href="#">${anchor}</a>`
+        headingLinkHtml(anchor)
       ).run();
       handleHtmlChange();
     }
