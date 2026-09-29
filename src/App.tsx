@@ -172,6 +172,10 @@ export function App() {
                 onAbout={() => navigate("about")}
                 onHelp={() => navigate("help")}
                 onStartTour={startTour}
+                // Backup reminders, the wiped-library explanation, the moved-
+                // domain banner and the install tip: the app's own library,
+                // so the app's own notices (an embedder's storage is theirs).
+                durabilityNotices
                 initialImportUrl={importUrlSeed}
                 graphOpen={route === "graph"}
                 // Opening the graph pushes (so browser Back closes it); closing

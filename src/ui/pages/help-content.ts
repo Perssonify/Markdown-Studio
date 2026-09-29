@@ -174,6 +174,22 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
+    id: "moving-library",
+    title: "Moving your library",
+    blocks: [
+      {
+        p: "Your library belongs to the browser and the web address you use it in. Another browser, another device, or another address — such as the move from markdowneditor.perssonify.com to markdownstudio.com — starts with an empty library. To bring your documents along:",
+      },
+      {
+        list: [
+          "Where your documents are now, choose File → Export → “Full backup (.zip) — restorable”. You get one file named perssonify-backup-<date and time>.zip.",
+          "In the new place, choose File → Open file… (or Import → File(s) / archive…) and pick that .zip — or simply drop it onto the editor.",
+          "Folders, titles, tags and formatting come back exactly as they were. Documents already in the new library are kept: a backup never overwrites them (restoring the same backup twice gives you copies).",
+        ],
+      },
+    ],
+  },
+  {
     id: "sharing-embedding",
     title: "Sharing & embedding",
     blocks: [
@@ -251,9 +267,26 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Import from URL fetches the link you enter. If that site blocks browsers from reading it, the app can fetch it through its own server instead — it asks you first and remembers the answer (change it in Settings → Privacy). The server receives the address, downloads the file and passes it straight back without keeping a copy; like any web request, the address may appear in our hosting provider's logs, so avoid importing links that carry secrets.",
           "Images in a document load from wherever they are hosted, which lets that site see when the document is opened. Settings → Privacy → Block remote images stops that; blocked images show as their description, and the setting applies the next time the app loads.",
           "Install it as an app (from your browser’s install/Add-to-Home-Screen option) to work offline.",
-          "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write, but nothing is saved between visits. Export before you close the tab.",
+          "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write, but nothing is saved: a “Not saving” banner says so for as long as it is true. Export before you close the tab.",
         ],
       },
+    ],
+  },
+  {
+    id: "keeping-safe",
+    title: "Keeping your library safe",
+    blocks: [
+      {
+        p: "Because your documents live in the browser, the browser can take them away: Safari clears a website's storage after seven days without a visit unless the site is added to the Home Screen or Dock, and other browsers clear it when the disk runs low or when you clear browsing data. Three things protect you:",
+      },
+      {
+        list: [
+          "Persistent storage — after your first save, the app asks the browser to keep your library. Settings → Storage & backup shows whether it agreed and how much space the library uses, with a button to ask again.",
+          "Full backups — File → Export → “Full backup (.zip) — restorable”, or the button in Settings → Storage & backup. If your last one is more than a week old (or you have never made one), a gentle reminder appears above the status bar.",
+          "Version history — Tools → Version history keeps earlier versions of each document, including documents you delete.",
+        ],
+      },
+      { tip: "If your library ever comes back empty in a browser that used to hold documents, the app tells you instead of quietly starting over — restore your latest full backup from the banner it shows." },
     ],
   },
 ];

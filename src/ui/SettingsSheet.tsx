@@ -20,6 +20,7 @@ import { useUIStore } from "../store/uiStore";
 import { MODES } from "../constants";
 import { adminSettingsAvailable, adsAvailable } from "../utils/build-gates";
 import { PrivacySection } from "./SettingsPrivacy";
+import { StorageBackupSection } from "./SettingsStorage";
 import { AccentCircleRow, ThemeCircleRow } from "./ThemeControls";
 
 const FLAVORS: { id: MarkdownFlavor; label: string; desc: string }[] = [
@@ -56,9 +57,12 @@ const RICH_TOGGLES: { key: keyof MarkdownFeatureSettings; label: string }[] = [
 function SettingsSheetInner({
   open,
   onOpenChange,
+  onBackup,
 }: {
   open: boolean;
   onOpenChange: (value: boolean) => void;
+  /** Run the full, restorable backup (shown in Storage & backup when given). */
+  onBackup?: () => void;
 }) {
   const markdownFeatures = useUIStore((s) => s.markdownFeatures);
   const setMarkdownFeatures = useUIStore((s) => s.setMarkdownFeatures);
@@ -349,6 +353,11 @@ function SettingsSheetInner({
                 <Switch id="pref-spellcheck" checked={spellcheck} onCheckedChange={setSpellcheck} />
               </div>
             </section>
+
+            <Separator />
+
+            {/* Storage & backup (SettingsStorage.tsx), then Privacy (SettingsPrivacy.tsx). */}
+            <StorageBackupSection open={open} onBackup={onBackup} />
 
             <Separator />
 
