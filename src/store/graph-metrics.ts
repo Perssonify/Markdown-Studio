@@ -1,8 +1,10 @@
 /**
  * graph-metrics.ts — pure, render-less helpers for the knowledge-graph overlay
- * (src/ui/GraphView.tsx). Kept free of React/DOM so the graph's logic layer is
- * unit-testable (the SVG/physics layer has no tests). All functions are O(n) or
- * O(edges) and allocate only their result Set/array.
+ * (src/ui/GraphView.tsx): the workspace metrics, label placement, the folder
+ * containers' ONE geometry, the spatial index both of those use, and the
+ * loop's pacing. Kept free of React/DOM so the map's logic layer is
+ * unit-testable (graph-metrics.test.js); the force layout itself is in
+ * graph-physics.ts, and the batched layers' path data in graph-draw.ts.
  */
 
 export interface MetricNode {
@@ -621,7 +623,9 @@ function containerGeometry(opts: Omit<FolderRectsOptions, "avoid">) {
  *  Above a threshold the layout advances several steps per rendered frame: the
  *  same number of steps, the same resting layout, a third of the frames. Small
  *  workspaces stay at 1 — there the frame is cheap and a step-per-frame is the
- *  smoothest way to watch the map unfold. */
+ *  smoothest way to watch the map unfold. A LARGE map also stops at SLICE_MS
+ *  (see `planFrame`): at 2,000 notes one step alone is 50-90ms under 4×
+ *  throttling, so six of them would be a 300-500ms task. */
 export function stepsPerFrame(n: number) {
   return n <= 60 ? 1 : Math.min(6, Math.ceil(n / 60));
 }
