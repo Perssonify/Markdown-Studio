@@ -133,31 +133,47 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **If you optimise further:** the remaining win is in the DOM, not the maths — fewer per-frame attribute writes (memoising the rail, or mutating node transforms imperatively instead of through React) beats Barnes-Hut here. Profile before you start; this entry exists because the obvious answer was the wrong one.
 - **Related:** [features.md#17-knowledge-graph-the-relationship-map](features.md#17-knowledge-graph-the-relationship-map).
 
-## Tabs inside a fenced code block become four spaces
+## Tabs inside a fenced code block became four spaces (fixed by marked 14.1.1)
 
-- **Symptom:** paste a Go function, a Makefile recipe, or any tab-indented
-  snippet into a fenced block; after the first markdown → rich → markdown round
-  trip the tabs are four spaces each. For a Makefile that is not cosmetic — make
-  requires a literal tab.
-- **Cause:** marked expands leading tabs across the WHOLE source before it
-  tokenises. `Lexer.blockTokens` runs
-  `src.replace(/^( *)(\t+)/gm, (_, lead, tabs) => lead + "    ".repeat(tabs.length))`
-  unconditionally — not only under `pedantic` — so fence CONTENT is expanded
-  along with block-structure indentation. CommonMark preserves tabs in code
-  content, so this is a marked deviation, not the spec.
-- **Fix/Workaround:** not fixed. `preprocessMarkdown` masks fenced code (found by
-  `findFencedCodeRanges`) for its own passes, but it restores the code BEFORE
-  marked runs, so marked still sees the tabs. The fix is to carry a mask across
-  marked itself — stash fence bodies in `hooks.preprocess` and restore them,
-  HTML-escaped, in `hooks.postprocess`, both configured in `build-marked.ts`. That
-  is a change to the whole md→html path and wants its own verification pass. Pinned
-  in `fenced-code-roundtrip.test.js` by a case that asserts today's behaviour (a
-  tab comes back as four spaces), so it fails — and names the reason — the moment
-  the behaviour changes. (It used to be an `it.fails`, which vitest would have
-  reported as a failure on the day someone fixed the bug.)
+- **Symptom (marked 12):** paste a Go function, a Makefile recipe, or any
+  tab-indented snippet into a fenced block; after the first markdown → rich →
+  markdown round trip the tabs were four spaces each. For a Makefile that is not
+  cosmetic — make requires a literal tab.
+- **Cause:** marked up to 14.1.0 expanded leading tabs across the WHOLE source
+  before it tokenised, fence content included. CommonMark preserves tabs in code
+  content, so this was a marked deviation, not the spec.
+- **Fix:** marked 14.1.1 stopped doing it, and the move to marked 18 (A113) took
+  the fix. `fenced-code-roundtrip.test.js` now pins tabs byte for byte (a Makefile
+  recipe, tabs inside a line); both cases fail on marked 12. It used to pin the
+  deviation, so that the day it changed the suite would say why.
 - **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
-  [src/engine/preprocessor.ts](../src/engine/preprocessor.ts),
   [src/__tests__/fenced-code-roundtrip.test.js](../src/__tests__/fenced-code-roundtrip.test.js).
+
+## A code span ending in a backslash hid the emphasis after it (marked ≥ 15.0.8)
+
+- **Symptom:** "Use `` `\` `` to escape. `**Note:**` …" showed the asterisks
+  literally — in the rich pane and in the Word export — and so did every `*`, `_`
+  and `**` up to the next backtick in the paragraph. CLAUDE.md contained exactly
+  such a paragraph (`` `Mod-Alt-\` ``). marked 12 rendered it correctly.
+- **Cause:** to decide which delimiters may close emphasis, marked masks the run
+  first. Since 15.0.8 it masks backslash escapes BEFORE code spans, but inside a
+  code span a backslash is literal, so the span's closing backtick reads as
+  escaped and its opener pairs with the next backtick instead. The code span
+  itself is still tokenised correctly; only the mask is wrong. Still present in
+  18.0.14.
+- **Fix:** `emStrongMaskFix` ([src/engine/marked-emphasis-mask.ts](../src/engine/marked-emphasis-mask.ts)),
+  an `emStrong` tokenizer override that both `build-marked.ts` and the Word export
+  install, hands marked's own emStrong a mask built with code spans and escapes in
+  ONE left-to-right pass. It steps in only for a run that contains a backslash
+  directly before a backtick.
+- **Watch for:** the module mirrors marked's reference-link masking and calls its
+  (TypeScript-private) `linkInText`. After a marked upgrade, the "emphasis after
+  backslash code span" cases in `marked-upgrade-parity.test.js` say whether it
+  still works — and whether upstream has fixed it, in which case delete the module
+  and keep the cases.
+- **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
+  [src/store/docx-export.ts](../src/store/docx-export.ts),
+  [src/__tests__/marked-upgrade-parity.test.js](../src/__tests__/marked-upgrade-parity.test.js).
 
 ## Reading CodeMirror's text with `innerText` double-counts blank lines
 

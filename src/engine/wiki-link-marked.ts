@@ -19,6 +19,7 @@
  * paragraphs, headings, list items, table cells — never inside any kind of
  * code, and never inside an HTML tag's attributes.
  */
+import type { RendererThis, Token, TokenizerThis } from "marked";
 import { escapeAttr } from "./css-safety";
 
 export interface WikiRef {
@@ -60,7 +61,7 @@ interface WikiToken extends WikiRef {
   type: "wikiLink";
   raw: string;
   text: string;
-  tokens?: unknown[];
+  tokens?: Token[];
 }
 
 export const wikiLinkExtension = {
@@ -70,7 +71,7 @@ export const wikiLinkExtension = {
     const i = src.indexOf("[[");
     return i < 0 ? undefined : i;
   },
-  tokenizer(this: { lexer: { inlineTokens(src: string): unknown[] } }, src: string): WikiToken | undefined {
+  tokenizer(this: TokenizerThis, src: string): WikiToken | undefined {
     const m = /^\[\[([^[\]\n]+)\]\]/.exec(src);
     if (!m) return undefined;
     const ref = parseWikiInner(m[1]!);
@@ -82,7 +83,7 @@ export const wikiLinkExtension = {
     if (ref.display !== null) token.tokens = this.lexer.inlineTokens(ref.display);
     return token;
   },
-  renderer(this: { parser: { parseInline(tokens: unknown[]): string } }, token: WikiToken): string {
+  renderer(this: RendererThis, token: WikiToken): string {
     const body = token.tokens ? this.parser.parseInline(token.tokens) : escapeAttr(token.text);
     return `${wikiLinkOpenTag(token.target, token.anchor)}${body}</a>`;
   },

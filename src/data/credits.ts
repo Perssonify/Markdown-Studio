@@ -54,7 +54,7 @@ export const CREDITS: CreditGroup[] = [
   {
     group: "Markdown & conversion",
     items: [
-      { name: "marked", version: "12.0.2", license: "MIT", role: "Markdown → HTML" },
+      { name: "marked", version: "18.0.14", license: "MIT", role: "Markdown → HTML" },
       { name: "turndown", version: "7.2.4", license: "MIT", role: "HTML → Markdown" },
       { name: "marked-emoji", version: "2.0.3", license: "MIT", role: ":shortcode: emoji" },
       { name: "marked-footnote", version: "1.4.0", license: "MIT", role: "Footnotes" },
