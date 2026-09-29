@@ -510,6 +510,34 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
     return parseStoredDocument(id, raw);
   }
 
+  /**
+   * Many documents in ONE read transaction (library export). Each slot is the
+   * record, null for an id that is not stored, or a StorageReadError for a
+   * record that will not parse; a transaction that fails rejects the call.
+   */
+  async getMany(ids: string[]): Promise<(DocumentRecord | null | StorageReadError)[]> {
+    await this._readyPromise;
+    let raws: (string | undefined)[];
+    try {
+      raws = await idbTransaction(this._db_(), [STORE_DOCS], "readonly", async (tx) => {
+        const store = tx.objectStore(STORE_DOCS);
+        // Every request is issued before the first await, so the transaction
+        // stays alive until the last one answers.
+        return Promise.all(ids.map((id) => idbRequest<string | undefined>(store.get(id))));
+      });
+    } catch (e) {
+      throw new StorageReadError(`Could not read ${ids.length} documents`, { cause: e });
+    }
+    return raws.map((raw, i) => {
+      if (raw === undefined || raw === null) return null;
+      try {
+        return parseStoredDocument(ids[i]!, raw);
+      } catch (e) {
+        return e instanceof StorageReadError ? e : new StorageReadError(String(e), { corrupt: true });
+      }
+    });
+  }
+
   async save(doc: DocumentRecord): Promise<void> {
     await this._readyPromise;
     stampUpdated(doc);
