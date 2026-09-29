@@ -127,6 +127,26 @@ export function audit(root = ROOT) {
   return { drift, missing, unresolved, total };
 }
 
+/**
+ * Of every line that DEFINES `name` (tiers 1–3 of defineLine), the one closest
+ * to `near`; null when there is none.
+ */
+export function nearestDefinition(file, name, near) {
+  const lines = fs.readFileSync(file, "utf8").split("\n");
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const defines = [
+    new RegExp(`^\\s*export\\s+(?:async\\s+)?(?:function|const|let|class|interface|type|enum)\\s+${esc}\\b`),
+    new RegExp(`^\\s*(?:async\\s+)?(?:function|const|let|class|interface|type|enum)\\s+${esc}\\b`),
+    new RegExp(`^\\s*(?:readonly\\s+|private\\s+|public\\s+)*${esc}\\s*[:(]`),
+  ];
+  let best = null;
+  lines.forEach((l, i) => {
+    if (!defines.some((re) => re.test(l))) return;
+    if (best === null || Math.abs(i + 1 - near) < Math.abs(best - near)) best = i + 1;
+  });
+  return best;
+}
+
 /** Re-point drifted anchors at their symbol's definition. Returns the count. */
 export function fix(root = ROOT) {
   const { drift } = audit(root);
@@ -148,8 +168,13 @@ export function fix(root = ROOT) {
       const href = d.match.slice(d.match.indexOf("](") + 2, -1);
       let next;
       if (d.tier <= 3) {
-        const label = d.label.replace(/:(\d+)$/, `:${d.should}`);
-        next = `[${label}](${href.replace(/#L\d+$/, `#L${d.should}`)})`;
+        // The DEFINITION nearest the old number, not the first one: a symbol
+        // defined twice (an interface member and its implementation — every
+        // store action) was re-pointed from the implementation the author
+        // chose to the declaration, just because lines above it moved.
+        const target = nearestDefinition(path.join(root, d.file), d.ident, d.line) ?? d.should;
+        const label = d.label.replace(/:(\d+)$/, `:${target}`);
+        next = `[${label}](${href.replace(/#L\d+$/, `#L${target}`)})`;
       } else {
         // A mention, not a definition: link the FILE and let the reader search
         // the name the sentence already gives them. Inventing a line number
