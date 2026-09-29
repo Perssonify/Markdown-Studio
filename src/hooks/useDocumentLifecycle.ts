@@ -5,6 +5,7 @@ import { cleanPasteHtml, sanitizePastedHtml } from "../engine/html-cleaner";
 import { historyCache } from "../store/history-cache";
 import type { IngestFormat, IngestSource } from "../store/ingest";
 import { useDocumentStore } from "../store/documentStore";
+import { useUIStore } from "../store/uiStore";
 import { createDocument } from "../store/document";
 import { snapshotStore, type SnapshotMeta } from "../store/snapshot-store";
 import type { UnsavedChangesResult } from "../ui/ConfirmDialog";
@@ -786,6 +787,17 @@ export function useDocumentLifecycle({
    * content replacement keeps undo history so ⌘Z reverts the restore too.
    */
   const restoreSnapshotInPlace = useCallback(async (snapshotId: number) => {
+    // A restore REPLACES the document's content, marks it dirty and saves it —
+    // an edit by any definition, and read-only let it straight through (the
+    // dispatcher's guard never sees this path). Refused, and said so. Checked
+    // again after the await: read-only can be switched on while the version
+    // loads.
+    const refuseReadOnly = () => {
+      if (!useUIStore.getState().readOnly) return false;
+      toast.show("Read-only is on — turn it off to restore a version", "warning");
+      return true;
+    };
+    if (refuseReadOnly()) return;
     // Generation guard — see handleCloseTab.
     const myGen = claimEditorGeneration(true);
     const { activeDocId, activeDoc } = useDocumentStore.getState();
@@ -793,6 +805,7 @@ export function useDocumentLifecycle({
     const canonical = await snapshotStore.getCanonical(snapshotId);
     if (switchGenRef.current !== myGen) return;
     if (!canonical) { toast.show("That version could not be loaded", "error"); return; }
+    if (refuseReadOnly()) return;
 
     const editor = tiptapRef.current?.getEditor?.();
     if (editor) {
