@@ -23,7 +23,13 @@ async function makeDocx() {
   return Packer.toBlob(doc);
 }
 
-describe("DOCX import", () => {
+// An explicit budget, because this is not a unit test's cost profile: the first
+// case dynamically imports `docx` AND `mammoth` (plus jszip, lop, underscore…)
+// cold, builds a real zip and parses it back. Warm and alone it takes ~0.2s;
+// in a parallel full run on a loaded machine the module transform alone has
+// taken it past the 5s default (measured 7.1s), which reported a timeout that
+// looks exactly like a regression. 30s still catches a genuinely hung promise.
+describe("DOCX import", { timeout: 30_000 }, () => {
   it("converts a .docx blob to HTML (headings, bold, lists)", async () => {
     const blob = await makeDocx();
     const { html, messages } = await convertDocxToHtml(blob);
