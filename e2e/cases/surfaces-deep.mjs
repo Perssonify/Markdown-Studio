@@ -200,16 +200,20 @@ runCase("surfaces-deep", async (rep, onClose) => {
   // ── the guided tour ─────────────────────────────────────────────────────
   await pg.locator('button:has-text("Help")').first().click();
   await pg.locator('[role="menuitem"]:has-text("Take a guided tour")').first().click();
+  // Wait for the tour's OWN title. This waited for any "Next|Done|Skip" text,
+  // which the always-present (visually hidden) "Skip to editor" link satisfies
+  // before the tour has rendered — so the checks below raced the tour's first
+  // paint and, under load, measured nothing and sent Escape to nobody.
   rep.check("the guided tour starts",
-    await until(async () => (await pg.locator('text=/Next|Done|Skip/').count()) > 0));
+    await until(async () => (await pg.locator("#pf-tour-title").count()) > 0));
   // It spotlights real anchors, so a step whose target is missing would leave
   // the highlight at 0x0 — worth knowing, since the anchors live in other files.
-  const spot = await pg.evaluate(() => {
+  const spot = await until(() => pg.evaluate(() => {
     const ring = document.querySelector(".ring-primary");
     if (!ring) return null;
     const r = ring.getBoundingClientRect();
     return { w: Math.round(r.width), h: Math.round(r.height) };
-  });
+  }));
   rep.check("the tour's spotlight has found a real element",
     !!spot && spot.w > 10 && spot.h > 10, JSON.stringify(spot));
   await pg.keyboard.press("Escape");
