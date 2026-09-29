@@ -469,12 +469,17 @@ export function FindReplaceBar({
   const [matchSet, setMatchSet] = useState<MatchSet | null>(null);
   const seqRef = useRef(0);
   const pendingSelectRef = useRef(false);
+  /** The document the latest refresh was started for — finished OR still in
+   *  the Worker. A document-change refresh for that same document would only
+   *  supersede (and so kill) a job that is already answering it. */
+  const requestedDocRef = useRef<unknown>(null);
 
   /** Recompute, publish the count and highlights, and (when `select`) select
    *  the match at or after the selection's start. The newest call wins. */
   const refresh = useCallback((select: boolean) => {
     if (select) pendingSelectRef.current = true;
     const seq = ++seqRef.current;
+    requestedDocRef.current = currentDoc();
     if (!live.current.findText) {
       cacheRef.current = null;
       pendingSelectRef.current = false;
@@ -506,7 +511,7 @@ export function FindReplaceBar({
         setCurrentMatch(set.ranges.findIndex((r) => r.from === sel.from && r.to === sel.to) + 1);
       }
     });
-  }, [getMatches, currentSelection, selectRange]);
+  }, [getMatches, currentSelection, selectRange, currentDoc]);
 
   // The query or an option changed: recompute and select (find-as-you-type).
   useEffect(() => {
@@ -583,8 +588,9 @@ export function FindReplaceBar({
   // the selection out from under someone who is typing.
   useEffect(() => {
     if (!live.current.findText) return;
-    const cached = cacheRef.current;
-    if (cached && cached.doc === currentDoc()) return; // only the DOM moved
+    // Only the DOM moved (our own highlights, a reflow), or a refresh for this
+    // very document is already done or on its way.
+    if (requestedDocRef.current === currentDoc()) return;
     refresh(false);
   }, [docRevision, refresh, currentDoc]);
 
