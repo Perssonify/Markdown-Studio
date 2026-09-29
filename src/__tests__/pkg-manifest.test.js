@@ -81,6 +81,9 @@ function importsUnder(dir, { exclude = [] } = {}) {
       if (!/\.(m?[jt]sx?)$/.test(e.name) || exclude.includes(rel)) continue;
       for (const spec of specifiersIn(readFileSync(p, "utf8"))) {
         if (spec.startsWith(".") || spec.startsWith("@/") || NODE_BUILTINS.has(spec)) continue;
+        // A Vite virtual module (`virtual:pwa-register`) is provided by a
+        // build plugin, not installed — there is no package to declare.
+        if (spec.startsWith("virtual:")) continue;
         const name = packageOf(spec);
         if (name === pkg.name) continue; // the package's own public name, in a doc sample
         if (!found.has(name)) found.set(name, new Set());

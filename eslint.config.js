@@ -21,8 +21,11 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig([
   globalIgnores([
-    "dist/", "dist-app/", "dist-embed/", "coverage/", "public/", "marketing/",
+    "dist/", "dist-app/", "dist-embed/", "dist-app-sourcemaps/", "coverage/", "public/", "marketing/",
     ".e2e-host-*/", ".e2e-bridge-*/",
+    // Agent git worktrees are whole checkouts (with their own dist/ and
+    // node_modules/) nested under the repo; they are not part of the project.
+    ".claude/",
   ]),
   js.configs.recommended,
   tseslint.configs.recommended,
@@ -41,8 +44,8 @@ export default defineConfig([
 
       // ~200 `any`s, most of them in the public integration API (EditorHandle,
       // the host bridge) and in ProseMirror/Tiptap JSON plumbing. Replacing them
-      // is a typing project (see the noImplicitAny note in the G6 report), not a
-      // lint fix — so they are counted as warnings until it is done.
+      // is a typing project (tracked in docs/backlog.md with the noImplicitAny
+      // switch), not a lint fix — so they are counted as warnings until it is done.
       "@typescript-eslint/no-explicit-any": "warn",
 
       // For .ts/.tsx the type gate already enforces this (tsconfig
@@ -71,8 +74,8 @@ export default defineConfig([
 
       // Real but low-risk findings — dead stores, redundant escapes, `let` that
       // could be `const` — in files owned by other work streams at the time
-      // this config landed. Warnings until their owners fix them; listed in the
-      // G6 report.
+      // this config landed. Warnings until they are fixed; tracked in
+      // docs/backlog.md.
       "no-useless-assignment": "warn",
       "no-useless-escape": "warn",
       "prefer-const": "warn",
