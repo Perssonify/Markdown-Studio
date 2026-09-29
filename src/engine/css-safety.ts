@@ -113,7 +113,10 @@ export function sanitizeStyleDeclarations(
     const raw = decl.slice(idx + 1);
     // A plain name only: this is what rejects `posit\ion` and friends.
     if (!/^[a-z][a-z-]*$/.test(prop)) continue;
-    // Anything that can hide or fetch, whatever the property.
+    // Anything that can hide or fetch, whatever the property. (Belt and
+    // braces: each per-property validator below also refuses a backslash, a
+    // bracket and a function call — this line keeps that true for a property
+    // added later with a looser validator.)
     if (/[\\<>{}]|\/\*|url\s*\(|image-set\s*\(|expression\s*\(|@import|behavior|-moz-binding|javascript:/i.test(raw)) continue;
     if (prop === "background" && sanitizeCssColor(raw.trim())) prop = "background-color";
     if (!allowed.has(prop)) continue;
