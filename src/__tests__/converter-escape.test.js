@@ -6,6 +6,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { escapeMarkdownText } from "../engine/turndown-rules";
 import { engineFor, htmlRoundTrip, roundTrip } from "./converter-harness";
@@ -200,6 +201,23 @@ describe("A097 — no lookbehind in the modules the entry chunk loads", () => {
   // is a conscious decision, not an accident.
   const LAZY_ALLOWED = new Set(["src/ui/FindReplace.tsx"]);
 
+  // Only regex LITERALS are parsed with the script. A lookbehind in a string
+  // handed to `new RegExp` inside try/catch fails at run time, where it can be
+  // caught (find-engine.ts, md-format-utils.ts do exactly that), so the scan
+  // asks the TypeScript parser which tokens really are regex literals — a
+  // plain text search flagged the safe form and could not tell them apart.
+  const regexLiterals = (file, text) => {
+    const kind = file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+    const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
+    const found = [];
+    const visit = (node) => {
+      if (node.kind === ts.SyntaxKind.RegularExpressionLiteral) found.push(node.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    return found;
+  };
+
   it("finds none outside the known lazy-loaded exceptions", () => {
     const hits = [];
     const walk = (dir) => {
@@ -210,11 +228,16 @@ describe("A097 — no lookbehind in the modules the entry chunk loads", () => {
         } else if (/\.(ts|tsx|js|jsx)$/.test(name)) {
           const rel = p.replace(/\\/g, "/").replace(/^.*?\/src\//, "src/");
           if (LAZY_ALLOWED.has(rel)) continue;
-          if (/\(\?<[=!]/.test(readFileSync(p, "utf8"))) hits.push(rel);
+          if (regexLiterals(name, readFileSync(p, "utf8")).some((re) => /\(\?<[=!]/.test(re))) hits.push(rel);
         }
       }
     };
     walk(join(process.cwd(), "src"));
     expect(hits).toEqual([]);
+  });
+
+  it("the scan sees a lookbehind literal and ignores one compiled from a string", () => {
+    expect(regexLiterals("a.ts", "const r = /(?<!x)y/g;")).toEqual(["/(?<!x)y/g"]);
+    expect(regexLiterals("a.ts", 'try { new RegExp("(?<!x)y"); } catch {}')).toEqual([]);
   });
 });

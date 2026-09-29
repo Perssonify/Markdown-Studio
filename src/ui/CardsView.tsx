@@ -756,7 +756,7 @@ export function CardsView({
                       discarding it) shows here, so it is not invisible state. */}
                   {hasDraft ? (
                     <span className="min-w-0 flex-1 truncate">
-                      <span className="mr-1.5 rounded bg-primary/15 px-1 py-0.5 text-[10px] font-semibold uppercase text-primary">Draft</span>
+                      <span className="mr-1.5 rounded bg-primary/15 px-1 py-0.5 text-[10px] font-semibold uppercase text-primary-strong">Draft</span>
                       {draftTitle.trim() || draftBody.trim().split("\n")[0]}
                     </span>
                   ) : (

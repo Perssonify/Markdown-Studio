@@ -140,6 +140,49 @@ const M1 = "";
  *  br, details, picture, a…) is content or structure and is left alone. */
 const FORMAT_TAG = /<\/?(?:u|sub|sup|s|del|strike|mark|b|strong|i|em|span)(?:\s[^>]*)?>/gi;
 
+let cachedPasses: [RegExp, string][] | null = null;
+
+/**
+ * The emphasis-stripping passes for clearMdFormatting. Three of them need the
+ * delimiter's LEFT neighbour. As a lookbehind in a regex LITERAL that is a
+ * parse-time SyntaxError on Safari/iOS before 16.4, and this module is in the
+ * entry chunk, so one literal would blank the whole app (A097). So they are
+ * compiled from strings at runtime; where lookbehind is unsupported the same
+ * check runs as a CAPTURED left neighbour that the replacement puts back.
+ * `lookbehind` is a parameter so the fallback can be tested where it isn't needed.
+ */
+export function emphasisPasses(lookbehind = supportsLookbehind()): [RegExp, string][] {
+  if (lookbehind && cachedPasses) return cachedPasses;
+  const strong: [RegExp, string] = [/\*\*(?![\s*])([^\n]*?[^\s*])\*\*/g, "$1"];
+  const strike: [RegExp, string] = [/~~(?!\s)([^\n]*?\S)~~/g, "$1"];
+  if (lookbehind) {
+    cachedPasses = [
+      strong,
+      [new RegExp("(?<![\\p{L}\\p{N}_])__(?![\\s_])([^\\n]*?[^\\s_])__(?![\\p{L}\\p{N}_])", "gu"), "$1"],
+      strike,
+      [new RegExp("(?<!\\*)\\*(?![\\s*])([^\\n*]*?[^\\s*])\\*(?!\\*)", "g"), "$1"],
+      [new RegExp("(?<![\\p{L}\\p{N}_])_(?![\\s_])([^\\n_]*?[^\\s_])_(?![\\p{L}\\p{N}_])", "gu"), "$1"],
+    ];
+    return cachedPasses;
+  }
+  return [
+    strong,
+    [/(^|[^\p{L}\p{N}_])__(?![\s_])([^\n]*?[^\s_])__(?![\p{L}\p{N}_])/gu, "$1$2"],
+    strike,
+    [/(^|[^*])\*(?![\s*])([^\n*]*?[^\s*])\*(?!\*)/g, "$1$2"],
+    [/(^|[^\p{L}\p{N}_])_(?![\s_])([^\n_]*?[^\s_])_(?![\p{L}\p{N}_])/gu, "$1$2"],
+  ];
+}
+
+function supportsLookbehind(): boolean {
+  try {
+    new RegExp("(?<!a)b");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Markdown-pane "Clear formatting": remove emphasis, strikethrough and the
  * inline formatting tags from `src`, and nothing else.
@@ -173,13 +216,7 @@ export function clearMdFormatting(src: string): string {
     .replace(/\$[^$\n]+\$/g, stash);                            // inline math
   t = t.replace(FORMAT_TAG, "").replace(/<[^>\n]+>/g, stash);   // unwrap formatting, keep the rest
 
-  const passes: [RegExp, string][] = [
-    [/\*\*(?![\s*])([^\n]*?[^\s*])\*\*/g, "$1"],
-    [/(?<![\p{L}\p{N}_])__(?![\s_])([^\n]*?[^\s_])__(?![\p{L}\p{N}_])/gu, "$1"],
-    [/~~(?!\s)([^\n]*?\S)~~/g, "$1"],
-    [/(?<!\*)\*(?![\s*])([^\n*]*?[^\s*])\*(?!\*)/g, "$1"],
-    [/(?<![\p{L}\p{N}_])_(?![\s_])([^\n_]*?[^\s_])_(?![\p{L}\p{N}_])/gu, "$1"],
-  ];
+  const passes = emphasisPasses();
   // `***x***` peels one layer per round.
   for (let round = 0; round < 6; round++) {
     const before = t;

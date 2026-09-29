@@ -21,7 +21,7 @@ import { ListKeymap } from "@tiptap/extension-list";
 export const ListKeymapNoTab = ListKeymap.extend({
   addKeyboardShortcuts() {
     const shortcuts = { ...(this.parent?.() ?? {}) };
-    delete shortcuts.Tab;
+    delete shortcuts["Tab"];
     return shortcuts;
   },
 });
