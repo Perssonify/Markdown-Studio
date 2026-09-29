@@ -562,20 +562,12 @@ runCase("surfaces", async (rep, onClose) => {
     // Chromium paints a forced-colours outline in Highlight on its own, so the
     // stylesheet's `outline-color: Highlight` restatement is not what makes
     // this pass (it is there for engines that do not).
-    if (ENGINE === "chromium") {
-      rep.check("A095: …and the focus ring survives, in the system Highlight colour",
-        fc.ring === "solid" && fc.ringColor === fc.hl, JSON.stringify(fc));
-    } else {
-      rep.check("A095: …and the focus ring survives (an outline, which forced colours keep)",
-        fc.ring === "solid", JSON.stringify(fc));
-      // Chromium forces a ring to Highlight on its own; here it relies on the
-      // stylesheet's restatement, which is dead: `:where(…) :focus-visible`
-      // (0,1,0) under ring rules of (0,2,0). Firefox paints CanvasText and
-      // WebKit, which only emulates the media query, the author colour.
-      // Measured in e2e/probes/forced-colors-ring.mjs; reported, not fixed here.
-      rep.xfail("A095: …in the system Highlight colour", fc.ring === "solid" && fc.ringColor === fc.hl,
-        "styles.css's forced-colours `outline-color: Highlight` never applies (specificity) — see e2e/probes/forced-colors-ring.mjs");
-    }
+    // On every engine: Chromium forces Highlight on outlines by itself, but
+    // Firefox and WebKit rely on the stylesheet's restatement, which was dead
+    // (a lower-specificity selector than the ring rules) until it restated
+    // their own selectors. e2e/probes/forced-colors-ring.mjs measures it.
+    rep.check("A095: …and the focus ring survives, in the system Highlight colour",
+      fc.ring === "solid" && fc.ringColor === fc.hl, JSON.stringify(fc));
     await kp.emulateMedia({ forcedColors: "none" });
 
     // A100: print prints the document, not the app.

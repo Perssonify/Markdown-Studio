@@ -1649,10 +1649,13 @@ img[src$="#gh-light-mode-only"] { display: revert; }
    Each is restated in system colours; `forced-color-adjust: none` is what lets
    a system-colour background survive on these few elements. */
 @media (forced-colors: active) {
-  /* Measured: Chromium already paints a forced-colours outline in Highlight.
-     Restated for engines that pick a different system colour. The part that
-     matters everywhere is that the indicator is an OUTLINE at all. */
-  :where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :focus-visible {
+  /* The ring in the system Highlight colour. These restate the two ring
+     rules' OWN selectors: a bare `:where(…) :focus-visible` is (0,1,0) under
+     their (0,2,0), so it never applied — Chromium only looked right because it
+     forces Highlight on outlines itself, while Firefox painted CanvasText and
+     WebKit the author colour (A095, measured on all three engines). */
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :focus-visible:not(.cm-content, .ProseMirror, [tabindex="-1"]),
+  :where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :is([role^="menuitem"], [role="option"], [role="treeitem"], [role="tab"]):focus-visible {
     outline-color: Highlight;
   }
   :where(.pf-app, .perssonify-editor, [data-base-ui-portal], [data-sonner-toaster], [data-pf-portal]) :is([aria-pressed="true"], [aria-selected="true"], [aria-current="true"], [data-highlighted]) {
