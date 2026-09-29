@@ -9,6 +9,8 @@ import {
 } from "./extensions/index";
 import { warnDeprecated } from "./integration/deprecation";
 export { ErrorBoundary } from "./ui/ErrorBoundary";
+// Privacy-safe crash diagnostics: subscribe a host reporter, or read the ring.
+export { buildDiagnosticsReport, getDiagnostics, setErrorReporter, type DiagnosticEntry, type ErrorReporter } from "./utils/diagnostics";
 
 export { useMarkdownEngine } from "./engine/useMarkdownEngine";
 export { useSyncEngine } from "./engine/useSyncEngine";

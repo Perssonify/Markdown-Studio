@@ -6,43 +6,98 @@
 // OWN origin, so no third party ever sees the request.
 //
 // Security (this is an internet-facing fetch endpoint):
-//  - SSRF: http(s) only; localhost/.local/.internal and private/loopback/
-//    link-local/CGNAT/cloud-metadata addresses refused AFTER DNS resolution,
-//    including IPv6 loopback/ULA/link-local and IPv4-embedded forms (mapped,
-//    NAT64, 6to4). Every redirect hop is re-validated.
+//  - SSRF: http(s) only; localhost/.local/.internal refused; the resolved
+//    address must be GLOBAL UNICAST (an allowlist — see isGlobalUnicast), which
+//    refuses private/loopback/link-local/CGNAT/cloud-metadata, multicast,
+//    reserved and documentation space, and every IPv4-in-IPv6 wrapper except the
+//    plain ::ffff: mapping (which is unwrapped and re-checked). Checked AFTER
+//    DNS resolution and again on every redirect hop.
 //  - DNS-rebinding: the resolved+vetted IPs are PINNED to the connection via an
 //    undici dispatcher, so fetch cannot re-resolve to a different address
 //    between validation and connection (TOCTOU).
-//  - Abuse: cross-site browser requests are refused (Sec-Fetch-Site); responses
-//    are CORS-restricted to the app's own origins; a best-effort per-IP rate
-//    limit and hard size/time caps bound resource use.
+//  - Abuse: browsers can only reach it first-party (Sec-Fetch-Site), responses
+//    are CORS-restricted to the app's two exact origins, and a best-effort
+//    per-IP rate limit plus hard size/time caps bound what one call costs. It
+//    is NOT closed to non-browser clients — a script can send any
+//    Sec-Fetch-Site value — so the real abuse controls are the platform's
+//    (docs/import-relay.md ▸ Operating it: firewall rate limit, spend alerts).
+//  - Every request emits ONE structured JSON log line (host, status, bytes,
+//    ms, reason) — never the URL's path or query, which can carry tokens.
 
 import dns from "node:dns/promises";
 import net from "node:net";
 import { Agent } from "undici";
 
-const MAX_BYTES = 25_000_000; // headroom over the client's 20 MB archive ceiling
+// Vercel Functions cannot return a response body much over 4.5 MB, so a larger
+// upstream used to be fetched in full and then fail at the platform with an
+// opaque error. Refuse it here instead, with a message that says what to do.
+export const MAX_BYTES = 4_000_000;
+export const TOO_LARGE_MESSAGE =
+  "That file is larger than the 4 MB the import relay can carry. Download it and drag it into the editor instead.";
 const TIMEOUT_MS = 20_000;
 const MAX_HOPS = 5;
 const RATE_MAX = 40; // requests per window per IP (best-effort, per warm instance)
 const RATE_WINDOW_MS = 60_000;
 
-// Origins allowed to READ relayed responses (this project's custom and Vercel
-// domains, plus any same-origin request).
-// A hyphen separator is REQUIRED before any suffix so a squatted domain like
-// `markdown-studioevil.vercel.app` cannot match, while the exact host and
-// Vercel preview URLs (`markdown-studio-git-…`) still do.
-const ALLOWED_ORIGIN = /^https:\/\/(?:(?:www\.)?markdownstudio\.com|markdown-studio(?:-[a-z0-9-]+)?\.vercel\.app)$/i;
+// Origins allowed to READ relayed responses cross-origin: the two production
+// origins, exactly. Same-origin requests need no grant, which is how a preview
+// deployment calls its own relay — so the old `markdown-studio-*.vercel.app`
+// pattern bought nothing, and `markdown-studio.vercel.app` itself already
+// belongs to a different product.
+const ALLOWED_ORIGIN = /^https:\/\/(?:www\.)?markdownstudio\.com$/;
 
-// ── SSRF address classification ─────────────────────────────────────────────
+// ── SSRF address classification: an ALLOWLIST ──────────────────────────────
+// A blocklist has to name every special range, and the old one did not
+// (`::127.0.0.1`, `::ffff:0:127.0.0.1`, Teredo, multicast and reserved space all
+// passed). Here an address is fetchable only when it is positively identified
+// as global unicast; anything unrecognised is refused.
 
-function isBlockedIpv4Parts(p) {
-  if (p[0] === 0 || p[0] === 10 || p[0] === 127) return true; // this-net, 10/8, loopback
-  if (p[0] === 169 && p[1] === 254) return true; // link-local + cloud metadata
-  if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return true; // 172.16/12
-  if (p[0] === 192 && p[1] === 168) return true; // 192.168/16
-  if (p[0] === 100 && p[1] >= 64 && p[1] <= 127) return true; // CGNAT 100.64/10
-  return false;
+/** IPv4 blocks that are not global unicast: the IANA special-purpose registry's
+ *  non-globally-reachable entries, plus multicast and the reserved 240/4. */
+const V4_NOT_GLOBAL = [
+  [[0, 0, 0, 0], 8], // "this network"
+  [[10, 0, 0, 0], 8], // private
+  [[100, 64, 0, 0], 10], // CGNAT
+  [[127, 0, 0, 0], 8], // loopback
+  [[169, 254, 0, 0], 16], // link-local, incl. cloud metadata 169.254.169.254
+  [[172, 16, 0, 0], 12], // private
+  [[192, 0, 0, 0], 24], // IETF protocol assignments
+  [[192, 0, 2, 0], 24], // TEST-NET-1
+  [[192, 88, 99, 0], 24], // 6to4 relay anycast (deprecated)
+  [[192, 168, 0, 0], 16], // private
+  [[198, 18, 0, 0], 15], // benchmarking
+  [[198, 51, 100, 0], 24], // TEST-NET-2
+  [[203, 0, 113, 0], 24], // TEST-NET-3
+  [[224, 0, 0, 0], 4], // multicast
+  [[240, 0, 0, 0], 4], // reserved, incl. limited broadcast 255.255.255.255
+];
+
+const v4ToInt = (p) => ((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]) >>> 0;
+
+function isGlobalUnicastV4(p) {
+  const n = v4ToInt(p);
+  return !V4_NOT_GLOBAL.some(([base, bits]) => {
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+    return ((n & mask) >>> 0) === ((v4ToInt(base) & mask) >>> 0);
+  });
+}
+
+/** IPv6: global unicast is 2000::/3, minus the special blocks carved out of it. */
+function isGlobalUnicastV6(g) {
+  // ::ffff:a.b.c.d — how a resolver or a dual-stack socket spells an IPv4
+  // address. The ONLY embedded form accepted, and only for what it wraps.
+  if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0xffff) {
+    return isGlobalUnicastV4([g[6] >> 8, g[6] & 0xff, g[7] >> 8, g[7] & 0xff]);
+  }
+  // Everything outside 2000::/3 — ::, ::1, ::a.b.c.d, ::ffff:0:a.b.c.d, NAT64
+  // 64:ff9b::/96, discard 100::/64, ULA fc00::/7, link-local fe80::/10,
+  // multicast ff00::/8 — is refused by this one test.
+  if ((g[0] & 0xe000) !== 0x2000) return false;
+  if (g[0] === 0x2001 && (g[1] & 0xfe00) === 0) return false; // 2001::/23 IETF, incl. Teredo 2001::/32
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return false; // 2001:db8::/32 documentation
+  if (g[0] === 0x2002) return false; // 6to4 2002::/16 — an IPv4 tunnel, not a destination
+  if (g[0] === 0x3fff && (g[1] & 0xf000) === 0) return false; // 3fff::/20 documentation
+  return true;
 }
 
 /** Expand an IPv6 literal (incl. `::` and trailing dotted-IPv4) to 8 hextets. */
@@ -70,50 +125,51 @@ function expandIpv6(input) {
   return out.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff) ? null : out;
 }
 
-/** IPs that must never be reachable through the relay. */
-export function isBlockedIp(ip) {
+/** True only for a global unicast address — the ONLY kind the relay fetches. */
+export function isGlobalUnicast(ip) {
   const v = net.isIP(ip);
-  if (v === 4) return isBlockedIpv4Parts(ip.split(".").map(Number));
+  if (v === 4) return isGlobalUnicastV4(ip.split(".").map(Number));
   if (v === 6) {
     const g = expandIpv6(ip);
-    if (!g) return true; // unparseable → block
-    if (g.every((x) => x === 0)) return true; // ::  (unspecified)
-    if (g.slice(0, 7).every((x) => x === 0) && g[7] === 1) return true; // ::1 loopback
-    if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
-    if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
-    // IPv4 embedded in IPv6 — resolve to the underlying v4 and re-check.
-    let emb = null;
-    if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0xffff)
-      emb = [g[6] >> 8, g[6] & 0xff, g[7] >> 8, g[7] & 0xff]; // ::ffff:0:0/96 mapped
-    else if (g[0] === 0x64 && g[1] === 0xff9b) emb = [g[6] >> 8, g[6] & 0xff, g[7] >> 8, g[7] & 0xff]; // 64:ff9b::/96 NAT64
-    else if (g[0] === 0x2002) emb = [g[1] >> 8, g[1] & 0xff, g[2] >> 8, g[2] & 0xff]; // 2002::/16 6to4
-    if (emb) return isBlockedIpv4Parts(emb);
-    return false;
+    return !!g && isGlobalUnicastV6(g); // unparseable → refused
   }
-  return true; // not a valid IP → block
+  return false; // not an IP literal at all → refused
+}
+
+/** IPs that must never be reachable through the relay (the complement). */
+export function isBlockedIp(ip) {
+  return !isGlobalUnicast(ip);
 }
 
 /** Validate scheme + host, resolve, and refuse blocked addresses. Returns the
  *  vetted { hostname, addrs } so the caller can pin the connection to them.
- *  Throws { status, message } on rejection. */
+ *  Throws { status, message, reason } on rejection. */
 export async function assertPublicUrl(url) {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw { status: 400, message: "Only http(s) URLs can be imported." };
+    throw { status: 400, message: "Only http(s) URLs can be imported.", reason: "bad_scheme" };
   }
   // Port allowlist enforced HERE (not only on the initial URL) so it also covers
   // every redirect hop — otherwise a public URL could 302 to http://host:6379
   // and the relay would connect to an arbitrary port on a public host.
   if (url.port && url.port !== "80" && url.port !== "443") {
-    throw { status: 400, message: "Only ports 80 and 443 can be imported." };
+    throw { status: 400, message: "Only ports 80 and 443 can be imported.", reason: "bad_port" };
   }
   const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, ""); // strip IPv6 brackets
   if (hostname === "localhost" || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
-    throw { status: 403, message: "That host can't be imported." };
+    throw { status: 403, message: "That host can't be imported.", reason: "blocked_host" };
   }
+  // No numeric-host special cases are needed here: the WHATWG URL parser has
+  // already normalised decimal (2130706433), octal (0177.0.0.1), hex (0x7f.1)
+  // and short (127.1) IPv4 spellings to dotted-quad by the time we see them.
   const literal = net.isIP(hostname);
-  const addrs = literal ? [{ address: hostname, family: literal }] : await dns.lookup(hostname, { all: true });
+  let addrs;
+  try {
+    addrs = literal ? [{ address: hostname, family: literal }] : await dns.lookup(hostname, { all: true });
+  } catch {
+    throw { status: 502, message: "Couldn't resolve that host.", reason: "dns_failed" };
+  }
   if (!addrs.length || addrs.some((a) => isBlockedIp(a.address))) {
-    throw { status: 403, message: "That address can't be imported." };
+    throw { status: 403, message: "That address can't be imported.", reason: "blocked_address" };
   }
   return { hostname, addrs };
 }
@@ -133,10 +189,14 @@ function pinnedDispatcher(hostname, addrs) {
   });
 }
 
-/** Fetch following redirects manually, re-validating AND re-pinning each hop. */
-async function safeFetch(startUrl) {
+/** Fetch following redirects manually, re-validating AND re-pinning each hop.
+ *  `trace` records the hops taken and the host that finally answered, for the
+ *  request's log line. */
+async function safeFetch(startUrl, trace = {}) {
   let current = new URL(startUrl);
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
+    trace.hops = hop;
+    trace.finalHost = current.hostname;
     const { hostname, addrs } = await assertPublicUrl(current);
     const dispatcher = pinnedDispatcher(hostname, addrs);
     let resp;
@@ -156,17 +216,19 @@ async function safeFetch(startUrl) {
     }
     return resp;
   }
-  throw { status: 508, message: "Too many redirects." };
+  throw { status: 508, message: "Too many redirects.", reason: "too_many_redirects" };
 }
+
+const tooLarge = () => ({ status: 413, message: TOO_LARGE_MESSAGE, reason: "too_large" });
 
 /** Read a web ReadableStream response with a hard byte cap. */
 async function readCapped(resp, max) {
   const declared = Number(resp.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > max) throw { status: 413, message: "File too large." };
+  if (Number.isFinite(declared) && declared > max) throw tooLarge();
   const reader = resp.body?.getReader?.();
   if (!reader) {
     const b = Buffer.from(await resp.arrayBuffer());
-    if (b.length > max) throw { status: 413, message: "File too large." };
+    if (b.length > max) throw tooLarge();
     return b;
   }
   const chunks = [];
@@ -177,7 +239,7 @@ async function readCapped(resp, max) {
       if (done) break;
       if (!value) continue;
       total += value.length;
-      if (total > max) throw { status: 413, message: "File too large." };
+      if (total > max) throw tooLarge();
       chunks.push(Buffer.from(value));
     }
   } finally {
@@ -203,35 +265,56 @@ function rateLimited(ip) {
   return b.count > RATE_MAX;
 }
 
+/**
+ * ONE structured line per request, so abuse and failures are visible in the
+ * platform's log stream. Hosts only: a URL's path and query routinely carry
+ * share tokens and document names, and a log line must never become the place
+ * they leak from. No client IP either — the platform's own request log has it,
+ * and this line must not turn into a second store of personal data.
+ */
+function logRequest(fields) {
+  try {
+    console.log(JSON.stringify({ evt: "import_relay", ...fields }));
+  } catch {
+    /* logging must never fail a request */
+  }
+}
+
 export default async function handler(req, res) {
+  const started = Date.now();
+  const log = { method: req.method, sfs: null, host: null, finalHost: null, hops: 0, status: 0, bytes: 0, reason: null };
+  const finish = (status, reason, body) => {
+    log.status = status;
+    log.reason = reason;
+    log.ms = Date.now() - started;
+    if (log.finalHost === log.host) log.finalHost = null; // only worth a field when a redirect changed it
+    logRequest(log);
+    if (body === undefined) res.status(status).end();
+    else res.status(status).json(body);
+  };
+
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGIN.test(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Vary", "Origin");
   res.setHeader("X-Content-Type-Options", "nosniff");
 
-  if (req.method === "OPTIONS") {
-    res.status(204).end();
-    return;
-  }
-  if (req.method !== "GET") {
-    res.status(405).json({ error: "GET only." });
-    return;
-  }
-  // Refuse anything but a first-party browser request. Sec-Fetch-Site is a
-  // forbidden header (page JS can't spoof it): the app's own fetch sends
-  // "same-origin", a direct navigation sends "none". We now REQUIRE the header
-  // to be present and in that allowlist — an absent header means a non-browser
-  // client (curl/another server), i.e. the open-proxy abuse path, so reject it.
+  if (req.method === "OPTIONS") return finish(204, null);
+  if (req.method !== "GET") return finish(405, "method", { error: "GET only." });
+
+  // Refuse anything but a first-party BROWSER request. Sec-Fetch-Site is a
+  // forbidden header — page script cannot set it — so a browser only ever sends
+  // "same-origin" (the app's own fetch) or "none" (a direct navigation) here,
+  // and a cross-site page cannot use a visitor's browser to drive the relay.
+  // It is NOT a defence against a non-browser client, which can send any value
+  // it likes; that traffic is bounded by the caps below and by the platform
+  // rate limit, not by this check.
   const sfs = req.headers["sec-fetch-site"];
+  log.sfs = typeof sfs === "string" ? sfs.slice(0, 32) : null;
   if (sfs !== "same-origin" && sfs !== "none") {
-    res.status(403).json({ error: "Only first-party requests are allowed." });
-    return;
+    return finish(403, "sec_fetch_site", { error: "Only first-party requests are allowed." });
   }
   const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
-  if (rateLimited(ip)) {
-    res.status(429).json({ error: "Too many requests. Try again shortly." });
-    return;
-  }
+  if (rateLimited(ip)) return finish(429, "rate_limited", { error: "Too many requests. Try again shortly." });
 
   const q = req.query?.url;
   const raw = typeof q === "string" ? q : Array.isArray(q) ? q[0] : "";
@@ -239,21 +322,19 @@ export default async function handler(req, res) {
   try {
     url = new URL(raw);
   } catch {
-    res.status(400).json({ error: "Missing or invalid url parameter." });
-    return;
+    return finish(400, "bad_url", { error: "Missing or invalid url parameter." });
   }
+  log.host = url.hostname;
   // Only fetch over the standard web ports — a relay that will connect to any
   // port is a port-scanner/abuse amplifier even against public hosts.
   if (url.port && url.port !== "80" && url.port !== "443") {
-    res.status(400).json({ error: "Only ports 80 and 443 are allowed." });
-    return;
+    return finish(400, "bad_port", { error: "Only ports 80 and 443 are allowed." });
   }
 
   try {
-    const upstream = await safeFetch(url.href); // validates + pins hop 0 and every redirect
+    const upstream = await safeFetch(url.href, log); // validates + pins hop 0 and every redirect
     if (!upstream.ok) {
-      res.status(502).json({ error: `Upstream responded ${upstream.status}.` });
-      return;
+      return finish(502, `upstream_${upstream.status}`, { error: `Upstream responded ${upstream.status}.` });
     }
     const body = await readCapped(upstream, MAX_BYTES);
     // SECURITY: never reflect the upstream Content-Type/Disposition. Doing so let
@@ -271,10 +352,15 @@ export default async function handler(req, res) {
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "no-store");
+    log.status = 200;
+    log.bytes = body.length;
+    log.ms = Date.now() - started;
+    if (log.finalHost === log.host) log.finalHost = null;
+    logRequest(log);
     res.status(200).send(body);
   } catch (e) {
-    if (e && typeof e.status === "number") res.status(e.status).json({ error: e.message });
-    else if (e && e.name === "TimeoutError") res.status(504).json({ error: "The request timed out." });
-    else res.status(502).json({ error: "Couldn't fetch that URL." });
+    if (e && typeof e.status === "number") finish(e.status, e.reason || "rejected", { error: e.message });
+    else if (e && e.name === "TimeoutError") finish(504, "timeout", { error: "The request timed out." });
+    else finish(502, "fetch_failed", { error: "Couldn't fetch that URL." });
   }
 }

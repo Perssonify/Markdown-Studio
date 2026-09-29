@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { cachedImport, isChunkLoadError } from "../utils/lazy-import";
 
 /**
  * Lazy-loaded live preview for fenced code blocks whose language is a diagram
@@ -8,19 +9,54 @@ import { useEffect, useRef, useState } from "react";
  * so ```mermaid / ```abc round-trip to Markdown for free.
  */
 
-let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
-async function getMermaid() {
-  if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then((m) => m.default);
-  }
-  return mermaidPromise;
+// A rejected import is not memoised: a promise that kept its rejection meant one
+// offline moment left every diagram broken for the rest of the session.
+const getMermaid = cachedImport(() => import("mermaid").then((m) => m.default));
+const loadAbc = cachedImport(() => import("abcjs"));
+async function getAbc() {
+  const mod = await loadAbc();
+  return (mod as { default?: typeof import("abcjs") }).default ?? mod;
 }
 
-let abcPromise: Promise<typeof import("abcjs")> | null = null;
-async function getAbc() {
-  if (!abcPromise) abcPromise = import("abcjs");
-  const mod = await abcPromise;
-  return (mod as { default?: typeof import("abcjs") }).default ?? mod;
+/**
+ * Config keys a diagram may NOT set for itself (via `%%{init}%%` or front-matter
+ * `config:`) — only this `initialize` call can.
+ *
+ * Mermaid pastes `themeCSS`, the font families and the theme variables into the
+ * diagram's own `<style>` block, scoped to the SVG's id. Its directive sanitiser
+ * only checks that braces balance, and with CSS nesting a perfectly balanced
+ * rule such as `body:has(&) { … }` leaves that scope and restyles the page
+ * around the diagram — in the app that also holds every stored document. Any
+ * opened or imported document can carry such a directive, and `securityLevel:
+ * "strict"` does not cover it. Mermaid unions this list with its own, which is
+ * restated first so the guarantee does not depend on that merge behaviour.
+ */
+export const MERMAID_SECURE_KEYS = [
+  "secure",
+  "securityLevel",
+  "startOnLoad",
+  "maxTextSize",
+  "suppressErrorRendering",
+  "maxEdges",
+  "themeCSS",
+  "themeVariables",
+  "fontFamily",
+  "altFontFamily",
+  "dompurifyConfig",
+] as const;
+
+/** The only configuration a diagram is rendered with (plus what it may set). */
+export function mermaidConfig(dark: boolean) {
+  return {
+    startOnLoad: false,
+    securityLevel: "strict" as const,
+    theme: dark ? ("dark" as const) : ("default" as const),
+    secure: [...MERMAID_SECURE_KEYS],
+    // Mermaid's defaults, stated so an upgrade that raises them cannot quietly
+    // let a pasted document spend longer laying out a hostile graph.
+    maxTextSize: 50_000,
+    maxEdges: 500,
+  };
 }
 
 function isDarkTheme(): boolean {
@@ -72,11 +108,7 @@ export function DiagramPreview({
       try {
         if (language === "mermaid") {
           const mermaid = await getMermaid();
-          mermaid.initialize({
-            startOnLoad: false,
-            securityLevel: "strict",
-            theme: isDarkTheme() ? "dark" : "default",
-          });
+          mermaid.initialize(mermaidConfig(isDarkTheme()));
           // Unique id per render; mermaid injects a throwaway element itself.
           const id = "mmd-" + Math.floor(Math.random() * 1e9).toString(36);
           const { svg } = await mermaid.render(id, src);
@@ -94,7 +126,14 @@ export function DiagramPreview({
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
+          // A renderer that could not be DOWNLOADED is not a mistake in the
+          // diagram; saying "mermaid error: Failed to fetch dynamically imported
+          // module …" sent people looking for a typo that was never there.
+          setError(
+            isChunkLoadError(e)
+              ? `The ${language === "abc" ? "music" : "diagram"} renderer couldn't be loaded — you may be offline. It will load after a reload once you're back online.`
+              : e instanceof Error ? e.message : String(e),
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
