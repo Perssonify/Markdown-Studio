@@ -117,6 +117,9 @@ let factory: () => WorkerLike | null = defaultFactory;
 let worker: WorkerLike | null = null;
 /** No Worker this session (could not be created, or failed to start). */
 let unavailable = false;
+/** A Worker has answered at least once this session — so a later error is the
+ *  JOB failing, not the Worker being unable to start. */
+let workerProven = false;
 let nextId = 0;
 let inflight: { id: number; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> } | null = null;
 
@@ -126,6 +129,7 @@ export function __setFindWorkerFactoryForTests(f: (() => WorkerLike | null) | nu
   worker = null;
   inflight = null;
   unavailable = false;
+  workerProven = false;
   factory = f ?? (() => null);
 }
 export function __resetFindWorkerForTests(): void {
@@ -189,17 +193,26 @@ export function runFind(
     w.onmessage = (e) => {
       const msg = e.data as { id: number; ok: boolean; value?: FindRunResult; error?: string };
       if (msg.id !== id) return;
+      workerProven = true;
       settle();
       if (msg.ok && msg.value) resolve(msg.value);
       else reject(new SyntaxError(msg.error ?? "Invalid pattern"));
     };
     w.onerror = () => {
-      // The Worker never started (a CSP that blocks blob: workers reports it
-      // here, asynchronously) — stop trying for this session, and answer this
-      // job on the main thread instead.
       if (inflight?.id !== id) return;
       settle();
       killWorker();
+      // A Worker that has already answered and now dies was killed by THIS
+      // pattern (memory, say): running it on the main thread instead is the
+      // one thing the Worker exists to prevent. Report it; the next job gets a
+      // fresh Worker.
+      if (workerProven) {
+        reject(new Error("This pattern could not be run on this document."));
+        return;
+      }
+      // Otherwise it never started — a CSP that blocks blob: workers reports
+      // it here, asynchronously. Stop trying for this session, and answer
+      // this job on the main thread.
       unavailable = true;
       try { resolve(runSync(req, true)); } catch (err) { reject(err as Error); }
     };
