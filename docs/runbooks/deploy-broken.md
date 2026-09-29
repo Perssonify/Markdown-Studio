@@ -10,8 +10,12 @@
      `bun install --frozen-lockfile`, then
      `bun run build:app && node scripts/strip-sourcemaps.mjs`. A lockfile that
      does not match `package.json` fails the install on purpose — regenerate
-     `bun.lock` with the pinned Bun (see `.github/workflows/ci.yml`) and commit
-     it. Reproduce anything else locally with `bun run build:app`.
+     `bun.lock` with the pinned Bun (1.4.0: `packageManager` in `package.json`,
+     `BUN_VERSION` in `.github/workflows/ci.yml`) and commit it. `build:app` is
+     `vite build` followed by `scripts/third-party-licenses.mjs`, which writes
+     `dist-app/third-party-licenses.txt` from the build's hidden sourcemaps and
+     fails the build if there are none. Reproduce anything else locally with
+     `bun run build:app`.
    - **Build succeeded, page blank** → the devtools console and network panel
      on the deployed URL.
 2. **Blank page checks:**
@@ -30,6 +34,9 @@
      REPORT, not the cause of a blank page — unless the policy has been
      promoted to enforcing, in which case an inline script whose hash is not in
      `vercel.json` is blocked (`ops-vercel-headers.test.js` should have failed).
+   - Blank only when the page is **inside an iframe** → anti-framing is
+     enforced on purpose (`frame-ancestors 'none'` and `X-Frame-Options: DENY`
+     on every page except `/embed.html`).
 3. **Routing:** deep links 404? The SPA rewrite must cover them (everything
    except `api/`, `assets/` and `.well-known/`).
 
@@ -42,9 +49,12 @@
 
 ## Prevention
 - Production must only receive commits that passed CI — branch protection with
-  required checks, and Vercel deployment checks ([deployment.md](../deployment.md)).
-- The CI gate: type-check, unit tests, the three builds, the browser campaign
-  (including the enforced-CSP and service-worker suites).
+  required checks, and Vercel deployment checks. Both are owner settings
+  ([deployment.md ▸ Gate production on CI](../deployment.md#gate-production-on-ci));
+  until they are switched on, Vercel deploys every push to `main` without
+  waiting for CI (A005).
+- The CI gate: lint, type-check, unit tests, the three builds, the browser
+  campaign (including the enforced-CSP and service-worker suites).
 
 ## Escalation
 No on-call. If it is Vercel-specific (not reproducible locally), check

@@ -267,8 +267,9 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
 
 - **Launch blockers first:** the owner actions and deferred engineering in
   `docs/audit-2026-09.md` — above all the domain, the CI gate on deploys and the old
-  origin's move banner — and the four defects found while reconciling the docs (the
-  `/embed.html` framing gap is the first to fix).
+  origin's move banner — and the defects found while reconciling the docs, listed in
+  the same file (the `/embed.html` framing gap and the broken first-run `[[Welcome]]`
+  links first).
 - **Live multi-tab invalidation** (`BroadcastChannel`; the terminal `conflict` status
   already exists) — closes the biggest deferred gap and is the FSM trigger.
 - **Full-document LaTeX / multi-file projects** — content/engine-layer if single-doc; a

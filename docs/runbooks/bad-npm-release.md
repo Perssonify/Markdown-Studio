@@ -5,10 +5,17 @@ pushed: it checks the tag against `package.json`, runs the type check, the unit
 tests and the library build, then `npm publish --provenance --access public`
 behind the `npm` GitHub environment ([deployment.md ▸ Publishing](../deployment.md#publishing-the-npm-package)).
 
+Nothing can be published that way until an owner claims the `@perssonify` scope
+on npm, turns on 2FA for it, stores `NPM_TOKEN` (or sets up trusted
+publishing) and creates the `npm` environment (A006). Until then, any version
+that appears under that name was not published by this project.
+
 ## Symptoms
 - Consumers report a broken install, missing files (`dist/`), a crash on
   import, a missing stylesheet (`@perssonify/editor/styles.css`), or types that
-  do not resolve.
+  do not resolve. (Every formula rendering twice, unstyled, is not a bad
+  release: the consumer has not imported `katex/dist/katex.min.css`, which the
+  library does not bundle — see the README's Install section.)
 - The published tarball differs from what `npm pack --dry-run` showed in the
   workflow log.
 - A version appears on npm that no workflow run published (compromised token).
@@ -40,8 +47,8 @@ a compromise ([security-incident.md](security-incident.md)).
 
 ## Prevention
 - Only CI publishes. Nobody runs `npm publish` from a laptop.
-- The `npm` environment requires a reviewer before the job runs.
-- The org requires 2FA; the publish token is scoped to this package.
+- Owner setup: the `npm` environment requires a reviewer before the job runs;
+  the org requires 2FA; the publish token is scoped to this package.
 - `npm pack --dry-run` in the workflow log is the record of what shipped.
 
 ## Escalation

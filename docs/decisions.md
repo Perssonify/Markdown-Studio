@@ -16,9 +16,12 @@ reach the standalone app's library on the same origin. But self-hosted embeds
 (`dist-embed/`, served by integrators) already store their users' documents in
 `perssonify-docs` on their own origins; renaming it would open every existing
 embed on an empty library — their documents orphaned, not lost, but invisible.
-The protection is placed where it does not cost data: the bridge now only talks
-to the real framer, and a deploy-time allowlist (`VITE_EMBED_ALLOWED_ORIGINS`)
-decides who that may be (`src/integration/embed-origins.ts`).
+The protection is placed where it does not cost data: where the browser reports
+the framing page (`location.ancestorOrigins` — Chromium and WebKit), the bridge
+talks only to that page, and a deploy-time allowlist
+(`VITE_EMBED_ALLOWED_ORIGINS`) decides who that may be
+(`src/integration/embed-origins.ts`). An embed built without the allowlist still
+trusts whichever page frames it.
 
 **Revisit if:** the embed is ever served from markdownstudio.com itself (today
 `/embed.html` there is the full app). Then either migrate (copy on first open)
@@ -74,7 +77,9 @@ delivered deploys fast by force-reloading tabs mid-edit — undo history, IME
 compositions and open dialogs lost, and a surprise "Leave site?" prompt.
 
 **Cost:** an open tab can run an older build until its user presses Reload; a
-critical fix must say so. Online page loads still get the current HTML.
+critical fix must say so. Online page loads still get the current HTML, and an
+open tab asks for a new version once an hour (while online and visible), so a
+long-lived tab is at least told.
 
 ---
 

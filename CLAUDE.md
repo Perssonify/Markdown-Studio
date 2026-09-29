@@ -44,6 +44,10 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   **Wiki links resolve by TITLE, which comes from the first `# H1`** — renaming a
   heading silently breaks the seed graph, so `src/__tests__/starter-documents.test.js`
   asserts every link target is a seeded title and no document is orphaned.
+  **Known gap (open):** the test hard-codes `WELCOME_TITLE = "Welcome"`, but since
+  1.76.0 the seed no longer pins that name — the Welcome document's title follows its
+  H1, "Markdown Studio" — so the `[[Welcome]]` links in the other two starter
+  documents resolve to nothing and, since A058, are drawn as broken on first run.
 - `src/store/doc-outline.ts` — `extractHeadings(canonical)` + `buildHeadingTree()`
   (stack-nesting), consumed by the Workspace Outline tab. **`src/ui/GraphView.tsx`
   is the MAP-ONLY knowledge-graph overlay** — the force-directed relationship graph

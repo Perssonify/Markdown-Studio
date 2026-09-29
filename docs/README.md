@@ -22,25 +22,26 @@ This repo uses **[Bun](https://bun.sh)** as its package manager and runner (see 
 ```bash
 git clone https://github.com/SolutionPath/markdown-studio.git
 cd markdown-studio
-bun install                 # installs deps from bun.lock
-bun run dev                 # starts the standalone app (Vite)
+bun install --frozen-lockfile   # exactly the locked tree (Bun 1.4.0, see packageManager)
+bun run dev                     # starts the standalone app (Vite 8)
 ```
 
-Expected output once Vite is up:
+Expected output once Vite is up (the version and timing vary):
 
 ```
-  VITE v6.x.x  ready in ~400 ms
+  VITE v8.x.x  ready in … ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
 ```
 
-Open `http://localhost:5173`. On an empty browser profile the first run seeds three linked documents — **Welcome** (which opens), **Changelog**, and **About Perssonify** in a folder — in a split view (markdown left, rich text right). They cross-link on purpose, so the relationship map has a real graph on day one. The browser console prints diagnostic boot lines prefixed `[DIAG +0ms] [BOOT]` — that's normal, see [domain-glossary.md#diag](domain-glossary.md#diag).
+Open `http://localhost:5173`. On an empty browser profile the first run seeds three linked documents — **Welcome** (which opens), **Changelog**, and **About Perssonify** in a folder — in a split view (markdown left, rich text right). They cross-link on purpose, so the relationship map has a real graph on day one. The structured `[DIAG]` boot trace is off by default; add `?diag=1` to the URL to see it (see [domain-glossary.md#diag](domain-glossary.md#diag)).
 
 Run the tests:
 
 ```bash
-bun run test                # vitest, one-shot
+bun run test                # vitest, one-shot (196 files, 2,126 tests)
+bun run lint                # ESLint: must report 0 errors
 ```
 
 Full setup, env vars, and recipes: [local-development.md](local-development.md).
