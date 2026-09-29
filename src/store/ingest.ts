@@ -388,12 +388,14 @@ function hasDangerousSrcset(value: string): boolean {
 
 /**
  * `class` values that carry meaning for the editor: the code block's language
- * (`language-js`, read by the CodeBlock node) and the screen-reader-only
- * footnote heading. Everything else goes — this output is injected into a live
- * document by the Cards preview, where the app's own Tailwind utilities are
- * loaded, so `class="fixed inset-0 z-50"` was a full-screen overlay.
+ * (`language-js`, read by the CodeBlock node), the screen-reader-only footnote
+ * heading, and the app's own link classes (`wiki-link` is what styles.css
+ * styles — including unresolved links — in the Cards preview). Everything else
+ * goes — this output is injected into a live document by the Cards preview,
+ * where the app's own Tailwind utilities are loaded, so
+ * `class="fixed inset-0 z-50"` was a full-screen overlay.
  */
-const KEPT_CLASS = /^(?:language-[\w+#.-]+|sr-only)$/;
+const KEPT_CLASS = /^(?:language-[\w+#.-]+|sr-only|wiki-link|perssonify-link)$/;
 
 function stripDangerousAttributes(doc: Document): void {
   doc.querySelectorAll("*").forEach((el) => {

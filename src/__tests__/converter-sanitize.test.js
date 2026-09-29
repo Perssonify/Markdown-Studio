@@ -86,12 +86,17 @@ describe("A073 — ingest sanitizer hardening", () => {
     expect(attrOf('<span style="background: url(x) yellow">x</span>', "span", "style")).toBeNull();
   });
 
-  it("strips class, id and name — except a code block's language", () => {
-    const out = sanitizeForIngest('<div class="fixed inset-0 z-50" id="app" name="x">a</div><img src="a.png" name="cookie"><pre><code class="language-js hljs">x</code></pre>');
+  it("strips class, id and name — except a code block's language and the app's link classes", () => {
+    const out = sanitizeForIngest(
+      '<div class="fixed inset-0 z-50" id="app" name="x">a</div><img src="a.png" name="cookie">' +
+        '<pre><code class="language-js hljs">x</code></pre><a class="wiki-link fixed" data-doc-link="D" href="#">D</a>'
+    );
     const d = new DOMParser().parseFromString(out, "text/html");
     expect(d.querySelector("div").getAttributeNames()).toEqual([]);
     expect(d.querySelector("img").hasAttribute("name")).toBe(false);
     expect(d.querySelector("code").getAttribute("class")).toBe("language-js");
+    // The Cards preview styles wiki links (and unresolved ones) by this class.
+    expect(d.querySelector("a").getAttribute("class")).toBe("wiki-link");
   });
 
   describe("without a DOM parser", () => {
