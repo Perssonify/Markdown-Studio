@@ -14,13 +14,12 @@ import { extractText, resolveDocTitle } from "./store/document";
 import { clearLocalData, configureLocalStores, ConflictError, useDocumentStore } from "./store/documentStore";
 import { snapshotStore } from "./store/snapshot-store";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
-import { captureIngestHeadless } from "./store/headless-ingest";
 import { buildZipAsync, readDocuments } from "./store/zip-builder";
 import { carryBlockAttrs } from "./store/card-save";
 import { canonicalMisfit, isNewerSchema } from "./store/schema-version";
 import { computeFidelity } from "./store/fidelity";
 import { useEditorStore } from "./store/editorStore";
-import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, getFileContentAndFormat, toExportEnvelope } from "./store/import-export";
+import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, toExportEnvelope } from "./store/import-export";
 import { printHtmlDocument } from "./store/print-export";
 import type { IngestFormat } from "./store/ingest";
 import { sanitizeForIngest } from "./store/ingest";
@@ -32,15 +31,14 @@ import { useCanonicalChangeHandler, useContentChangeEmitter } from "./editor/use
 import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation";
 import { usePaneCommands } from "./editor/usePaneCommands";
 import { useBottomTray, useConsoleContext, useTrayTabs } from "./editor/useBottomTray";
-import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
+import { collectImportItems, useImportPipeline } from "./editor/useImportPipeline";
+import { canonicalToHtml, canonicalToMarkdown } from "./engine/serialize-doc";
 import { extractHeadings } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
 import { LinkBuilderDialog } from "./ui/LinkBuilderDialog";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, extractArchive, isArchiveName, type ArchiveEntry } from "./store/archive";
 import { collectFolderExport, groupDocsByFolder, useFolderStore } from "./store/folders";
-import type { ImportResource } from "./store/url-import";
 import { searchDocuments } from "./store/search";
 import { docSearchText, docSearchTextLower } from "./store/doc-text";
 import { normalizeMarkdownFeatures } from "./store/settings";
@@ -544,41 +542,17 @@ export function PerssonifyEditor({
     activeBacklinks, activeForwardLinks, activeUnresolved, navigateToDoc, consoleEnabled, consoleCtx,
   });
 
-  const waitForEditor = useCallback((maxMs = 1500): Promise<any> => new Promise((resolve) => {
-    const start = Date.now();
-    const check = () => {
-      const ed = tiptapRef.current?.getEditor();
-      if (ed) return resolve(ed);
-      if (Date.now() - start > maxMs) return resolve(null);
-      requestAnimationFrame(check);
-    };
-    check();
-  }), []);
-
-  /**
-   * Persist and ACTIVATE a freshly created document, then hydrate the editor
-   * with it — if, after every await, the store is still on it.
-   *
-   * The canonical is captured HEADLESSLY (see captureIngestHeadless): this used
-   * to borrow the live editor — activate, push the ingest HTML in, yield a
-   * frame, read it back — and a document switch landing in that frame either
-   * captured the OTHER document's content as this one's or persisted an empty
-   * "Untitled". There is no yield between conversion and persistence now.
-   * Hydration is checked on `activeDocId` alone: a switch that took the store
-   * elsewhere hydrates its own document, and this must not push over it.
-   *
-   * Used by every path that creates and opens a document outside import:
-   * the host bridge's `addDocuments` and `importContent`, and quick capture
-   * on the Cards board.
-   */
-  const activateAndCapture = useCallback(async (doc: DocumentRecord) => {
-    captureIngestHeadless(doc, tiptapRef.current?.getEditor?.()?.schema ?? headlessSchema());
-    await finalizeDoc(doc, null, false);     // persist + activate (the editor mounts if it was not)
-    const editor = await waitForEditor(2000);
-    if (editor && useDocumentStore.getState().activeDocId === doc.id) {
-      hydrateEditorWithDoc(doc.id, doc.canonical);
-    }
-  }, [finalizeDoc, waitForEditor, hydrateEditorWithDoc, tiptapRef]);
+  // ── Import pipeline ───────────────────────────────────────────────────────
+  // Creating documents from outside (useImportPipeline): file, archive and URL
+  // import, the activate-and-hydrate step the host bridge and Cards share, and
+  // the post-await ownership check (isEditorTargeting) all of them rely on.
+  const {
+    waitForEditor, activateAndCapture, isEditorTargeting, importItems, handleImportUrl,
+  } = useImportPipeline({
+    tiptapRef, engine, createDoc, finalizeDoc, saveNewDoc,
+    prepareToLeaveActiveDoc, hydrateEditorWithDoc, handleSwitchDoc, toast,
+    setShowUrlImport, setImportUrlSeed,
+  });
 
   /**
    * Append documents to the store (persisted), non-destructively. Reuses the
@@ -652,28 +626,6 @@ export function PerssonifyEditor({
       _onIntegrationGraphUpdate, prepareToLeaveActiveDoc, hydrateEditorWithDoc]);
 
   // ── Integration imperative API ────────────────────────────────────────────
-  /**
-   * Is THIS document the one the editor is showing (or switching to)?
-   *
-   * Must be evaluated AFTER every await, never captured before one. Persisting
-   * goes through IndexedDB, which is slow enough that a document switch lands
-   * mid-write routinely; a pre-await snapshot then authorises pushing document
-   * A's content into an editor that now holds document B, and autosave writes it
-   * into B's record. This is the same chokepoint `saveActiveDoc` re-asserts
-   * after its own await (see CLAUDE.md).
-   *
-   * Deliberately checks `activeDocId` ONLY. Also requiring `hydratedDocId` was
-   * too strict and swallowed a REPAIR: when a document is active but not yet
-   * hydrated, pushing its freshly-written content into the editor and marking it
-   * hydrated is exactly the right move — that is how `appendToDocument` rescued
-   * an activated-but-unhydrated document, and demanding hydration up front
-   * turned that rescue into a silent no-op that left every later save refused.
-   */
-  const isEditorTargeting = useCallback(
-    (id: string) => useDocumentStore.getState().activeDocId === id,
-    []
-  );
-
   useImperativeHandle(_integrationRef, () => ({
     getCanonical: () => getCanonical(),
     getMarkdown: () => cmRef.current?.getValue() || "",
@@ -899,89 +851,6 @@ export function PerssonifyEditor({
     });
     return { id, updated: true };
   }, [switchToDoc, waitForEditor, engine, setFromHtml, patchDocById]);
-
-  // Create + persist a batch of import items (each with an optional in-archive
-  // folder path), creating folders as needed. Shared by file-drop import and
-  // URL import so both get identical folder handling and canonical capture.
-  const importItems = useCallback(async (
-    items: { raw: string; format: IngestFormat; folderPath: string[] }[]
-  ): Promise<{ importedCount: number; failedCount: number; firstDocId: string | null }> => {
-    let importedCount = 0;
-    let failedCount = 0;
-    let firstDocId: string | null = null;
-
-    // Import ACTIVATES the first imported document and overwrites both panes, so
-    // it is a document-leaving path like a switch or a close — and it was the
-    // only one that never said goodbye to the document already open. Anything
-    // typed in the current autosave window was destroyed outright: not on disk,
-    // not in the draft cache, not in undo.
-    await prepareToLeaveActiveDoc();
-
-    const folderIdByPath = new Map<string, string>();
-    const ensureFolder = (segments: string[]): string | null => {
-      let parentId: string | null = null;
-      let acc = "";
-      for (const seg of segments) {
-        acc = acc ? `${acc}/${seg}` : seg;
-        let id = folderIdByPath.get(acc);
-        if (!id) {
-          // No `startNaming` — these folders are created FOR the user (archive
-          // import, first-run seeding), not by them. Opting in here opened a
-          // focused rename box on load, leaving a caret blinking in the library.
-          id = useFolderStore.getState().createFolder(seg, parentId);
-          folderIdByPath.set(acc, id);
-        }
-        parentId = id;
-      }
-      return parentId;
-    };
-
-    // Every file is converted HEADLESSLY against the editor's schema — the live
-    // one when an editor is mounted, the identical serialisation schema when
-    // not. The loop used to BORROW the live editor per file (activate, push the
-    // HTML in, yield a frame, read the canonical back): a click in the library
-    // during that frame hydrated the user's own document, and the fallback then
-    // persisted the file's pre-editor canonical — an empty "Untitled" — and
-    // counted it as imported, while each later file yanked the store back off
-    // the user's choice. Nothing here activates a document or touches the
-    // editor now; the caller opens the first import through handleSwitchDoc,
-    // the ordinary leaving path.
-    const schema = tiptapRef.current?.getEditor?.()?.schema ?? headlessSchema();
-    let firstDoc: DocumentRecord | null = null;
-
-    for (const item of items) {
-      const doc = createDoc(item.raw, item.format, "file-import", { mdToHtml: engine?.mdToHtml });
-      if (!doc) continue;
-      if (!firstDocId) { firstDocId = doc.id; firstDoc = doc as DocumentRecord; }
-      const folderId = item.folderPath.length ? ensureFolder(item.folderPath) : null;
-
-      // Persistence failures (quota, adapter errors) are counted so callers
-      // can report the truth instead of "Imported N".
-      try {
-        captureIngestHeadless(doc as DocumentRecord, schema);
-        await saveNewDoc(doc as DocumentRecord);
-      } catch (e) {
-        console.warn("[importItems] Persist failed for imported doc:", e);
-        failedCount++;
-        continue;
-      }
-      if (folderId) useFolderStore.getState().moveDoc(doc.id, folderId);
-      importedCount++;
-    }
-
-    // With NO editor mounted (an empty library) the caller's switch would
-    // hydrate an editor that does not exist yet. Open the first import here,
-    // once the editor has mounted for it; handleSwitchDoc then finds it open.
-    if (firstDoc && importedCount > 0 && !useDocumentStore.getState().activeDocId) {
-      await finalizeDoc(firstDoc, null, true);          // activate only — already persisted
-      const editor = await waitForEditor(2000);
-      if (editor && useDocumentStore.getState().activeDocId === firstDoc.id) {
-        hydrateEditorWithDoc(firstDoc.id, firstDoc.canonical);
-      }
-    }
-
-    return { importedCount, failedCount, firstDocId };
-  }, [createDoc, engine, finalizeDoc, saveNewDoc, waitForEditor, prepareToLeaveActiveDoc, hydrateEditorWithDoc, tiptapRef]);
 
   useEffect(() => {
     if (!engineReady || !engine || initDoneRef.current) return;
@@ -1337,68 +1206,9 @@ export function PerssonifyEditor({
     }
     if (type === "import" && data?.length) {
       const files = Array.from(data as FileList | File[]);
-      const skipped: string[] = [];
-
-      // Expand archives (zip/tar/tgz/gz) into per-entry items carrying their
-      // in-archive folder path; regular files import at the root.
-      const items: { raw: string; format: IngestFormat; folderPath: string[] }[] = [];
-      for (const file of files) {
-        if (file.type?.startsWith("image/")) continue;
-        if (isArchiveName(file.name)) {
-          // Password-protected ZIPs are detected inside extractArchive; prompt for
-          // the password (masked) and retry, up to a few attempts on a wrong one.
-          let extracted: ArchiveEntry[] | null = null;
-          let password: string | undefined;
-          for (let attempt = 0; attempt < 4; attempt++) {
-            try {
-              extracted = await extractArchive(file, password ? { password } : {});
-              break;
-            } catch (err) {
-              if (err instanceof ArchiveEncryptedError || err instanceof ArchiveWrongPasswordError) {
-                const pw = await promptText(
-                  err instanceof ArchiveWrongPasswordError ? "Incorrect password — try again" : "Enter password",
-                  { description: `"${file.name}" is password-protected.`, placeholder: "Password", type: "password" }
-                );
-                if (!pw) break; // cancelled
-                password = pw;
-                continue;
-              }
-              break; // other error → skip
-            }
-          }
-          if (extracted) {
-            for (const e of archiveEntriesToItems(extracted, file.name)) {
-              items.push({ raw: e.text, format: e.format, folderPath: e.folderPath });
-            }
-          } else {
-            skipped.push(file.name);
-          }
-          continue;
-        }
-        if ((file.size ?? 0) > 5_000_000) {
-          skipped.push(file.name);
-          continue;
-        }
-        // DOCX: a binary format — must NOT go through getFileContentAndFormat
-        // (which readFileAsText's it into garbage). Convert to HTML first (lazy
-        // mammoth) and feed the existing "html" ingest path (sanitize + analyze).
-        if (/\.docx$/i.test(file.name)) {
-          try {
-            const { convertDocxToHtml } = await import("./store/docx-import");
-            const { html } = await convertDocxToHtml(file);
-            if (html.trim()) {
-              items.push({ raw: html, format: "html", folderPath: [] });
-            } else {
-              skipped.push(file.name);
-            }
-          } catch {
-            skipped.push(file.name);
-          }
-          continue;
-        }
-        const { raw, format } = await getFileContentAndFormat(file);
-        items.push({ raw, format: format as IngestFormat, folderPath: [] });
-      }
+      // Expand archives into per-entry items, convert .docx, read the rest as
+      // text; files that cannot be taken come back in `skipped`.
+      const { items, skipped } = await collectImportItems(files, promptText);
 
       try {
         const { importedCount, failedCount, firstDocId } = await importItems(items);
@@ -1600,49 +1410,6 @@ export function PerssonifyEditor({
     } catch { toast.show("Export failed", "error"); return 0; }
   }, [exportDocsToZip, toast]);
   exportDocsRef.current = handleExportDocs;
-
-  // Create a document from URL-fetched (or pasted) content. Routes through the
-  // same createDoc → ingest/sanitize → Tiptap path as file import, so remote
-  // HTML is sanitized before it ever reaches the editor.
-  const handleImportUrl = useCallback(async (resource: ImportResource, selectedPaths?: string[]) => {
-    try {
-      // Build import items from the fetched resource. Archives contribute one item
-      // per selected entry (carrying its in-archive folder path); a single text
-      // doc contributes one root item.
-      let items: { raw: string; format: IngestFormat; folderPath: string[] }[];
-      if (resource.kind === "archive") {
-        const keep = selectedPaths ? new Set(selectedPaths) : null;
-        const chosen = keep ? resource.entries.filter((e) => keep.has(e.path)) : resource.entries;
-        items = archiveEntriesToItems(chosen, resource.name).map((e) => ({
-          raw: e.text,
-          format: e.format,
-          folderPath: e.folderPath,
-        }));
-      } else {
-        items = [{ raw: resource.text, format: resource.format, folderPath: [] }];
-      }
-
-      if (!items.length) { toast.show("Nothing selected to import", "warning"); return; }
-
-      const { importedCount, failedCount, firstDocId } = await importItems(items);
-      if (firstDocId) {
-        await handleSwitchDoc(firstDocId); // hydrates the editor (see file-import path)
-      }
-      setShowUrlImport(false);
-      setImportUrlSeed(null);
-      if (failedCount > 0) {
-        toast.show(`${failedCount} document(s) could not be saved — storage may be full`, "error");
-      }
-      if (importedCount > 0) {
-        toast.show(
-          importedCount > 1 ? `Imported ${importedCount} documents` : "Imported from URL",
-          "success",
-        );
-      }
-    } catch {
-      toast.show("Import failed", "error");
-    }
-  }, [importItems, handleSwitchDoc, toast]);
 
   // Full-text body search for the sidebar filter. Reuses the link index's already
   // loaded full documents (fullDocsRef), so it costs no extra storage reads. Falls
