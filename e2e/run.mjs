@@ -22,6 +22,8 @@ const SUITES = {
   faults: "Tier 4 — fault injection: quota, blocked storage, multi-tab",
   library: "The published library on a host page (needs dist/)",
   bridge: "The iframe embed's host bridge, driven from a second origin (needs dist-embed/)",
+  csp: "vercel.json's Content-Security-Policy ENFORCED while every renderer and lazy surface runs",
+  pwa: "The service worker: offline after one online visit, and updates that never force-reload a tab",
   perf: "Measurement only — not run in CI (timing noise)",
 };
 

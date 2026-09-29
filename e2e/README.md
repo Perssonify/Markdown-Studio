@@ -29,6 +29,8 @@ bun run e2e:stress         # tier 2 — scale and duration (slow)
 bun run e2e:harness        # the rig checking itself (run this first when a case looks wrong)
 bun run e2e:library        # the published stylesheet on a host page (needs `bun run build`)
 bun run e2e:bridge         # the embed's host bridge from a second origin (needs build:embed)
+node e2e/run.mjs csp       # vercel.json's CSP ENFORCED while every renderer runs
+node e2e/run.mjs pwa       # offline after one visit; updates that never force-reload a tab
 bun run e2e:perf           # measurement only, never asserted in CI
 ```
 
@@ -53,6 +55,9 @@ if you do not have one; `E2E_CHROME=/path/to/chrome` overrides.
 | `cases/harness.mjs` | the rig checking ITSELF — the pane readers against a document of known lines |
 | `cases/library.mjs` | the published stylesheet on a page that is not ours (needs `dist/`) |
 | `cases/bridge.mjs` | the embed's host bridge, driven from a second origin (needs `dist-embed/`) |
+| `cases/csp.mjs` | the production build served with vercel.json's headers, the report-only CSP switched to ENFORCING; KaTeX, Mermaid, abcjs, a data: image, Find, the map, Cards, Word export and /help must raise zero violations |
+| `cases/pwa.mjs` | the service worker: one online visit, then the network is killed and every lazy feature is used for the first time offline; then a byte-changed `sw.js` — the prompt appears, nothing reloads by itself, a dirty second tab is told rather than reloaded |
+| `renderers.mjs` | the probe document and actions `csp` and `pwa` share (a helper, not a case) |
 | `probes/` | one-off diagnostics kept because they are the evidence behind a fix |
 
 ## What this campaign does NOT cover
@@ -110,7 +115,16 @@ several were in the plan this campaign was built from and were not written.
 - An **archive import with a mid-loop switch**.
 - The window **immediately after `compositionend`**, and the **emoji suggestion
   list clicked mid-composition**.
-- **Slow or failing network**, **corrupt stored JSON**, **offline / PWA**.
+- **Slow or failing network** (a network that answers, slowly or with errors —
+  `pwa.mjs` covers only a network that is GONE), **corrupt stored JSON**.
+- **Offline / PWA — now covered by `cases/pwa.mjs`, with these limits:** it
+  cannot flip `navigator.onLine` reliably (Playwright's offline emulation leaves
+  it `true` in a reloaded, worker-controlled page), so the "never reload while
+  offline" gates are covered by unit tests only (`ops-app-health`,
+  `ops-sw-update`); the automatic reload of a clean BACKGROUND tab after another
+  tab applied an update is unit-tested only (visibility is not emulated); and a
+  password-protected ZIP (zip.js's WebAssembly/worker path) is exercised by
+  neither `pwa.mjs` nor `csp.mjs`.
 
 **Scaled down from what was planned**
 - Continuous typing runs are ~480 characters, not 2000; the duration case is 8
