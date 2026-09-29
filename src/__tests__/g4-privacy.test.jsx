@@ -55,6 +55,7 @@ describe("no absolute 'nothing ever leaves' claims", () => {
     "src/constants.ts",
     "src/data/starter-documents.ts",
     "src/ui/MenuBar.tsx",
+    "vite.app.config.ts", // the install prompt's description (PWA manifest)
   ];
   const ABSOLUTE = [
     /never leave your device/i,
@@ -62,6 +63,11 @@ describe("no absolute 'nothing ever leaves' claims", () => {
     /never uploaded/i,
     /no server, nothing/i,
     /completely client-side/i,
+    /client-only/i,
+    // Offline works after one online visit (A085); installing is not required.
+    /install it as an app[^"]*to work offline/i,
+    // PDF is export-only; there is no PDF import.
+    /import and export [^"]*\bPDF\b/i,
   ];
 
   it.each(FILES)("%s", (file) => {

@@ -64,8 +64,8 @@ export function AboutPage({ onClose }: AboutPageProps) {
             without a connection.
           </Highlight>
           <Highlight icon={FileText} title="Open formats">
-            Import and export standard Markdown, HTML, JSON, Word and PDF — your work is
-            never locked in.
+            Import Markdown, HTML, JSON and Word; export all of those and PDF — your work
+            is never locked in.
           </Highlight>
         </div>
 
