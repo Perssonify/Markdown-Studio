@@ -373,11 +373,14 @@ drive it:
 Before v1.74.0 the embed passed its *own* origin here, so a host's messages were
 never accepted at all. If you were working around that, remove the workaround.
 
-The embed stores its documents in the default database, `perssonify-docs` — on
-the same origin as a standalone copy of the app, the two share one library.
-Renaming it would have orphaned every existing embed user's documents
-([decisions.md](decisions.md)); serve the embed from its own origin if its
-library must stay separate.
+A self-hosted embed stores its documents in the default database,
+`perssonify-docs`, the name existing embed users' documents are already in
+([decisions.md](decisions.md)). On the same origin as a standalone copy of the
+app, the two share one library; serve the embed from its own origin if its
+library must stay separate. The exception is the app's own hosts (`APP_HOSTS`
+in `src/constants.ts` — markdownstudio.com and its aliases, and localhost in
+development): there the embed keeps `perssonify-embed-docs`, so a page that
+frames it cannot reach the app's library.
 
 The host talks to the iframe with `createEditorClient(iframe, editorOrigin)`. The
 second argument is optional — the client derives the editor's origin from the

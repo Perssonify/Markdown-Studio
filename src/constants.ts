@@ -25,6 +25,11 @@ export const APP_URL = `https://${APP_DOMAIN}`;
  * what makes that banner reach them; retiring the host strands their data.
  */
 export const LEGACY_APP_HOST = "markdowneditor.perssonify.com";
+/** Every host the standalone APP is served from, development included. The app's
+ *  library is in the default database there, so an iframe embed served from one
+ *  keeps its own (`embedStorageConfig`, integration/embed-origins.ts, A072). */
+export const APP_HOSTS: readonly string[] =
+  [APP_DOMAIN, `www.${APP_DOMAIN}`, "markdownstudio.perssonify.com", LEGACY_APP_HOST, "localhost", "127.0.0.1"];
 // Single source of truth: injected from package.json "version" via Vite
 // `define` (see vite.config.ts / vite.app.config.ts). Falls back for tests.
 declare const __APP_VERSION__: string;

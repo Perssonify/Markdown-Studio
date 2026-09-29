@@ -13,7 +13,7 @@
 
 | Property | Value | Source |
 |----------|-------|--------|
-| Database name | `perssonify-docs` (a host may pass its own `dbName`) | `DEFAULT_DB_NAME`, [src/store/idb-storage-adapter.ts:126](../src/store/idb-storage-adapter.ts#L126) |
+| Database name | `perssonify-docs` (a host may pass its own `dbName`; the iframe embed uses `perssonify-embed-docs` on the app's own hosts, see [decisions.md](decisions.md)) | `DEFAULT_DB_NAME`, [src/store/idb-storage-adapter.ts:126](../src/store/idb-storage-adapter.ts#L126) |
 | Version | `1` | `DB_VERSION`, [:127](../src/store/idb-storage-adapter.ts#L127) |
 | Object store: documents | `documents` (key = doc id) | `STORE_DOCS`, [:130](../src/store/idb-storage-adapter.ts#L130) |
 | Object store: meta | `meta` (key = string) | `STORE_META`, [:131](../src/store/idb-storage-adapter.ts#L131) |

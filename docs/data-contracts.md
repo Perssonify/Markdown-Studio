@@ -20,6 +20,7 @@ longer recognises it — which a user experiences as "my documents are gone".
 | `perssonify-backup` | the full-library archive name | Re-import detection keys on it — a backup ZIP would import as a folder of loose files instead of restoring library state |
 | `perssonify-snapshots` | sidecar IndexedDB database (recoverable version history) | The whole snapshot ring is orphaned — the last-resort recovery net for a wiped document |
 | `perssonify-docs` | the main IndexedDB database (documents + `__manifest` / `__prefs`), in the standalone app and in self-hosted iframe embeds alike ([decisions.md](decisions.md)) | The user's entire library is orphaned |
+| `perssonify-embed-docs` | the iframe embed's database when it is served from one of the app's own hosts (`APP_HOSTS`), with `perssonify-snapshots:perssonify-embed-docs` and `pf:recovery:perssonify-embed-docs` beside it ([decisions.md](decisions.md)) | Every embed user on those hosts opens on an empty library |
 | `perssonify` | the iframe `postMessage` protocol tag ([host-bridge.ts](../src/integration/host-bridge.ts)) | Every existing embedder's bridge stops handshaking |
 | `@perssonify/editor` | the npm package name | Every existing import in every embedder breaks |
 
