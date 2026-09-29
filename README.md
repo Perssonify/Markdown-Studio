@@ -63,7 +63,9 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) (canonical — `bun.lock` is committed and Vercel builds with Bun)
+- [Bun](https://bun.sh) (canonical — `bun.lock` is committed and Vercel builds with Bun),
+  at the version pinned by `packageManager` in `package.json`. Install with
+  `bun install --frozen-lockfile` to get exactly the locked tree.
 - Node.js 20+
 
 ### Install and Run
@@ -77,6 +79,9 @@ bun run dev
 
 # Run tests
 bun run test
+
+# Lint (must report zero errors; warnings are the tracked backlog)
+bun run lint
 
 # Build the standalone app
 bun run build:app
@@ -677,8 +682,9 @@ Annotated map and a "where does X live?" table: [docs/codebase-tour.md](docs/cod
 ## Testing
 
 ```bash
-bun run test         # Run all tests once
-bun run test:watch   # Watch mode
+bun run test           # Run all tests once
+bun run test:watch     # Watch mode
+bun run test:coverage  # Coverage over ALL of src/ (generated shadcn primitives excluded); html in coverage/
 ```
 
 > Test files must be named `*.test.js` or `*.test.jsx` — the Vitest `include` glob is
