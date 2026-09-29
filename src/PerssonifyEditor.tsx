@@ -8,9 +8,7 @@ import { useFormatDispatcher } from "./formatting/useFormatDispatcher";
 import { useDocumentLifecycle } from "./hooks/useDocumentLifecycle";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 import { useLinkIndex } from "./hooks/useLinkIndex";
-import { buildContextPrompt } from "./integration/prompt-builder";
 import type { DocumentRecord } from "./store/document";
-import { extractText } from "./store/document";
 import { clearLocalData, ConflictError, useDocumentStore } from "./store/documentStore";
 import { snapshotStore } from "./store/snapshot-store";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
@@ -28,11 +26,10 @@ import { useCanonicalChangeHandler, useContentChangeEmitter } from "./editor/use
 import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation";
 import { usePaneCommands } from "./editor/usePaneCommands";
 import { useBottomTray, useConsoleContext, useTrayTabs } from "./editor/useBottomTray";
-import { collectImportItems, useImportPipeline } from "./editor/useImportPipeline";
+import { useImportPipeline } from "./editor/useImportPipeline";
 import { useEditorBoot, usePersistPreferences } from "./editor/useEditorBoot";
-import {
-  exportActiveDocAsDocx, exportActiveDocAsFile, exportActiveDocAsPdf, exportAllDocuments, exportFullBackup, useExportActions,
-} from "./editor/useExportActions";
+import { useExportActions } from "./editor/useExportActions";
+import { useEditorActions } from "./editor/useEditorActions";
 import { canonicalToMarkdown } from "./engine/serialize-doc";
 import { extractHeadings } from "./store/doc-outline";
 import { MemorySheet } from "./ui/MemorySheet";
@@ -864,99 +861,14 @@ export function PerssonifyEditor({
     promptLink: promptLinkCb,
   });
 
-  // ── Actions 
-  const handleAction = useCallback(async (type: string, data?: any) => {
-    if (type === "md" || type === "html" || type === "json") {
-      const content = type === "md" ? cmRef.current?.getValue() : type === "html" ? tiptapRef.current?.getHTML() : JSON.stringify(getCanonical(), null, 2);
-      navigator.clipboard.writeText(content || "").then(() => toast.show(`${type.toUpperCase()} copied!`, "success"));
-      return;
-    }
-    if (type === "clear") {
-      if (useUIStore.getState().readOnly) return; // read-only: don't wipe the doc
-      const ok = await confirm({ title: "Clear document?", description: "All content will be removed. This cannot be undone.", confirmLabel: "Clear", destructive: true });
-      if (!ok) return;
-      cmRef.current?.setValue("");
-      tiptapRef.current?.setHTML("");
-      // Both set calls above are update-suppressed (no onChange), so without
-      // this the clear was never marked dirty or persisted — reloading brought
-      // the "cleared" content back. Reset hashes too, or retyping identical
-      // content would hash-match stale state and skip syncing.
-      resetHashes();
-      // This is an EXPLICIT clear, so permit the next save to persist the blank
-      // over the stored content — bypassing the data-loss backstop that refuses
-      // an accidental/stale blank overwrite.
-      useDocumentStore.getState().allowBlankSaveOnce();
-      setDirty();
-      toast.show("Content cleared", "info");
-      return;
-    }
-    if (type === "export-graph") { handleGraphExport(); return; }
-    if (type === "import-url") { setShowUrlImport(true); return; }
-    if (type === "export-all-zip") {
-      exportAllDocuments(exportDocsRef);
-      return;
-    }
-    if (type === "export-backup-zip") {
-      exportFullBackup(exportDocsRef);
-      return;
-    }
-    if (type === "export-pdf" && activeDoc) {
-      exportActiveDocAsPdf(activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
-      return;
-    }
-    if (type === "prompt" && activeDoc) {
-      try {
-        const storage = useDocumentStore.getState().getStorage();
-        // An unreadable linked document is left out of the prompt, not fatal to it.
-        const docStoreGetter = { get: async (id: string) => (storage ? await storage.get(id).catch(() => null) : null) };
-        const promptText = await buildContextPrompt(activeDoc, docStoreGetter, linkIndex, {
-          format: "markdown",
-          mdConverter: (d) => d.markdownCache ?? (engine?.htmlToMd && d.htmlCache ? engine.htmlToMd(d.htmlCache) : extractText(d.canonical)),
-          includeBacklinks: true,
-          maxDocs: 20,
-        });
-        await navigator.clipboard.writeText(promptText);
-        toast.show("Prompt copied to clipboard", "success");
-      } catch (e) {
-        toast.show("Failed to build prompt", "error");
-      }
-      return;
-    }
-    if ((type === "export-md" || type === "export-html" || type === "export-json") && activeDoc) {
-      exportActiveDocAsFile(type, activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
-      return;
-    }
-    if (type === "export-docx" && activeDoc) {
-      await exportActiveDocAsDocx(activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
-      return;
-    }
-    if (type === "import" && data?.length) {
-      const files = Array.from(data as FileList | File[]);
-      // Expand archives into per-entry items, convert .docx, read the rest as
-      // text; files that cannot be taken come back in `skipped`.
-      const { items, skipped } = await collectImportItems(files, promptText);
-
-      try {
-        const { importedCount, failedCount, firstDocId } = await importItems(items);
-        if (skipped.length > 0) {
-          toast.show(`Skipped ${skipped.length} file(s): ${skipped.join(", ")}`, "warning");
-        }
-        if (failedCount > 0) {
-          toast.show(`${failedCount} file(s) could not be saved — storage may be full`, "error");
-        }
-        if (firstDocId) {
-          // handleSwitchDoc hydrates the editor with the target's canonical —
-          // a bare switchToDoc left the LAST imported file's content in the
-          // editor while activating the FIRST, corrupting it on next save.
-          await handleSwitchDoc(firstDocId);
-          if (importedCount > 0) toast.show(`Imported ${importedCount} file(s)`, "success");
-        } else if (importedCount === 0 && skipped.length === 0 && failedCount === 0) {
-          toast.show("No supported files found", "warning");
-        }
-      } catch (e) { toast.show("Import failed", "error"); }
-      return;
-    }
-  }, [toast, getCanonical, engine, activeDoc, syncMode, handleGraphExport, linkIndex, createDoc, importItems, handleSwitchDoc, confirm, promptText]);
+  // ── Actions ───────────────────────────────────────────────────────────────
+  // The menu bar's action dispatcher (useEditorActions): copy as MD/HTML/JSON,
+  // clear, file / drop / URL import, the File-menu exports, Copy as Prompt.
+  const { handleAction, handleFileDropImport, handleBackupNow } = useEditorActions({
+    cmRef, tiptapRef, activeDoc, engine, syncMode, linkIndex,
+    getCanonical, resetHashes, setDirty, createDoc, importItems, handleSwitchDoc, handleGraphExport,
+    exportDocsRef, setShowUrlImport, toast, confirm, promptText,
+  });
 
   // ── Export ────────────────────────────────────────────────────────────────
   // Library exports (useExportActions): one document in any format, a folder,
@@ -965,18 +877,6 @@ export function PerssonifyEditor({
   const { handleExportFolder, handleExportDoc, handleExportDocs } = useExportActions({
     engine, syncMode, getCanonical, toast, toastRef, autosaveRef, exportDocsRef,
   });
-
-  // Defined here rather than with the other panel callbacks: it closes over
-  // handleAction, which is declared above this point.
-  const handleFileDropImport = useCallback((files: FileList | File[]) => {
-    handleAction("import", files);
-  }, [handleAction]);
-
-  // The storage-durability notices and Settings ▸ Storage & backup run the
-  // SAME full backup as File ▸ Export, so it is recorded the same way.
-  const handleBackupNow = useCallback(() => {
-    void handleAction("export-backup-zip");
-  }, [handleAction]);
 
   // Full-text body search for the sidebar filter. Reuses the link index's already
   // loaded full documents (fullDocsRef), so it costs no extra storage reads. Falls
