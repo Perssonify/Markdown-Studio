@@ -18,6 +18,23 @@ interface FieldEntry {
   value?: string;
 }
 
+/**
+ * Turndown's own block-element list (`blockElements` in turndown.es.js), plus
+ * <details>, which it omits but which the Details node renders as a block.
+ * Kept identical to turndown's notion of a block so that decisions made here
+ * (list-item looseness, where the linear converter may split a document)
+ * agree with how turndown itself separates the output.
+ */
+export const BLOCK_ELEMENTS = new Set([
+  "ADDRESS", "ARTICLE", "ASIDE", "AUDIO", "BLOCKQUOTE", "BODY", "CANVAS", "CENTER",
+  "DD", "DIR", "DIV", "DL", "DT", "FIELDSET", "FIGCAPTION", "FIGURE", "FOOTER", "FORM",
+  "FRAMESET", "H1", "H2", "H3", "H4", "H5", "H6", "HEADER", "HGROUP", "HR", "HTML",
+  "ISINDEX", "LI", "MAIN", "MENU", "NAV", "NOFRAMES", "NOSCRIPT", "OL", "OUTPUT", "P",
+  "PRE", "SECTION", "TABLE", "TBODY", "TD", "TFOOT", "TH", "THEAD", "TR", "UL",
+]);
+const isBlockElement = (el: Element): boolean =>
+  BLOCK_ELEMENTS.has(el.nodeName) || el.nodeName === "DETAILS";
+
 export function addBaseRules(td: TurndownInstance): TurndownInstance {
   // Math: <span data-math-inline="x"> → $x$ ; <div data-math-block="x"> → $$x$$.
   td.addRule("mathInline", {
@@ -115,6 +132,62 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
     return owner === el;
   };
 
+  // A list item's already-converted content, laid out under its marker.
+  //
+  // `contentWidth` is the item's CONTENT COLUMN — the width of `- ` or `12. `
+  // — and every continuation line is indented by exactly that. It is not the
+  // marker's printed width: a task item prints `- [ ] ` (6) but its content
+  // column is still 2, because `[ ]` is part of the item's first paragraph.
+  // Indenting a task item's nested list by 6 put it 4 columns past that
+  // column, where CommonMark reads it as a lazy continuation of the paragraph:
+  // after one markdown edit the nested `- [x] b` became escaped literal text,
+  // and nested ordered lists and code blocks collapsed the same way.
+  //
+  // Tight vs loose. TipTap wraps every item's text in <p>, which turndown
+  // would print as a loose list, so a simple item (one paragraph, optionally
+  // followed by nested lists) is printed tight. Only the blank line turndown
+  // put BETWEEN that paragraph and its nested list goes — this used to delete
+  // every blank line in the item, which merged two paragraphs into one and
+  // removed blank lines from the middle of fenced code. An item holding more
+  // than one block (two paragraphs, a paragraph and a code block, …) keeps its
+  // blank lines, which is what makes it that item again on the way back in.
+  const itemBody = (el: Element): Element => {
+    // A TaskItem renders `<li><label>…</label><div>…content…</div></li>`.
+    if (isTaskLi(el)) {
+      for (const c of Array.from(el.children)) if (c.nodeName === "DIV") return c;
+    }
+    return el;
+  };
+  const LIST_TAGS = new Set(["UL", "OL"]);
+  const NON_BLOCK_CHILDREN = new Set(["LABEL", "INPUT", "BR"]);
+  const isLooseItem = (el: Element): boolean => {
+    let blocks = 0;
+    let afterList = false;
+    for (const c of Array.from(itemBody(el).children)) {
+      if (LIST_TAGS.has(c.nodeName)) { afterList = true; continue; }
+      if (NON_BLOCK_CHILDREN.has(c.nodeName) || !isBlockElement(c)) continue;
+      blocks++;
+      if (afterList || blocks > 1) return true;
+    }
+    return false;
+  };
+  const layoutListItem = (el: Element, content: string, marker: string, contentWidth: number): string => {
+    content = content.replace(/^\n+/, "").replace(/\n+$/, "");
+    // Tight: drop only the paragraph → nested-list separator (the first blank
+    // run — a paragraph's own markdown never contains a blank line). Anything
+    // deeper belongs to the nested items, which laid themselves out already.
+    if (!isLooseItem(el)) content = content.replace(/\n{2,}/, "\n");
+    if (content.includes("\n")) {
+      const indent = " ".repeat(contentWidth);
+      // Blank lines stay blank (not dropped: inside a fence they are code).
+      content = content
+        .split("\n")
+        .map((line, i) => (i === 0 || line === "" ? line : indent + line))
+        .join("\n");
+    }
+    return marker + content + "\n";
+  };
+
   // Tiptap wraps every <li> content in <p> tags, which Turndown treats as "loose" lists
   // (adding blank lines between items). This rule produces tight list output instead.
   td.addRule("tightListItem", {
@@ -123,10 +196,6 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
     },
     replacement: function (content: string, node?: Node): string {
       const el = node as Element;
-      // Strip leading/trailing whitespace and collapse internal blank lines
-      content = content.replace(/^\n+/, "").replace(/\n+$/, "");
-      content = content.replace(/\n{2,}/g, "\n");
-
       const parent = el.parentNode;
       let prefix = "- ";
       if (parent && (parent as Element).nodeName === "OL") {
@@ -138,18 +207,7 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
         const idx = Array.from((parent as Element).children).indexOf(el);
         prefix = base + idx + ". ";
       }
-
-      // For multi-line content (e.g. nested paragraphs), indent continuation lines
-      if (content.includes("\n")) {
-        const indent = " ".repeat(prefix.length);
-        content = content
-          .split("\n")
-          .map((line, i) => (i === 0 ? line : line.trim() ? indent + line : ""))
-          .filter(Boolean)
-          .join("\n");
-      }
-
-      return prefix + content + "\n";
+      return layoutListItem(el, content, prefix, prefix.length);
     },
   });
 
@@ -170,8 +228,8 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
   // Task lists: TipTap TaskItem renders `<li data-type="taskItem"
   // data-checked="true|false"><label><input …><span/></label><div>…</div></li>`.
   // Prefer the authoritative `data-checked` attribute; fall back to a bare
-  // `input[type=checkbox]` (pasted GFM). Nested task lists (nested:true) round-trip
-  // by indenting continuation lines under the marker (mirrors tightListItem).
+  // `input[type=checkbox]` (pasted GFM). Nested content is laid out under the
+  // item's CONTENT column (2, the width of "- ") — see layoutListItem.
   td.addRule("taskListItem", {
     filter: (node) => isTaskLi(node as Element),
     replacement: (content: string, node?: Node): string => {
@@ -182,21 +240,8 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
         dataChecked != null
           ? dataChecked === "true" || dataChecked === ""
           : Boolean(checkbox && (checkbox as HTMLInputElement).checked);
-      let text = content
-        .replace(/^\s*\[[ x]\]\s*/i, "")
-        .replace(/^\n+/, "")
-        .replace(/\n+$/, "")
-        .replace(/\n{2,}/g, "\n");
-      const marker = `- [${checked ? "x" : " "}] `;
-      if (text.includes("\n")) {
-        const indent = " ".repeat(marker.length);
-        text = text
-          .split("\n")
-          .map((line, i) => (i === 0 ? line : line.trim() ? indent + line : ""))
-          .filter(Boolean)
-          .join("\n");
-      }
-      return marker + text + "\n";
+      const text = content.replace(/^\s*\[[ x]\]\s*/i, "");
+      return layoutListItem(el, text, `- [${checked ? "x" : " "}] `, 2);
     },
   });
 
