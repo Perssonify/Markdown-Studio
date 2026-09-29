@@ -62,7 +62,7 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 ### Add a formatting command (e.g. a new toolbar button)
 
 1. Add the button in [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) calling `dispatch("myCmd")`.
-2. Handle `"myCmd"` in **both** branches of [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts): `dispatchToTiptap` ([:316](../src/formatting/useFormatDispatcher.ts#L316)) for the rich-text pane and `dispatchToMd` ([:466](../src/formatting/useFormatDispatcher.ts#L466)) for the markdown pane.
+2. Handle `"myCmd"` in **both** branches of [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts): `dispatchToTiptap` ([:336](../src/formatting/useFormatDispatcher.ts#L336)) for the rich-text pane and `dispatchToMd` ([:502](../src/formatting/useFormatDispatcher.ts#L502)) for the markdown pane.
 3. If it should reflect active state, add detection in the format-state query ([:364](../src/formatting/useFormatDispatcher.ts#L364)).
 4. Optional shortcut: add to [src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts).
 
@@ -82,7 +82,7 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 ### Add a storage field
 
 1. Extend `DocumentRecord` in [src/store/document.ts](../src/store/document.ts) and default it on read.
-2. If derived, **strip it in `serializeForStorage`** ([:307](../src/store/document.ts#L307)) so it isn't persisted.
+2. If derived, **strip it in `serializeForStorage`** ([:418](../src/store/document.ts#L418)) so it isn't persisted.
 3. Only bump `DB_VERSION` if you need a new object store or a data transform — see [database.md#migrations](database.md#migrations).
 
 ### Run one test file in watch mode

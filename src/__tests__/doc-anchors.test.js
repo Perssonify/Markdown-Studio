@@ -1,3 +1,5 @@
+import { spawnSync } from "child_process";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { anchorsIn, audit, defineLine } from "../../scripts/doc-anchors.mjs";
 
@@ -73,5 +75,15 @@ describe("the checker itself", () => {
 
   it("reports line 0 for a symbol that is not there at all", () => {
     expect(defineLine("const other = 1;", "thing")).toEqual({ line: 0, tier: 0 });
+  });
+});
+
+describe("the command-line entry point", () => {
+  // `node scripts/doc-anchors.mjs [--fix]` is what a contributor runs. Its
+  // "am I the main module?" check compared a file URL with a native path, which
+  // never matches on Windows: the script exited 0 having checked nothing.
+  it("actually runs when invoked directly", () => {
+    const r = spawnSync(process.execPath, [join(process.cwd(), "scripts", "doc-anchors.mjs")], { encoding: "utf8" });
+    expect(r.stdout).toMatch(/\d+ anchors checked/);
   });
 });

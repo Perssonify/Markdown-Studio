@@ -84,7 +84,7 @@ Single-threaded browser JavaScript. There are no workers, no cron, no long-lived
 - **Scheduled sync.** Edits don't project on every keystroke. `useDocumentLifecycle` debounces, with a **max-wait ceiling** so the other pane still advances while you keep typing; both delays come from the measured cost of recent projections, not from document length ([src/hooks/sync-schedule.ts](../src/hooks/sync-schedule.ts), [src/hooks/useDocumentLifecycle.ts](../src/hooks/useDocumentLifecycle.ts)).
 - **Re-entrancy guard.** `useSyncEngine` uses a `syncing` ref ([src/engine/useSyncEngine.ts:28](../src/engine/useSyncEngine.ts#L28)) so a sync in progress can't trigger another.
 - **Hash guard.** `quickHash` short-circuits a sync whose content hasn't changed ([src/engine/useSyncEngine.ts:62](../src/engine/useSyncEngine.ts#L62), [:124](../src/engine/useSyncEngine.ts#L124)) — this is what actually prevents the MD→HTML→MD echo loop.
-- **In-flight unsaved state** lives in two places: the `_unsavedEdits` Map in `useDocumentStore` (a per-doc cache used when switching tabs, [src/store/documentStore.ts:373](../src/store/documentStore.ts#L373)) and the live Tiptap editor instance. Persisted state lives in IndexedDB.
+- **In-flight unsaved state** lives in two places: the `_unsavedEdits` Map in `useDocumentStore` (a per-doc cache used when switching tabs, [src/store/documentStore.ts:708](../src/store/documentStore.ts#L708)) and the live Tiptap editor instance. Persisted state lives in IndexedDB.
 - **Autosave** is a single trailing timer (`AUTOSAVE_MS = 5000`), replaced on each change so it doesn't stack.
 
 ## Key design decisions (ADR-style)

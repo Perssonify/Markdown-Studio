@@ -169,7 +169,10 @@ export function fix(root = ROOT) {
   return n;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compared as paths, not URLs: on Windows `import.meta.url` is
+// `file:///C:/…` while argv[1] is `C:\…`, so a string comparison never matched
+// and the script exited 0 having checked and repaired nothing.
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   if (process.argv.includes("--fix")) {
     const n = fix();
     console.log(`repaired ${n} anchor(s)`);

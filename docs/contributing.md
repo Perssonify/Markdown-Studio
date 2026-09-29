@@ -40,7 +40,7 @@
 - **Path alias:** import from `@/…` (maps to `src/`).
 - **State goes through stores**, not component-local globals — use `documentStore` / `uiStore` / `editorStore`.
 - **Markdown vs canonical:** if you touch conversion, ensure HTML→MD→HTML **converges** (idempotent round-trip) or you'll create a sync loop — add a convergence test ([runbooks/sync-loop-or-frozen-editor.md](runbooks/sync-loop-or-frozen-editor.md)).
-- **Don't persist derived data:** new derived fields must be stripped in `serializeForStorage` ([src/store/document.ts:307](../src/store/document.ts#L307)).
+- **Don't persist derived data:** new derived fields must be stripped in `serializeForStorage` ([src/store/document.ts:418](../src/store/document.ts#L418)).
 - **Diagnostics:** use the `[DIAG]` helpers ([src/utils/diag.ts](../src/utils/diag.ts)) rather than ad-hoc `console.log`.
 
 ## Adding a dependency
