@@ -23,12 +23,14 @@ import { COMPOSITION_STALL_MS } from "../constants";
 import { useUIStore } from "../store/uiStore";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";
+import { BidiAuto } from "../extensions/BidiAuto";
 import { EmojiNode } from "../extensions/EmojiNode";
 import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
 import { Callout } from "../extensions/Callout";
 import { Details, Summary } from "../extensions/Details";
 import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
+import { TableCellAlign } from "../extensions/TableCellAlign";
 import { ThemeImage } from "../extensions/ThemeImage";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
@@ -307,8 +309,9 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         Placeholder.configure({ placeholder: "Start typing rich text..." }),
         TextAlign.configure({ types: ["heading", "paragraph"], alignments: ["left", "center", "right", "justify"] }),
         Table.configure({ resizable: false }),
-        TableRow, TableCell, TableHeader,
+        TableRow, TableCell, TableHeader, TableCellAlign,
         SearchHighlightExtension,
+        BidiAuto, // dir="auto" per text block — view-only, not in the schema
       ],
       content: defaultValue || "",
       editorProps: {
