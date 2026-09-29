@@ -1,10 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { schema } from "@tiptap/pm/schema-basic";
+import { getSchema } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
 import {
   htmlToCanonical,
   asCanonicalDoc,
   appendHtmlToCanonical,
 } from "../store/canonical-ops";
+
+// A Tiptap schema, which is what these helpers receive in the app. (The test
+// used prosemirror's basic schema via `@tiptap/pm/schema-basic`; Tiptap 3.31's
+// `@tiptap/pm` no longer ships that subpath.)
+const schema = getSchema([StarterKit]);
 
 describe("canonical-ops", () => {
   it("asCanonicalDoc normalizes non-doc values to an empty doc", () => {
