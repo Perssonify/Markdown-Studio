@@ -174,7 +174,11 @@ export function scopeTokens(css) {
     // either branch below, so they need no special case.)
     if (insideAtRule(rule, (a) => a.name === "layer" && a.params.trim() === "base")) return;
     const selectors = rule.selectors.map((s) => s.trim());
-    if (selectors.every((s) => THEME_COMPOUND.test(s))) {
+    // A token rule declares ONLY custom properties. `html { scrollbar-width:
+    // none }` has a token-shaped selector but styles the page, so it takes the
+    // page path below instead of landing on our roots.
+    const onlyTokens = (rule.nodes ?? []).every((n) => n.type !== "decl" || n.prop.startsWith("--"));
+    if (onlyTokens && selectors.every((s) => THEME_COMPOUND.test(s))) {
       rule.selectors = [...new Set(selectors.flatMap(scopeTokenSelector))];
     } else if (selectors.some((s) => /^(html|:root|body)\b/.test(s))) {
       rule.selectors = selectors.map(scopePageSelector);
