@@ -2,22 +2,53 @@
   "buildCommand": "bun run build:app",
   "outputDirectory": "dist-app",
   "framework": "vite",
-  "installCommand": "bun install",
+  "installCommand": "bun install --frozen-lockfile",
   "functions": {
     "api/import.js": { "maxDuration": 25 }
   },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|\\.well-known/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
-      "source": "/sw.js",
+      "source": "/((?!api/|embed\\.html).*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-hq3Xx1aiQlCCt70h5Eyvba4ZbPwxhT3wZDtmv9Fhvtw=' 'sha256-9FOqIDDcsr35s9td+ABPsuA/TkzdrlYXzJ5hUjKOyIw=' 'sha256-ZdfEy6xR57DrwDYRVRcVXtYHOLJrHYok+33CZR8fWUE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: data: blob:; worker-src 'self' blob: data:; frame-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" },
+        { "key": "X-Frame-Options", "value": "DENY" }
       ]
     },
     {
-      "source": "/registerSW.js",
+      "source": "/embed.html",
+      "headers": [
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-hq3Xx1aiQlCCt70h5Eyvba4ZbPwxhT3wZDtmv9Fhvtw=' 'sha256-9FOqIDDcsr35s9td+ABPsuA/TkzdrlYXzJ5hUjKOyIw=' 'sha256-ZdfEy6xR57DrwDYRVRcVXtYHOLJrHYok+33CZR8fWUE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: data: blob:; worker-src 'self' blob: data:; frame-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), midi=(), display-capture=(), magnetometer=(), gyroscope=(), accelerometer=()"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]
