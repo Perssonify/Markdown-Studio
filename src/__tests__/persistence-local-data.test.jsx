@@ -66,6 +66,7 @@ describe("clearLocalData", () => {
     await m.snaps.record("a", "Secret A", doc("an older secret"), "manual");
     m.rec.stashUnsaved([{ docId: "a", canonical: doc("unsaved secret"), at: Date.now() }]);
     localStorage.setItem("pf:library-canary", JSON.stringify({ count: 1 }));
+    localStorage.setItem("pf:card-draft", JSON.stringify({ title: "", body: "unsent secret note" }));
     localStorage.setItem("pf:font-size", "17");
     localStorage.setItem("someone-else:key", "keep");
     m.ds.useDocumentStore.setState({ activeDocId: "a", hydratedDocId: "a", activeDoc: await adapter.get("a") });
@@ -96,6 +97,13 @@ describe("clearLocalData", () => {
     // A canary left behind would announce "your browser cleared your library"
     // on the next boot and suppress the starter documents.
     expect(localStorage.getItem("pf:library-canary")).toBeNull();
+    expect(localStorage.getItem("pf:font-size")).toBe("17");
+  });
+
+  it("always removes the Cards composer draft: it is the user's words, not a setting", async () => {
+    const { m } = await seeded();
+    await m.ds.clearLocalData();
+    expect(localStorage.getItem("pf:card-draft")).toBeNull();
     expect(localStorage.getItem("pf:font-size")).toBe("17");
   });
 });
