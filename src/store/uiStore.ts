@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { safeStorage } from "../utils/safe-storage";
+import { adminSettingsAvailable } from "../utils/build-gates";
 import { MODES } from "../constants";
 import {
   DEFAULT_MARKDOWN_FEATURES,
@@ -180,10 +181,13 @@ export const useUIStore = create<UIState>((set) => ({
     safeStorage.get("pf:show-ads") === "true",
   readOnly:
     safeStorage.get("pf:read-only") === "true",
+  // Admin-only switches: when the Admin section is hidden (production without
+  // the `pf:admin` opt-in) a value stored before it was hidden must not stick —
+  // the user would have no control left to change it back. Defaults apply.
   contextMenuEnabled:
-    safeStorage.get("pf:context-menu") !== "false",
+    !adminSettingsAvailable() || safeStorage.get("pf:context-menu") !== "false",
   consoleEnabled:
-    safeStorage.get("pf:console") === "true",
+    adminSettingsAvailable() && safeStorage.get("pf:console") === "true",
   keyboardShortcutsEnabled:
     safeStorage.get("pf:keyboard-shortcuts") !== "false",
   editorFontSize:
