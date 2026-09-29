@@ -6,7 +6,7 @@ import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter
 import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
 import { createAssociationStore, mergeGraphWithAssociations } from "./associations";
 import { createHostBridge } from "./host-bridge";
-import { formatDocumentsForPrompt, PromptFormat } from "./prompt-builder";
+import { formatDocumentsForPrompt, linkedPromptItems, PromptFormat } from "./prompt-builder";
 import { sanitizeCssColor } from "../theme/palette";
 import { warnDeprecated } from "./deprecation";
 
@@ -327,19 +327,8 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
 
           if (includeLinked) {
             const graph = handle.getGraph();
-            const linkedIds = new Set<string>();
-            
-            for (const edge of graph.edges || []) {
-              if (edge.source === activeDoc.id) linkedIds.add(edge.target);
-              if (edge.target === activeDoc.id) linkedIds.add(edge.source);
-            }
-            
-            for (const id of linkedIds) {
-              const doc = internalRef.current?.getDocById?.(id);
-              if (doc) {
-                items.push({ doc });
-              }
-            }
+            const getDocById = internalRef.current?.getDocById;
+            if (getDocById) items.push(...(await linkedPromptItems(graph.edges || [], activeDoc.id, getDocById)));
           }
 
           const prompt = formatDocumentsForPrompt(items, { format: format as PromptFormat, preamble });
