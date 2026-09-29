@@ -149,11 +149,17 @@ runCase("stress", async (rep, onClose) => {
   // survive that: every note drawn exactly once and still measurable, nothing
   // drawn over a label, and the pointer and the wheel still reaching the note
   // under them. Content, not timing — cases/perf-map.mjs measures the timing.
+  //
+  // The library has NO folders, on purpose: with sixty folders in the world the
+  // map gives 2,000 notes, the containers overlap and the map vetoes nearly
+  // every name (measured: no labels at any zoom, in the build before the scale
+  // work too) — and a check that nothing is drawn over a label is vacuous on a
+  // map that draws no labels. Zoomed in, this one places dozens.
   {
     const srv = await serve(APP_DIR);
     const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
-    const { docs, folderTree } = mapLibrary(2000);
+    const { docs, folderTree } = mapLibrary(2000, { folders: false });
     await seedFresh(pg, srv.port, docs, folderTree);
     await boot(pg, srv.port, { mode: "Split", settle: 14000 });
     await pg.keyboard.press("Control+Shift+G");
@@ -172,10 +178,10 @@ runCase("stress", async (rep, onClose) => {
     rep.check("2,000 notes: every note is drawn, exactly once",
       !!m && m.documents === 2000 && m.drawn === m.documents && m.batched === m.documents && m.batchedUnique === m.batched,
       JSON.stringify(m && { documents: m.documents, drawn: m.drawn, batched: m.batched, unique: m.batchedUnique, error: m.error }));
+    // (At the overview a 2,000-note map is too dense to name anything; the
+    // label checks are made zoomed in, below, where names are actually placed.)
     const noLabelCovered = (c) => !!c && c.labelLabel === 0 && c.labelDot === 0 && c.labelChip === 0
       && c.labelEdge === 0 && c.strangerLabel === 0;
-    rep.check("2,000 notes: no label drawn over a label, a dot, a chip, a stranger's container or the canvas edge",
-      noLabelCovered(m?.count), JSON.stringify(m?.count));
 
     // A dot in the middle of the canvas that is drawn in the batch, not in full.
     const target = await pg.evaluate(() => {
@@ -216,9 +222,15 @@ runCase("stress", async (rep, onClose) => {
     await pg.mouse.wheel(0, -480);
     const after = await untilValue(zoomLabel, (t) => !!t && t !== before, { timeout: 5000 });
     rep.check("2,000 notes: the wheel zooms the map", !!after && after !== before, `${before} → ${after}`);
+    // Close in, where there is room for names — and the placer has to find it.
+    for (let i = 0; i < 6; i++) {
+      await pg.locator('button[aria-label="Zoom in"]').first().click();
+      await pg.waitForTimeout(150);
+    }
     await pg.waitForTimeout(800);
     const zoomed = await pg.evaluate(measureMap);
-    rep.check("2,000 notes, zoomed in: still no label drawn over anything", noLabelCovered(zoomed?.count), JSON.stringify(zoomed?.count));
+    rep.check("2,000 notes, zoomed in: names are placed, and none is drawn over anything",
+      (zoomed?.labels ?? 0) > 0 && noLabelCovered(zoomed?.count), JSON.stringify({ labels: zoomed?.labels, ...zoomed?.count }));
     await browser.close(); srv.close();
   }
 

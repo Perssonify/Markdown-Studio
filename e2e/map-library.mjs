@@ -40,10 +40,14 @@ const FOLDER_NAMES = ["Projects", "Meetings", "Research", "Journal", "Clients", 
  * note's own folder and otherwise preferential towards low-numbered "hub"
  * notes; ~6% of notes link to nothing and ~3% carry a broken link.
  *
- * Returns `{ docs, folderTree }`, both for
- * `seedFresh()`.
+ * `folders: false` files nothing: every note at the root, links still
+ * hub-and-cluster. (Sixty skewed folders in the world the map gives 2,000 notes
+ * overlap one another, and the map then vetoes nearly every name — so a case
+ * that checks how LABELS are placed at that scale needs a library without.)
+ *
+ * Returns `{ docs, folderTree }`, both for `seedFresh()`.
  */
-export function mapLibrary(n, { seed = 7 } = {}) {
+export function mapLibrary(n, { seed = 7, folders: withFolders = true } = {}) {
   const rand = prng(seed + n);
   const pick = (xs) => xs[Math.floor(rand() * xs.length)];
   const titles = Array.from({ length: n }, (_, i) =>
@@ -58,7 +62,7 @@ export function mapLibrary(n, { seed = 7 } = {}) {
   const docParents = {};
   const members = folders.map(() => []);
   for (let i = 0; i < n; i++) {
-    if (rand() < 0.25) continue; // stays at the root
+    if (rand() < 0.25 || !withFolders) continue; // stays at the root
     const f = Math.min(folderCount - 1, Math.floor(folderCount * Math.pow(rand(), 1.6)));
     docParents[`e2e-map-${i + 1}`] = folders[f].id;
     members[f].push(i);
@@ -85,7 +89,7 @@ export function mapLibrary(n, { seed = 7 } = {}) {
     return { id: `e2e-map-${i + 1}`, title, canonical: { type: "doc", content } };
   });
 
-  return { docs, folderTree: { folders, docParents, docOrder: {}, expanded: {} } };
+  return { docs, folderTree: { folders: withFolders ? folders : [], docParents, docOrder: {}, expanded: {} } };
 }
 
 /**
