@@ -7,6 +7,7 @@ import { Check, Copy } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { APP_NAME } from "../constants";
 import { PALETTES } from "../theme/palette";
+import { adsAvailable } from "../utils/build-gates";
 
 type ViewMode = "split" | "md" | "html";
 type ThemeOpt = "light" | "dark";
@@ -170,12 +171,19 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
   const bgValue = bgMode === "transparent" ? "transparent" : bgColor.trim();
   const importTrimmed = importUrl.trim();
 
+  // The `ads` parameter only exists in development builds (A078): production
+  // ignores it, so offering it here would build links that do nothing — or, in
+  // a dev build shared by mistake, links that dress the product in placeholder
+  // ad slots.
+  const showAdsParam = adsAvailable();
+  const adsOn = showAdsParam && on.ads;
+
   const { appUrl, embedSnippet } = useMemo(() => {
     // Standalone link — only the params the standalone app actually reads.
     const app = new URLSearchParams();
     if (on.view_mode) app.set("view_mode", viewMode);
     if (on.readonly) app.set("readonly", readonly);
-    if (on.ads) app.set("ads", ads);
+    if (adsOn) app.set("ads", ads);
     if (on.import_url && importTrimmed) app.set("import_url", importTrimmed);
     const appQs = app.toString();
     const appUrl = `${origin}${root}${appQs ? `?${appQs}` : ""}`;
@@ -185,7 +193,7 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
     const emb = new URLSearchParams();
     if (on.view_mode) emb.set("view_mode", viewMode);
     if (on.readonly) emb.set("readonly", readonly);
-    if (on.ads) emb.set("ads", ads);
+    if (adsOn) emb.set("ads", ads);
     if (on.theme) emb.set("theme", theme);
     if (on.accent) {
       if (accentMode === "palette") emb.set("accent", accent);
@@ -197,7 +205,7 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
     const embedUrl = `${origin}${root}embed.html${embQs ? `?${embQs}` : ""}`;
     const embedSnippet = `<iframe src="${embedUrl}" width="100%" height="600" style="border:0" title="${APP_NAME}"></iframe>`;
     return { appUrl, embedSnippet };
-  }, [origin, root, on, viewMode, readonly, ads, importTrimmed, theme, accentMode, accent, accentColor, chrome, bgValue]);
+  }, [origin, root, on, adsOn, viewMode, readonly, ads, importTrimmed, theme, accentMode, accent, accentColor, chrome, bgValue]);
 
   const copy = async (text: string, which: "app" | "embed") => {
     try {
@@ -238,9 +246,11 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
         <ParamRow pk="readonly" label="Read-only" hint="readonly=true — editing off, view mode locked" checked={on.readonly} onToggle={toggle("readonly")}>
           <Segmented disabled={!on.readonly} value={readonly} onChange={setReadonly} options={[{ v: "true", label: "On" }, { v: "false", label: "Off" }]} />
         </ParamRow>
-        <ParamRow pk="ads" label="Ads" hint="ads=true — show the optional support ads" checked={on.ads} onToggle={toggle("ads")}>
-          <Segmented disabled={!on.ads} value={ads} onChange={setAds} options={[{ v: "true", label: "On" }, { v: "false", label: "Off" }]} />
-        </ParamRow>
+        {showAdsParam && (
+          <ParamRow pk="ads" label="Ads" scope="dev only" hint="ads=true — show the placeholder ad slots (development builds)" checked={on.ads} onToggle={toggle("ads")}>
+            <Segmented disabled={!on.ads} value={ads} onChange={setAds} options={[{ v: "true", label: "On" }, { v: "false", label: "Off" }]} />
+          </ParamRow>
+        )}
         <ParamRow
           pk="import_url"
           label="Import URL"

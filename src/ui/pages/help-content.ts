@@ -54,7 +54,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Right-click menu — right-click in either pane for format, insert, link, and clipboard actions in context.",
           "Status bar (bottom) — the active document, current view mode, document-link count, save state, and word/character counts. Two warnings can appear beside them: a fidelity note (e.g. “2 colors, 1 alignment not in MD”) when the open document holds formatting the Markdown pane cannot write, and a “N residuals” button — click it — listing what an import could not bring across. It sheds the least-important details first as the window narrows so it stays readable on phones.",
           "Pane headers — the Markdown pane's header carries the Styled switch (and, in Split, a scroll-sync toggle); the rich pane's carries an images on/off toggle and Styled paste.",
-          "Panel tray — the “Panel” chevron button at the far-left of the status bar expands a tabbed tray (Document Links; a read-only Console tab appears when enabled in Settings ▸ Admin). Click it (or the links count) to open, and again to collapse.",
+          "Panel tray — the “Panel” chevron button at the far-left of the status bar expands a tabbed tray (Document Links, plus a read-only diagnostics Console tab when it has been switched on for a support session). Click it (or the links count) to open, and again to collapse.",
         ],
       },
       {
@@ -190,7 +190,6 @@ export const HELP_SECTIONS: HelpSection[] = [
         list: [
           "view_mode=md | html | split — which pane(s) to show on open (split is the default).",
           "readonly=true — open read-only: editing is disabled, the formatting toolbar is hidden, and the view mode is locked (the menu bar and reading stay available).",
-          "ads=true — show the optional support ads (off by default; never shown in embeds).",
           "import_url=<link> — open the importer pre-filled with that link (top-level documents only). You review it and press Fetch; the link never fetches by itself.",
         ],
       },
