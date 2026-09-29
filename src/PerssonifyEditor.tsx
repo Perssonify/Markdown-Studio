@@ -113,7 +113,7 @@ export function PerssonifyEditor({
 
   // ── Stores ────────────────────────────────────────────────────────────────
   // Shallow selectors, NOT whole-store subscriptions: a bare useXStore() call
-  // re-renders this 1500-line component on EVERY store write — which meant ≥2
+  // re-renders this whole component on EVERY store write — which meant ≥2
   // full re-renders per keystroke (setDirty, setActiveFormats, updateCounts…).
   // Zustand actions are stable references, so including them in the shallow
   // object is free; only the listed STATE fields trigger renders now.
@@ -205,8 +205,10 @@ export function PerssonifyEditor({
 
   const [showSearch, setShowSearch] = useState(false);
   const [findSeed, setFindSeed] = useState("");
-  // Stable indirection to the multi-doc zip exporter (defined below handleAction),
-  // so handleAction can trigger "export all" without a forward dependency.
+  // Stable indirection to the multi-doc zip exporter, so handleAction
+  // (useEditorActions) can trigger "export all" / "full backup" without a
+  // forward dependency: useExportActions, called after it, points this at
+  // handleExportDocs on every render.
   const exportDocsRef = useRef<(ids: string[], zipName: string, opts?: { canonical?: boolean }) => Promise<number> | void>(() => {});
 
   // ── Engine
