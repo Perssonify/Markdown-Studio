@@ -23,12 +23,13 @@ import { cn } from "@/lib/utils";
 import type { DocumentSummary } from "@/store/document";
 import { useUIStore } from "@/store/uiStore";
 import {
+  type BuiltTree,
   buildFolderTree,
   docOrderKey,
   type FolderRecord,
-  type FolderTreeNode,
   useFolderStore,
 } from "@/store/folders";
+import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import {
   ArchiveIcon,
   ChevronDownIcon,
@@ -44,7 +45,16 @@ import {
   MoreVerticalIcon,
   Trash2Icon,
 } from "lucide-react";
-import { type DragEvent as ReactDragEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import React, {
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   computeDropZone,
   type DropZone,
@@ -53,20 +63,8 @@ import {
   setDragPayload,
   spliceOrder,
 } from "./folder-dnd";
-
-function timeAgo(date: Date | number | string): string {
-  const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (s < 60) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo}mo ago`;
-  return `${Math.floor(mo / 12)}y ago`;
-}
+import { timeAgo } from "./relative-time";
+import { useFocusRowAfterRender, useWindowedList } from "./use-windowed-list";
 
 export type ExportDocFormat = "md" | "html" | "docx" | "json";
 
@@ -83,6 +81,9 @@ interface FolderTreeProps {
   /** Confirm before deleting a folder. Resolves true to proceed. When omitted,
    *  deletion proceeds without confirmation (kept optional for tests). */
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
+  /** The element the tree scrolls inside, for windowing (A082). Without it the
+   *  tree's own container is used. */
+  scrollRef?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -114,89 +115,181 @@ const CONTEXT_FAM: MenuFam = {
   Separator: ContextMenuSeparator,
 };
 
-/** Wrap a library row so right-click / long-press opens `menu`. Honors the
- *  admin `contextMenuEnabled` flag (off → native browser menu). The trigger
- *  uses display:contents so it adds no box and leaves the row's own layout,
- *  ref, and drag handlers untouched. */
-function RowContextMenu({ menu, children }: { menu: ReactNode; children: ReactNode }) {
-  const enabled = useUIStore((s) => s.contextMenuEnabled);
-  if (!enabled) return <>{children}</>;
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger render={<div style={{ display: "contents" }} />}>
-        {children}
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-44">{menu}</ContextMenuContent>
-    </ContextMenu>
-  );
-}
+// ── The tree as a flat list of VISIBLE rows ────────────────────────────────
 
-export function FolderTree(props: FolderTreeProps) {
-  const folders = useFolderStore((s) => s.folders);
-  const docParents = useFolderStore((s) => s.docParents);
-  const docOrder = useFolderStore((s) => s.docOrder);
-  const moveDoc = useFolderStore((s) => s.moveDoc);
-  const moveFolder = useFolderStore((s) => s.moveFolder);
-  const tree = buildFolderTree(props.documents, folders, docParents, docOrder);
-  const [rootOver, setRootOver] = useState(false);
+export type TreeRow =
+  | {
+      kind: "folder";
+      key: string;
+      id: string;
+      folder: FolderRecord;
+      depth: number;
+      expanded: boolean;
+      /** Child folders + documents, shown beside the name. */
+      count: number;
+      parentIndex: number | null;
+      posinset: number;
+      setsize: number;
+      siblingFolderIds: string[];
+    }
+  | {
+      kind: "doc";
+      key: string;
+      id: string;
+      doc: DocumentSummary;
+      depth: number;
+      folderId: string | null;
+      parentIndex: number | null;
+      posinset: number;
+      setsize: number;
+      siblingDocIds: string[];
+    };
 
-  const rootFolderIds = tree.rootFolders.map((n) => n.folder.id);
-  const rootDocIds = tree.rootDocs.map((d) => d.id);
+export const folderRowKey = (id: string) => `f:${id}`;
+export const docRowKey = (id: string) => `d:${id}`;
 
-  const dropToRoot = (e: ReactDragEvent) => {
-    const p = getDragPayload(e);
-    setRootOver(false);
-    if (!p) return;
-    e.preventDefault();
-    if (p.kind === "doc") moveDoc(p.id, null);
-    else moveFolder(p.id, null);
+/**
+ * Flatten the folder tree into the rows a user can currently SEE (children of
+ * collapsed folders are omitted), in display order.
+ *
+ * A082/A094. The tree used to be nested DOM, which cannot be windowed and
+ * which gave arrow-key navigation nothing to walk. A flat row list is both:
+ * windowing renders a slice of it, and "next row" is `index + 1`. The
+ * hierarchy survives as data — depth, parent, position among siblings — and
+ * reaches assistive tech as aria-level / aria-posinset / aria-setsize, the
+ * form ARIA specifies for a tree whose structure is not expressed by nesting.
+ */
+export function flattenTree(tree: BuiltTree, expanded: Record<string, boolean>): TreeRow[] {
+  const rows: TreeRow[] = [];
+  const walk = (
+    folders: BuiltTree["rootFolders"],
+    docs: DocumentSummary[],
+    depth: number,
+    parentIndex: number | null,
+    parentFolderId: string | null,
+  ) => {
+    const setsize = folders.length + docs.length;
+    const siblingFolderIds = folders.map((n) => n.folder.id);
+    const siblingDocIds = docs.map((d) => d.id);
+    folders.forEach((node, i) => {
+      const isOpen = !!expanded[node.folder.id];
+      const index = rows.length;
+      rows.push({
+        kind: "folder",
+        key: folderRowKey(node.folder.id),
+        id: node.folder.id,
+        folder: node.folder,
+        depth,
+        expanded: isOpen,
+        count: node.docs.length + node.children.length,
+        parentIndex,
+        posinset: i + 1,
+        setsize,
+        siblingFolderIds,
+      });
+      if (isOpen) walk(node.children, node.docs, depth + 1, index, node.folder.id);
+    });
+    docs.forEach((doc, i) => {
+      rows.push({
+        kind: "doc",
+        key: docRowKey(doc.id),
+        id: doc.id,
+        doc,
+        depth,
+        folderId: parentFolderId,
+        parentIndex,
+        posinset: folders.length + i + 1,
+        setsize,
+        siblingDocIds,
+      });
+    });
   };
-
-  return (
-    <div
-      role="tree"
-      aria-label="Document folders"
-      className="flex min-h-[80px] flex-col gap-0.5"
-      onDragOver={(e) => {
-        if (hasDragItem(e)) e.preventDefault();
-      }}
-      onDrop={dropToRoot}
-      onDragEnd={() => setRootOver(false)}
-    >
-      {tree.rootFolders.map((node) => (
-        <FolderNode
-          key={node.folder.id}
-          node={node}
-          depth={0}
-          siblingFolderIds={rootFolderIds}
-          {...props}
-        />
-      ))}
-      {tree.rootDocs.map((doc) => (
-        <DocRow key={doc.id} doc={doc} depth={0} folderId={null} siblingDocIds={rootDocIds} {...props} />
-      ))}
-      {/* Always-available drop target so items can be dragged OUT to the top level. */}
-      <div
-        aria-hidden={!rootOver}
-        onDragOver={(e) => {
-          if (hasDragItem(e)) {
-            e.preventDefault();
-            e.stopPropagation();
-            setRootOver(true);
-          }
-        }}
-        onDragLeave={() => setRootOver(false)}
-        onDrop={dropToRoot}
-        className={cn(
-          "mt-1 flex-1 rounded-md border border-dashed border-transparent px-2 py-3 text-center text-[10px] text-muted-foreground/50 transition-colors",
-          rootOver && "border-primary/50 bg-primary/5 text-muted-foreground"
-        )}
-      >
-        {rootOver ? "Drop here to move to top level" : " "}
-      </div>
-    </div>
-  );
+  walk(tree.rootFolders, tree.rootDocs, 0, null, null);
+  return rows;
 }
+
+export type TreeKeyAction =
+  | { type: "focus"; index: number }
+  | { type: "expand"; index: number }
+  | { type: "collapse"; index: number }
+  | { type: "activate"; index: number };
+
+/**
+ * The WAI-ARIA tree keyboard model over the flat rows (A094 — the tree claimed
+ * role="tree" but the arrow keys did nothing).
+ *  ↑ / ↓        previous / next visible row
+ *  Home / End   first / last row
+ *  →            closed folder: open it · open folder: first child
+ *  ←            open folder: close it · anything else: its parent folder
+ *  Enter/Space  open the document · toggle the folder
+ */
+export function treeKeyAction(rows: TreeRow[], index: number, key: string): TreeKeyAction | null {
+  const row = rows[index];
+  if (!row) return null;
+  switch (key) {
+    case "ArrowDown":
+      return index + 1 < rows.length ? { type: "focus", index: index + 1 } : null;
+    case "ArrowUp":
+      return index > 0 ? { type: "focus", index: index - 1 } : null;
+    case "Home":
+      return index !== 0 ? { type: "focus", index: 0 } : null;
+    case "End":
+      return index !== rows.length - 1 ? { type: "focus", index: rows.length - 1 } : null;
+    case "ArrowRight":
+      if (row.kind !== "folder") return null;
+      if (!row.expanded) return { type: "expand", index };
+      return rows[index + 1]?.parentIndex === index ? { type: "focus", index: index + 1 } : null;
+    case "ArrowLeft":
+      if (row.kind === "folder" && row.expanded) return { type: "collapse", index };
+      return row.parentIndex !== null ? { type: "focus", index: row.parentIndex } : null;
+    case "Enter":
+    case " ":
+      return { type: "activate", index };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Where a drag dropped on a DOCUMENT row goes. A doc is re-ordered among its
+ * siblings. A FOLDER goes into the doc's folder (A066) — the same "this row's
+ * container" rule a folder row applies to a dropped doc. It used to fall
+ * through un-handled, bubble to the tree root's drop-to-root handler and land
+ * at the TOP LEVEL, which is where the user had pointedly not dropped it.
+ */
+export function docRowDrop(
+  payload: { kind: "doc" | "folder"; id: string },
+  target: { docId: string; folderId: string | null; siblingDocIds: string[] },
+  zone: DropZone | null,
+):
+  | { kind: "reorderDoc"; folderId: string | null; order: string[] }
+  | { kind: "moveFolder"; parentId: string | null }
+  | { kind: "none" } {
+  if (payload.kind === "folder") return { kind: "moveFolder", parentId: target.folderId };
+  if (payload.id === target.docId) return { kind: "none" };
+  return {
+    kind: "reorderDoc",
+    folderId: target.folderId,
+    order: spliceOrder(target.siblingDocIds, payload.id, target.docId, zone === "after" ? "after" : "before"),
+  };
+}
+
+/** Re-render relative times ("5m ago") once a minute. Rows are memoized now,
+ *  so they no longer refresh as a side effect of every autosave. */
+function useMinuteTick(): number {
+  const [tick, setTick] = useState(() => Math.floor(Date.now() / 60_000));
+  useEffect(() => {
+    const t = setInterval(() => setTick(Math.floor(Date.now() / 60_000)), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  return tick;
+}
+
+// ── Menus: ONE of each for the whole tree (A082) ────────────────────────────
+
+type RowMenuPayload =
+  | { kind: "doc"; id: string; folderId: string | null }
+  | { kind: "folder"; id: string };
 
 function MoveToMenu({
   F,
@@ -308,14 +401,14 @@ function DocMenuBody({
 /** Folder row menu items, rendered into either primitive family. */
 function FolderMenuBody({
   F,
-  node,
+  folder,
   count,
   startRename,
   onExportFolder,
   confirmDeleteFolder,
 }: {
   F: MenuFam;
-  node: FolderTreeNode;
+  folder: FolderRecord;
   count: number;
   startRename: () => void;
   onExportFolder?: (folderId: string, opts?: { canonical?: boolean }) => void;
@@ -326,7 +419,7 @@ function FolderMenuBody({
   const deleteFolder = useFolderStore((s) => s.deleteFolder);
   return (
     <>
-      <F.Item onClick={() => createFolder("New Folder", node.folder.id, { startNaming: true })}>
+      <F.Item onClick={() => createFolder("New Folder", folder.id, { startNaming: true })}>
         <FolderPlusIcon className="mr-2 size-3.5" />
         New subfolder
       </F.Item>
@@ -336,19 +429,19 @@ function FolderMenuBody({
       </F.Item>
       <MoveToMenu
         F={F}
-        onMove={(pid) => moveFolder(node.folder.id, pid)}
+        onMove={(pid) => moveFolder(folder.id, pid)}
         onNewFolderHere={() => {
-          const id = createFolder("New Folder", node.folder.parentId, { startNaming: true });
-          moveFolder(node.folder.id, id);
+          const id = createFolder("New Folder", folder.parentId, { startNaming: true });
+          moveFolder(folder.id, id);
         }}
       />
       {onExportFolder && (
         <>
-          <F.Item onClick={() => onExportFolder(node.folder.id)}>
+          <F.Item onClick={() => onExportFolder(folder.id)}>
             <FolderDownIcon className="mr-2 size-3.5" />
             Export as ZIP
           </F.Item>
-          <F.Item onClick={() => onExportFolder(node.folder.id, { canonical: true })}>
+          <F.Item onClick={() => onExportFolder(folder.id, { canonical: true })}>
             <ArchiveIcon className="mr-2 size-3.5" />
             Full backup (.zip)
           </F.Item>
@@ -358,8 +451,8 @@ function FolderMenuBody({
       <F.Item
         className="text-destructive focus:text-destructive"
         onClick={async () => {
-          const ok = confirmDeleteFolder ? await confirmDeleteFolder(node.folder.name, count) : true;
-          if (ok) deleteFolder(node.folder.id);
+          const ok = confirmDeleteFolder ? await confirmDeleteFolder(folder.name, count) : true;
+          if (ok) deleteFolder(folder.id);
         }}
       >
         <Trash2Icon className="mr-2 size-3.5" />
@@ -377,221 +470,199 @@ function dropClasses(zone: DropZone | null): string {
   return "";
 }
 
-function FolderNode({
-  node,
-  depth,
-  siblingFolderIds,
-  ...props
-}: { node: FolderTreeNode; depth: number; siblingFolderIds: string[] } & FolderTreeProps) {
-  const expanded = useFolderStore((s) => s.expanded[node.folder.id] ?? false);
-  const toggleExpanded = useFolderStore((s) => s.toggleExpanded);
-  const renameFolder = useFolderStore((s) => s.renameFolder);
-  const moveFolder = useFolderStore((s) => s.moveFolder);
-  const moveDoc = useFolderStore((s) => s.moveDoc);
-  const setFolderOrder = useFolderStore((s) => s.setFolderOrder);
-  const lastCreatedFolderId = useFolderStore((s) => s.lastCreatedFolderId);
-  const consumeLastCreatedFolder = useFolderStore((s) => s.consumeLastCreatedFolder);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(node.folder.name);
-  const [zone, setZone] = useState<DropZone | null>(null);
-  const rowRef = useRef<HTMLDivElement>(null);
-  const count = node.docs.length + node.children.length;
-  const startRename = () => {
-    setName(node.folder.name);
-    setEditing(true);
-  };
-  const menuBody = (F: MenuFam) => (
-    <FolderMenuBody
-      F={F}
-      node={node}
-      count={count}
-      startRename={startRename}
-      onExportFolder={props.onExportFolder}
-      confirmDeleteFolder={props.confirmDeleteFolder}
-    />
-  );
-
-  useEffect(() => {
-    if (lastCreatedFolderId === node.folder.id) {
-      setName(node.folder.name);
-      setEditing(true);
-      consumeLastCreatedFolder();
-    }
-  }, [lastCreatedFolderId, node.folder.id, node.folder.name, consumeLastCreatedFolder]);
-
-  return (
-    /* `aria-level` is required on a treeitem whose depth is expressed by
-       styling rather than by DOM nesting of groups. */
-    <div role="treeitem" aria-expanded={expanded} aria-level={depth + 1} aria-label={node.folder.name}>
-      <RowContextMenu menu={menuBody(CONTEXT_FAM)}>
-      <div
-        ref={rowRef}
-        draggable={!editing}
-        onDragStart={(e) => {
-          e.stopPropagation();
-          setDragPayload(e, { kind: "folder", id: node.folder.id });
-        }}
-        onDragOver={(e) => {
-          if (!hasDragItem(e) || !rowRef.current) return;
-          e.preventDefault();
-          e.stopPropagation();
-          // Drag kind isn't readable during dragover (protected mode), so show the
-          // 3-zone folder indicator; a doc drop is coerced to "into" in onDrop.
-          setZone(computeDropZone(e, rowRef.current, true));
-        }}
-        onDragLeave={() => setZone(null)}
-        onDrop={(e) => {
-          const p = getDragPayload(e);
-          const z = zone;
-          setZone(null);
-          if (!p) return;
-          e.preventDefault();
-          e.stopPropagation();
-          if (p.kind === "doc") {
-            // Docs always drop INTO the folder (reordering happens among doc rows).
-            moveDoc(p.id, node.folder.id);
-            return;
-          }
-          // Folder payload
-          if (p.id === node.folder.id) return;
-          if (z === "into") {
-            moveFolder(p.id, node.folder.id);
-          } else {
-            // Reorder before/after this folder within its sibling group.
-            moveFolder(p.id, node.folder.parentId);
-            setFolderOrder(spliceOrder(siblingFolderIds, p.id, node.folder.id, z === "after" ? "after" : "before"));
-          }
-        }}
-        className={cn(
-          "group/folder flex select-none items-center gap-1 rounded-md px-1 py-1 hover:bg-sidebar-accent",
-          !editing && "cursor-grab active:cursor-grabbing",
-          dropClasses(zone)
-        )}
-        style={{ paddingLeft: depth * 12 + 4 }}
-      >
-        <button
-          type="button"
-          onClick={() => toggleExpanded(node.folder.id)}
-          className="flex size-4 items-center justify-center text-muted-foreground"
-          aria-label={expanded ? "Collapse" : "Expand"}
-        >
-          {expanded ? (
-            <ChevronDownIcon className="size-3.5" />
-          ) : (
-            <ChevronRightIcon className="size-3.5" />
-          )}
-        </button>
-        <FolderIcon className="size-3.5 shrink-0 text-primary/70" />
-        {editing ? (
-          <Input
-            autoFocus
-            onFocus={(e) => e.target.select()}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => {
-              renameFolder(node.folder.id, name);
-              setEditing(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                renameFolder(node.folder.id, name);
-                setEditing(false);
-              }
-              if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
-            }}
-            className="h-6 flex-1 text-[12px]!"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => toggleExpanded(node.folder.id)}
-            // A5: `truncate` with no `title` leaves a clipped name unreadable —
-            // and folder names nest, so the deeper ones are clipped soonest.
-            title={node.folder.name}
-            className="flex-1 truncate text-left text-xs font-medium text-foreground"
-          >
-            {node.folder.name}
-            <span className="ml-1.5 text-[10px] text-muted-foreground/70">
-              {count || ""}
-            </span>
-          </button>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                title="Folder options"
-                className="flex size-5 items-center justify-center rounded p-0 text-muted-foreground opacity-0 hover:bg-sidebar-accent group-hover/folder:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
-              />
-            }
-          >
-            <MoreVerticalIcon className="size-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            {menuBody(DROPDOWN_FAM)}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      </RowContextMenu>
-      {expanded && (
-        /* role="group" is REQUIRED between a treeitem and its child treeitems.
-           Without it the children were direct descendants of the item, so the
-           tree reported a flat list of siblings and the folder structure — the
-           only reason this is a tree at all — was invisible to a screen reader. */
-        <div role="group">
-          {node.children.map((child) => (
-            <FolderNode
-              key={child.folder.id}
-              node={child}
-              depth={depth + 1}
-              siblingFolderIds={node.children.map((c) => c.folder.id)}
-              {...props}
-            />
-          ))}
-          {node.docs.map((doc) => (
-            <DocRow
-              key={doc.id}
-              doc={doc}
-              depth={depth + 1}
-              folderId={node.folder.id}
-              siblingDocIds={node.docs.map((d) => d.id)}
-              {...props}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+/** Everything a row can ask of the tree. ONE object for every row, with a
+ *  stable identity, so the memoized rows do not re-render when the tree does. */
+interface RowHandlers {
+  select: (docId: string) => void;
+  toggle: (folderId: string) => void;
+  renameDoc: (docId: string, title: string) => void;
+  renameFolder: (folderId: string, name: string) => void;
+  endRename: (key: string) => void;
+  dragStart: (e: ReactDragEvent, kind: "doc" | "folder", id: string) => void;
+  dropOnRow: (e: ReactDragEvent, key: string, zone: DropZone | null) => void;
+  menuOpened: (key: string) => void;
+  menuHandle: MenuPrimitive.Handle<RowMenuPayload>;
 }
 
-function DocRow({
-  doc,
-  depth,
-  folderId,
-  siblingDocIds,
-  activeDocId,
-  onSelect,
-  onRename,
-  onDelete,
-  onDuplicate,
-  onExportDoc,
-}: {
-  doc: DocumentSummary;
-  depth: number;
-  folderId: string | null;
-  siblingDocIds: string[];
-} & FolderTreeProps) {
-  const moveDoc = useFolderStore((s) => s.moveDoc);
-  const setDocOrder = useFolderStore((s) => s.setDocOrder);
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(doc.title);
+/** Drop-target plumbing shared by both row kinds: the zone indicator is local
+ *  state, so only the row under the pointer re-renders during a drag. */
+function useRowDrop(
+  rowRef: RefObject<HTMLDivElement | null>,
+  isFolder: boolean,
+  onDrop: (e: ReactDragEvent, zone: DropZone | null) => void,
+) {
   const [zone, setZone] = useState<DropZone | null>(null);
-  const rowRef = useRef<HTMLDivElement>(null);
-  const isActive = doc.id === activeDocId;
-  const startRename = () => {
-    setTitle(doc.title);
-    setEditing(true);
+  const zoneRef = useRef<DropZone | null>(null);
+  return {
+    zone,
+    dnd: {
+      onDragOver: (e: ReactDragEvent) => {
+        if (!hasDragItem(e) || !rowRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        // Drag kind isn't readable during dragover (protected mode); a folder
+        // row shows the 3-zone indicator and a doc drop is coerced to "into".
+        const z = computeDropZone(e, rowRef.current, isFolder);
+        zoneRef.current = z;
+        setZone(z);
+      },
+      onDragLeave: () => { zoneRef.current = null; setZone(null); },
+      onDrop: (e: ReactDragEvent) => {
+        const z = zoneRef.current;
+        zoneRef.current = null;
+        setZone(null);
+        onDrop(e, z);
+      },
+    },
   };
+}
+
+interface FolderRowProps {
+  rowKey: string;
+  id: string;
+  name: string;
+  depth: number;
+  expanded: boolean;
+  count: number;
+  posinset: number;
+  setsize: number;
+  tabbable: boolean;
+  editing: boolean;
+  handlers: RowHandlers;
+}
+
+const FolderRow = React.memo(function FolderRow({
+  rowKey, id, name, depth, expanded, count, posinset, setsize, tabbable, editing, handlers,
+}: FolderRowProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState(name);
+  useEffect(() => { if (editing) setDraft(name); }, [editing, name]);
+  const onDrop = useCallback(
+    (e: ReactDragEvent, z: DropZone | null) => handlers.dropOnRow(e, rowKey, z),
+    [handlers, rowKey],
+  );
+  const { zone, dnd } = useRowDrop(rowRef, true, onDrop);
+  const commit = () => { handlers.renameFolder(id, draft); handlers.endRename(rowKey); };
+
+  return (
+    /* A flat treeitem: its depth is aria-level and its place among siblings is
+       aria-posinset / aria-setsize — required when the hierarchy is not
+       expressed by nesting role="group" elements, and a windowed list cannot
+       nest (A082). */
+    <div
+      ref={rowRef}
+      role="treeitem"
+      data-key={rowKey}
+      aria-level={depth + 1}
+      aria-posinset={posinset}
+      aria-setsize={setsize}
+      aria-expanded={expanded}
+      aria-label={name}
+      tabIndex={tabbable ? 0 : -1}
+      draggable={!editing}
+      onDragStart={(e) => handlers.dragStart(e, "folder", id)}
+      {...dnd}
+      className={cn(
+        "group/folder flex select-none items-center gap-1 rounded-md px-1 py-1 hover:bg-sidebar-accent",
+        !editing && "cursor-grab active:cursor-grabbing",
+        dropClasses(zone)
+      )}
+      style={{ paddingLeft: depth * 12 + 4 }}
+    >
+      {/* Pointer affordances only: inside a tree the ROW is the tab stop and
+          the arrow keys expand/collapse, so these are not in the Tab order. */}
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => handlers.toggle(id)}
+        className="flex size-4 items-center justify-center text-muted-foreground"
+        aria-hidden
+      >
+        {expanded ? <ChevronDownIcon className="size-3.5" /> : <ChevronRightIcon className="size-3.5" />}
+      </button>
+      <FolderIcon className="size-3.5 shrink-0 text-primary/70" />
+      {editing ? (
+        <Input
+          autoFocus
+          aria-label="Folder name"
+          onFocus={(e) => e.target.select()}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") { e.preventDefault(); handlers.endRename(rowKey); }
+          }}
+          className="h-6 flex-1 text-[12px]!"
+        />
+      ) : (
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => handlers.toggle(id)}
+          // A5: `truncate` with no `title` leaves a clipped name unreadable —
+          // and folder names nest, so the deeper ones are clipped soonest.
+          title={name}
+          className="flex-1 truncate text-left text-xs font-medium text-foreground"
+        >
+          {name}
+          <span className="ml-1.5 text-[10px] text-muted-foreground">
+            {count || ""}
+          </span>
+        </button>
+      )}
+      <DropdownMenuTrigger
+        handle={handlers.menuHandle}
+        payload={{ kind: "folder", id }}
+        id={`pf-row-menu-${rowKey}`}
+        tabIndex={-1}
+        onPointerDown={() => handlers.menuOpened(rowKey)}
+        title="Folder options"
+        aria-label={`Options for ${name}`}
+        className="flex size-5 items-center justify-center rounded p-0 text-muted-foreground opacity-0 hover:bg-sidebar-accent group-hover/folder:opacity-100 group-focus-within/folder:opacity-100 aria-expanded:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
+      >
+        <MoreVerticalIcon className="size-3.5" />
+      </DropdownMenuTrigger>
+    </div>
+  );
+});
+
+interface DocRowProps {
+  rowKey: string;
+  id: string;
+  title: string;
+  updated: string;
+  wordCount: number | null | undefined;
+  folderId: string | null;
+  depth: number;
+  posinset: number;
+  setsize: number;
+  isActive: boolean;
+  tabbable: boolean;
+  editing: boolean;
+  /** Minute counter: re-renders the relative time once a minute. */
+  tick: number;
+  handlers: RowHandlers;
+}
+
+/**
+ * A document row. MEMOIZED on primitives (A082): `storage.list()` hands back
+ * a fresh summary object for every document on every save, so a memo keyed on
+ * the summary object would never bail out — every save re-rendered every row.
+ * Keyed on the fields it shows, a save re-renders the one row that changed.
+ */
+const DocRow = React.memo(function DocRow({
+  rowKey, id, title, updated, wordCount, folderId, depth, posinset, setsize,
+  isActive, tabbable, editing, handlers,
+}: DocRowProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState(title);
+  useEffect(() => { if (editing) setDraft(title); }, [editing, title]);
+  const onDrop = useCallback(
+    (e: ReactDragEvent, z: DropZone | null) => handlers.dropOnRow(e, rowKey, z),
+    [handlers, rowKey],
+  );
+  const { zone, dnd } = useRowDrop(rowRef, false, onDrop);
   /**
    * Commit an inline rename, ignoring an empty one.
    *
@@ -601,30 +672,22 @@ function DocRow({
    * no heading could ever heal. The flat list in WorkspacePanel and
    * `renameFolder` both already guard this; only this row did not.
    */
-  const commitRename = () => {
-    const next = title.trim();
-    if (next && next !== doc.title) onRename(doc.id, next);
-    else setTitle(doc.title);
-    setEditing(false);
+  const commit = () => {
+    const next = draft.trim();
+    if (next && next !== title) handlers.renameDoc(id, next);
+    else setDraft(title);
+    handlers.endRename(rowKey);
   };
-  const menuBody = (F: MenuFam) => (
-    <DocMenuBody
-      F={F}
-      docId={doc.id}
-      folderId={folderId}
-      startRename={startRename}
-      onDuplicate={onDuplicate}
-      onDelete={onDelete}
-      onExportDoc={onExportDoc}
-    />
-  );
+  const shown = title || "Untitled";
 
   return (
-    <RowContextMenu menu={menuBody(CONTEXT_FAM)}>
     <div
       ref={rowRef}
       role="treeitem"
+      data-key={rowKey}
       aria-level={depth + 1}
+      aria-posinset={posinset}
+      aria-setsize={setsize}
       /* Both, deliberately. Inside a `role="tree"` the open document IS the
          tree's selection, so `aria-selected` is what an AT user hears on the
          row; `aria-current` is kept to match the flat list in WorkspacePanel,
@@ -632,29 +695,11 @@ function DocRow({
          (CLAUDE.md: keep the two library lists in sync). */
       aria-selected={isActive}
       aria-current={isActive ? "true" : undefined}
+      aria-label={shown}
+      tabIndex={tabbable ? 0 : -1}
       draggable={!editing}
-      onDragStart={(e) => {
-        e.stopPropagation();
-        setDragPayload(e, { kind: "doc", id: doc.id });
-      }}
-      onDragOver={(e) => {
-        if (!hasDragItem(e) || !rowRef.current) return;
-        e.preventDefault();
-        e.stopPropagation();
-        setZone(computeDropZone(e, rowRef.current, false));
-      }}
-      onDragLeave={() => setZone(null)}
-      onDrop={(e) => {
-        const p = getDragPayload(e);
-        const z = zone;
-        setZone(null);
-        if (!p || p.kind !== "doc") return; // only docs reorder among doc rows
-        e.preventDefault();
-        e.stopPropagation();
-        if (p.id === doc.id) return;
-        moveDoc(p.id, folderId); // ensure same folder, then position
-        setDocOrder(docOrderKey(folderId), spliceOrder(siblingDocIds, p.id, doc.id, z === "after" ? "after" : "before"));
-      }}
+      onDragStart={(e) => handlers.dragStart(e, "doc", id)}
+      {...dnd}
       className={cn(
         "group/doc relative flex select-none items-center gap-1 rounded-md px-1 py-1 hover:bg-sidebar-accent",
         !editing && "cursor-grab active:cursor-grabbing",
@@ -674,69 +719,410 @@ function DocRow({
         />
       )}
       <FileTextIcon
-        className={cn("size-3.5 shrink-0", isActive ? "text-primary" : "text-muted-foreground/50")}
+        className={cn("size-3.5 shrink-0", isActive ? "text-primary-strong" : "text-muted-foreground/50")}
       />
       {editing ? (
         <Input
           autoFocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => {
-            commitRename();
-          }}
+          aria-label="Document title"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              commitRename();
-            }
-            if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") { e.preventDefault(); setDraft(title); handlers.endRename(rowKey); }
           }}
           className="h-6 flex-1 text-[12px]!"
         />
       ) : (
         <button
           type="button"
-          onClick={() => onSelect(doc.id)}
+          tabIndex={-1}
+          onClick={() => handlers.select(id)}
           className="flex min-w-0 flex-1 flex-col items-start text-left"
         >
           <span
-            title={doc.title || "Untitled"}
+            title={shown}
             className={cn("w-full truncate text-xs text-foreground", isActive && "font-semibold")}
           >
-            {doc.title || "Untitled"}
+            {shown}
           </span>
-          <span className="flex items-center gap-2 text-muted-foreground/75">
+          {/* A095: 10px metadata at the full --muted-foreground; the 75% alpha
+              it used to carry measured 3.0:1. */}
+          <span className="flex items-center gap-2 text-muted-foreground">
             <span className="flex items-center gap-1 text-[10px]">
               <ClockIcon className="size-2.5!" />
-              {timeAgo(doc.updated)}
+              {timeAgo(updated)}
             </span>
-            {doc.wordCount != null && doc.wordCount > 0 && (
+            {wordCount != null && wordCount > 0 && (
               <span
                 className="flex items-center gap-1 text-[10px]"
-                title={`${doc.wordCount.toLocaleString()} words (last saved)`}
+                title={`${wordCount.toLocaleString()} words (last saved)`}
               >
                 <HashIcon className="size-2.5!" />
-                {doc.wordCount.toLocaleString()} words
+                {wordCount.toLocaleString()} words
               </span>
             )}
           </span>
         </button>
       )}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              title="Document options"
-              className="flex size-5 items-center justify-center rounded p-0 text-muted-foreground opacity-0 hover:bg-sidebar-accent group-hover/doc:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
-            />
-          }
-        >
-          <MoreVerticalIcon className="size-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          {menuBody(DROPDOWN_FAM)}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <DropdownMenuTrigger
+        handle={handlers.menuHandle}
+        payload={{ kind: "doc", id, folderId }}
+        id={`pf-row-menu-${rowKey}`}
+        tabIndex={-1}
+        onPointerDown={() => handlers.menuOpened(rowKey)}
+        title="Document options"
+        aria-label={`Options for ${shown}`}
+        className="flex size-5 items-center justify-center rounded p-0 text-muted-foreground opacity-0 hover:bg-sidebar-accent group-hover/doc:opacity-100 group-focus-within/doc:opacity-100 aria-expanded:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
+      >
+        <MoreVerticalIcon className="size-3.5" />
+      </DropdownMenuTrigger>
     </div>
-    </RowContextMenu>
+  );
+});
+
+export function FolderTree(props: FolderTreeProps) {
+  const folders = useFolderStore((s) => s.folders);
+  const docParents = useFolderStore((s) => s.docParents);
+  const docOrder = useFolderStore((s) => s.docOrder);
+  const expanded = useFolderStore((s) => s.expanded);
+  const lastCreatedFolderId = useFolderStore((s) => s.lastCreatedFolderId);
+  const consumeLastCreatedFolder = useFolderStore((s) => s.consumeLastCreatedFolder);
+  const contextMenuEnabled = useUIStore((s) => s.contextMenuEnabled);
+  const tick = useMinuteTick();
+
+  const tree = useMemo(
+    () => buildFolderTree(props.documents, folders, docParents, docOrder),
+    [props.documents, folders, docParents, docOrder]
+  );
+  const rows = useMemo(() => flattenTree(tree, expanded), [tree, expanded]);
+
+  // What the stable handlers read: always the latest render's.
+  const latest = useRef({ rows, props });
+  latest.current = { rows, props };
+
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [ctxKey, setCtxKey] = useState<string | null>(null);
+  const [rootOver, setRootOver] = useState(false);
+
+  const indexOfKey = useMemo(() => new Map(rows.map((r, i) => [r.key, i])), [rows]);
+  const activeKey = props.activeDocId ? docRowKey(props.activeDocId) : null;
+  // The one row Tab lands on: the row the user was last on, else the open
+  // document (when its folder is expanded), else the first row.
+  const tabbableKey =
+    (focusKey && indexOfKey.has(focusKey) ? focusKey : null) ??
+    (activeKey && indexOfKey.has(activeKey) ? activeKey : null) ??
+    rows[0]?.key ??
+    null;
+  // Rows that must stay mounted even when scrolled away: the tab stop (so
+  // focus is never dropped on <body>), a rename in progress, an open menu.
+  const pinned = [tabbableKey, renamingKey, menuKey, ctxKey]
+    .map((k) => (k ? indexOfKey.get(k) ?? -1 : -1))
+    .filter((i) => i >= 0);
+
+  const ownScrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const scrollRef = props.scrollRef ?? ownScrollRef;
+  const getKey = useCallback((i: number) => rows[i]!.key, [rows]);
+  const estimateSize = useCallback((i: number) => (rows[i]!.kind === "folder" ? 28 : 40), [rows]);
+  const { rows: windowRows, totalSize, measureElement, scrollToIndex, rowKeyAttr } = useWindowedList({
+    count: rows.length,
+    getKey,
+    estimateSize,
+    scrollRef,
+    listRef,
+    pinned,
+  });
+  const focusRow = useFocusRowAfterRender(listRef);
+
+  // A user-initiated "New folder" opens its rename box (createFolder's
+  // `startNaming`). createFolder expands the parent, so the row exists; bring
+  // it into the window and focus it.
+  useEffect(() => {
+    if (!lastCreatedFolderId) return;
+    const key = folderRowKey(lastCreatedFolderId);
+    const index = indexOfKey.get(key);
+    if (index === undefined) return; // not in the rows yet — retried on the next change
+    setRenamingKey(key);
+    setFocusKey(key);
+    scrollToIndex(index);
+    consumeLastCreatedFolder();
+  }, [lastCreatedFolderId, indexOfKey, scrollToIndex, consumeLastCreatedFolder]);
+
+  const menuHandle = useMemo(() => MenuPrimitive.createHandle<RowMenuPayload>(), []);
+
+  const handlers = useMemo<RowHandlers>(() => {
+    const store = () => useFolderStore.getState();
+    return {
+      select: (docId) => latest.current.props.onSelect(docId),
+      toggle: (folderId) => store().toggleExpanded(folderId),
+      renameDoc: (docId, title) => latest.current.props.onRename(docId, title),
+      renameFolder: (folderId, name) => store().renameFolder(folderId, name),
+      endRename: (key) => {
+        setRenamingKey((k) => (k === key ? null : k));
+        focusRow(key); // back to the row, not lost on <body>
+      },
+      dragStart: (e, kind, id) => {
+        e.stopPropagation();
+        setDragPayload(e, { kind, id });
+      },
+      dropOnRow: (e, key, zone) => {
+        const p = getDragPayload(e);
+        const row = latest.current.rows.find((r) => r.key === key);
+        if (!p || !row) return;
+        // Every drop a row accepts is FINISHED here: nothing may bubble on to
+        // the tree root's drop-to-root handler (that bubbling was A066).
+        e.preventDefault();
+        e.stopPropagation();
+        const s = store();
+        if (row.kind === "folder") {
+          if (p.kind === "doc") {
+            // Docs always drop INTO the folder (reordering happens among doc rows).
+            s.moveDoc(p.id, row.id);
+            return;
+          }
+          if (p.id === row.id) return;
+          if (zone === "into") {
+            s.moveFolder(p.id, row.id);
+          } else {
+            // Reorder before/after this folder within its sibling group.
+            s.moveFolder(p.id, row.folder.parentId);
+            s.setFolderOrder(spliceOrder(row.siblingFolderIds, p.id, row.id, zone === "after" ? "after" : "before"));
+          }
+          return;
+        }
+        const action = docRowDrop(p, { docId: row.id, folderId: row.folderId, siblingDocIds: row.siblingDocIds }, zone);
+        if (action.kind === "moveFolder") s.moveFolder(p.id, action.parentId);
+        else if (action.kind === "reorderDoc") {
+          s.moveDoc(p.id, action.folderId); // ensure same folder, then position
+          s.setDocOrder(docOrderKey(action.folderId), action.order);
+        }
+      },
+      menuOpened: (key) => setMenuKey(key),
+      menuHandle,
+    };
+  }, [menuHandle, focusRow]);
+
+  const dropToRoot = (e: ReactDragEvent) => {
+    const p = getDragPayload(e);
+    setRootOver(false);
+    if (!p) return;
+    e.preventDefault();
+    const s = useFolderStore.getState();
+    if (p.kind === "doc") s.moveDoc(p.id, null);
+    else s.moveFolder(p.id, null);
+  };
+
+  const onTreeKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.defaultPrevented) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("input, textarea")) return; // the rename box keeps its keys
+    const rowEl = target.closest<HTMLElement>('[role="treeitem"]');
+    const key = rowEl?.getAttribute("data-key");
+    const index = key ? indexOfKey.get(key) : undefined;
+    if (index === undefined) return;
+    const row = rows[index]!;
+    // The row's menu from the keyboard: the context-menu key or Shift+F10
+    // open the SAME shared menu the ⋮ button does.
+    if (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
+      e.preventDefault();
+      setMenuKey(row.key);
+      menuHandle.open(`pf-row-menu-${row.key}`);
+      return;
+    }
+    if (e.key === "F2") {
+      e.preventDefault();
+      setRenamingKey(row.key);
+      return;
+    }
+    // Enter / Space on an inner button activate that button natively.
+    if ((e.key === "Enter" || e.key === " ") && target !== rowEl) return;
+    const action = treeKeyAction(rows, index, e.key);
+    if (!action) return;
+    e.preventDefault();
+    const at = rows[action.index]!;
+    if (action.type === "focus") {
+      setFocusKey(at.key);
+      scrollToIndex(action.index);
+      focusRow(at.key);
+    } else if (action.type === "expand" || action.type === "collapse" || at.kind === "folder") {
+      useFolderStore.getState().toggleExpanded(at.id);
+    } else {
+      props.onSelect(at.id);
+    }
+  };
+
+  // Clicking into a row (its title, its ⋮) makes it the tab stop.
+  const onTreeFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    const key = (e.target as HTMLElement).closest('[role="treeitem"]')?.getAttribute("data-key");
+    if (key && key !== focusKey) setFocusKey(key);
+  };
+
+  // Right-click / long-press: remember WHICH row, so the shared context menu
+  // renders that row's items. Runs in the same event as Base UI's handler.
+  const recordCtxTarget = (e: React.SyntheticEvent) => {
+    const key = (e.target as HTMLElement).closest(`[${rowKeyAttr}]`)?.getAttribute(rowKeyAttr) ?? null;
+    setCtxKey(key);
+  };
+
+  const menuBody = (payload: RowMenuPayload | undefined, F: MenuFam) => {
+    if (!payload) return null;
+    if (payload.kind === "doc") {
+      return (
+        <DocMenuBody
+          F={F}
+          docId={payload.id}
+          folderId={payload.folderId}
+          startRename={() => setRenamingKey(docRowKey(payload.id))}
+          onDuplicate={props.onDuplicate}
+          onDelete={props.onDelete}
+          onExportDoc={props.onExportDoc}
+        />
+      );
+    }
+    const row = rows[indexOfKey.get(folderRowKey(payload.id)) ?? -1];
+    if (!row || row.kind !== "folder") return null;
+    return (
+      <FolderMenuBody
+        F={F}
+        folder={row.folder}
+        count={row.count}
+        startRename={() => setRenamingKey(folderRowKey(payload.id))}
+        onExportFolder={props.onExportFolder}
+        confirmDeleteFolder={props.confirmDeleteFolder}
+      />
+    );
+  };
+
+  const ctxRow = ctxKey !== null ? rows[indexOfKey.get(ctxKey) ?? -1] : undefined;
+  const ctxPayload: RowMenuPayload | undefined = !ctxRow
+    ? undefined
+    : ctxRow.kind === "doc"
+      ? { kind: "doc", id: ctxRow.id, folderId: ctxRow.folderId }
+      : { kind: "folder", id: ctxRow.id };
+
+  const treeProps = {
+    ref: listRef,
+    role: "tree",
+    "aria-label": "Document folders",
+    onKeyDown: onTreeKeyDown,
+    onFocus: onTreeFocus,
+    className: "relative shrink-0",
+    style: { height: totalSize },
+  };
+
+  const rowElements = windowRows.map((w) => {
+    const row = rows[w.index]!;
+    const tabbable = row.key === tabbableKey;
+    const editing = row.key === renamingKey;
+    return (
+      <div
+        key={row.key}
+        {...{ [rowKeyAttr]: row.key }}
+        ref={measureElement}
+        className="absolute inset-x-0"
+        style={{ top: w.start }}
+      >
+        {row.kind === "folder" ? (
+          <FolderRow
+            rowKey={row.key}
+            id={row.id}
+            name={row.folder.name}
+            depth={row.depth}
+            expanded={row.expanded}
+            count={row.count}
+            posinset={row.posinset}
+            setsize={row.setsize}
+            tabbable={tabbable}
+            editing={editing}
+            handlers={handlers}
+          />
+        ) : (
+          <DocRow
+            rowKey={row.key}
+            id={row.id}
+            title={row.doc.title}
+            updated={row.doc.updated}
+            wordCount={row.doc.wordCount}
+            folderId={row.folderId}
+            depth={row.depth}
+            posinset={row.posinset}
+            setsize={row.setsize}
+            isActive={row.id === props.activeDocId}
+            tabbable={tabbable}
+            editing={editing}
+            tick={tick}
+            handlers={handlers}
+          />
+        )}
+      </div>
+    );
+  });
+
+  return (
+    <div
+      ref={props.scrollRef ? undefined : ownScrollRef}
+      className="flex min-h-[80px] flex-col"
+      onDragOver={(e) => {
+        if (hasDragItem(e)) e.preventDefault();
+      }}
+      onDrop={dropToRoot}
+      onDragEnd={() => setRootOver(false)}
+    >
+      {contextMenuEnabled ? (
+        /* ONE context menu for the whole tree (A082), not a root per row.
+           Base UI's trigger handles right-click and the touch long-press; the
+           recorders say which row it was over. The honour of the admin flag is
+           unchanged: off, there is no trigger and the native menu shows. */
+        <ContextMenu onOpenChange={(open) => { if (!open) setCtxKey(null); }}>
+          <ContextMenuTrigger
+            render={<div {...treeProps} />}
+            onContextMenu={recordCtxTarget}
+            onTouchStart={recordCtxTarget}
+          >
+            {rowElements}
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-44">{menuBody(ctxPayload, CONTEXT_FAM)}</ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        <div {...treeProps}>{rowElements}</div>
+      )}
+
+      {/* ONE dropdown for every row's ⋮ button (A082). The triggers are
+          detached (a Base UI handle + payload), so no row mounts a menu root,
+          and the popup itself mounts only while open. */}
+      <DropdownMenu handle={menuHandle} onOpenChange={(open) => { if (!open) setMenuKey(null); }}>
+        {({ payload }) =>
+          payload ? (
+            <DropdownMenuContent align="end" className="w-44">
+              {menuBody(payload as RowMenuPayload, DROPDOWN_FAM)}
+            </DropdownMenuContent>
+          ) : null
+        }
+      </DropdownMenu>
+
+      {/* Always-available drop target so items can be dragged OUT to the top level. */}
+      <div
+        aria-hidden={!rootOver}
+        onDragOver={(e) => {
+          if (hasDragItem(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            setRootOver(true);
+          }
+        }}
+        onDragLeave={() => setRootOver(false)}
+        onDrop={dropToRoot}
+        className={cn(
+          "mt-1 flex-1 rounded-md border border-dashed border-transparent px-2 py-3 text-center text-[10px] text-muted-foreground transition-colors",
+          rootOver && "border-primary/50 bg-primary/5"
+        )}
+      >
+        {rootOver ? "Drop here to move to top level" : " "}
+      </div>
+    </div>
   );
 }
