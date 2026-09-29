@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!-- `pf-app` opts this page in to the app-level styling (body typography and
+     background, html scrollbars, the in-app-webview pins). Those rules are scoped
+     to this class so that importing the library stylesheet cannot repaint a
+     consumer's whole page. -->
+<html lang="en" class="pf-app">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0a" />
+        <script>
+        // Pre-paint theme + palette. next-themes only applies `.dark` in a
+        // post-mount effect, so without this the browser painted the LIGHT
+        // default first: measured 183ms of full-viewport cream on desktop and
+        // 895ms on a throttled mid-range phone before the dark theme landed.
+        // Must stay BLOCKING and above the stylesheet.
+        (function () {
+            try {
+                // `?theme=` WINS over the stored preference. The editor's theme
+                // provider writes a namespaced attribute now (so that mounting the
+                // editor as a library component cannot rewrite a host page's
+                // class), which means it no longer clears a wrong class this
+                // script may have set — an embed asked for ?theme=light would
+                // otherwise keep the pre-painted `dark` and render dark forever.
+                var q = "";
+                try { q = new URLSearchParams(location.search).get("theme") || ""; } catch (e) { }
+                var t = q || localStorage.getItem("perssonify-theme") || "dark";
+                var d = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+                var r = document.documentElement;
+                r.classList.add(d ? "dark" : "light");
+                r.style.colorScheme = d ? "dark" : "light";
+                var p = localStorage.getItem("perssonify-palette");
+                if (p) r.setAttribute("data-palette", p);
+            } catch (e) { }
+        })();
+    </script>
+<title>Markdown Studio (embed)</title>
+</head>
+
+<body class="pf-app">
+    <div id="root"></div>
+    <script type="module" src="/src/embed.tsx"></script>
+</body>
+
+</html>

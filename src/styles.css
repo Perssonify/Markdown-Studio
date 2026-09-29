@@ -1,0 +1,1589 @@
+@import "tailwindcss";
+
+@import 'tw-animate-css';
+
+
+
+/* `data-pf-theme` is the NAMESPACED attribute the library integration's theme
+   provider writes on the document element. It exists because writing `class`
+   there rewrote the HOST page's own class list; but portalled surfaces (menus,
+   dialogs, sheets, tooltips, toasts) mount on document.body, OUTSIDE the
+   editor's themed wrapper, so without recognising that attribute a library
+   mount rendered every one of them light while the editor was dark. */
+@custom-variant dark (&:where([data-theme="dark"], .dark, [data-pf-theme="dark"], .dark *, [data-theme="dark"] *, [data-pf-theme="dark"] *));
+
+/*
+ * Accent fallback. The accent lives on the palette blocks below (selected via
+ * data-palette on <html>, set by theme/palette.ts). This plain :root default
+ * ensures --primary is defined even when no palette is applied — e.g. the
+ * embeddable integration build, which does not call initPalette(). It is on a
+ * bare :root (html only), NOT combined with [data-theme], so it never overrides
+ * the palette on the editor subtree (which carries data-theme).
+ */
+:root {
+  --primary: hsl(44, 98%, 48%);
+  --primary-foreground: hsl(0deg 0% 9.8%);
+  /* Accent tuned for use as TEXT/ICON color. Bright fills (var(--primary)) fail
+     contrast as small text on light backgrounds (amber ~1.8:1), so foreground
+     usages read this instead: darkened for light mode, bright in dark mode.
+     Derived from --primary so it tracks every palette automatically. */
+  --primary-strong: color-mix(in srgb, var(--primary) 58%, #000);
+}
+
+:root,
+[data-theme="light"] {
+  --primary-strong: color-mix(in srgb, var(--primary) 58%, #000);
+  --background: hsl(40, 30%, 96%);
+  --foreground: hsl(0deg 0% 9.8%);
+
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(0deg 0% 9.8%);
+
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(0deg 0% 9.8%);
+
+
+  --secondary: hsla(240 4.8% 95.9%);
+  --secondary-foreground: hsla(240 5.9% 10%);
+
+  --tertiary: #20adee;
+  --tertiary-foreground: hsl(0deg 0% 92.16%);
+
+  --muted: hsl(0, 0%, 92%);
+  --muted-foreground: hsl(220 8.9% 46.1%);
+
+  --accent: hsl(344.79deg 33.25% 96.34%);
+  --accent-foreground: hsl(220.9 39.3% 11%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0deg 0% 92.16%);
+
+  /* proposed */
+  /* --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.985 0 0); */
+  /* Status colors are authored in hsl (not oklch/color-mix) so they resolve in
+     older in-app webviews — WKWebView < iOS 16.4, older Android WebView — where an
+     unsupported color value would drop the declaration and break the token. */
+  --success: hsl(142 71% 45%);
+  --success-foreground: hsl(0 0% 98%);
+  --warning: hsl(41 96% 62%);
+  --warning-foreground: hsl(0 0% 9%);
+  --info: hsl(191 82% 39%);
+  --info-foreground: hsl(0 0% 98%);
+  /* design kit vars */
+  --primary-blue: hsla(201, 100%, 95%);
+  --primary-purple: hsla(215, 49%, 93%);
+  --primary-light: hsla(210, 33%, 98%);
+  --primary-green: hsla(201, 100%, 95%);
+  --primary-red: hsla(201, 100%, 95%);
+
+  --border: hsl(220 13% 91%);
+  --input: hsl(220 13% 92%);
+
+  --dark: hsl(0deg 1.79% 21.96%);
+  --dark-foreground: hsl(0deg 0% 92.16%);
+  --ring: var(--primary, hsl(262.1 83.3% 57.8%));
+  --radius: 0.75rem;
+  --max-app-width: clamp(1280px, 80vw, 1920px);
+
+
+  --sidebar: hsl(0deg 0% 96.86%);
+  --sidebar-background: var(--card);
+  --sidebar-foreground: var(--card-foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--muted-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  --noise-bg: linear-gradient(hsl(40, 30%, 96%), hsl(40, 30%, 96%));
+
+
+}
+
+.dark,
+[data-pf-theme="dark"],
+[data-theme="dark"] {
+  /* On dark backgrounds the bright accent already has good contrast — use it
+     directly for text/icons (don't darken). */
+  --primary-strong: var(--primary);
+  --background: hsl(0deg 0% 7.06%);
+  --foreground: hsl(0deg 0% 92.16%);
+
+  --card: hsl(0deg 0% 9.8%);
+
+  --card-foreground: hsl(0deg 0% 92.16%);
+  --popover: hsl(0deg 0% 9.8%);
+  --popover-foreground: hsl(0deg 0% 92.16%);
+
+
+  --secondary: hsla(240 3.7% 15.9%);
+  --secondary-foreground: hsla(0 0% 98%);
+
+  --muted: hsl(0deg 0.01% 12.16%);
+  --muted-foreground: hsl(217.9 10.6% 64.9%);
+
+  --accent: hsl(240 3.7% 15.9%);
+  --accent-foreground: hsl(0, 0%, 61%);
+  --destructive: hsl(0 72% 58%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --noise-bg: linear-gradient(#393737, #1b1b1b);
+
+
+  /* Status colors in hsl (see the light-block note) — old-webview-safe. */
+  --success: hsl(142 70% 38%);
+  --success-foreground: hsl(0 0% 98%);
+  --warning: hsl(35 92% 50%);
+  --warning-foreground: hsl(0 0% 9%);
+  --info: hsl(189 71% 50%);
+  --info-foreground: hsl(0 0% 98%);
+  /* design kit vars */
+  --primary-light: hsla(0, 0%, 100%, 0.05);
+  --primary-purple: hsla(215, 49%, 93%, 1);
+  --primary-blue: hsla(201, 100%, 95%, 1);
+  --border: hsl(0, 0%, 14%);
+  --input: hsla(0 0% 100% / 0.15);
+  --ring: var(--primary, hsl(250deg 100% 80%));
+  --dark: hsl(0deg 0% 92.16%);
+  --dark-foreground: hsl(0deg 0% 9.8%);
+  --sidebar: hsl(0, 0%, 7%);
+  --sidebar-background: var(--card);
+  --sidebar-foreground: var(--card-foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--muted);
+  --sidebar-accent-foreground: var(--muted-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+}
+
+/*
+ * Accent palettes (orthogonal to light/dark). Selected via `data-palette` on
+ * <html>; persisted by src/theme/palette.ts. Only the accent tokens change —
+ * --ring and --sidebar-primary follow --primary via var(). Placed after the
+ * light/dark blocks so equal-specificity attribute selectors win by source order.
+ */
+/*
+ * Each palette sets --primary (the bright fill) and an explicit --primary-strong
+ * tuned for TEXT/ICON use in LIGHT mode, hitting WCAG AA (≥4.5:1) on the light
+ * background — a uniform color-mix could not push amber far enough without
+ * over-darkening the others. Dark mode reasserts the bright accent below.
+ */
+[data-palette="amber"] {
+  --primary: hsl(44, 98%, 48%);
+  --primary-foreground: hsl(0deg 0% 9.8%);
+  --primary-strong: hsl(38, 100%, 27%);
+}
+[data-palette="blue"] {
+  --primary: hsl(201, 90%, 48%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --primary-strong: hsl(201, 92%, 33%);
+}
+[data-palette="violet"] {
+  --primary: hsl(262, 83%, 58%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --primary-strong: hsl(262, 74%, 48%);
+}
+[data-palette="emerald"] {
+  --primary: hsl(160, 84%, 39%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --primary-strong: hsl(162, 90%, 24%);
+}
+[data-palette="rose"] {
+  --primary: hsl(347, 77%, 50%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --primary-strong: hsl(347, 77%, 42%);
+}
+/* Mono: black accent in light mode, white accent in dark mode. */
+[data-palette="mono"] {
+  --primary: hsl(0, 0%, 12%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --primary-strong: hsl(0, 0%, 12%);
+}
+/* Reassert the bright accent for text/icons in dark mode across every palette
+   (palette blocks above would otherwise leave the darkened light value). */
+.dark[data-palette="amber"], [data-theme="dark"][data-palette="amber"], [data-pf-theme="dark"][data-palette="amber"],
+.dark[data-palette="blue"], [data-theme="dark"][data-palette="blue"], [data-pf-theme="dark"][data-palette="blue"],
+.dark[data-palette="violet"], [data-theme="dark"][data-palette="violet"], [data-pf-theme="dark"][data-palette="violet"],
+.dark[data-palette="emerald"], [data-theme="dark"][data-palette="emerald"], [data-pf-theme="dark"][data-palette="emerald"],
+.dark[data-palette="rose"], [data-theme="dark"][data-palette="rose"] {
+  --primary-strong: var(--primary);
+}
+.dark[data-palette="mono"],
+[data-theme="dark"][data-palette="mono"] {
+  --primary: hsl(0, 0%, 98%);
+  --primary-foreground: hsl(0, 0%, 10%);
+}
+
+@theme inline {
+  /* Extra-small breakpoint (480px) for fine-grained status-bar / toolbar
+     degradation on phones, below Tailwind's default `sm` (640px). */
+  --breakpoint-xs: 30rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-strong: var(--primary-strong);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-foreground: var(--tertiary-foreground);
+
+
+  --color-primary-blue: var(--primary-blue);
+  --color-primary-purple: var(--primary-purple);
+  --color-primary-light: var(--primary-light);
+  --color-primary-green: var(--primary-green);
+  --color-primary-red: var(--primary-red);
+
+  --color-dark: var(--dark);
+  --color-dark-foreground: var(--dark-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --spacing-app: var(--max-app-width);
+  /* --color-white: hsla(0, 0%, 93%, 1); */
+
+  --font-mono: 'Space Mono', 'Fira Code', 'Courier New', 'Courier', 'monospace';
+  --font-sans: 'Geist Variable', 'Inter Variable', 'Helvetica', 'Arial', sans-serif;
+
+  --shadow-button: 0px -1px 0px 0px hsla(0, 0%, 100%, 0.04), 0px 0px 0px 1px hsla(0, 0%, 100%, 0.12), 0px 0px 1px 0px rgba(0, 0, 0, 0.04), 0px 2px 2px 0px rgba(0, 0, 0, 0.04), 0px 4px 2px 0px rgba(0, 0, 0, 0.04), 0px 6px 3px 0px rgba(0, 0, 0, 0.04);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-accordion-fade-in: accordion-fade-in 0.2s ease-out;
+  --animate-accordion-fade-out: accordion-fade-out 0.2s ease-out;
+  --animate-collapsible-down: collapsible-down 0.2s ease-out;
+  --animate-collapsible-up: collapsible-up 0.2s ease-out;
+
+
+
+  @keyframes accordion-down {
+    0% {
+      height: 0;
+    }
+
+    100% {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    0% {
+      height: var(--radix-accordion-content-height);
+    }
+
+    100% {
+      height: 0;
+    }
+  }
+
+  @keyframes accordion-fade-in {
+    0% {
+      opacity: 0;
+    }
+
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes accordion-fade-out {
+    0% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes border-beam {
+    100% {
+      offset-distance: 100%;
+    }
+  }
+
+  @keyframes collapsible-down {
+    0% {
+      height: 0;
+      opacity: 0;
+    }
+
+    100% {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes collapsible-up {
+    0% {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+
+    100% {
+      height: 0;
+      opacity: 0;
+    }
+  }
+
+
+}
+
+@layer base {
+
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  /* Scoped, deliberately. As a bare `*` this applied the editor's border and
+     outline tokens to EVERY element on the page — fine for the standalone app,
+     but the library ships this same stylesheet, so importing the editor
+     repainted the borders of the host's entire application. `.pf-app` is set by
+     the app and embed shells; `.perssonify-editor` is the editor container a
+     library consumer mounts. */
+  .pf-app *,
+  .perssonify-editor,
+  .perssonify-editor * {
+    @apply border-border outline-ring/50;
+  }
+
+
+  html.pf-app::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  /* NOTE: --primary/--secondary/--muted/--background are already full color
+     values, so hsl(var(--x)) is invalid and was silently dropped. Use the
+     colors directly, with color-mix for the translucent gradient stops. */
+  html.pf-app::-webkit-scrollbar-track {
+    background: var(--muted);
+    border-radius: 0.5rem;
+  }
+
+  html.pf-app::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--primary) 60%, transparent),
+        color-mix(in srgb, var(--secondary) 80%, transparent));
+    border-radius: 0.5rem;
+    border: 2px solid var(--background);
+    transition: all 0.2s ease-in-out;
+  }
+
+  html.pf-app::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--primary) 80%, transparent),
+        var(--secondary));
+    transform: scale(1.1);
+  }
+
+  html.pf-app::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg,
+        var(--primary),
+        var(--secondary));
+  }
+
+  html.pf-app::-webkit-scrollbar-corner {
+    background: var(--background);
+  }
+
+  /* Firefox scrollbar support */
+  html.pf-app {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--primary) 60%, transparent) var(--muted);
+  }
+
+  /* Embedded / in-app webview robustness (WhatsApp, Slack, Telegram, Claude,
+     ChatGPT, etc.). These hosts frame the app in a thin webview where the
+     defaults look "off": mobile browsers inflate font sizes on rotation, taps
+     flash a grey box, and rubber-band overscroll bleeds into (and sometimes
+     dismisses) the host chrome. Pin all three. */
+  html.pf-app,
+  html.pf-app body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a {
+    cursor: pointer;
+    outline: none;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"]:disabled {
+    cursor: not-allowed;
+  }
+
+  a,
+  button,
+  input,
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+  }
+
+  svg {
+    display: inline-block;
+  }
+
+  *:autofill,
+  *:-webkit-autofill,
+  *:-internal-autofill-selected {
+    font: inherit;
+    font-size: inherit;
+    font-family: inherit;
+    -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+    box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+    @apply border-primary bg-primary/10;
+
+  }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar,
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar,
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+}
+
+/* App/embed shells only. Unscoped, this repainted the BODY of any page that
+   imported the library stylesheet — its font, its background, its text colour
+   and its selection colours. `.pf-app` is set by src/main.tsx and src/embed.tsx;
+   a library consumer's page keeps its own typography. */
+.pf-app body,
+body.pf-app {
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  position: relative;
+  font-family: var(--font-sans, 'Inter', 'Helvetica', 'Arial', sans-serif);
+  @apply bg-(image:--noise-bg) text-foreground selection:bg-primary/75 selection:text-primary-foreground antialiased;
+  /* No theme transition here: this element's background is a `background-image`
+     gradient (`--noise-bg`), which a `background-color` transition cannot
+     interpolate — the declaration that used to sit here animated `color` alone
+     while the backdrop snapped. Theme swaps are made atomic by next-themes'
+     `disableTransitionOnChange` instead (see main.tsx). */
+}
+
+/* Safe-area helpers for full-screen in-app webviews. On a notched phone the top
+   header, the side edges (landscape), and the bottom status bar would otherwise
+   sit UNDER the notch / home indicator; these push the chrome's own background
+   into that inset so it reads as an intentional edge, not a clipped one. The
+   `0px` fallback makes every one a strict no-op where there is no inset (desktop
+   side panels, the iframe embed) — so nothing shifts in those contexts. */
+.pf-safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pf-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pf-safe-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* ── Old in-app-webview color fallback ──────────────────────────────────────
+   Tailwind v4 renders every `/opacity` utility as `color-mix(in oklab, …)`, and
+   an accent-derived token uses color-mix too. In-app browsers on older engines
+   (WKWebView < iOS 16.4, older Android WebView — how many WhatsApp / Slack /
+   Telegram / Claude / ChatGPT users first see the app) DON'T support color-mix,
+   so those declarations are dropped: structural surfaces lose their background
+   and the UI reads as "colors/transparency broken." This block only activates
+   where color-mix is unsupported (a strict no-op on every modern browser and the
+   iframe embed), and forces the essential chrome opaque so the first experience
+   stays legible. Decorative tints (bg-primary/…, bg-destructive/…) and overlay
+   scrims (bg-black/…, bg-white/…) are intentionally NOT forced — they degrade to
+   no-tint, which is correct; forcing them to a solid fill would be wrong. */
+@supports not (background-color: color-mix(in oklab, red, red)) {
+  /* Accent-for-text token is color-mix-derived on the bare/light default — give
+     it a static value (the palette blocks already set static hsl values). */
+  :root,
+  [data-theme="light"] {
+    --primary-strong: hsl(38 100% 27%);
+  }
+
+  .bg-background\/50,
+  .bg-background\/60,
+  .bg-background\/80,
+  .supports-backdrop-filter\:bg-background\/60 {
+    background-color: var(--background) !important;
+  }
+  .bg-card\/30,
+  .bg-card\/40,
+  .bg-card\/60,
+  .bg-card\/70,
+  .bg-card\/80,
+  .bg-card\/85,
+  .bg-card\/95 {
+    background-color: var(--card) !important;
+  }
+  .bg-muted\/20,
+  .bg-muted\/30,
+  .bg-muted\/40,
+  .bg-muted\/50 {
+    background-color: var(--muted) !important;
+  }
+  .bg-secondary\/80 {
+    background-color: var(--secondary) !important;
+  }
+  .bg-accent\/60 {
+    background-color: var(--accent) !important;
+  }
+}
+
+/* ==========================================
+   Markdown Studio — Base Styles
+   Required for CodeMirror 6 + Tiptap
+   Phase I: Scrollbar centralization
+   ========================================== */
+
+/* --- Tiptap base --- */
+.tiptap {
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* --- ProseMirror --- */
+.ProseMirror,
+[data-md-preview] {
+  outline: none;
+  min-height: 100%;
+  padding: 12px 0 !important;
+  box-sizing: border-box;
+  background-color: var(--color-background) !important;
+  /* Typography prefs (uiStore) ride in via CSS vars set on the editor
+     container (EditorPanes splitRef). Defaults keep the pre-typography look. */
+  font-size: var(--editor-font-size, 0.875rem);
+  line-height: var(--editor-line-height, 1.625);
+}
+
+/* Reading width caps the CONTENT column (not the flex pane — capping panes
+   would break the split divider math). Centered when a cap is set. */
+.ProseMirror {
+  max-width: var(--reading-width, none);
+  margin-inline: auto;
+}
+
+/* Tiptap scroll container — inherit bg, kill outlines */
+.tiptap-scroll,
+.tiptap-scroll>div,
+.tiptap-scroll>div>div,
+.tiptap-scroll .tiptap {
+  background-color: inherit;
+}
+
+.tiptap-scroll,
+.tiptap-scroll:focus,
+.tiptap-scroll:focus-visible,
+.tiptap-scroll:focus-within,
+.tiptap-scroll>div,
+.tiptap-scroll>div:focus,
+.tiptap-scroll>div:focus-visible {
+  outline: none !important;
+  border-color: transparent;
+}
+
+.ProseMirror:focus,
+.ProseMirror:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #6b7280;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Typography */
+.ProseMirror h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+  margin: 16px 0 8px;
+}
+
+.ProseMirror h2 {
+  font-size: 1.45em;
+  font-weight: 700;
+  margin: 14px 0 6px;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 12px 0 4px;
+}
+
+.ProseMirror h4 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+
+.ProseMirror h5,
+.ProseMirror h6 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 8px 0 4px;
+}
+
+.ProseMirror p {
+  margin: 0 0 8px;
+}
+
+/* Lists — defeat Tailwind preflight */
+.ProseMirror ul {
+  list-style: disc outside;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.ProseMirror ol {
+  list-style: decimal outside;
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.ProseMirror li {
+  display: list-item;
+  margin-bottom: 2px;
+}
+
+.ProseMirror ul ul {
+  list-style-type: circle;
+}
+
+.ProseMirror ul ul ul {
+  list-style-type: square;
+}
+
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.ProseMirror ol ol ol {
+  list-style-type: lower-roman;
+}
+
+/* Task lists (TaskList/TaskItem). The item is a flex row: checkbox + content.
+   Kill the disc marker and list-item display so no bullet sits by the checkbox.
+   Also targets [data-md-preview] so exported/preview HTML matches. */
+.ProseMirror ul[data-type="taskList"],
+[data-md-preview] ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.ProseMirror ul[data-type="taskList"] li,
+[data-md-preview] ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  margin-bottom: 2px;
+}
+.ProseMirror ul[data-type="taskList"] li > label,
+[data-md-preview] ul[data-type="taskList"] li > label {
+  flex: 0 0 auto;
+  margin-top: 0.3em;
+  user-select: none;
+}
+.ProseMirror ul[data-type="taskList"] li > div,
+[data-md-preview] ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ProseMirror ul[data-type="taskList"] li > div > p,
+[data-md-preview] ul[data-type="taskList"] li > div > p {
+  margin: 0;
+}
+/* Nested task lists indent under the parent item's content. */
+.ProseMirror ul[data-type="taskList"] ul[data-type="taskList"],
+[data-md-preview] ul[data-type="taskList"] ul[data-type="taskList"] {
+  margin-top: 2px;
+}
+
+/* Links */
+.ProseMirror a,
+.ProseMirror .perssonify-link {
+  color: var(--primary-strong);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ProseMirror a:hover {
+  text-decoration: underline;
+}
+
+/* Blockquotes */
+.ProseMirror blockquote {
+  border-left: 3px solid var(--primary);
+  padding: 8px 16px;
+  margin: 12px 0;
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+
+/* Callouts / admonitions (> [!NOTE] … [!CAUTION]). The type label is drawn via
+   ::before (keyed on data-callout) so it never enters the serialized content.
+   Semantic hues are fixed (independent of the accent palette) and readable in
+   both themes via color-mix. Also targets [data-md-preview] for exported HTML. */
+.ProseMirror div[data-type="callout"],
+[data-md-preview] div[data-type="callout"] {
+  --callout-color: #3b82f6; /* note (blue) default */
+  border-left: 3px solid var(--callout-color);
+  border-radius: 0 8px 8px 0;
+  padding: 8px 16px;
+  margin: 12px 0;
+  background: color-mix(in srgb, var(--callout-color) 8%, transparent);
+}
+.ProseMirror div[data-type="callout"][data-callout="tip"],
+[data-md-preview] div[data-type="callout"][data-callout="tip"] { --callout-color: #22c55e; }
+.ProseMirror div[data-type="callout"][data-callout="important"],
+[data-md-preview] div[data-type="callout"][data-callout="important"] { --callout-color: #a855f7; }
+.ProseMirror div[data-type="callout"][data-callout="warning"],
+[data-md-preview] div[data-type="callout"][data-callout="warning"] { --callout-color: #f59e0b; }
+.ProseMirror div[data-type="callout"][data-callout="caution"],
+[data-md-preview] div[data-type="callout"][data-callout="caution"] { --callout-color: #ef4444; }
+.ProseMirror div[data-type="callout"]::before,
+[data-md-preview] div[data-type="callout"]::before {
+  content: "Note";
+  display: block;
+  font-size: 0.8em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--callout-color);
+  margin-bottom: 4px;
+}
+.ProseMirror div[data-type="callout"][data-callout="tip"]::before,
+[data-md-preview] div[data-type="callout"][data-callout="tip"]::before { content: "Tip"; }
+.ProseMirror div[data-type="callout"][data-callout="important"]::before,
+[data-md-preview] div[data-type="callout"][data-callout="important"]::before { content: "Important"; }
+.ProseMirror div[data-type="callout"][data-callout="warning"]::before,
+[data-md-preview] div[data-type="callout"][data-callout="warning"]::before { content: "Warning"; }
+.ProseMirror div[data-type="callout"][data-callout="caution"]::before,
+[data-md-preview] div[data-type="callout"][data-callout="caution"]::before { content: "Caution"; }
+.ProseMirror div[data-type="callout"] > :last-child,
+[data-md-preview] div[data-type="callout"] > :last-child { margin-bottom: 0; }
+
+/* Collapsible <details> — a bordered disclosure card; the summary is the toggle. */
+.ProseMirror details,
+[data-md-preview] details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 12px 0;
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.ProseMirror details > summary,
+[data-md-preview] details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: revert;
+  user-select: none;
+  outline: none;
+}
+.ProseMirror details[open] > summary,
+[data-md-preview] details[open] > summary { margin-bottom: 8px; }
+.ProseMirror details > :last-child,
+[data-md-preview] details > :last-child { margin-bottom: 0; }
+
+/* Code */
+.ProseMirror code {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary-strong);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.9em;
+}
+
+.ProseMirror pre {
+  padding: 12px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 12px 0;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.88em;
+  line-height: 1.5;
+  position: relative;
+}
+
+.ProseMirror[data-theme="dark"] pre {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ProseMirror[data-theme="light"] pre {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+/*
+ * Text highlight legibility. A highlight is a `<span style="background-color: …">`
+ * (see extensions/BackgroundColor.ts). Highlight colors are conventionally light,
+ * so in dark mode the inherited light text color would sit on a light background
+ * and become unreadable. Pin a dark ink on any inline-background span so the
+ * highlight reads correctly in BOTH themes, and give it a subtle highlighter
+ * shape. (Foreground `color` spans use `style="color: …"` with no background, so
+ * they are unaffected.)
+ */
+.ProseMirror span[style*="background-color"] {
+  color: #1c1917;
+  padding: 0.05em 0.15em;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* --- Math (KaTeX) inline editing --- */
+.ProseMirror .math-inline {
+  border-radius: 3px;
+  transition: background-color 120ms;
+}
+.ProseMirror .math-inline:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.ProseMirror .math-block {
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: 8px 0;
+  transition: background-color 120ms;
+}
+.ProseMirror .math-block:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.ProseMirror .math-editing {
+  display: inline-block;
+}
+.ProseMirror .math-block.math-editing {
+  display: block;
+}
+.ProseMirror .math-source-input {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.9em;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--primary) 8%, var(--background));
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+  resize: vertical;
+}
+.ProseMirror span.math-source-input {
+  min-width: 6ch;
+}
+.ProseMirror .math-block .math-source-input {
+  display: block;
+  width: 100%;
+}
+
+.tiptap-preview {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color:
+    color-mix(in srgb, var(--foreground) 15%, transparent) transparent;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+html::-webkit-scrollbar,.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+html,.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+
+/* Code block wrapper (React NodeView) */
+.code-block-wrapper {
+  position: relative;
+  margin: 12px 0;
+}
+
+/* Code block copy button */
+.code-block-copy-wrapper {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  pointer-events: all;
+}
+
+.code-block-copy-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.code-block-copy-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.code-block-copy-button:active {
+  transform: scale(0.95);
+}
+
+.code-block-copy-button.copied {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: rgb(34, 197, 94);
+}
+
+.code-block-copy-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+/* Light theme specific styling */
+.ProseMirror[data-theme="light"] .code-block-copy-button {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.ProseMirror[data-theme="light"] .code-block-copy-button:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.ProseMirror[data-theme="light"] .code-block-copy-button.copied {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.25);
+  color: rgb(22, 163, 74);
+}
+
+/* GitHub-style theme-aware images: show only the variant matching the current
+   theme. Works with the app's class-based theme (.dark on <html>, data-theme on
+   the rich pane) so it follows the in-app Light/Dark/System toggle, not just the
+   OS. Author two images differing only by the URL fragment:
+     ![logo](…/light.svg#gh-light-mode-only)
+     ![logo](…/dark.svg#gh-dark-mode-only)
+   The fragment is ignored by the server, so both URLs still load fine. */
+img[src$="#gh-dark-mode-only"] { display: none; }
+img[src$="#gh-light-mode-only"] { display: revert; }
+.dark img[src$="#gh-dark-mode-only"],
+[data-theme="dark"] img[src$="#gh-dark-mode-only"] { display: revert; }
+.dark img[src$="#gh-light-mode-only"],
+[data-theme="dark"] img[src$="#gh-light-mode-only"] { display: none; }
+
+/* Inline diagram editing (Mermaid / ABC) — one cohesive framed card: header
+   (label + Edit/Copy), the rendered output, and — while editing — the source
+   right above a live preview. The source <pre> stays mounted (ProseMirror owns
+   it) and is only hidden via .is-hidden so the fenced round-trip is untouched. */
+.diagram-block {
+  margin: 14px 0;
+}
+.diagram-block .diagram-frame {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--card) 60%, var(--background));
+}
+.diagram-block .diagram-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+.diagram-block.is-editing .diagram-header {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.diagram-block .diagram-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.diagram-block .diagram-lang {
+  font-family: "SF Mono", "Fira Code", monospace;
+  text-transform: none;
+  opacity: 0.8;
+}
+.diagram-block .diagram-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Copy button sheds its absolute positioning inside the header flow. */
+.diagram-block .diagram-actions .code-block-copy-wrapper {
+  position: static;
+  top: auto;
+  right: auto;
+}
+.diagram-edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 1px solid var(--border);
+  transition: all 0.15s ease;
+}
+.diagram-edit-toggle:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+.diagram-edit-toggle.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+/* The one control left under WCAG 2.5.8's 24px on a phone. Measured on a 390px
+   touch viewport, every visible button in the app clears 24px except this one,
+   which came back 58x21 — it is a text+icon chip, so its height is the padding
+   and nothing more. Grown only on coarse pointers, like the rest of the
+   touch-target work, so the desktop chip keeps its compact 21px. */
+@media (pointer: coarse) {
+  .diagram-edit-toggle {
+    min-height: 24px;
+    padding-block: 5px;
+  }
+}
+/* Source editor (the ProseMirror-managed code) shown only while editing. */
+.diagram-block .diagram-source {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--muted) 40%, var(--background));
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.diagram-block .diagram-source.is-hidden {
+  display: none;
+}
+.diagram-block.is-editing .diagram-render {
+  border-top: 1px solid var(--border);
+}
+.diagram-block .diagram-preview-label {
+  padding: 6px 12px 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+/* The inner DiagramPreview drops its own card chrome inside the frame. */
+.diagram-block .diagram-render .diagram-preview {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 12px;
+}
+
+/* Tables */
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  padding: 8px 12px;
+  text-align: left;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.ProseMirror th {
+  font-weight: 600;
+  background: rgba(128, 128, 128, 0.05);
+}
+
+/* Horizontal rule */
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid rgba(128, 128, 128, 0.3);
+  margin: 20px 0;
+}
+
+/* Graceful transition when a view mode or read-only is imposed — a brief fade of
+   the editor area so panes/toolbar don't snap in/out. Restarted via reflow in
+   EditorLayout (opacity only, so no layout cost or remount). */
+@keyframes pf-mode-fade {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+.pf-mode-fade { animation: pf-mode-fade 200ms ease; }
+
+/* ── Cards: rendered previews ──────────────────────────────────────────────
+   The card FACE and the opened card render markdown as real structure (they
+   carry `data-md-preview`, so they inherit the rich pane's heading/list/quote/
+   code styling). Two adjustments the shared preview CSS can't make:
+
+   1. On the small FACE, a document's H1 would dwarf a teaser, and its first
+      block's top margin would leave a gap under the title — so headings are
+      pulled down to near body size and the first block's margin is removed.
+   2. The face is CLIPPED to a few lines with a soft fade, so a long note can't
+      grow an unbounded card. `cardPreviewHtml` already bounds the content; this
+      is the visual backstop. */
+.pf-card-preview { position: relative; overflow: hidden; }
+.pf-card-preview > :first-child { margin-top: 0 !important; }
+.pf-card-preview :last-child { margin-bottom: 0 !important; }
+.pf-card-preview h1,
+.pf-card-preview h2,
+.pf-card-preview h3,
+.pf-card-preview h4,
+.pf-card-preview h5,
+.pf-card-preview h6 {
+  font-size: 1em !important;
+  font-weight: 600 !important;
+  margin: 0.35em 0 0.15em !important;
+}
+.pf-card-preview :first-child { margin-top: 0 !important; }
+.pf-card-preview ul,
+.pf-card-preview ol { margin: 0.2em 0 !important; padding-left: 1.1rem !important; }
+.pf-card-preview pre { margin: 0.2em 0 !important; padding: 0.35em 0.5em !important; }
+.pf-card-preview blockquote { margin: 0.2em 0 !important; }
+.pf-card-preview-sm { max-height: 3rem; }
+.pf-card-preview-lg { max-height: 9rem; }
+.pf-card-preview-sm::after,
+.pf-card-preview-lg::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 1.25rem;
+  background: linear-gradient(to bottom, transparent, var(--card));
+  pointer-events: none;
+}
+/* A coloured card paints its own background, so the fade must match it, not the
+   default card surface. Cards set `background-color` inline; the fade then reads
+   the same value through `currentColor` is not viable, so on coloured cards we
+   simply drop the fade — the content is already bounded. */
+[style*="background-color"] > .pf-card-preview-sm::after,
+[style*="background-color"] > .pf-card-preview-lg::after,
+[style*="background-color"] .pf-card-preview-sm::after,
+[style*="background-color"] .pf-card-preview-lg::after { display: none; }
+
+/* The opened card's rendered pane: normal document rhythm (no face clipping). */
+.pf-card-render > div > :first-child { margin-top: 0; }
+
+/* Focus / zen mode — dim the chrome (menu bar, toolbar, status bar, pane
+   headers) so the document takes center stage. Opacity/transition ONLY — never
+   height/visibility that would reflow the viewport-locked shell (invariant:
+   the shell stays h-dvh + overflow-hidden). Hovering any dimmed region brings
+   it back to full opacity so nothing becomes unreachable. */
+/* The transition lives on the UNQUALIFIED selectors. Declared inside the
+   `.pf-focus` rule (as it was), it existed only while the class did: entering
+   Focus mode animated 1 → 0.25, but on exit the selector stopped matching in
+   the same frame the value reverted, so 0.25 → 1 snapped. The asymmetry was the
+   whole of D4. */
+[data-tour="menubar"],
+[data-tour="toolbar"],
+[data-pane-header],
+.perssonify-editor footer {
+  transition: opacity 200ms ease;
+}
+.pf-focus [data-tour="menubar"],
+.pf-focus [data-tour="toolbar"],
+.pf-focus [data-pane-header],
+.pf-focus footer {
+  opacity: 0.25;
+}
+.pf-focus [data-tour="menubar"]:hover,
+.pf-focus [data-tour="toolbar"]:hover,
+.pf-focus [data-pane-header]:hover,
+.pf-focus footer:hover,
+.pf-focus [data-tour="menubar"]:focus-within,
+.pf-focus [data-tour="toolbar"]:focus-within,
+.pf-focus [data-pane-header]:focus-within,
+.pf-focus footer:focus-within {
+  opacity: 1;
+}
+
+/* Active-pane cue. Keyed off ONE attribute the JS sets on the header, because
+   the previous approach — a `text-muted-foreground!` on the label plus
+   `classList.add("text-primary")` on focus — could never work: the removal
+   targeted a class that was never applied (`text-muted-foreground` vs the
+   important-suffixed `text-muted-foreground!`), and the addition could not beat
+   `!important`. The label's colour never changed in either direction; only the
+   dot, which used an inline style, ever responded. Toggle an attribute and let
+   CSS decide, rather than racing Tailwind specificity from JavaScript. */
+[data-pane-header] [data-pane-label] {
+  color: var(--muted-foreground);
+}
+[data-pane-header] [data-pane-dot] {
+  opacity: 0;
+}
+[data-pane-header][data-pane-focused] [data-pane-label] {
+  color: var(--primary);
+}
+[data-pane-header][data-pane-focused] [data-pane-dot] {
+  opacity: 1;
+}
+
+/* Wiki links. A `[[link]]` pointing at a document that does not exist used to
+   render identically to one that works, so the only way to find a broken link
+   was to click it. The unresolved ones are marked by `useLinkIndex` with
+   `data-unresolved` (in the DOM, not the mark — the answer depends on OTHER
+   documents, so it must not become part of this one's stored content). Dashed
+   and muted rather than red: a link you have not written the target for yet is
+   a normal state in note-taking, not an error. */
+.ProseMirror a.wiki-link,
+[data-md-preview] a.wiki-link {
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+.ProseMirror a.wiki-link[data-unresolved],
+[data-md-preview] a.wiki-link[data-unresolved] {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
+  text-decoration-color: currentColor;
+}
+
+/* Images — no border-radius: rounding clips the image's corner pixels, which
+   truncates logos/screenshots that carry content to the edge. */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0;
+}
+
+/* Phase 3: Image toggle — collapse images to placeholder when data-hide-images is set */
+[data-hide-images] .ProseMirror img {
+  display: inline-block !important;
+  width: 64px !important;
+  height: 18px !important;
+  max-width: 64px !important;
+  object-fit: none;
+  object-position: -9999px -9999px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 35%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  vertical-align: middle;
+  margin: 2px 4px;
+}
+
+/* Inline marks */
+.ProseMirror strong {
+  font-weight: 700;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror del,
+.ProseMirror s {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.ProseMirror u {
+  text-decoration: underline;
+}
+
+.ProseMirror sup {
+  vertical-align: super;
+  font-size: 0.8em;
+}
+
+.ProseMirror sub {
+  vertical-align: sub;
+  font-size: 0.8em;
+}
+
+.ProseMirror mark {
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Table selection */
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+}
+
+.ProseMirror table .selectedCell {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* --- CodeMirror 6 --- */
+.cm-editor {
+  height: 100%;
+}
+
+/* --- App-wide thin scrollbar for sidebar, tab bar, etc. --- */
+.app-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.2) transparent;
+}
+
+.app-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.app-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-scroll::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 3px;
+}
+
+.app-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.4);
+}
+
+/* Hide scrollbar completely (compact toolbar) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Search highlight (Tiptap pane — visible even when editor is unfocused) */
+.ProseMirror .search-highlight {
+  background-color: rgba(245, 158, 11, 0.45) !important;
+  border-radius: 2px;
+  color: inherit !important;
+}
+
+.ProseMirror[data-theme="light"] .search-highlight {
+  background-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+/* --- Tiptap scrollbar (CSS custom properties set inline by TiptapPane) --- */
+.tiptap-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.tiptap-scroll::-webkit-scrollbar-track {
+  background: var(--scroll-track, transparent);
+}
+
+.tiptap-scroll::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb, rgba(128, 128, 128, 0.2));
+  border-radius: 4px;
+}
+
+.tiptap-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover, rgba(128, 128, 128, 0.4));
+}
+
+.tiptap-scroll::-webkit-scrollbar-corner {
+  background: var(--scroll-track, transparent);
+}
+
+/* Wiki links */
+.ProseMirror a[data-doc-link] {
+  color: var(--primary-strong);
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in srgb, var(--primary) 50%, transparent);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.ProseMirror a[data-doc-link]:hover {
+  border-bottom-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-radius: 2px;
+}
+
+/* Field blocks */
+.ProseMirror .field-block {
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  background: color-mix(in srgb, var(--primary) 3%, transparent);
+  user-select: none;
+}
+
+.ProseMirror .field-block.ProseMirror-selectednode {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Transclusion blocks */
+.ProseMirror .transclusion-block {
+  border-left: 3px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 0 8px 8px 0;
+  padding: 8px 16px;
+  margin: 12px 0;
+  background: color-mix(in srgb, var(--primary) 2%, transparent);
+  user-select: none;
+}
+
+.ProseMirror .transclusion-block.ProseMirror-selectednode {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.ProseMirror .transclusion-error {
+  border-left-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+/* Block ID indicators */
+.ProseMirror [data-block-id]::after {
+  content: " ^" attr(data-block-id);
+  font-size: 0.7em;
+  color: color-mix(in srgb, var(--primary) 30%, transparent);
+  vertical-align: super;
+  font-family: monospace;
+}
+/* ── The toast close button's hit area ───────────────────────────
+   The backlog recorded this button as "rendering outside its toast". Measured
+   in a real browser, it does overhang — sonner straddles it across the toast's
+   top-left corner with translate(-7px, -7px) — but that is deliberate, and the
+   button came back fully on-screen, opacity 1, and hit-testing to itself at its
+   own centre. So the overhang is not the defect.
+
+   The size is. sonner draws it at 20x20, against WCAG 2.5.8's 24x24 minimum,
+   on the one control whose entire job is dismissing something that covers the
+   app. It is grown with a ::before rather than by resizing the button, exactly
+   as the resize separators are (DIVIDER_HIT_AREA in ui/use-divider-drag.ts):
+   sonner positions the button FROM its own box, so changing that box moves the
+   glyph. A pseudo-element leaves the visual and the geometry untouched. */
+[data-sonner-toast] [data-close-button]::before {
+  content: "";
+  position: absolute;
+  /* 20 + 3 + 3 = 26px each way. */
+  inset: -3px;
+  border-radius: inherit;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────
+   The app previously honored `prefers-reduced-motion` NOWHERE: with the OS
+   setting on, the boot pulse, autosave spinner, the infinite drop-overlay
+   bounce, every menu/dialog zoom-in, the mode fade, the graph camera fly and
+   the ad slide all still animated (WCAG 2.3.3). This is the global backstop;
+   JS-driven motion is gated separately: the graph's force simulation advances
+   node positions from rAF, which no stylesheet can reach, so it settles in one
+   step under this preference (`prefersReducedMotion`, src/utils/reduced-motion.ts).
+   The graph CAMERA needs nothing — it is an inline CSS transition, so the
+   `transition-duration` below already beats it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .pf-mode-fade {
+    animation: none !important;
+  }
+}
