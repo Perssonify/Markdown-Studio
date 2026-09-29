@@ -108,12 +108,27 @@ describe("boot watchdog", () => {
     expect(w.calls.reload).toBe(0);
   });
 
-  it("treats an uncaught error before boot as evidence too", async () => {
+  it("treats an uncaught error from the app's own bundle before boot as evidence too", async () => {
     const w = boot();
-    w.fire("error", { target: w.sandbox, error: new SyntaxError("Unexpected token '<'"), message: "Unexpected token '<'" });
+    w.fire("error", {
+      target: w.sandbox,
+      error: new SyntaxError("The requested module does not provide an export named 'x'"),
+      message: "The requested module does not provide an export named 'x'",
+      filename: "https://markdownstudio.com/assets/index-abc123.js",
+    });
     await w.elapse();
     expect(w.calls.reload).toBe(1);
     expect(JSON.parse(w.local.get("pf:boot-recovered")).reason).toBe("boot-error");
+  });
+
+  it("ignores errors that are not the app's bundle failing (extensions, injected inline scripts)", async () => {
+    const w = boot();
+    w.fire("error", { target: w.sandbox, error: new Error("ext"), message: "ext", filename: "chrome-extension://abcdef/content.js" });
+    w.fire("error", { target: w.sandbox, error: new Error("inline"), message: "inline", filename: "https://markdownstudio.com/" });
+    w.fire("error", { target: w.sandbox, message: "Script error.", filename: "" });
+    await w.elapse();
+    expect(w.calls.reload).toBe(0);
+    expect(w.calls.cachesDeleted).toEqual([]);
   });
 
   it("does not loop: no second recovery within 30 s", async () => {
