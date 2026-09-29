@@ -1,5 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
-import React, { RefObject, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { RefObject, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { toast as toastSonner } from "sonner";
 import { useMarkdownEngine } from "./engine/useMarkdownEngine";
@@ -624,7 +624,7 @@ export function PerssonifyEditor({
     handleNewDoc, handleDeleteDoc,
     prepareToLeaveActiveDoc, hydrateEditorWithDoc,
     restoreSnapshotInPlace, restoreSnapshotAsNew,
-    cancelPendingSync, flushPendingSync,
+    cancelPendingSync, flushPendingSync, releaseEditor,
   } = useDocumentLifecycle({
     tiptapRef, cmRef, engine, syncMdToHtml, syncHtmlToMd, forceSyncMdToHtml, forceSyncHtmlToMd,
     resetHashes, setCanonical, setFromHtml, switchToDoc, closeTab,
@@ -632,6 +632,14 @@ export function PerssonifyEditor({
     setDirty, handleCanonicalChange, pasteStyled, setPasteStyled,
     syncMode, setSyncMode, toast, confirm, confirmUnsaved,
   });
+
+  // Unmount is a document-leaving path (see releaseEditor). A LAYOUT cleanup,
+  // not a passive one: React runs a component's layout cleanups before its
+  // children's, so both panes — and the refs to them — still exist here; by
+  // the time passive cleanups run, the pane handles have been detached.
+  const releaseEditorRef = useRef(releaseEditor);
+  useEffect(() => { releaseEditorRef.current = releaseEditor; }, [releaseEditor]);
+  useLayoutEffect(() => () => { releaseEditorRef.current(); }, []);
 
   // Open a document scrolled to one of its headings (by document-order index),
   // used by the graph's document-structure view. Heading elements in the rich
