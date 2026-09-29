@@ -37,8 +37,19 @@ const POPUPS = '[role="dialog"][aria-modal="true"], [role="alertdialog"], [role=
 function openPopupOutside(surface: Element): boolean {
   for (const el of Array.from(document.querySelectorAll(POPUPS))) {
     if (surface.contains(el)) continue;
-    if (el.closest("[hidden], [inert], [aria-hidden='true']")) continue;
-    return true;
+    if (isShown(el)) return true;
   }
   return false;
+}
+
+/** Actually on screen. Some popups stay MOUNTED while closed — the emoji
+ *  suggestion list is a `role="listbox"` parked on <body> with display:none —
+ *  and counting those as open made the board ignore every Escape. */
+function isShown(el: Element): boolean {
+  if (el.closest("[hidden], [inert], [aria-hidden='true']")) return false;
+  for (let n: Element | null = el; n; n = n.parentElement) {
+    const style = getComputedStyle(n);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+  }
+  return true;
 }
