@@ -248,16 +248,24 @@ via `postMessage` through the host bridge; note `postMessage` is one-way, so the
 `onLinkClick` "return `true` to suppress default" mechanism only applies to
 direct React embeds, not the iframe bridge.
 
-**The shipped embed build (`dist-embed/`) resolves its own allowed origins**, in
-this order ([`resolveAllowedOrigins`](../src/embed.tsx)):
+**The shipped embed build (`dist-embed/`) resolves its own allowed origins**
+([`resolveEmbedAllowedOrigins`](../src/integration/embed-origins.ts)). The bridge
+can read and overwrite every document the embed can see, so this decides who may
+drive it:
 
-1. `?allowed_origin=` on the iframe `src` — one origin, or several separated by
-   commas. Each must parse to a bare origin; a literal `*` is **rejected**, since
-   whoever frames the editor already gets their own origin from step 2 and a
-   wildcard would only let them relay the document onward.
-2. the origin of `document.referrer` — i.e. the page that framed it.
-3. `[]` — deny all. That is the safe failure, and it is what you get when the
-   referrer is suppressed (`referrerpolicy="no-referrer"`, some privacy modes).
+1. **Deploy-time allowlist — set this.** Build with
+   `VITE_EMBED_ALLOWED_ORIGINS="https://app.example,https://staging.app.example"`
+   and nothing outside that list is ever allowed, whatever the URL or the
+   referrer says. Without it, the embed trusts whichever page frames it.
+2. Where the browser reports the real framer (`location.ancestorOrigins` —
+   Chromium and WebKit), a requested origin must **be** that framer; a page that
+   is not framed at all gets no bridge partner.
+3. The requested origins: `?allowed_origin=` on the iframe `src` (one origin, or
+   several separated by commas; each must parse to a bare origin, and a literal
+   `*` is **rejected** — a wildcard would only let the framer relay the document
+   onward), else the reported framer, else the origin of `document.referrer`.
+4. `[]` — deny all. That is the safe failure, and it is what you get when nothing
+   above yields an origin (for example a suppressed referrer in Firefox).
 
 Before v1.74.0 the embed passed its *own* origin here, so a host's messages were
 never accepted at all. If you were working around that, remove the workaround.

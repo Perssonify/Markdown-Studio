@@ -29,13 +29,16 @@ the live site or a current `main` build before reporting.
 **Please do not open a public issue for a security problem, and please do not
 post a working exploit in a pull request.**
 
-Report privately through GitHub's private vulnerability reporting:
+Report privately by e-mail:
 
-- <https://github.com/SolutionPath/markdown-studio/security/advisories/new>
+- **<security@markdownstudio.com>**
 
-(If that page is not available to you, open a public issue that says only
-"security report, requesting a private channel" — with **no** details — and a
-maintainer will open an advisory and invite you to it.)
+The same address is published at
+<https://markdownstudio.com/.well-known/security.txt> (RFC 9116). The source
+repository is private, so GitHub's private vulnerability reporting is not
+available to outside reporters; e-mail is the channel. If you want to encrypt
+your report, say so in a first short message and we will agree a way to
+exchange it.
 
 A useful report includes:
 
@@ -66,9 +69,11 @@ no bug bounty.
 hardened; anything that gets past one of these controls is a valid report:
 
 - **SSRF.** `http(s)` only; `localhost`, `*.local` and `*.internal` refused;
-  private, loopback, link-local, CGNAT and cloud-metadata addresses refused
-  *after* DNS resolution, including IPv6 loopback/ULA/link-local and the
-  IPv4-in-IPv6 forms (mapped, NAT64, 6to4).
+  the resolved address must be **global unicast** — an allowlist, checked
+  *after* DNS resolution, so private, loopback, link-local, CGNAT,
+  cloud-metadata, multicast, reserved and documentation space are refused in
+  both families, as is every IPv4-in-IPv6 wrapper except the plain
+  `::ffff:a.b.c.d` mapping (which is judged as the IPv4 it spells).
 - **Per-hop revalidation.** Redirects are followed manually and every hop is
   re-validated (scheme, port, host, resolved addresses).
 - **DNS rebinding.** The vetted IPs are pinned to the connection through an
@@ -76,17 +81,22 @@ hardened; anything that gets past one of these controls is a valid report:
   between validation and connect (TOCTOU).
 - **Port allowlist.** Only ports 80 and 443, on the initial URL *and* on every
   redirect hop.
-- **First-party gate.** `Sec-Fetch-Site` must be `same-origin` or `none`; an
-  absent header (non-browser client) is refused, so the relay is not an open
-  proxy. Reads are CORS-restricted to this project's own origins.
+- **First-party gate.** `Sec-Fetch-Site` must be `same-origin` or `none`, so a
+  cross-site page cannot use a visitor's browser to drive the relay, and reads
+  are CORS-restricted to the two production origins exactly. This does **not**
+  stop a non-browser client, which can send any header it likes: to a script
+  the relay is a bounded proxy (public destinations, ports 80/443, ≤ 4 MB,
+  ≤ 20 s), and volume is limited at the platform. Using it as that bounded proxy
+  is known and not a finding; getting it to exceed one of those bounds is.
 - **Response neutralisation.** The upstream `Content-Type`/`Content-Disposition`
   are never reflected; responses are forced to
   `application/octet-stream` + `Content-Disposition: attachment` +
   `Content-Security-Policy: default-src 'none'; sandbox` + `nosniff`, so a
   same-origin navigation to `/api/import?url=…` cannot render attacker HTML on
   our origin.
-- **Resource bounds.** Hard byte cap, request timeout, redirect-hop cap and a
-  best-effort per-IP rate limit.
+- **Resource bounds.** A 4 MB response cap, request timeout, redirect-hop cap and
+  a best-effort per-IP rate limit, with the durable rate limit in the platform
+  firewall.
 
 **The import / ingest path (client side).** Content arriving from a file, an
 archive, a URL import or a paste is untrusted:
@@ -102,10 +112,16 @@ archive, a URL import or a paste is untrusted:
 
 **The embed and host-supplied parameters.** `embed.html` / the `integration`
 entry point accept host-controlled values (`theme`, `bg`, `accentColor`,
-`view_mode`, `readonly`, `ads`, `chrome`). CSS colours go through
+`view_mode`, `readonly`, `chrome`, `allowed_origin`). CSS colours go through
 `sanitizeCssColor` (`src/theme/palette.ts`). A parameter value that escapes
 into script, breaks out of the iframe, or turns into an outbound network
-request is in scope.
+request is in scope. The embed's host bridge can read and write the documents
+the embed sees; which origin may drive it is decided by
+`src/integration/embed-origins.ts` (a deploy-time `VITE_EMBED_ALLOWED_ORIGINS`
+allowlist, then the browser-reported framer). A framing page that gets bridge
+access despite a configured allowlist, or while naming a window other than
+itself, is in scope. An embed deployed WITHOUT an allowlist trusts whoever
+frames it — that is documented behaviour, not a finding.
 
 **The library API.** `@perssonify/editor` consumed as a package: an input a
 host passes in (initial document, host bridge calls) that leads to script
