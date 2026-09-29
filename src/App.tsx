@@ -8,6 +8,14 @@ import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
+import { sessionAdsFromParam } from "./utils/build-gates";
+import { installRemoteImagePolicy } from "./utils/remote-images";
+
+// Settings ▸ Privacy ▸ "Block remote images" is enforced as an img-src policy
+// for THIS page, and must be in force before any document renders — hence
+// module scope, not an effect. The app shell owns its document; the library
+// never does this (it must not restrict its host page).
+installRemoteImagePolicy();
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
 const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
@@ -36,14 +44,16 @@ export function App() {
     // SESSION only — via setState, which bypasses the persisting setters — so
     // opening a shared read-only/ads link doesn't overwrite the visitor's own
     // saved settings on later normal visits. The standalone app's counterpart to
-    // embed.tsx's param block.
+    // embed.tsx's param block. `ads` is honoured in DEVELOPMENT builds only
+    // (sessionAdsFromParam) — a crafted `?ads=1` link must not dress a
+    // production build in placeholder ad slots — but it is stripped either way.
     useEffect(() => {
         let params: URLSearchParams;
         try { params = new URLSearchParams(window.location.search); } catch { return; }
         if (![...params.keys()].some((k) => k === "ads" || k === "readonly" || k === "view_mode" || k === "import_url")) return;
         const store = useUIStore.getState();
-        const ads = params.get("ads");
-        if (ads !== null) useUIStore.setState({ showAds: ads === "true" || ads === "1" });
+        const ads = sessionAdsFromParam(params.get("ads"));
+        if (ads !== null) useUIStore.setState({ showAds: ads });
         const ro = params.get("readonly");
         if (ro !== null) useUIStore.setState({ readOnly: ro === "true" || ro === "1" });
         const vm = params.get("view_mode");
@@ -162,6 +172,10 @@ export function App() {
                 onAbout={() => navigate("about")}
                 onHelp={() => navigate("help")}
                 onStartTour={startTour}
+                // Backup reminders, the wiped-library explanation, the moved-
+                // domain banner and the install tip: the app's own library,
+                // so the app's own notices (an embedder's storage is theirs).
+                durabilityNotices
                 initialImportUrl={importUrlSeed}
                 graphOpen={route === "graph"}
                 // Opening the graph pushes (so browser Back closes it); closing

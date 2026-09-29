@@ -390,7 +390,11 @@ function FilesTab({
     const count = selected.size;
     const ok = await confirm({
       title: `Delete ${count} document${count > 1 ? "s" : ""}?`,
-      description: "This action cannot be undone.",
+      // Each delete records a pre-delete snapshot (see deleteDoc), so this is
+      // recoverable; the old "no undo" warning was wrong in the other direction.
+      description: count > 1
+        ? "They will be removed from your library. The last saved version of each stays in Tools ▸ Version history, where it can be restored as a new document."
+        : "It will be removed from your library. Its last saved version stays in Tools ▸ Version history, where you can restore it as a new document.",
       confirmLabel: "Delete",
       destructive: true,
     });

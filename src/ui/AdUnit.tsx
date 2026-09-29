@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useUIStore } from "../store/uiStore";
+import { adsAvailable } from "../utils/build-gates";
 
 export type AdUnitVariant = "sidebar-inline" | "floating-bar" | "right-rail";
 
@@ -25,13 +26,18 @@ let sidebarAdDismissed = false;
  * a real network later, replace the placeholder markup inside each variant with
  * the network's slot element — the gating here stays the same.
  *
+ * DEVELOPMENT BUILDS ONLY (`adsAvailable`). The toggles and the URL parameter
+ * are hidden in production too, but the check that matters is this one: a
+ * `pf:show-ads=true` stored by an earlier version, or the embed's own `?ads=`
+ * handling, would otherwise still paint "Your Ad Here" over a shipped build.
+ *
  *   sidebar-inline — compact banner inside the sidebar doc list.
  *   floating-bar   — wide bottom-anchored bar that slides up (all widths).
  *   right-rail     — tall slot on the right of the editor on wide (xl) screens.
  */
 export function AdUnit({ variant, className, chromeFull = true }: AdUnitProps) {
   const showAds = useUIStore((s) => s.showAds);
-  if (!showAds || !chromeFull) return null;
+  if (!adsAvailable() || !showAds || !chromeFull) return null;
   if (variant === "sidebar-inline") return <SidebarInlineAd className={className} />;
   if (variant === "right-rail") return <RightRailAd className={className} />;
   return <FloatingBarAd className={className} />;

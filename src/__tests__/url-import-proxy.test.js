@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import { fetchImportResource } from "../store/url-import";
 
 const DRIVE_VIEW = "https://drive.google.com/file/d/12a4D7oHxJ7bKlkJV6hpQMS5FX8iPXSnD/view?usp=sharing";
@@ -6,6 +6,11 @@ const DRIVE_VIEW = "https://drive.google.com/file/d/12a4D7oHxJ7bKlkJV6hpQMS5FX8i
 function md(body, ct = "text/markdown") {
   return new Response(body, { status: 200, headers: { "content-type": ct } });
 }
+
+// The relay is opt-in (A076): these cases exercise the relay PATH, so the
+// visitor says yes. Consent itself is covered by g4-relay-consent.test.js.
+const allowRelay = async () => true;
+beforeEach(() => localStorage.clear());
 
 describe("fetchImportResource — direct vs proxy fallback", () => {
   it("uses a direct fetch (no proxy) for a CORS-friendly host", async () => {
@@ -28,7 +33,7 @@ describe("fetchImportResource — direct vs proxy fallback", () => {
       if (href.includes("/api/import")) return md("# Relayed", "application/octet-stream");
       throw new TypeError("Failed to fetch"); // simulates a CORS block
     };
-    const r = await fetchImportResource(DRIVE_VIEW, { fetchImpl });
+    const r = await fetchImportResource(DRIVE_VIEW, { fetchImpl, confirmRelay: allowRelay });
     expect(r.viaProxy).toBe(true);
     expect(r.text).toContain("Relayed");
     // The relay wraps the *normalized* Drive download URL.
@@ -41,7 +46,7 @@ describe("fetchImportResource — direct vs proxy fallback", () => {
     const fetchImpl = async () => {
       throw new TypeError("Failed to fetch");
     };
-    await expect(fetchImportResource("https://example.com/notes.md", { fetchImpl })).rejects.toThrow(
+    await expect(fetchImportResource("https://example.com/notes.md", { fetchImpl, confirmRelay: allowRelay })).rejects.toThrow(
       /Download the file and drag it in/i,
     );
   });
@@ -52,6 +57,6 @@ describe("fetchImportResource — direct vs proxy fallback", () => {
         return md("<!DOCTYPE html><html><head><title>Sign in - Google Accounts</title>", "application/octet-stream");
       throw new TypeError("Failed to fetch");
     };
-    await expect(fetchImportResource(DRIVE_VIEW, { fetchImpl })).rejects.toThrow(/sign-in or confirmation page/i);
+    await expect(fetchImportResource(DRIVE_VIEW, { fetchImpl, confirmRelay: allowRelay })).rejects.toThrow(/sign-in or confirmation page/i);
   });
 });

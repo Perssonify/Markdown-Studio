@@ -745,7 +745,9 @@ export function useDocumentLifecycle({
     // hydrates nothing, so it observes the generation rather than claiming it.
     const myGen = claimEditorGeneration(docId === useDocumentStore.getState().activeDocId);
     if (!skipConfirm) {
-      const ok = await confirm({ title: "Delete document?", description: "This action cannot be undone.", confirmLabel: "Delete", destructive: true });
+      // Recoverable, so no "no undo" warning: deleteDoc records a pre-delete
+      // snapshot first, and Version history restores it as a new document.
+      const ok = await confirm({ title: "Delete document?", description: "It will be removed from your library. Its last saved version stays in Tools ▸ Version history, where you can restore it as a new document.", confirmLabel: "Delete", destructive: true });
       if (!ok) return;
     }
     endCompositions(); // the document is going away — see handleCloseTab

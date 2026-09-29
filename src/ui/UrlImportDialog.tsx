@@ -25,10 +25,12 @@ import {
   buildImportShareLink,
   detectUrlFormat,
   fetchImportResource,
+  relayConsentPrompt,
   UrlImportError,
   type ImportResource,
 } from "@/store/url-import";
 import { ArchiveEncryptedError, ArchiveWrongPasswordError } from "@/store/archive";
+import { APP_NAME } from "@/constants";
 import { useDialog } from "./DialogProvider";
 
 interface UrlImportDialogProps {
@@ -81,11 +83,17 @@ export function UrlImportDialog({
     }
   }, [open, initialUrl]);
 
+  // Asked once, before the relay is ever used; url-import remembers the answer.
+  const confirmRelay = useCallback(
+    (target: URL) => dialog.confirm(relayConsentPrompt(target.hostname)),
+    [dialog],
+  );
+
   const runFetch = useCallback(async (target: string, password?: string) => {
     setError(null);
     setPhase("loading");
     try {
-      const res = await fetchImportResource(target, password ? { password } : {});
+      const res = await fetchImportResource(target, password ? { password, confirmRelay } : { confirmRelay });
       setResource(res);
       if (res.kind === "archive") {
         setSelected(new Set(res.entries.map((e) => e.path)));
@@ -109,7 +117,7 @@ export function UrlImportDialog({
       setError(msg);
       setPhase("input");
     }
-  }, [dialog]);
+  }, [dialog, confirmRelay]);
 
   // ?import_url= deep links PRE-FILL the URL field (done in the open effect
   // above) but do NOT auto-fetch: a shared link must not force the visitor's
@@ -247,8 +255,8 @@ export function UrlImportDialog({
 
             <p className="text-[11px] leading-relaxed text-muted-foreground/70">
               Trouble with a link? Some hosts (e.g. Google Drive) block direct browser
-              access — we retry via the app's server relay automatically. If it still fails,
-              download the file and drag it in (or use <span className="font-medium">Import file</span>).
+              access — with your permission, the app can fetch those through its own server.
+              Otherwise, download the file and drag it in (or use <span className="font-medium">Import file</span>).
             </p>
           </div>
         )}
@@ -317,8 +325,8 @@ export function UrlImportDialog({
               <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
                 <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
                 <span>
-                  This host blocks direct browser access, so it was fetched via the app's own
-                  server relay (first-party — not a third-party proxy).
+                  This host blocks direct browser access, so it was fetched through the
+                  {" "}{APP_NAME} server, as you allowed (first-party — not a third-party proxy).
                 </span>
               </p>
             )}

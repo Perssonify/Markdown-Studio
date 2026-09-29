@@ -1,6 +1,6 @@
 import { FileText, Heart, Shield, WifiOff } from "lucide-react";
 import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, VERSION } from "../../constants";
-import { CREDITS, LICENSE_SUMMARY } from "../../data/credits";
+import { CREDITS, LICENSE_SUMMARY, THIRD_PARTY_NOTICES_PATH } from "../../data/credits";
 import { PageChrome } from "./PageChrome";
 
 interface AboutPageProps {
@@ -38,8 +38,8 @@ export function AboutPage({ onClose }: AboutPageProps) {
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
             A dual-pane Markdown editor that keeps a raw-Markdown source and a rich-text
             preview perfectly in sync — with math, diagrams, music, tables, folders, a
-            knowledge graph, a card board, and one-click export. It runs entirely in your
-            browser: no account, no server, nothing uploaded.
+            knowledge graph, a card board, and one-click export. It runs in your browser:
+            there is no account, and your documents are stored on your device, not on a server.
           </p>
           <a
             href={APP_URL}
@@ -54,8 +54,9 @@ export function AboutPage({ onClose }: AboutPageProps) {
         {/* Principles */}
         <div className="mt-10 grid gap-3 sm:grid-cols-3">
           <Highlight icon={Shield} title="Private by design">
-            Your documents never leave your device. Everything is stored locally in this
-            browser — there is no account and no server that reads your content.
+            Your documents are stored in this browser. There is no account, and no server
+            stores or reads them. Importing from a URL asks before using our relay, and
+            remote images can be blocked — both in Settings ▸ Privacy.
           </Highlight>
           <Highlight icon={WifiOff} title="Works offline">
             Installable as an app and cached for offline use, so you can keep writing
@@ -74,6 +75,19 @@ export function AboutPage({ onClose }: AboutPageProps) {
             {APP_NAME} stands on the shoulders of these projects. Versions reflect what this
             build was tested against. Licenses in use:{" "}
             <span className="font-medium text-foreground">{LICENSE_SUMMARY.join(" · ")}</span>.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            These are the highlights. The complete list of open-source software in this
+            build, with every licence and notice text, is in the{" "}
+            <a
+              href={THIRD_PARTY_NOTICES_PATH}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary hover:underline"
+            >
+              third-party licences
+            </a>
+            .
           </p>
 
           <div className="mt-6 space-y-8">
@@ -116,6 +130,11 @@ export function AboutPage({ onClose }: AboutPageProps) {
         <footer className="mt-12 border-t border-border pt-6 text-center text-xs text-muted-foreground">
           © {APP_NAME} · Made with 💗 by Perssonify. All trademarks and licenses belong to
           their respective owners.
+          <span className="mt-2 block">
+            <a href={THIRD_PARTY_NOTICES_PATH} target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
+              Third-party licences
+            </a>
+          </span>
         </footer>
       </div>
     </PageChrome>
