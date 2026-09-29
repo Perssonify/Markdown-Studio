@@ -25,12 +25,12 @@ import { printHtmlDocument } from "./store/print-export";
 import type { IngestFormat } from "./store/ingest";
 import { sanitizeForIngest } from "./store/ingest";
 import { exportGraph } from "./store/link-index";
-import { headingLinkHtml } from "./formatting/heading-link";
 import type { PerssonifyEditorProps } from "./editor/props";
 import { useOverlayInert, useWorkspaceViews } from "./editor/useWorkspaceViews";
 import { useAutosave } from "./editor/useAutosave";
 import { useCanonicalChangeHandler, useContentChangeEmitter } from "./editor/useChangeNotifications";
 import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation";
+import { usePaneCommands } from "./editor/usePaneCommands";
 import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
 import { extractHeadings } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
@@ -80,7 +80,6 @@ import { TiptapPaneHandle } from "./ui/TiptapPane";
 
 // Lazy-loaded panels (bundle splitting - load only when feature is used)
 import { LazyChunkBoundary } from "./ui/LazyChunkBoundary";
-import { promptImage } from "./formatting/image-insert";
 const FindReplaceBar = React.lazy(() => import("./ui/FindReplace").then((m) => ({ default: m.FindReplaceBar })));
 const GraphView = React.lazy(() => import("./ui/GraphView").then((m) => ({ default: m.GraphView })));
 const CardsView = React.lazy(() => import("./ui/CardsView").then((m) => ({ default: m.CardsView })));
@@ -456,14 +455,17 @@ export function PerssonifyEditor({
     emitContentChange();
   }, [_handleHtmlChange, emitContentChange]);
 
-  // ── Context menu: headings + heading-anchor insertion ───────────────────────
-  // Tracks which pane the caret was last in, so an inserted anchor link lands
-  // in the pane the user is actually working in (split view).
-  const lastFocusedPaneRef = useRef<"md" | "html">("html");
-  const getContextHeadings = useCallback(
-    () => extractHeadings(getCanonical()).map((h) => ({ level: h.level, text: h.text })),
-    [getCanonical]
-  );
+  // ── Pane commands ─────────────────────────────────────────────────────────
+  // What acts on "the pane you are in" (usePaneCommands): the right-click
+  // menu's API, clipboard, heading-anchor insertion, the insert prompts, and
+  // the focus handlers that remember which pane last had the caret.
+  const {
+    lastFocusedPaneRef, contextMenuApi, handleClipboard,
+    handleFocusMdPane, handleFocusHtmlPane, editLinkCb, promptLinkCb,
+  } = usePaneCommands({
+    cmRef, tiptapRef, mode, initDoneRef, getCanonical, handleMdChange, handleHtmlChange,
+    flushPendingSync, dispatch, setFocusedPane, promptText, equationPrompt, toast,
+  });
   // The Workspace panel's Outline: the TOC headings and which one the reader is
   // scrolled to (useOutline — the tracker is read-only and only runs while the
   // Outline tab is showing).
@@ -498,63 +500,6 @@ export function PerssonifyEditor({
       return exportGraph(merged, idx);
     },
   }), [getCanonical]);
-  const insertHeadingLink = useCallback((anchor: string) => {
-    if (useUIStore.getState().readOnly) return; // read-only: don't mutate the doc
-    // Same-document anchor link: [[#Heading]]. Insert into whichever pane is
-    // active — the markdown pane gets the raw syntax; the rich pane gets a real
-    // anchor <a> (WikiLink preserves data-doc-link / data-anchor) so it renders
-    // and round-trips immediately.
-    const pane = mode === "md" ? "md" : mode === "html" ? "html" : lastFocusedPaneRef.current;
-    if (pane === "md") {
-      cmRef.current?.insertAtCursor(`[[#${anchor}]]`);
-      handleMdChange();
-    } else {
-      const editor = tiptapRef.current?.getEditor?.();
-      if (!editor) return;
-      editor.chain().focus().insertContent(
-        headingLinkHtml(anchor)
-      ).run();
-      handleHtmlChange();
-    }
-  }, [mode, cmRef, tiptapRef, handleMdChange, handleHtmlChange]);
-
-  // Clipboard + select-all for the right-click menu. Pane-aware (markdown pane
-  // = CodeMirror, rich pane = TipTap). cut/copy run on the live selection via
-  // execCommand (the menu click is a user gesture, so the browser allows it);
-  // paste reads the async clipboard and inserts into the focused pane.
-  const handleClipboard = useCallback(async (action: "cut" | "copy" | "paste" | "selectAll") => {
-    // Cut and paste mutate the document — block them in read-only mode (copy and
-    // select-all are non-destructive and stay available).
-    if ((action === "cut" || action === "paste") && useUIStore.getState().readOnly) return;
-    const pane = mode === "md" ? "md" : mode === "html" ? "html" : lastFocusedPaneRef.current;
-    if (action === "selectAll") {
-      if (pane === "md") {
-        const v = cmRef.current?.getView();
-        if (v) { v.dispatch({ selection: { anchor: 0, head: v.state.doc.length } }); v.focus(); }
-      } else {
-        tiptapRef.current?.getEditor?.()?.chain().focus().selectAll().run();
-      }
-      return;
-    }
-    if (action === "paste") {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (!text) return;
-        if (pane === "md") { cmRef.current?.insertAtCursor(text); handleMdChange(); }
-        else { tiptapRef.current?.getEditor?.()?.chain().focus().insertContent(text).run(); handleHtmlChange(); }
-      } catch {
-        toast.show("Clipboard access was blocked by the browser", "info");
-      }
-      return;
-    }
-    // cut / copy — focus the pane, then run the native command on its selection.
-    const dom = pane === "md"
-      ? cmRef.current?.getView()?.dom
-      : (tiptapRef.current?.getEditor?.()?.view?.dom as HTMLElement | undefined);
-    dom?.focus?.();
-    try { document.execCommand(action); } catch { /* no-op */ }
-    if (action === "cut") { if (pane === "md") handleMdChange(); else handleHtmlChange(); }
-  }, [mode, cmRef, tiptapRef, handleMdChange, handleHtmlChange, toast]);
 
   // ── Stable callbacks for the memoized chrome ──────────────────────────────
   // MenuBar / StatusBar / BottomTray are React.memo'd, but every one of these
@@ -632,49 +577,7 @@ export function PerssonifyEditor({
   const closeActiveTab = useCallback(() => {
     if (activeDocId) handleCloseTab(activeDocId);
   }, [activeDocId, handleCloseTab]);
-  const handleFocusMdPane = useCallback(() => {
-    if (initDoneRef.current) flushPendingSync();
-    lastFocusedPaneRef.current = "md";
-    setFocusedPane("md");
-  }, [flushPendingSync, setFocusedPane]);
-  const handleFocusHtmlPane = useCallback(() => {
-    if (initDoneRef.current) flushPendingSync();
-    lastFocusedPaneRef.current = "html";
-    setFocusedPane("html");
-  }, [flushPendingSync, setFocusedPane]);
 
-  /**
-   * The right-click menu's "ask, then insert" items. It used to dispatch these
-   * four commands with no value at all, and the dispatcher guards each on
-   * `if (value)` — so Inline formula and Formula block did nothing in either
-   * pane, and Add link / Image did nothing in the rich pane. The toolbar and the
-   * menu bar have always prompted first; this is the same call, in one place.
-   */
-  const promptInsert = useCallback(async (kind: "link" | "image" | "mathInline" | "mathBlock") => {
-    if (kind === "link") {
-      const url = await promptText("Insert Link", {
-        placeholder: "https://example.com", description: "Enter the URL for the link.",
-      });
-      if (url) dispatch("createLink", url);
-      return;
-    }
-    if (kind === "image") {
-      const img = await promptImage(promptText);
-      if (img) dispatch("insertImage", img);
-      return;
-    }
-    const block = kind === "mathBlock";
-    const latex = await equationPrompt(block ? "Insert Formula (block)" : "Insert inline formula", {
-      display: block ? "block" : "inline",
-      description: block ? "LaTeX rendered with KaTeX ($$…$$)." : "Inline LaTeX ($…$).",
-    });
-    if (latex && latex.trim()) dispatch(block ? "insertMathBlock" : "insertMathInline", latex);
-  }, [promptText, equationPrompt, dispatch]);
-
-  const contextMenuApi = useMemo(
-    () => ({ dispatch, getHeadings: getContextHeadings, insertHeadingLink, clipboard: handleClipboard, promptInsert }),
-    [dispatch, getContextHeadings, insertHeadingLink, handleClipboard, promptInsert]
-  );
   // Freshly-built JSX in an array literal: every render handed the memoized
   // tray a brand-new tabs array containing brand-new elements.
   const trayTabs = useMemo(() => [
@@ -1362,22 +1265,6 @@ export function PerssonifyEditor({
   });
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
-  /** The link bubble menu's "Edit" — through the styled dialog, not window.prompt. */
-  const editLinkCb = useCallback(
-    (currentUrl: string) => promptText("Edit link", {
-      placeholder: "https://example.com",
-      description: "Enter the URL for this link. Leave it empty to remove the link.",
-      defaultValue: currentUrl,
-    }),
-    [promptText]
-  );
-  const promptLinkCb = useCallback(
-    () => promptText("Insert Link", {
-      placeholder: "https://example.com",
-      description: "Enter the URL for the link.",
-    }),
-    [promptText]
-  );
   // Find/Replace can open in two modes: ⌘F (find) and ⌘H (replace expanded).
   // `frWithReplace` seeds the panel's replace row; passed live so ⌘H expands it
   // even when the panel is already open.
