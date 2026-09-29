@@ -120,6 +120,7 @@ export function compileFindQuery(query: string, opts: FindOptions, pane: FindPan
  * can never stall the loop, and is still reported (a Replace All of `^` with
  * "> " quotes every line).
  */
+/* eslint-disable no-var -- this function's SOURCE TEXT runs in a Web Worker (find-worker.ts): conservative syntax on purpose */
 export function execAllCore(
   source: string,
   flags: string,
@@ -177,6 +178,7 @@ export function execAllCore(
   }
   return { matches: matches, truncated: truncated };
 }
+/* eslint-enable no-var */
 
 /**
  * The text a `$`-template produces for one match — String.prototype.replace's

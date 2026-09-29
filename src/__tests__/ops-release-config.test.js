@@ -26,7 +26,7 @@ describe("CI is reproducible (A014)", () => {
 
   it.each(WORKFLOWS)("%s never installs `latest` Bun and grants least privilege", (_f, text) => {
     expect(text).not.toMatch(/bun-version:\s*latest/);
-    expect(text).toMatch(/^permissions:\n  contents: read/m);
+    expect(text).toMatch(/^permissions:\n {2}contents: read/m);
   });
 
   it("CI pins Bun, installs from the lockfile, and gates on lint (when present), types, tests and builds", () => {

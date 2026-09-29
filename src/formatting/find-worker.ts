@@ -65,6 +65,7 @@ interface FindRequest {
  * matcher is passed in) for the same reason as execAllCore — its source text is
  * what the Worker runs.
  */
+/* eslint-disable no-var -- this function's SOURCE TEXT runs in a Web Worker (find-worker.ts): conservative syntax on purpose */
 export function findRequestCore(req: FindRequest, exec: typeof execAllCore): FindRunResult {
   var results: ExecResult[] = [];
   var left = req.maxMatches;
@@ -78,6 +79,7 @@ export function findRequestCore(req: FindRequest, exec: typeof execAllCore): Fin
   }
   return { results: results, truncated: truncated };
 }
+/* eslint-enable no-var */
 
 /** The Worker's whole program. */
 export function findWorkerSource(): string {
