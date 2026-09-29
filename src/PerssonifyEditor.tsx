@@ -16,6 +16,7 @@ import { collectUnloadStash, ConflictError, describeUncommittedSave, isBlankCano
 import { snapshotStore } from "./store/snapshot-store";
 import { stashUnsaved, type RecoveryEntry } from "./store/crash-recovery";
 import { appendHtmlToCanonical, htmlToCanonical } from "./store/canonical-ops";
+import { captureIngestHeadless } from "./store/headless-ingest";
 import { canonicalMisfit, CURRENT_SCHEMA_VERSION, isNewerSchema } from "./store/schema-version";
 import { useEditorStore } from "./store/editorStore";
 import type { IDBStorageConfig, StorageMetrics } from "./store/idb-storage-adapter";
@@ -26,7 +27,7 @@ import { sanitizeForIngest } from "./store/ingest";
 import { exportGraph } from "./store/link-index";
 import type { StorageAdapter } from "./store/storage-adapter";
 import { StorageQuotaError } from "./store/storage-adapter";
-import { canonicalToHtml, canonicalToMarkdown } from "./engine/serialize-doc";
+import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
 import { extractHeadings } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
@@ -288,7 +289,7 @@ export function PerssonifyEditor({
   const {
     documents, activeDoc, activeDocId,
     fidelityReport, storageMetrics, saveStatus,
-    initialize, createDoc, finalizeDoc, saveActiveDoc,
+    initialize, createDoc, finalizeDoc, saveNewDoc, saveActiveDoc,
     setDirty, revertActiveDoc, switchToDoc, closeTab,
     deleteDoc, renameDoc, duplicateDoc, patchDocById,
     updateDerived, setEngine, setSyncModeInternal,
@@ -297,7 +298,7 @@ export function PerssonifyEditor({
     useShallow((s) => ({
       documents: s.documents, activeDoc: s.activeDoc, activeDocId: s.activeDocId,
       fidelityReport: s.fidelityReport, storageMetrics: s.storageMetrics, saveStatus: s.saveStatus,
-      initialize: s.initialize, createDoc: s.createDoc, finalizeDoc: s.finalizeDoc, saveActiveDoc: s.saveActiveDoc,
+      initialize: s.initialize, createDoc: s.createDoc, finalizeDoc: s.finalizeDoc, saveNewDoc: s.saveNewDoc, saveActiveDoc: s.saveActiveDoc,
       setDirty: s.setDirty, revertActiveDoc: s.revertActiveDoc, switchToDoc: s.switchToDoc, closeTab: s.closeTab,
       deleteDoc: s.deleteDoc, renameDoc: s.renameDoc, duplicateDoc: s.duplicateDoc, patchDocById: s.patchDocById,
       updateDerived: s.updateDerived, setEngine: s.setEngine,
@@ -1016,54 +1017,29 @@ export function PerssonifyEditor({
   }), []);
 
   /**
-   * Activate a freshly created document, push its ingest HTML into the live
-   * editor, and capture the resulting canonical — re-checking after EVERY yield
-   * that the editor still holds THIS document.
+   * Persist and ACTIVATE a freshly created document, then hydrate the editor
+   * with it — if, after every await, the store is still on it.
    *
-   * The rAF below is a real yield, and a loop over an archive of fifty notes
-   * runs for seconds — long enough for the user to click a document in the
-   * library. That switch hydrates the editor with THEIR document, and capturing
-   * here would then persist that content as this entry's canonical (the file's
-   * own content discarded) while yanking the store back mid-switch. Re-push and
-   * re-check once; if the store still is not on this document, persist the
-   * pre-Tiptap canonical rather than someone else's content.
+   * The canonical is captured HEADLESSLY (see captureIngestHeadless): this used
+   * to borrow the live editor — activate, push the ingest HTML in, yield a
+   * frame, read it back — and a document switch landing in that frame either
+   * captured the OTHER document's content as this one's or persisted an empty
+   * "Untitled". There is no yield between conversion and persistence now.
+   * Hydration is checked on `activeDocId` alone: a switch that took the store
+   * elsewhere hydrates its own document, and this must not push over it.
    *
-   * Checked on `activeDocId` ALONE, deliberately — not through
-   * `isEditorTargeting`. `finalizeDoc(..., true)` activates without marking
-   * hydrated (the capture is what establishes hydration), so requiring
-   * `hydratedDocId` here is false on the normal path: it sent every markdown
-   * import — including the first-run starter documents — down the no-editor
-   * fallback, which persists the pre-Tiptap canonical and left them all titled
-   * "Untitled".
-   *
-   * Extracted because THREE loops need it and only one had it: `importItems`
-   * carried the guard, while `addDocumentsImpl` (the host bridge's
-   * `addDocuments`) and `handleCardCreate` (quick capture on the Cards board)
-   * ran the identical sequence — same awaits, same rAF — unguarded.
+   * Used by every path that creates and opens a document outside import:
+   * the host bridge's `addDocuments` and `importContent`, and quick capture
+   * on the Cards board.
    */
   const activateAndCapture = useCallback(async (doc: DocumentRecord) => {
-    if (!doc._ingestHtml) {
-      await finalizeDoc(doc, null, false);   // pmjson: canonical already set
-      return;
-    }
-    await finalizeDoc(doc, null, true);      // activate → mounts the editor
+    captureIngestHeadless(doc, tiptapRef.current?.getEditor?.()?.schema ?? headlessSchema());
+    await finalizeDoc(doc, null, false);     // persist + activate (the editor mounts if it was not)
     const editor = await waitForEditor(2000);
-    if (!editor) {
-      await finalizeDoc(doc, null, false);
-      return;
+    if (editor && useDocumentStore.getState().activeDocId === doc.id) {
+      hydrateEditorWithDoc(doc.id, doc.canonical);
     }
-    setFromHtml(doc._ingestHtml);
-    await new Promise((r) => requestAnimationFrame(r));
-
-    const stillOurs = () => useDocumentStore.getState().activeDocId === doc.id;
-    if (!stillOurs()) {
-      await finalizeDoc(doc, null, true);
-      setFromHtml(doc._ingestHtml);
-      await new Promise((r) => requestAnimationFrame(r));
-    }
-    if (stillOurs()) await finalizeDoc(doc, editor, false);
-    else await finalizeDoc(doc, null, false);
-  }, [finalizeDoc, setFromHtml, waitForEditor]);
+  }, [finalizeDoc, waitForEditor, hydrateEditorWithDoc, tiptapRef]);
 
   /**
    * Append documents to the store (persisted), non-destructively. Reuses the
@@ -1180,13 +1156,16 @@ export function PerssonifyEditor({
     getDocuments: () => useDocumentStore.getState().documents,
     getActiveDocument: () => activeDoc,
     getDocById: (id: string) => useDocumentStore.getState().getDocById(id),
+    // Creates and opens a document from host-supplied content. It used to push
+    // the content straight into the live editor — over the open document, with
+    // no flush, no draft, no save — and a `pmjson` payload was neither saved
+    // nor opened at all. It is a document-LEAVING path like import and
+    // addDocuments, and goes through the same two steps they do.
     importContent: async (content: string, format: string) => {
       const doc = createDoc(content, format as IngestFormat, "api", { mdToHtml: engine?.mdToHtml });
-      if (doc?._ingestHtml) {
-        setFromHtml(doc._ingestHtml);
-        const editor = tiptapRef.current?.getEditor();
-        if (editor) await finalizeDoc(doc as DocumentRecord, editor);
-      }
+      if (!doc) return doc;
+      await prepareToLeaveActiveDoc();
+      await activateAndCapture(doc as DocumentRecord);
       return doc;
     },
     /**
@@ -1323,7 +1302,7 @@ export function PerssonifyEditor({
     // would have written into the newly-active doc.
     openDocument: (id: string) => handleSwitchDoc(id),
     exportAs: async (format: string) => handleAction?.(`export-${format}`),
-  }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical, hydrateEditorWithDoc]);
+  }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical, hydrateEditorWithDoc, prepareToLeaveActiveDoc, activateAndCapture]);
 
   // ── Inject storage adapter before init (runs once, synchronously before engine) ──
   const storageInjectedRef = useRef(false);
@@ -1411,56 +1390,30 @@ export function PerssonifyEditor({
       return parentId;
     };
 
+    // Every file is converted HEADLESSLY against the editor's schema — the live
+    // one when an editor is mounted, the identical serialisation schema when
+    // not. The loop used to BORROW the live editor per file (activate, push the
+    // HTML in, yield a frame, read the canonical back): a click in the library
+    // during that frame hydrated the user's own document, and the fallback then
+    // persisted the file's pre-editor canonical — an empty "Untitled" — and
+    // counted it as imported, while each later file yanked the store back off
+    // the user's choice. Nothing here activates a document or touches the
+    // editor now; the caller opens the first import through handleSwitchDoc,
+    // the ordinary leaving path.
+    const schema = tiptapRef.current?.getEditor?.()?.schema ?? headlessSchema();
+    let firstDoc: DocumentRecord | null = null;
+
     for (const item of items) {
       const doc = createDoc(item.raw, item.format, "file-import", { mdToHtml: engine?.mdToHtml });
       if (!doc) continue;
-      if (!firstDocId) firstDocId = doc.id;
+      if (!firstDocId) { firstDocId = doc.id; firstDoc = doc as DocumentRecord; }
       const folderId = item.folderPath.length ? ensureFolder(item.folderPath) : null;
 
-      // finalizeDoc rethrows persistence failures (quota, adapter errors) —
-      // count them so callers can report the truth instead of "Imported N".
+      // Persistence failures (quota, adapter errors) are counted so callers
+      // can report the truth instead of "Imported N".
       try {
-        if (doc._ingestHtml) {
-          await finalizeDoc(doc as DocumentRecord, null, true);
-          const editor = await waitForEditor(2000);
-          if (editor) {
-            setFromHtml(doc._ingestHtml);
-            await new Promise((r) => requestAnimationFrame(r));
-            // The rAF above is a real yield, and importing an archive of 50
-            // notes keeps this loop running for seconds — long enough for the
-            // user to click a document in the library. That switch hydrates the
-            // editor with THEIR document, and capturing here would then persist
-            // that document's content as this imported entry's canonical (the
-            // file's actual content discarded) while yanking the store back
-            // mid-switch. Re-push and re-check once; if the store still is not
-            // on this import, persist the pre-Tiptap canonical rather than
-            // someone else's content.
-            //
-            // Checked on `activeDocId` ALONE, deliberately — not through
-            // `isEditorTargeting`. `finalizeDoc(..., true)` activates the document
-            // without marking it hydrated (hydration is what the capture below
-            // establishes), so requiring hydratedDocId here is false on the
-            // normal path: it sent every markdown import — including the
-            // first-run starter documents — down the no-editor fallback, which
-            // persists the pre-Tiptap canonical and left them all titled
-            // "Untitled".
-            const stillOurs = () => useDocumentStore.getState().activeDocId === doc.id;
-            if (!stillOurs()) {
-              await finalizeDoc(doc as DocumentRecord, null, true);
-              setFromHtml(doc._ingestHtml);
-              await new Promise((r) => requestAnimationFrame(r));
-            }
-            if (stillOurs()) {
-              await finalizeDoc(doc as DocumentRecord, editor, false);
-            } else {
-              await finalizeDoc(doc as DocumentRecord, null, false);
-            }
-          } else {
-            await finalizeDoc(doc as DocumentRecord, null, false);
-          }
-        } else {
-          await finalizeDoc(doc as DocumentRecord, null, false);
-        }
+        captureIngestHeadless(doc as DocumentRecord, schema);
+        await saveNewDoc(doc as DocumentRecord);
       } catch (e) {
         console.warn("[importItems] Persist failed for imported doc:", e);
         failedCount++;
@@ -1470,24 +1423,19 @@ export function PerssonifyEditor({
       importedCount++;
     }
 
-    // Leave the editor genuinely holding the document the store says is active.
-    // A `pmjson` item has no ingest HTML, so its branch never pushes content
-    // into the editor: `activeDocId` moved to the import while `hydratedDocId`
-    // still pointed at the PREVIOUS document. The caller's `handleSwitchDoc`
-    // could not repair it either — the ids already matched, so it returned
-    // immediately — leaving the editor showing the old document's text under the
-    // new document's identity, with every subsequent save refused for the rest
-    // of the session ("editor is not hydrated for the active document").
-    if (firstDocId) {
-      const store = useDocumentStore.getState();
-      if (store.activeDocId === firstDocId && store.hydratedDocId !== firstDocId) {
-        const rec = await store.getDocById(firstDocId).catch(() => null);
-        if (rec?.canonical) hydrateEditorWithDoc(firstDocId, rec.canonical);
+    // With NO editor mounted (an empty library) the caller's switch would
+    // hydrate an editor that does not exist yet. Open the first import here,
+    // once the editor has mounted for it; handleSwitchDoc then finds it open.
+    if (firstDoc && importedCount > 0 && !useDocumentStore.getState().activeDocId) {
+      await finalizeDoc(firstDoc, null, true);          // activate only — already persisted
+      const editor = await waitForEditor(2000);
+      if (editor && useDocumentStore.getState().activeDocId === firstDoc.id) {
+        hydrateEditorWithDoc(firstDoc.id, firstDoc.canonical);
       }
     }
 
     return { importedCount, failedCount, firstDocId };
-  }, [createDoc, engine, finalizeDoc, waitForEditor, setFromHtml, prepareToLeaveActiveDoc, hydrateEditorWithDoc]);
+  }, [createDoc, engine, finalizeDoc, saveNewDoc, waitForEditor, prepareToLeaveActiveDoc, hydrateEditorWithDoc, tiptapRef]);
 
   useEffect(() => {
     if (!engineReady || !engine || initDoneRef.current) return;
