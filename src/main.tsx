@@ -1,45 +1,42 @@
+/// <reference types="vite-plugin-pwa/client" />
 import "@fontsource-variable/geist";
 import "@fontsource-variable/inter";
 import "katex/dist/katex.min.css";
 import { ThemeProvider } from "next-themes";
 import { createRoot } from "react-dom/client";
+import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
+import { setupServiceWorkerUpdates } from "./pwa/sw-updates";
 import "./styles.css";
 import { initPalette } from "./theme/palette";
+import { reloadForChunkErrorIfSafe, watchSaveProblems } from "./utils/app-health";
 import { diag } from "./utils/diag";
+import { installGlobalErrorCapture, recordDiagnostic } from "./utils/diagnostics";
+
+// Local, privacy-safe error capture (utils/diagnostics.ts): uncaught errors,
+// unhandled rejections and failed/refused/conflicted saves go into a small ring
+// a user can copy from the crash screen or Help ▸ About. Nothing is sent.
+installGlobalErrorCapture();
+watchSaveProblems();
 
 // Apply the persisted accent palette before first paint (no FOUC).
 initPalette();
 
-// Stale-deploy recovery: a lazy import() of a hashed chunk that a previous
-// deploy has purged (the cached index.html still points at the old hash) fails
-// with a `vite:preloadError`. Reload once to pull the fresh index + current
-// chunk hashes. A 10s throttle in sessionStorage prevents any reload loop.
-const PRELOAD_RELOAD_AT = "pf:preload-reload-at";
+// A lazy chunk Vite's preload helper could not fetch (offline, or a stale
+// deploy). It used to reload unconditionally — offline too, onto the browser's
+// error page — and over whatever the user was typing. Now the reload happens
+// only when it can help and cannot hurt (online, nothing unsaved, not a loop);
+// otherwise the error reaches the code that asked for the chunk, which says
+// what happened (LazyChunkBoundary, the export handlers).
 window.addEventListener("vite:preloadError", (event) => {
-  const last = Number(sessionStorage.getItem(PRELOAD_RELOAD_AT) || "0");
-  if (Date.now() - last < 10_000) return; // already reloaded very recently — don't loop
-  sessionStorage.setItem(PRELOAD_RELOAD_AT, String(Date.now()));
-  event.preventDefault();
-  location.reload();
+  recordDiagnostic({ kind: "chunk", error: (event as Event & { payload?: unknown }).payload });
+  if (reloadForChunkErrorIfSafe()) event.preventDefault();
 });
 
-// PWA update delivery. The service worker (vite.app.config.ts) uses autoUpdate +
-// skipWaiting + clientsClaim, so a new deploy installs and activates a fresh SW
-// in the background — but WITHOUT this, an already-open tab keeps rendering the
-// previously-cached build until a manual hard-reload, which reads as "my changes
-// never shipped". When the new SW takes control (`controllerchange`), reload once
-// so the tab picks up the new app. Guards: skip the first-install claim (no prior
-// controller) and never loop.
-if ("serviceWorker" in navigator) {
-  const hadController = !!navigator.serviceWorker.controller;
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloaded || !hadController) return;
-    reloaded = true;
-    location.reload();
-  });
-}
+// PWA updates: a new version WAITS and the user is told; nothing force-reloads
+// an open tab (src/pwa/sw-updates.ts). No-op where service workers are missing
+// and under `vite dev`.
+if ("serviceWorker" in navigator) setupServiceWorkerUpdates(registerSW);
 
 // Tell the index.html boot watchdog the bundle is alive (see the inline
 // script there — it self-heals stale-service-worker blank loads otherwise).
