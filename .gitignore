@@ -15,3 +15,6 @@ e2e/*.json
 # Temporary host-page directories built by the library / bridge e2e suites.
 .e2e-host-*/
 .e2e-bridge-*/
+
+# Git worktrees created by Claude Code agents (never part of the project).
+.claude/worktrees/
