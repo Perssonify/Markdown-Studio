@@ -30,8 +30,9 @@ import type { PerssonifyEditorProps } from "./editor/props";
 import { useOverlayInert, useWorkspaceViews } from "./editor/useWorkspaceViews";
 import { useAutosave } from "./editor/useAutosave";
 import { useCanonicalChangeHandler, useContentChangeEmitter } from "./editor/useChangeNotifications";
+import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation";
 import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
-import { extractHeadings, findHeadingByAnchor } from "./store/doc-outline";
+import { extractHeadings } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
@@ -57,11 +58,9 @@ import { StatusBar } from "./ui/StatusBar";
 import { ToastType, useToast } from "./ui/Toast";
 import { EditorToolbar } from "./ui/Toolbar";
 import { diagError } from "./utils/diag";
-import { scrollBehavior } from "./utils/reduced-motion";
 
 // Handle types for the sub-panes
 import { FileTextIcon, Link as LinkIcon, TerminalSquare } from "lucide-react";
-import { useActiveHeading } from "./hooks/useActiveHeading";
 import { useIsMobile } from "./hooks/use-mobile";
 import { ConsolePanel } from "./ui/ConsolePanel";
 import { getBacklinks, getForwardLinks } from "./store/link-index";
@@ -86,10 +85,6 @@ const FindReplaceBar = React.lazy(() => import("./ui/FindReplace").then((m) => (
 const GraphView = React.lazy(() => import("./ui/GraphView").then((m) => ({ default: m.GraphView })));
 const CardsView = React.lazy(() => import("./ui/CardsView").then((m) => ({ default: m.CardsView })));
 const WorkspacePanel = React.lazy(() => import("./ui/WorkspacePanel").then((m) => ({ default: m.WorkspacePanel })));
-
-// Stable empty outline reference for when the nav panel is closed (avoids a
-// fresh array identity churning DocNavPanel memoization).
-const EMPTY_HEADINGS: ReturnType<typeof extractHeadings> = [];
 
 /**
  * The dual-pane Markdown editor.
@@ -444,62 +439,11 @@ export function PerssonifyEditor({
   useEffect(() => { releaseEditorRef.current = releaseEditor; }, [releaseEditor]);
   useLayoutEffect(() => () => { releaseEditorRef.current(); }, []);
 
-  // Open a document scrolled to one of its headings (by document-order index),
-  // used by the graph's document-structure view. Heading elements in the rich
-  // pane render in the same order as extractHeadings(), so the index lines up.
-  const scrollToHeading = useCallback(async (docId: string, index: number) => {
-    // Await the switch so the editor is hydrated with the TARGET doc before we
-    // start matching headings — otherwise the retry loop could match (and stop
-    // on) the OLD document's DOM.
-    if (docId !== activeDocId) await handleSwitchDoc(docId);
-    setWorkspaceView("editor");
-    if (mode === "md") setMode("split"); // ensure the rich pane (which we scroll) is visible
-    const attempt = (tries: number) => {
-      // Only match once the store agrees the target doc is active AND hydrated.
-      const s = useDocumentStore.getState();
-      if (s.activeDocId === docId && s.hydratedDocId === docId) {
-        const editor = tiptapRef.current?.getEditor();
-        const dom = editor?.view?.dom as HTMLElement | undefined;
-        const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
-        const el = headings?.[index] as HTMLElement | undefined;
-        if (el) { el.scrollIntoView({ behavior: scrollBehavior(), block: "start" }); return; }
-      }
-      if (tries > 0) setTimeout(() => attempt(tries - 1), 200);
-    };
-    requestAnimationFrame(() => attempt(12));
-  }, [activeDocId, handleSwitchDoc, setWorkspaceView, mode, setMode]);
-
-  // Navigate a heading ANCHOR link ([[Doc#Heading]] / [[#Heading]]): switch to
-  // the target doc if needed, then scroll to the heading whose text matches the
-  // anchor. Matching is normalized (case/punctuation/spacing-insensitive) so it
-  // tolerates the small text variations that "auto-updating" links rely on.
-  const scrollToHeadingByAnchor = useCallback(async (docId: string | null, anchorText: string) => {
-    const targetId = docId ?? useDocumentStore.getState().activeDocId;
-    if (!targetId) return;
-    if (targetId !== useDocumentStore.getState().activeDocId) await handleSwitchDoc(targetId);
-    setWorkspaceView("editor");
-    if (mode === "md") setMode("split");
-    const attempt = (tries: number) => {
-      const s = useDocumentStore.getState();
-      if (s.activeDocId === targetId && s.hydratedDocId === targetId) {
-        const dom = tiptapRef.current?.getEditor()?.view?.dom as HTMLElement | undefined;
-        const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
-        if (headings) {
-          // The ONE anchor matcher (doc-outline). Its old inline normaliser,
-          // `[^a-z0-9]`, erased every non-Latin heading to "", so an anchor to
-          // any of them jumped to the FIRST non-Latin heading in the document.
-          const i = findHeadingByAnchor(Array.from(headings, (h) => h.textContent || ""), anchorText);
-          if (i >= 0) {
-            (headings[i] as HTMLElement).scrollIntoView({ behavior: scrollBehavior(), block: "start" });
-            return;
-          }
-          if (headings.length) { toast.show(`Heading not found: "${anchorText}"`, "info"); return; }
-        }
-      }
-      if (tries > 0) setTimeout(() => attempt(tries - 1), 200);
-    };
-    requestAnimationFrame(() => attempt(12));
-  }, [handleSwitchDoc, setWorkspaceView, mode, setMode, toast, tiptapRef]);
+  // Heading navigation (useHeadingNavigation): open a document at a heading by
+  // index (the map's rail, the Outline) or by anchor text ([[Doc#Heading]]).
+  const { scrollToHeading, scrollToHeadingByAnchor, handleNavigateHeading } = useHeadingNavigation({
+    tiptapRef, activeDocId, mode, setMode, handleSwitchDoc, setWorkspaceView, toast,
+  });
 
   // Wrap MD/HTML change handlers to also emit onContentChange
   const handleMdChange = useCallback(() => {
@@ -520,33 +464,12 @@ export function PerssonifyEditor({
     () => extractHeadings(getCanonical()).map((h) => ({ level: h.level, text: h.text })),
     [getCanonical]
   );
-  // Live outline for the in-editor Outline tray tab. The array index is the
-  // document-order heading index (matches the rendered DOM order), so it feeds
-  // scrollToHeading directly — same data path the graph uses.
-  // Which heading the reader is currently scrolled to in the rich pane — drives
-  // the DocNavPanel's live TOC highlight. READ-ONLY tracker (never writes
-  // scrollTop). Only runs while the panel is open AND the rich pane is visible
-  // (md-only mode has no .ProseMirror to observe). Re-attaches on doc/mode change.
-  const activeHeadingIndex = useActiveHeading({
-    getEditorDom: () => tiptapRef.current?.getEditor()?.view?.dom as HTMLElement | undefined,
-    active: showSidebar && workspaceTab === "outline" && mode !== "md" && !!activeDocId,
-    revision: `${activeDocId}:${mode}`,
+  // The Workspace panel's Outline: the TOC headings and which one the reader is
+  // scrolled to (useOutline — the tracker is read-only and only runs while the
+  // Outline tab is showing).
+  const { activeHeadingIndex, docNavHeadings } = useOutline({
+    tiptapRef, getCanonical, activeDocId, mode, showSidebar, workspaceTab,
   });
-  // Headings for the DocNavPanel TOC — recomputed only when the doc content
-  // actually changes (counts is bumped by updateCounts on each edit) or on doc
-  // switch, NOT on every scroll re-render, so buildHeadingTree stays cached
-  // while the reader scrolls.
-  const docCounts = useDocumentStore((s) => s.counts);
-  // Only the Workspace panel's Outline/Map tabs consume this. Gate the compute on
-  // that being visible so we don't run a full editor.getJSON() + extractHeadings
-  // walk on EVERY keystroke while it's not shown (the counts path already walks
-  // the doc once per edit — this avoids a second serialization).
-  const navOpen = showSidebar && workspaceTab === "outline";
-  const docNavHeadings = useMemo(
-    () => (navOpen ? extractHeadings(getCanonical()) : EMPTY_HEADINGS),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [navOpen, getCanonical, activeDocId, docCounts]
-  );
   // Read-only context for the diagnostics console tray tab (admin-gated). Every
   // accessor reads LIVE store/editor state so results reflect the moment a
   // command runs, not a stale render. No write path is exposed (curated,
@@ -706,9 +629,6 @@ export function PerssonifyEditor({
     try { await duplicateDoc(docId); }
     catch { toastRef.current.show("Duplicate could not be saved — storage may be full", "error"); }
   }, [duplicateDoc]);
-  const handleNavigateHeading = useCallback((i: number) => {
-    if (activeDocId) scrollToHeading(activeDocId, i);
-  }, [activeDocId, scrollToHeading]);
   const closeActiveTab = useCallback(() => {
     if (activeDocId) handleCloseTab(activeDocId);
   }, [activeDocId, handleCloseTab]);
