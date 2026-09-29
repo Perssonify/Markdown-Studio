@@ -35,7 +35,11 @@
 
 Markdown Studio is a **browser-only** markdown editor that runs two editing engines side by side: **CodeMirror 6** for raw markdown and **Tiptap 3** (ProseMirror) for rich text. Edits in either pane are synchronized bidirectionally through a canonical ProseMirror JSON layer, with content hashing to prevent echo loops.
 
-The editor supports multi-document management with **nested folders**, wiki-style inter-document linking, a force-directed knowledge graph, selectable **Markdown flavors** (CommonMark/GFM/Markdown Extra), **LaTeX math (KaTeX)**, **Mermaid diagrams**, **ABC music**, emoji, a **theme/accent selector**, and import/export across markdown, HTML, JSON, and **ZIP/TAR archives**. It has **no backend** — documents are persisted locally in IndexedDB — and ships two ways: as a standalone web app and as an embeddable npm library (`@perssonify/editor`). See [docs/extended-features.md](docs/extended-features.md) for the 2026 additions.
+The editor supports multi-document management with **nested folders**, wiki-style inter-document linking, a force-directed knowledge graph, selectable **Markdown flavors** (CommonMark/GFM/Markdown Extra), **LaTeX math (KaTeX)**, **Mermaid diagrams**, **ABC music**, emoji, a **theme/accent selector**, and import/export across markdown, HTML, JSON, and **ZIP/TAR archives**. Documents are persisted in the browser's IndexedDB — there is no account and no server copy; the only server code is an opt-in relay for "Import from URL" ([below](#the-import-relay)). After one online visit the app works offline. It ships two ways: as a standalone web app and as an embeddable npm library (`@perssonify/editor`). See [docs/extended-features.md](docs/extended-features.md) for the 2026 additions.
+
+> **Before launch:** the September 2026 production-readiness audit and what still
+> remains — mostly owner actions such as the domain, the CI gate on deploys and
+> the npm scope — are in [docs/audit-2026-09.md](docs/audit-2026-09.md).
 
 ---
 
@@ -45,16 +49,17 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 |-------|-----------|
 | UI Framework | React 18 |
 | Markdown editor | CodeMirror 6 |
-| Rich Text Editor | Tiptap 3 (ProseMirror) |
+| Rich Text Editor | Tiptap 3.31 (ProseMirror) — every `@tiptap/*` package at one version |
 | Markdown Parser | marked 12 |
 | HTML-to-Markdown | Turndown 7 |
 | State | Zustand 5 |
-| Persistence | IndexedDB (local, no server) |
+| Persistence | IndexedDB in the browser (no account, no server copy) |
 | UI primitives | Base UI (menus, dialogs, popovers) |
-| Build Tool | Vite 8 |
-| Test Framework | Vitest 4 + Testing Library |
-| Package Manager | Bun |
-| Deployment | Vercel (static SPA) |
+| Build Tool | Vite 8 (Rolldown) + vite-plugin-pwa (service worker) |
+| Test Framework | Vitest 4 + Testing Library; Playwright-driven Chromium for `e2e/` |
+| Lint | ESLint 10 + typescript-eslint + React hook rules |
+| Package Manager | Bun 1.4.0 (pinned by `packageManager`) |
+| Deployment | Vercel (static SPA + one serverless function, the import relay) |
 | Styling | Tailwind CSS v4 + shadcn/ui |
 
 ---
@@ -71,23 +76,25 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 ### Install and Run
 
 ```bash
-# Install dependencies
-bun install
+# Install dependencies (exactly the locked tree)
+bun install --frozen-lockfile
 
 # Start development server (localhost:5173)
 bun run dev
 
-# Run tests
+# Type-check, lint (zero errors; warnings are the tracked backlog) and test
+bunx tsc --noEmit
+bun run lint
 bun run test
 
-# Lint (must report zero errors; warnings are the tracked backlog)
-bun run lint
-
-# Build the standalone app
+# Build the standalone app (also writes dist-app/third-party-licenses.txt)
 bun run build:app
 
 # Preview production build
 bun run preview
+
+# Browser campaign against the build (see e2e/README.md)
+bun run e2e
 ```
 
 ### Build Outputs
@@ -226,8 +233,11 @@ The mode switch is in the **markdown** pane's header. **Paste Styled**, in the *
 
 ### Responsive Design
 
-- Below 768px: the split view **stacks vertically** instead of sitting side by side, and the
-  menu bar collapses to a single ☰ drill-down menu
+- Below 768px the menu bar collapses to a single ☰ drill-down menu, and the split view
+  **stacks vertically** when there is height for two panes (500px or more, or a phone held
+  upright) — a landscape phone keeps them side by side
+- Below 450px of height (400% zoom, a landscape phone) the page scrolls instead of
+  squeezing the editor to nothing
 - Safe area insets for notched devices (`viewport-fit=cover` + `.pf-safe-*` utilities)
 - Compact toolbar on mobile
 
@@ -691,8 +701,10 @@ bun run test:coverage  # Coverage over ALL of src/ (generated shadcn primitives 
 > `src/__tests__/**/*.test.{js,jsx}` ([vitest.config.js](vitest.config.js)). A `.ts` test is
 > silently ignored — it runs nowhere and fails nothing; a test that renders JSX must be `.jsx`.
 
-The suite is **1069 tests across 90 files**. Browser-level coverage (real IME composition,
-real IndexedDB, quota exhaustion, blocked storage, a second tab, coarse pointers) lives in
+The suite is **2,126 tests across 196 files** (`bunx vitest run --maxWorkers=3`,
+September 2026). Browser-level coverage (real IME composition, real IndexedDB, quota
+exhaustion, blocked storage, a second tab, coarse pointers, the published library on a
+host page, the Content-Security-Policy enforced, offline after one visit) lives in
 [`e2e/`](e2e/) — `bun run e2e`, and [`e2e/README.md`](e2e/README.md) states what it does
 *not* cover. A sample of the unit suites in [src/__tests__/](src/__tests__/):
 
@@ -704,13 +716,13 @@ real IndexedDB, quota exhaustion, blocked storage, a second tab, coarse pointers
 | `sync-engine` | Bidirectional sync, hash guards |
 | `link-index` | Wiki link parsing, backlink resolution |
 | `fidelity` | Serialization loss detection |
-| `suppression` | Content filtering logic |
+| `converter-roundtrip` | md → rich → md′ → rich → md″ through the real engine and schema |
 | `smoke` | Component renders without crashing |
 | `serialize-doc` | Headless export round-trips (schema parity) |
 | `workspace-views` | Editor / Cards / Map stay one exclusive selection |
 | `app-identity` | Product name is consistent; data identifiers are unchanged |
 
-CI runs on every PR to `main` via GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)): `bunx tsc --noEmit`, `bun run test`, and the app/library/embed builds. Run the same gate locally before pushing. See [docs/workflows.md](docs/workflows.md).
+CI runs on every PR to `main` and every push to it via GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)): lint, `bunx tsc --noEmit`, `bun run test`, the app/library/embed builds and the browser campaign, including the `csp` and `pwa` suites. Run the same gate locally before pushing. **CI does not yet block a deploy** — Vercel deploys `main` on its own until branch protection and deployment checks are switched on ([docs/deployment.md](docs/deployment.md)). See [docs/workflows.md](docs/workflows.md).
 
 ---
 
@@ -725,13 +737,25 @@ guide, threat model, limitations and hardening roadmap:
 **[docs/import-relay.md](docs/import-relay.md)**.
 
 **Configuration** ([vercel.json](vercel.json)):
-- Install command: `bun install`
-- Build command: `bun run build:app`
+- Install command: `bun install --frozen-lockfile`
+- Build command: `bun run build:app && node scripts/strip-sourcemaps.mjs` — the build writes
+  the third-party licence notice from its hidden sourcemaps, then the maps are moved out of
+  the deploy
 - Output directory: `dist-app/`
-- SPA rewrites: every route **except** `/api/*` → `/index.html` (the `api/` exclusion keeps the
-  import relay reachable)
-- `Cache-Control: no-cache` on `sw.js`, `registerSW.js`, `sw-recover.js`, `index.html` and
+- SPA rewrites: every route **except** `/api/*`, `/assets/*` and `/.well-known/*` →
+  `/index.html` (the relay stays reachable, and a missing chunk is a 404 rather than the app
+  page)
+- Headers: a Content-Security-Policy in report-only mode (hash-pinned — editing an inline
+  script means updating the hash), enforced anti-framing on everything but `/embed.html`,
+  `nosniff`, `Referrer-Policy: no-referrer` and a restrictive `Permissions-Policy`;
+  `/assets/*` is cached as immutable
+- `Cache-Control: no-cache` on `sw.js`, `sw-recover.js`, `index.html` and
   `manifest.webmanifest`, so a cached service worker can't pin visitors to an old build
+- The service worker **prompts** for updates ("Update ready — Reload"); it never reloads an
+  open tab by itself while there is work to lose
+
+Production is not yet gated on CI; the owner steps (domain, branch protection, Vercel
+deployment checks, npm) are in [docs/deployment.md](docs/deployment.md).
 
 ### Manual Deployment
 
@@ -755,24 +779,27 @@ tests are [`src/__tests__/import-relay.test.js`](src/__tests__/import-relay.test
 
 **What it does.** "Import from URL" tries a direct browser `fetch` first. Some hosts
 refuse cross-origin reads — Google Drive sends no CORS headers to a browser at all — so
-on a CORS failure the client retries through `/api/import?url=…`, which fetches the URL
-server-side and returns the bytes. It runs on the app's own origin, so the request stays
-first-party; a public CORS proxy would hand a third party the URL, the bytes and the
-user's IP, which would contradict the product's entire privacy story.
+on a CORS failure the client can retry through `/api/import?url=…`, which fetches the URL
+server-side and returns the bytes. **It asks first**: the relay is used only after the
+user agrees, once, and the answer is remembered (`pf:import-relay`; Settings ▸ Privacy).
+It runs on the app's own origin, so no third party sees the request; a public CORS proxy
+would hand a third party the URL, the bytes and the user's IP.
 
 **Why most of the file is refusals.** An unauthenticated endpoint that fetches an
 arbitrary URL is an SSRF gadget, an open proxy and an XSS vector at the same time. It
-resolves DNS and refuses private, loopback, link-local, CGNAT and cloud-metadata
-addresses (including the IPv4-in-IPv6 forms that are the classic bypass), pins the
-vetted IPs to the connection so it cannot be rebound between check and connect,
-re-validates every redirect hop, allows only ports 80 and 443, requires a first-party
-`Sec-Fetch-Site`, rate-limits per IP, caps size and time — and never reflects the
-upstream `Content-Type`, because doing so let an attacker render HTML on this origin.
+resolves DNS and connects only to GLOBAL-UNICAST addresses (an allowlist, which also
+refuses the IPv4-in-IPv6, NAT64, 6to4 and Teredo wrappers that are the classic
+bypasses), pins the vetted IPs to the connection so it cannot be rebound between check
+and connect, re-validates every redirect hop, allows only ports 80 and 443, caps the body
+at 4 MB and the time at 25 s, writes one log line per request with the host only, and
+never reflects the upstream `Content-Type`, because doing so let an attacker render HTML
+on this origin.
 
-**Its limits are real and documented**, not hand-waved: the rate limit is per warm
-instance, `x-forwarded-for` is trusted, there is no upstream allowlist, redirect chains
-are not covered end to end by tests, and a static (non-Vercel) deployment has no relay
-at all.
+**Its limits are real and documented**, not hand-waved: `Sec-Fetch-Site` stops other web
+pages but not a script, so to non-browser clients it is a bounded proxy whose real abuse
+controls are the platform's (a firewall rate limit and spend alerts — owner setup); the
+in-code rate limit is per warm instance, `x-forwarded-for` is trusted, redirect chains are
+not covered end to end by tests, and a static (non-Vercel) deployment has no relay at all.
 
 📖 **[docs/import-relay.md](docs/import-relay.md)** — the full guide: request path,
 threat model control by control, how to run and test it, every limitation, and a
@@ -782,7 +809,13 @@ prioritised list of what to do next if you want it more effective or more harden
 
 ## Environment Variables
 
-**None.** This is a client-only app with no backend and no build-time secrets — there is no `.env` and no `import.meta.env.VITE_*` usage. Runtime configuration (debounce, autosave, storage cap, etc.) lives in [src/constants.ts](src/constants.ts) and component props; see [docs/local-development.md](docs/local-development.md#environment-variables).
+**One, for the embed build only.** `VITE_EMBED_ALLOWED_ORIGINS` (comma-separated
+origins, baked in at build time) is the allowlist of host pages the iframe embed's bridge
+will talk to; set it for any embed deployment served from an origin that holds user
+documents ([docs/integration-guide.md](docs/integration-guide.md)). Otherwise there are no
+build-time secrets and no `.env`. Runtime configuration (debounce, autosave, etc.) lives in
+[src/constants.ts](src/constants.ts) and component props; see
+[docs/local-development.md](docs/local-development.md#environment-variables).
 
 ---
 
@@ -790,7 +823,7 @@ prioritised list of what to do next if you want it more effective or more harden
 
 1. Create a feature branch from `main` (`feat/*` or `fix/*`)
 2. Make changes and add tests where appropriate (test files end in `.test.js` / `.test.jsx`), then mutation-test each new guard: revert the fix, confirm the case goes red, restore
-3. Run `bun run test`, `bunx tsc --noEmit`, `bun run build:app`, `bun run build` and `bun run e2e` to verify
+3. Run `bunx tsc --noEmit`, `bun run lint`, `bun run test`, `bun run build:app`, `bun run build`, `bun run build:embed` and `bun run e2e` to verify
 4. Submit a pull request with a clear description of changes
 
 Full contributor guide (standards, dependencies, what not to touch): [docs/contributing.md](docs/contributing.md). When making significant changes, update the relevant docs under [`docs/`](docs/).
