@@ -88,7 +88,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## IndexedDB transactions abort if you await the wrong thing
 
 - **Symptom:** A storage write silently fails / the transaction aborts mid-operation.
-- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented at [src/store/idb-storage-adapter.ts:94](../src/store/idb-storage-adapter.ts#L94).
+- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented at [src/store/idb-storage-adapter.ts:169](../src/store/idb-storage-adapter.ts#L169).
 - **Fix/Workaround:** Keep all awaits inside a transaction limited to `idbRequest` wrappers; do any other async work before/after the transaction.
 - **Related:** [database.md#invariants](database.md#invariants).
 

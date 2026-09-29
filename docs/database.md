@@ -4,10 +4,10 @@
 
 ## Where it lives in code
 
-- Abstraction / interface: [src/store/storage-adapter.ts](../src/store/storage-adapter.ts) (`StorageAdapter`, [:63](../src/store/storage-adapter.ts#L63)).
+- Abstraction / interface: [src/store/storage-adapter.ts](../src/store/storage-adapter.ts) (`StorageAdapter`, [:75](../src/store/storage-adapter.ts#L75)).
 - IndexedDB implementation: [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts).
 - Record shape: [src/store/document.ts](../src/store/document.ts).
-- Adapter selection (`createStorageAdapter`): [src/store/storage-adapter.ts:379](../src/store/storage-adapter.ts#L379) — picks IndexedDB → window storage → localStorage → in-memory, in that order of availability.
+- Adapter selection (`createStorageAdapter`): [src/store/storage-adapter.ts:485](../src/store/storage-adapter.ts#L485) — picks IndexedDB → window storage → localStorage → in-memory, in that order of availability.
 
 ## The database
 
@@ -15,8 +15,8 @@
 |----------|-------|--------|
 | Database name | `perssonify-docs` | [src/store/idb-storage-adapter.ts:66](../src/store/idb-storage-adapter.ts#L66) |
 | Version | `1` | [src/store/idb-storage-adapter.ts:68](../src/store/idb-storage-adapter.ts#L68) |
-| Object store: documents | `documents` (key = doc id) | [:69](../src/store/idb-storage-adapter.ts#L69) |
-| Object store: meta | `meta` (key = string) | [:70](../src/store/idb-storage-adapter.ts#L70) |
+| Object store: documents | `documents` (key = doc id) | [:497](../src/store/idb-storage-adapter.ts#L497) |
+| Object store: meta | `meta` (key = string) | [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts) |
 | Default storage cap | 50 MB (`maxBytes`) | [:28](../src/store/idb-storage-adapter.ts#L28) |
 
 ```mermaid
@@ -55,7 +55,7 @@ erDiagram
 ## The `documents` store
 
 - **Key:** the document `id` (a generated string, `generateId` in [src/store/document.ts](../src/store/document.ts)).
-- **Value:** a serialized `DocumentRecord` (JSON string). Written by `serializeForStorage()` ([src/store/document.ts:307](../src/store/document.ts#L307)), which **strips derived caches** (`markdownCache`, `htmlCache`, `fidelityReport`) to save space — these are recomputed on load.
+- **Value:** a serialized `DocumentRecord` (JSON string). Written by `serializeForStorage()` ([src/store/document.ts:418](../src/store/document.ts#L418)), which **strips derived caches** (`markdownCache`, `htmlCache`, `fidelityReport`) to save space — these are recomputed on load.
 - **Rough size:** one record per document; the whole store is capped at 50 MB by default. Expect tens to low-hundreds of documents for a typical user.
 
 ### The document record
@@ -80,7 +80,7 @@ Defined at [src/store/document.ts:28](../src/store/document.ts#L28). The **three
 
 - **`origin.source`** — provenance enum-ish string: `"user-typed"`, `"clipboard-paste"`, `"file-import"`, `"storage-load"`. Useful when debugging where a doc came from.
 - **`origin.alternates`** — alternate clipboard formats captured at paste time (`text/html`, `text/plain`, `text/rtf`).
-- **`residuals`** — each entry is categorized by `analyzeHtml()` ([src/store/ingest.ts:227](../src/store/ingest.ts#L227)): `blocked-element`, `unknown-element`, `unknown-style`, `dropped-attribute`, `noted-attribute`. Drives the StatusBar "residuals" count.
+- **`residuals`** — each entry is categorized by `analyzeHtml()` ([src/store/ingest.ts:238](../src/store/ingest.ts#L238)): `blocked-element`, `unknown-element`, `unknown-style`, `dropped-attribute`, `noted-attribute`. Drives the StatusBar "residuals" count.
 - **`canonical`** — may contain custom node types (`fieldBlock`, `transclusionBlock`) and a `data-block-id` global attribute — see [src/extensions/](../src/extensions/).
 
 ## The `meta` store
@@ -89,12 +89,12 @@ Two well-known keys:
 
 | Key | Constant | Contents |
 |-----|----------|----------|
-| `__manifest` | `MANIFEST_KEY` ([:71](../src/store/idb-storage-adapter.ts#L71)) | Array of `DocumentSummary` `{ id, title, words, updated, … }` — the source for the library list without loading full docs |
-| `__prefs` | `PREFS_KEY` ([:72](../src/store/idb-storage-adapter.ts#L72)) | `{ lastActiveDocId, syncMode, editorMode, … }` user preferences |
+| `__manifest` | `MANIFEST_KEY` ([:132](../src/store/idb-storage-adapter.ts#L132)) | Array of `DocumentSummary` `{ id, title, words, updated, … }` — the source for the library list without loading full docs |
+| `__prefs` | `PREFS_KEY` ([:133](../src/store/idb-storage-adapter.ts#L133)) | `{ lastActiveDocId, syncMode, editorMode, … }` user preferences |
 
 ## The link index (in-memory, **not persisted**)
 
-The wiki-link graph is rebuilt at runtime from document content — it is **not** stored in IndexedDB. Built by `buildLinkIndex()` ([src/store/link-index.ts:177](../src/store/link-index.ts#L177)) into four maps ([:177](../src/store/link-index.ts#L177)):
+The wiki-link graph is rebuilt at runtime from document content — it is **not** stored in IndexedDB. Built by `buildLinkIndex()` ([src/store/link-index.ts:248](../src/store/link-index.ts#L248)) into four maps ([:248](../src/store/link-index.ts#L248)):
 
 | Map | Shape | Meaning |
 |-----|-------|---------|
@@ -109,17 +109,17 @@ If the index ever looks wrong, it can be fully rebuilt — `rebuildLinks()` in [
 
 These are enforced by code, not by the store:
 
-1. **Every `__manifest` entry should have a matching `documents` record**, and vice-versa. `saveActiveDoc`/`deleteDoc` update both together ([src/store/documentStore.ts:172](../src/store/documentStore.ts#L172), [:172](../src/store/documentStore.ts#L172)). A crash between the two writes can desync them — see [runbooks/documents-disappeared.md](runbooks/documents-disappeared.md).
+1. **Every `__manifest` entry should have a matching `documents` record**, and vice-versa. `saveActiveDoc`/`deleteDoc` update both together ([src/store/documentStore.ts:329](../src/store/documentStore.ts#L329), [:329](../src/store/documentStore.ts#L329)). A crash between the two writes can desync them — see [runbooks/documents-disappeared.md](runbooks/documents-disappeared.md).
 2. **Derived fields are never trusted from storage.** `markdownCache`/`htmlCache`/`fidelityReport` are stripped on write and recomputed on read.
 3. **`canonical` is always a valid ProseMirror `doc`.** Ingest guarantees this; a default is `{ type:"doc", content:[{ type:"paragraph" }] }` ([src/store/document.ts:206](../src/store/document.ts#L206)).
-4. **Quota is checked before write.** Projected usage > `maxBytes` throws `StorageQuotaError` *before* mutating ([src/store/idb-storage-adapter.ts:46](../src/store/idb-storage-adapter.ts#L46)).
-5. **IDB transaction callbacks may only await `idbRequest()` calls** — awaiting an arbitrary Promise inside `idbTransaction()` aborts the transaction (browser auto-commit rule). See the comment at [src/store/idb-storage-adapter.ts:105](../src/store/idb-storage-adapter.ts#L105). This is a real footgun if you add storage code.
+4. **Quota is checked before write.** Projected usage > `maxBytes` throws `StorageQuotaError` *before* mutating ([src/store/idb-storage-adapter.ts:76](../src/store/idb-storage-adapter.ts#L76)).
+5. **IDB transaction callbacks may only await `idbRequest()` calls** — awaiting an arbitrary Promise inside `idbTransaction()` aborts the transaction (browser auto-commit rule). See the comment at [src/store/idb-storage-adapter.ts:188](../src/store/idb-storage-adapter.ts#L188). This is a real footgun if you add storage code.
 
 ## "Migrations"
 
 The DB version is `1` and there is no upgrade chain yet. To evolve the schema:
 
-1. Bump `DB_VERSION` ([src/store/idb-storage-adapter.ts:68](../src/store/idb-storage-adapter.ts#L68)).
+1. Bump `DB_VERSION` ([src/store/idb-storage-adapter.ts:127](../src/store/idb-storage-adapter.ts#L127)).
 2. Add object-store creation / data transforms in the `onupgradeneeded` handler (the `upgrade` path in the open logic of [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts)).
 3. There is **no rollback** — IndexedDB versions only go forward. Guard transforms so they're safe to re-run, and test on a copy of a real profile.
 4. Because records are JSON strings, additive field changes usually need no migration — just default missing fields on read in `document.ts`.

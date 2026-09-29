@@ -43,23 +43,23 @@ flowchart TD
 
 ### Stage 1 — Ingest (untrusted input → a document)
 
-- **Code:** [src/store/ingest.ts](../src/store/ingest.ts), entry `ingest()` ([:479](../src/store/ingest.ts#L479)).
+- **Code:** [src/store/ingest.ts](../src/store/ingest.ts), entry `ingest()` ([:488](../src/store/ingest.ts#L488)).
 - **Input shape:** a raw string + a declared format. Formats: `markdown | html | paste-html | text | pmjson` ([src/store/ingest.ts:27](../src/store/ingest.ts#L27)). File imports detect format from extension/MIME in [src/store/import-export.ts:43](../src/store/import-export.ts#L43).
 - **What happens:**
   - **markdown** → converted to HTML via the engine (or escaped-wrapped if no engine yet).
   - **text** → split on blank lines, each block wrapped in `<p>`.
-  - **html / paste-html** → `sanitizeForIngest()` ([:436](../src/store/ingest.ts#L436)) strips dangerous elements (`BLOCKED_ELEMENTS`, [:189](../src/store/ingest.ts#L189)) using DOMParser, preserving text.
+  - **html / paste-html** → `sanitizeForIngest()` ([:446](../src/store/ingest.ts#L446)) strips dangerous elements (`BLOCKED_ELEMENTS`, [:189](../src/store/ingest.ts#L189)) using DOMParser, preserving text.
   - **pmjson** → parsed and validated as a ProseMirror `doc` (or a `perssonify-document` envelope); used directly as canonical.
-- **Output shape:** `{ doc: DocumentRecord, html, needsTiptap }` ([:47](../src/store/ingest.ts#L47)). `needsTiptap: true` means HTML still has to be run through Tiptap to produce canonical PM JSON; `completeIngest()` ([:625](../src/store/ingest.ts#L625)) captures `editor.getJSON()` afterward.
+- **Output shape:** `{ doc: DocumentRecord, html, needsTiptap }` ([:47](../src/store/ingest.ts#L47)). `needsTiptap: true` means HTML still has to be run through Tiptap to produce canonical PM JSON; `completeIngest()` ([:637](../src/store/ingest.ts#L637)) captures `editor.getJSON()` afterward.
 - **State persisted:** none yet — ingest builds the in-memory record.
-- **Guarantees:** Output is **sanitized** (this is the trust boundary, see below). Anything dropped/transformed is recorded in `residuals` + `ingestReport` via `analyzeHtml()` ([:227](../src/store/ingest.ts#L227)).
+- **Guarantees:** Output is **sanitized** (this is the trust boundary, see below). Anything dropped/transformed is recorded in `residuals` + `ingestReport` via `analyzeHtml()` ([:238](../src/store/ingest.ts#L238)).
 - **Failure mode:** malformed `pmjson` falls back to wrapping the raw string as a paragraph ([src/store/ingest.ts](../src/store/ingest.ts)); DOMParser-unavailable falls back to regex stripping.
 
 ### Stage 2 — Paste cleaning (clipboard → editor)
 
-- **Code:** [src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts); paste handling in [src/ui/TiptapPane.tsx:235](../src/ui/TiptapPane.tsx#L235) → `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:296](../src/hooks/useDocumentLifecycle.ts#L296)).
+- **Code:** [src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts); paste handling in [src/ui/TiptapPane.tsx:235](../src/ui/TiptapPane.tsx#L235) → `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:305](../src/hooks/useDocumentLifecycle.ts#L305)).
 - **Input:** `text/html` from the clipboard (Word, Google Docs, web pages — i.e. hostile HTML).
-- **What happens:** `sanitizePastedHtml()` removes comments/meta/script/Office-VML junk and strips `class`/`id`/`data-*` ([src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts)); `cleanHtmlForTurndown()` / `cleanPasteHtml()` convert CSS like `font-weight:bold` into semantic `<strong>` and drop everything except an allow-list of CSS properties ([:229](../src/engine/html-cleaner.ts#L229)).
+- **What happens:** `sanitizePastedHtml()` removes comments/meta/script/Office-VML junk and strips `class`/`id`/`data-*` ([src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts)); `cleanHtmlForTurndown()` / `cleanPasteHtml()` convert CSS like `font-weight:bold` into semantic `<strong>` and drop everything except an allow-list of CSS properties ([:244](../src/engine/html-cleaner.ts#L244)).
 - **Output:** clean HTML safe to hand to Tiptap.
 - **Guarantee:** only allow-listed CSS survives; styling is normalized to semantic tags where possible.
 - **Failure mode:** over-aggressive cleaning can drop intentional styling. **Paste Styled** is on by default and keeps more; hold **⇧** while pasting to invert it for that one paste ([src/ui/EditorPanes.tsx](../src/ui/EditorPanes.tsx)).
@@ -91,13 +91,13 @@ flowchart TD
   - `syncMaxWaitFor` — the longest the other pane may lag while changes keep arriving, clamped to `SYNC_MIN_MAX_WAIT_MS`…`SYNC_MAX_MAX_WAIT_MS` (250–1200ms). Without it the debounce was purely trailing and the other pane never updated during continuous typing.
 
   Only projections that actually RAN are measured — `syncMdToHtml`/`syncHtmlToMd` return a boolean for exactly that, since most calls are gated out by the hash and doc-identity checks and return in microseconds. Document length used to pick the delay directly (300/500/800ms by size); it was a proxy for cost and a poor one, punishing a large note on a fast machine and being too eager on a slow phone.
-- **Failure mode:** A thrown converter error leaves `syncing` reset (try/finally) but the panes can drift. `Cmd+Z` calls `cancelPendingSync` to protect the undo stack ([src/hooks/useKeyboardShortcuts.ts:189](../src/hooks/useKeyboardShortcuts.ts#L189)).
+- **Failure mode:** ⌘Z cancels the pending projection to protect the undo stack (the ⌘Z branch, [src/hooks/useKeyboardShortcuts.ts:237](../src/hooks/useKeyboardShortcuts.ts#L237), which calls `cancelPendingSync`). A thrown converter error leaves `syncing` reset (try/finally) but the panes can drift.
 
 ### Stage 4 — Persist (canonical → IndexedDB)
 
-- **Code:** `useDocumentStore.saveActiveDoc` ([src/store/documentStore.ts:163](../src/store/documentStore.ts#L163)) → storage adapter `save()` → [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts).
+- **Code:** `useDocumentStore.saveActiveDoc` ([src/store/documentStore.ts:312](../src/store/documentStore.ts#L312)) → storage adapter `save()` → [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts).
 - **Input:** the active `DocumentRecord` with fresh canonical JSON.
-- **What happens:** `serializeForStorage()` ([src/store/document.ts:307](../src/store/document.ts#L307)) strips derived caches (markdown/html/fidelity) before writing; the adapter projects storage usage and throws `StorageQuotaError` if over the cap ([src/store/idb-storage-adapter.ts:46](../src/store/idb-storage-adapter.ts#L46)).
+- **What happens:** `serializeForStorage()` ([src/store/document.ts:418](../src/store/document.ts#L418)) strips derived caches (markdown/html/fidelity) before writing; the adapter projects storage usage and throws `StorageQuotaError` if over the cap ([src/store/idb-storage-adapter.ts:76](../src/store/idb-storage-adapter.ts#L76)).
 - **Output / state persisted:** the `documents` store record, the `__manifest` summary list, and `__prefs`. See [database.md](database.md).
 - **Guarantees:** Last-write-wins per document; the manifest and the doc are written so the list view stays consistent (see invariants in [database.md#invariants](database.md#invariants)).
 - **Failure mode:** quota exceeded → `onStorageQuotaExceeded` callback / toast — see [runbooks/storage-quota-exceeded.md](runbooks/storage-quota-exceeded.md).
@@ -113,7 +113,7 @@ flowchart TD
 ### Stage 5 — Readers (canonical → outputs)
 
 - **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`).
-- **Knowledge graph:** `exportGraph` ([src/store/link-index.ts:336](../src/store/link-index.ts#L336)).
+- **Knowledge graph:** `exportGraph` ([src/store/link-index.ts:411](../src/store/link-index.ts#L411)).
 - **Copy as Prompt:** `buildContextPrompt` ([src/integration/prompt-builder.ts:201](../src/integration/prompt-builder.ts#L201)).
 - All readers derive from canonical; none mutate it.
 
@@ -140,11 +140,11 @@ flowchart LR
 
 ## Worked example — paste a styled paragraph and watch it land
 
-1. User pastes Google-Docs HTML into the rich-text pane → Tiptap paste handler ([src/ui/TiptapPane.tsx:235](../src/ui/TiptapPane.tsx#L235)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:296](../src/hooks/useDocumentLifecycle.ts#L296)).
-2. `cleanPasteHtml()` ([src/engine/html-cleaner.ts:229](../src/engine/html-cleaner.ts#L229)) strips Office junk, converts `font-weight:700` → `<strong>`, keeps only allow-listed CSS.
+1. User pastes Google-Docs HTML into the rich-text pane → Tiptap paste handler ([src/ui/TiptapPane.tsx:235](../src/ui/TiptapPane.tsx#L235)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:305](../src/hooks/useDocumentLifecycle.ts#L305)).
+2. `cleanPasteHtml()` ([src/engine/html-cleaner.ts:244](../src/engine/html-cleaner.ts#L244)) strips Office junk, converts `font-weight:700` → `<strong>`, keeps only allow-listed CSS.
 3. Cleaned HTML is set into Tiptap; the editor normalizes it to canonical PM JSON.
 4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:108](../src/engine/useSyncEngine.ts#L108)) runs: hash differs → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
-5. `onCanonicalChange` fires → `updateCounts` + `updateFidelity` ([src/store/documentStore.ts:193](../src/store/documentStore.ts#L193)); if styling can't be represented in the chosen markdown mode, `computeFidelity` ([src/store/fidelity.ts:149](../src/store/fidelity.ts#L149)) records the loss and the StatusBar shows a fidelity badge.
+5. `onCanonicalChange` fires → `updateCounts` + `updateFidelity` ([src/store/documentStore.ts:363](../src/store/documentStore.ts#L363)); if styling can't be represented in the chosen markdown mode, `computeFidelity` ([src/store/fidelity.ts:162](../src/store/fidelity.ts#L162)) records the loss and the StatusBar shows a fidelity badge.
 6. Autosave (≤5s later) → `saveActiveDoc` → `serializeForStorage` → IndexedDB `documents` store; `__manifest` updated.
 
 That's the full life of one paste: untrusted HTML → sanitized → canonical → projected to markdown → fidelity-checked → persisted.

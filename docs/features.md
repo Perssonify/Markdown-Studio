@@ -5,7 +5,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 > **Roles:** This is a single-user, client-only app. There is **no permission model** — every capability is available to whoever has the browser tab open. "Who can use it" is therefore "any user" throughout, except where a feature is gated by *mode* or *screen size*. See [auth.md](auth.md).
 
 **Where state lives** (referenced constantly below):
-- `useDocumentStore` — [src/store/documentStore.ts:373](../src/store/documentStore.ts#L373) — documents, active doc, tabs, save status, counts, storage handle.
+- `useDocumentStore` — [src/store/documentStore.ts:708](../src/store/documentStore.ts#L708) — documents, active doc, tabs, save status, counts, storage handle.
 - `useUIStore` — [src/store/uiStore.ts:152](../src/store/uiStore.ts#L152) — view mode, sidebar/graph/find toggles, sync mode.
 - `useEditorStore` — [src/store/editorStore.ts:92](../src/store/editorStore.ts#L92) — active formatting state, link index, backlinks, graph data.
 
@@ -18,7 +18,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 - **What:** Edit raw markdown (left) and rich text (right) simultaneously; changes in one pane appear in the other.
 - **Entry point:** [src/ui/EditorPanes.tsx:204](../src/ui/EditorPanes.tsx#L204) (`EditorLayout`), rendering [src/ui/CodeMirrorPane.tsx](../src/ui/CodeMirrorPane.tsx) and [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
 - **Happy-path flow** (you type in the markdown pane):
-  1. CodeMirror fires its change handler → `handleMdChange()` in [src/hooks/useDocumentLifecycle.ts:233](../src/hooks/useDocumentLifecycle.ts#L233).
+  1. CodeMirror fires its change handler → `handleMdChange()` in [src/hooks/useDocumentLifecycle.ts:242](../src/hooks/useDocumentLifecycle.ts#L242).
   2. The change is debounced, with a ceiling so the other pane keeps up during continuous typing; both delays come from the measured cost of recent projections (see [src/hooks/sync-schedule.ts](../src/hooks/sync-schedule.ts)).
   3. `syncMdToHtml()` runs — [src/engine/useSyncEngine.ts:41](../src/engine/useSyncEngine.ts#L41): `quickHash(md)` guard → `engine.mdToHtml(md)` → `tiptapRef.setHTML(html)`.
   4. Tiptap re-serializes to its canonical ProseMirror JSON; `onCanonicalChange(editor.getJSON())` fires ([src/engine/useSyncEngine.ts:50](../src/engine/useSyncEngine.ts#L50)).
@@ -32,8 +32,8 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 
 - **What:** Show only the markdown pane, only the rich-text pane, or both side by side.
 - **Who:** Any user. **Split is disabled below 768px** — mobile is forced to markdown-only.
-- **Entry point:** [src/ui/ModeSwitcher.tsx:22](../src/ui/ModeSwitcher.tsx#L22) → `useUIStore.setMode`. Mode constants: `MODES` = `{ MD, HTML, SPLIT }` ([src/constants.ts:26](../src/constants.ts#L26)).
-- **Flow:** `setMode(m)` → `useUIStore.mode` updates → `PerssonifyEditor` re-renders panes ([src/PerssonifyEditor.tsx:208](../src/PerssonifyEditor.tsx#L208)) → persists `editorMode` to prefs ([src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx)).
+- **Entry point:** [src/ui/ModeSwitcher.tsx:22](../src/ui/ModeSwitcher.tsx#L22) → `useUIStore.setMode`. Mode constants: `MODES` = `{ MD, HTML, SPLIT }` ([src/constants.ts:34](../src/constants.ts#L34)).
+- **Flow:** `setMode(m)` → `useUIStore.mode` updates → `PerssonifyEditor` re-renders panes ([src/PerssonifyEditor.tsx:240](../src/PerssonifyEditor.tsx#L240)) → persists `editorMode` to prefs ([src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx)).
 - **Edge cases:** the toolbar collapses below `TOOLBAR_COMPACT_BP = 1080` ([src/constants.ts](../src/constants.ts)); the ☰ menu collapse and the split-pane stack use their own 768px breakpoint (see [src/hooks/use-mobile.ts](../src/hooks/use-mobile.ts)).
 
 ### 3. Menu bar (File · Edit · Insert · View · Format · Tools · Help)
@@ -52,13 +52,13 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 
 - **What:** Bold, italic, underline, strikethrough, superscript, subscript, inline code; headings H1–H6, ordered/unordered/task lists, blockquote, code block, horizontal rule.
 - **Entry point:** [src/ui/Toolbar.tsx:176](../src/ui/Toolbar.tsx#L176) buttons, or keyboard shortcuts ([src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts)).
-- **Happy-path flow:** Toolbar button → `dispatch(cmd)` → `useFormatDispatcher` ([src/formatting/useFormatDispatcher.ts:120](../src/formatting/useFormatDispatcher.ts#L120)) picks the target pane via `getTargetPane()` ([:136](../src/formatting/useFormatDispatcher.ts#L136)):
-  - **Rich-text pane active** → `dispatchToTiptap()` ([:316](../src/formatting/useFormatDispatcher.ts#L316)) runs Tiptap commands.
-  - **Markdown pane active** → `dispatchToMd()` ([:466](../src/formatting/useFormatDispatcher.ts#L466)) edits the CM6 text directly via `mdWrap`/`mdPrefixLine`/`mdSetHeading` ([src/formatting/md-format-utils.ts](../src/formatting/md-format-utils.ts)).
+- **Happy-path flow:** Toolbar button → `dispatch(cmd)` → `useFormatDispatcher` ([src/formatting/useFormatDispatcher.ts:138](../src/formatting/useFormatDispatcher.ts#L138)) picks the target pane via `getTargetPane()` ([:154](../src/formatting/useFormatDispatcher.ts#L154)):
+  - **Rich-text pane active** → `dispatchToTiptap()` ([:336](../src/formatting/useFormatDispatcher.ts#L336)) runs Tiptap commands.
+  - **Markdown pane active** → `dispatchToMd()` ([:502](../src/formatting/useFormatDispatcher.ts#L502)) edits the CM6 text directly via `mdWrap`/`mdPrefixLine`/`mdSetHeading` ([src/formatting/md-format-utils.ts](../src/formatting/md-format-utils.ts)).
 - **Data:** Operates on the active pane's content; result flows through the sync engine into canonical PM JSON.
 - **Indent / outdent (`Cmd+]` / `Cmd+[`, toolbar):** these mean **list nesting**, in both panes. Rich pane → `sinkListItem` / `liftListItem` with the item type taken from the selection (`taskItem` inside a checklist, `listItem` otherwise — hardcoding the latter made indent dead in every checklist). Markdown pane → CodeMirror's `indentMore`/`indentLess`, gated by `mdIndentable` ([src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts)) to list lines and lines inside a fenced block. Markdown has no paragraph indent — four leading spaces on a paragraph *is* an indented code block — so on anything else both panes no-op rather than change what the block is.
 - **Strikethrough round-trip:** TipTap renders `<s>`; turndown's core is CommonMark and this project does not load `turndown-plugin-gfm`, so an unmatched element is silently reduced to its text. The `strikethrough` rule in [src/engine/turndown-rules.ts](../src/engine/turndown-rules.ts) emits `~~…~~`. Without it, striking text in the rich pane was destroyed by the next sync and lost on export, with no fidelity warning — strikethrough is native Markdown, so nothing classed it as a loss.
-- **Edge cases:** Toolbar active-state for the markdown pane is **regex-based** ([src/formatting/useFormatDispatcher.ts:393](../src/formatting/useFormatDispatcher.ts#L393)) — it can mis-detect nested markers (see `isSubmarker` at [src/formatting/md-format-utils.ts:139](../src/formatting/md-format-utils.ts#L139)).
+- **Edge cases:** Toolbar active-state for the markdown pane is **regex-based** ([src/formatting/useFormatDispatcher.ts:393](../src/formatting/useFormatDispatcher.ts#L393)) — it can mis-detect nested markers (see `isSubmarker` at [src/formatting/md-format-utils.ts:271](../src/formatting/md-format-utils.ts#L271)).
 - **Related:** [src/__tests__/md-format-utils.test.js](../src/__tests__/md-format-utils.test.js).
 
 ### 4a. Interactive task lists (v1.36.0)
@@ -72,7 +72,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 
 - **What:** Insert tables via a grid picker; add/delete rows & columns; alignment.
 - **Entry point:** Toolbar table button → [src/ui/TableGridPicker.tsx:17](../src/ui/TableGridPicker.tsx#L17) (8×6 grid). In-table editing surfaces [src/ui/TableBubbleMenu.tsx:67](../src/ui/TableBubbleMenu.tsx#L67).
-- **Flow (markdown pane):** Table commands route to [src/formatting/md-table-ops.ts](../src/formatting/md-table-ops.ts) — `mdParseTableAtCursor` ([:29](../src/formatting/md-table-ops.ts#L29)) parses the pipe table, ops mutate the 2-D array, `renderTable` ([:238](../src/formatting/md-table-ops.ts#L238)) re-emits aligned markdown.
+- **Flow (markdown pane):** Table commands route to [src/formatting/md-table-ops.ts](../src/formatting/md-table-ops.ts) — `mdParseTableAtCursor` ([:29](../src/formatting/md-table-ops.ts#L29)) parses the pipe table, ops mutate the 2-D array, `renderTable` ([:317](../src/formatting/md-table-ops.ts#L317)) re-emits aligned markdown.
 - **Flow (rich-text pane):** Tiptap `@tiptap/extension-table` commands via `dispatchToTiptap`.
 - **Edge cases:** Deleting the last row/column deletes the whole table ([src/formatting/md-table-ops.ts:125](../src/formatting/md-table-ops.ts#L125), [:166](../src/formatting/md-table-ops.ts#L166)). Pipes inside cells are escaped on render.
 - **Related:** [src/__tests__/md-table-ops.test.js](../src/__tests__/md-table-ops.test.js).
@@ -134,7 +134,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 
 - **What:** Keep many documents open in the library; switch, rename, duplicate, close.
 - **Entry point:** the Workspace panel's Files tab ([src/ui/WorkspacePanel.tsx](../src/ui/WorkspacePanel.tsx)); the tab strip was removed in v1.9 — document switching happens in the Files tab and the active title shows in the menu bar.
-- **Flow:** `onSwitch(id)` → `handleSwitchDoc` ([src/hooks/useDocumentLifecycle.ts:458](../src/hooks/useDocumentLifecycle.ts#L458)) flushes pending edits of the current doc, then `useDocumentStore.switchToDoc` ([src/store/documentStore.ts:170](../src/store/documentStore.ts#L170)) loads the target (checking the in-memory unsaved-edits cache first, [:170](../src/store/documentStore.ts#L170)).
+- **Flow:** `onSwitch(id)` → `handleSwitchDoc` ([src/hooks/useDocumentLifecycle.ts:509](../src/hooks/useDocumentLifecycle.ts#L509)) flushes pending edits of the current doc, then `useDocumentStore.switchToDoc` ([src/store/documentStore.ts:322](../src/store/documentStore.ts#L322)) loads the target (checking the in-memory unsaved-edits cache first, [:322](../src/store/documentStore.ts#L322)).
 - **Edge cases:** Closing a tab with unsaved edits prompts confirmation ([src/hooks/useDocumentLifecycle.ts:195](../src/hooks/useDocumentLifecycle.ts#L195)).
 
 ### 10. Files (library) — the Workspace panel's Files tab
@@ -149,15 +149,15 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 
 - **What:** Standard document lifecycle ops.
 - **Entry points & flow:**
-  - New: `Cmd+N` → `handleNewDoc` ([src/hooks/useDocumentLifecycle.ts:659](../src/hooks/useDocumentLifecycle.ts#L659)) → `useDocumentStore.createDoc` ([src/store/documentStore.ts:156](../src/store/documentStore.ts#L156)).
-  - Rename: stored as `userTitle` so it survives re-derivation on save ([src/store/documentStore.ts:995](../src/store/documentStore.ts#L995)).
+  - New: `Cmd+N` → `handleNewDoc` ([src/hooks/useDocumentLifecycle.ts:733](../src/hooks/useDocumentLifecycle.ts#L733)) → `useDocumentStore.createDoc` ([src/store/documentStore.ts:291](../src/store/documentStore.ts#L291)).
+  - Rename: stored as `userTitle` so it survives re-derivation on save ([src/store/documentStore.ts:500](../src/store/documentStore.ts#L500)).
   - Duplicate: [src/store/documentStore.ts:408](../src/store/documentStore.ts#L408).
-  - Delete: confirm → `useDocumentStore.deleteDoc` ([src/store/documentStore.ts:172](../src/store/documentStore.ts#L172)) removes from IndexedDB + manifest and closes the tab.
+  - Delete: confirm → `useDocumentStore.deleteDoc` ([src/store/documentStore.ts:329](../src/store/documentStore.ts#L329)) removes from IndexedDB + manifest and closes the tab.
 
 ### 12. Auto-save & session restore
 
 - **What:** Edits persist automatically; the last active document reopens on reload.
-- **Entry point:** Autosave interval `AUTOSAVE_MS = 5000` ([src/constants.ts:17](../src/constants.ts#L17)). Restore: `useDocumentStore.initialize()` ([src/store/documentStore.ts:155](../src/store/documentStore.ts#L155)) reads the manifest and the `lastActiveDocId` pref.
+- **Entry point:** Autosave interval `AUTOSAVE_MS = 5000` ([src/constants.ts:17](../src/constants.ts#L17)). Restore: `useDocumentStore.initialize()` ([src/store/documentStore.ts:290](../src/store/documentStore.ts#L290)) reads the manifest and the `lastActiveDocId` pref.
 - **Data:** Writes `doc` records + `__manifest` + `__prefs` to IndexedDB — see [database.md](database.md).
 - **Edge cases:** Save can fail on quota (`StorageQuotaError`) — see [runbooks/storage-quota-exceeded.md](runbooks/storage-quota-exceeded.md).
 - **A failed save stays visible.** A failed autosave is routed `error` → `editing` after 3s so the re-arm effect fires, which meant that for most of each retry cycle the status bar read "Unsaved changes" — the reassuring message — while saving was failing over and over. `saveError` outlives that transition (cleared only by a save that lands) and the bar reads **"Save failed — retrying"**. The two terminal states say what they are rather than nothing: `"blocked"` (the blank-over-content refusal) reads **"Empty editor — not saving"**, and `"conflict"` reads **"Changed in another tab — not saving"**. Neither re-arms autosave; a later real edit resumes it.
@@ -193,8 +193,8 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 - **What:** Import `.md`/`.markdown`/`.txt`/`.html`/`.htm`/`.json`/`.docx`; export Markdown, HTML, or ProseMirror JSON; copy any of those to clipboard.
 - **Entry point:** the **File** menu ([src/ui/MenuBar.tsx](../src/ui/MenuBar.tsx)) — Import…, Export ▸, Full backup — dispatched through `handleAction` in [src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx). (`ActionBar.tsx` no longer exists; the menu bar replaced it.)
 - **Dropping a file on the editor imports it** ([src/ui/EditorLayout.tsx](../src/ui/EditorLayout.tsx) `onDragOver`/`onDrop` → PE's `handleFileDropImport`). There was no drop handler anywhere in `src/`, so a file dropped on either pane got the browser default: the tab navigates to the file and everything typed since the last autosave is gone — the one gesture that leaves no draft, no undo and no snapshot. Only drags carrying `Files` are intercepted; a text/HTML drag inside the document still belongs to CodeMirror and ProseMirror. The `preventDefault` happens even with no importer wired, since losing the document is not an acceptable way to say "we can't import this". Pinned by [src/__tests__/editor-file-drop.test.js](../src/__tests__/editor-file-drop.test.js).
-- **Flow (import):** File chosen/dropped → `getFileContentAndFormat` → `detectFormat` ([src/store/import-export.ts:65](../src/store/import-export.ts#L65)) → `importFile`/`importFiles` ([:139](../src/store/import-export.ts#L139)) → `ingest()` ([src/store/ingest.ts:479](../src/store/ingest.ts#L479)) → new document.
-- **Flow (export):** `exportAsMarkdown`/`exportAsHtml`/`exportAsJson` ([src/store/import-export.ts:275](../src/store/import-export.ts#L275)). Markdown export respects the current sync mode; JSON export wraps the document in a `_format: "perssonify-document"` envelope ([:275](../src/store/import-export.ts#L275)).
+- **Flow (import):** File chosen/dropped → `getFileContentAndFormat` → `detectFormat` ([src/store/import-export.ts:65](../src/store/import-export.ts#L65)) → `importFile`/`importFiles` ([:139](../src/store/import-export.ts#L139)) → `ingest()` ([src/store/ingest.ts:488](../src/store/ingest.ts#L488)) → new document.
+- **Flow (export):** `exportAsMarkdown`/`exportAsHtml`/`exportAsJson` ([src/store/import-export.ts:306](../src/store/import-export.ts#L306)). Markdown export respects the current sync mode; JSON export wraps the document in a `_format: "perssonify-document"` envelope ([:306](../src/store/import-export.ts#L306)).
 - **PDF / print:** "PDF / Print…" renders the rich document into a hidden iframe with a print stylesheet and opens the browser print dialog (use "Save as PDF"). Fidelity matches HTML export. Implemented by `printHtmlDocument` in [src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx).
 - **Word (.docx):** "Word (.docx)" tokenizes the document's Markdown with marked's lexer and maps tokens to Word elements via the (dynamically imported) `docx` library — headings, paragraphs, nested lists, blockquotes, code, tables, rules, inline formatting. [src/store/docx-export.ts](../src/store/docx-export.ts). Images/math/diagrams fall back to source text.
 - **Word (.docx) import:** A `.docx` upload is converted to HTML by the (dynamically imported) `mammoth` library, then fed to the existing `format:"html"` ingest branch — so it gets the same sanitize (`sanitizeForIngest` keeps inlined `data:` raster images, strips scripts) and residual-report (`analyzeHtml`) treatment as any HTML import. PE's import loop branches on `.docx` **before** the text-reading path (a Word file read as text is binary garbage). [src/store/docx-import.ts](../src/store/docx-import.ts) `convertDocxToHtml`. Best-effort/lossy: headings, bold/italic, lists, tables, and embedded raster images convert; Word equations (OMML), text boxes, and complex layout do not. Embedded images inline as base64, so a small `.docx` can expand past the 5 MB import cap once images are embedded. Related: [src/__tests__/docx-import.test.js](../src/__tests__/docx-import.test.js).
@@ -252,7 +252,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 
 - **What:** Link one document to another by title or id; backlinks are tracked automatically.
 - **Syntax:** `[[Document Title]]` (resolve by title, case-insensitive) or `[[doc-id|Display Text]]`.
-- **Entry point / flow:** On any document change, `useLinkIndex` ([src/hooks/useLinkIndex.ts](../src/hooks/useLinkIndex.ts)) rebuilds the index via `buildLinkIndex` ([src/store/link-index.ts:177](../src/store/link-index.ts#L177)); `scanWikiLinks` ([:71](../src/store/link-index.ts#L71), regex `/\[\[([^\]]+)\]\]/g`) finds links and `resolveTarget` ([:148](../src/store/link-index.ts#L148)) matches them to docs. Clicking a `[[link]]` in the rich-text pane is wired at [src/hooks/useLinkIndex.ts](../src/hooks/useLinkIndex.ts).
+- **Entry point / flow:** On any document change, `useLinkIndex` ([src/hooks/useLinkIndex.ts](../src/hooks/useLinkIndex.ts)) rebuilds the index via `buildLinkIndex` ([src/store/link-index.ts:248](../src/store/link-index.ts#L248)); `scanWikiLinks` ([:77](../src/store/link-index.ts#L77), regex `/\[\[([^\]]+)\]\]/g`) finds links and `resolveTarget` ([:236](../src/store/link-index.ts#L236)) matches them to docs. Clicking a `[[link]]` in the rich-text pane is wired at [src/hooks/useLinkIndex.ts](../src/hooks/useLinkIndex.ts).
 - **Data:** Builds the four maps `forward / reverse / unresolved / contexts` — see [database.md#the-link-index-in-memory-not-persisted](database.md#the-link-index-in-memory-not-persisted).
 
 ### 16. Backlinks panel (bottom tray)
@@ -348,7 +348,7 @@ These are **custom node types** layered on Tiptap. Most are preprocessed but **d
 
 - **What:** Use the editor as a React component or inside an iframe, with an imperative handle and event callbacks.
 - **Entry point:** [`<PerssonifyEditorIntegration>`](../src/integration/PerssonifyEditorIntegration.tsx) (exported from [src/index.tsx](../src/index.tsx)).
-- **Imperative handle** (`EditorHandle`, [src/integration/PerssonifyEditorIntegration.tsx:105](../src/integration/PerssonifyEditorIntegration.tsx#L105)): `getCanonicalDocument()`, `getMarkdown()`, `getHTML()`, `getGraph()`, `getDocuments()`, `getActiveDocument()`, `importContent()`, `setDocuments()`, `setFieldSchemas()`, `setAssociations()`, `setTheme()`, `getAssociations()`, `copyAsPrompt()`, `exportAs()`.
+- **Imperative handle** (`EditorHandle`, [src/integration/PerssonifyEditorIntegration.tsx:115](../src/integration/PerssonifyEditorIntegration.tsx#L115)): `getCanonicalDocument()`, `getMarkdown()`, `getHTML()`, `getGraph()`, `getDocuments()`, `getActiveDocument()`, `importContent()`, `setDocuments()`, `setFieldSchemas()`, `setAssociations()`, `setTheme()`, `getAssociations()`, `copyAsPrompt()`, `exportAs()`.
 - **Iframe bridge:** `createHostBridge` (inside the iframe) ⇄ `createEditorClient` (parent) over `postMessage`, protocol `"perssonify"` — [src/integration/host-bridge.ts](../src/integration/host-bridge.ts).
 - **Full reference:** [architecture.md#embedding--integration](architecture.md#embedding--integration).
 
