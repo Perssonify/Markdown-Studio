@@ -640,3 +640,30 @@ export const LARGE_MAP_MIN = 250;
 export function isLargeMap(n: number) {
   return n > LARGE_MAP_MIN;
 }
+
+/** A large map's physics budget per animation frame (at least one step runs). */
+export const SLICE_MS = 12;
+/** A large map paints its moving layout at most this often. */
+export const PAINT_EVERY_MS = 250;
+/** A large map holds its layout still this long after the user moves the camera
+ *  (wheel, pan, zoom buttons) or the pointer over the map, so the interaction
+ *  gets the main thread rather than queueing behind layout steps — and a pan or
+ *  a hover over an unchanged layout rebuilds nothing. The held steps are
+ *  deferred, not skipped: the layout resumes where it was and rests where it
+ *  would have. */
+export const CAMERA_HOLD_MS = 300;
+
+/**
+ * What one animation frame of the layout loop does. A small map always steps
+ * (and paints every frame, as it always has). A large map does exactly ONE of:
+ * wait while the user is moving the camera or pointing; paint the moving
+ * layout, if one is due; or step it. Never a step and a paint in the same
+ * frame: measured at 2,000 notes under 4× CPU throttling, a frame carrying both
+ * ran 300-440ms where either alone stayed under 200ms.
+ */
+export function planFrame(o: { large: boolean; running: boolean; now: number; holdUntil: number; lastPaint: number }): "hold" | "paint" | "step" {
+  if (!o.large || !o.running) return "step";
+  if (o.now < o.holdUntil) return "hold";
+  if (o.now - o.lastPaint >= PAINT_EVERY_MS) return "paint";
+  return "step";
+}

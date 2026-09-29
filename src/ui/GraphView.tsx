@@ -14,12 +14,15 @@ import {
   FOLDER_CHIP_H,
   folderRects,
   findOrphans,
+  CAMERA_HOLD_MS,
   isLargeMap,
   labelBoxAt,
   matchNodes,
   neighborIds,
   placeLabels,
+  planFrame,
   rankByDegree,
+  SLICE_MS,
   truncateLabel,
   type LabelBox,
 } from "../store/graph-metrics";
@@ -93,20 +96,9 @@ type Pt = SimPoint;
 // ── Scale ────────────────────────────────────────────────────────────────────
 // A LARGE map (`isLargeMap`, graph-metrics.ts) is drawn and paced for scale:
 // ordinary dots, links and arrowheads are a few batched paths (graph-draw.ts),
-// hover is hit-tested in code, and the layout is stepped against a clock and
-// painted at most every PAINT_EVERY_MS. A small map is untouched: one element
-// per note and per link, every step painted.
-/** A large map's physics budget per animation frame (at least one step runs). */
-const SLICE_MS = 12;
-/** A large map paints its moving layout at most this often. */
-const PAINT_EVERY_MS = 250;
-/** A large map holds its layout still this long after the user moves the camera
- *  (wheel, pan, zoom buttons) or the pointer over the map, so the interaction
- *  gets the main thread rather than queueing behind layout steps — and a pan or
- *  a hover over an unchanged layout rebuilds nothing. The held steps are
- *  deferred, not skipped: the layout resumes where it was and rests where it
- *  would have. */
-const CAMERA_HOLD_MS = 300;
+// hover is hit-tested in code, and each frame of the layout loop holds, paints
+// or steps (`planFrame` — never a step and a paint together). A small map is
+// untouched: one element per note and per link, every step painted.
 
 const CAM_MIN = 0.3;
 const CAM_MAX = 3;
@@ -391,17 +383,19 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     // same hard budget on the simulation however many steps a frame takes.
     const n = graphRef.current.nodes.length;
     const large = isLargeMap(n);
-    if (large && runningRef.current && performance.now() < cameraHoldRef.current) {
-      // The user is moving the camera: no step this frame (nothing decays and
-      // nothing is spent from the step budget — the layout simply waits).
+    const plan = planFrame({
+      large, running: runningRef.current, now: performance.now(),
+      holdUntil: cameraHoldRef.current, lastPaint: lastPaintRef.current,
+    });
+    if (plan === "hold") {
+      // The user is moving the camera or pointing: no step this frame (nothing
+      // decays and nothing is spent from the step budget — the layout waits).
       rafRef.current = requestAnimationFrame(loop);
       return;
     }
-    if (large && runningRef.current && performance.now() - lastPaintRef.current >= PAINT_EVERY_MS) {
-      // A large map's paint and its steps go in DIFFERENT frames. Measured at
-      // 2,000 notes under 4× throttling, one frame carrying both — a step and
-      // the React render of the moved layout — ran 300-440ms; either alone is
-      // well under 200ms. The steps are not lost, they run next frame.
+    if (plan === "paint") {
+      // A large map's paint and its steps go in DIFFERENT frames (planFrame).
+      // The steps are not lost; they run next frame.
       lastPaintRef.current = performance.now();
       recenter(false);
       render();
@@ -420,7 +414,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       if (large && performance.now() - started >= SLICE_MS) break;
     }
     const done = frozen || !runningRef.current;
-    // A large map paints its moving layout only every PAINT_EVERY_MS (above),
+    // A large map paints its moving layout only every PAINT_EVERY_MS (planFrame),
     // in a frame of its own; the steps between are the same steps, so the
     // resting layout is the same. A small map paints every frame.
     if (!large || done) {
