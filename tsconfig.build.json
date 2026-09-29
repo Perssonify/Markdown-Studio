@@ -10,7 +10,9 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "declarationMap": true,
+    // No declaration maps: they point back into src/, which is not published,
+    // so a consumer's "go to definition" would only find a dangling reference.
+    "declarationMap": false,
     "outDir": "dist",
     // Declaration emit must not fail on the app-only surface or on generated
     // primitives; the real type gate still covers those.

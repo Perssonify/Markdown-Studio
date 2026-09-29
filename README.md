@@ -50,8 +50,8 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 | HTML-to-Markdown | Turndown 7 |
 | State | Zustand 5 |
 | Persistence | IndexedDB (local, no server) |
-| Positioning | @floating-ui/dom |
-| Build Tool | Vite 6 |
+| UI primitives | Base UI (menus, dialogs, popovers) |
+| Build Tool | Vite 8 |
 | Test Framework | Vitest 4 + Testing Library |
 | Package Manager | Bun |
 | Deployment | Vercel (static SPA) |
@@ -396,9 +396,37 @@ The editor can be embedded in external applications via the library build.
 > authoritative reference for **autosave/persistence, theming, default view mode,
 > and deep links**. Read it first if you're integrating the editor into a host app.
 
+### Install
+
+```bash
+npm install @perssonify/editor
+```
+
+The package ships ES and CommonJS builds, TypeScript declarations and one
+stylesheet. React 18, Tiptap 3 (3.31 or later, as one matching set), CodeMirror 6,
+lucide-react, next-themes and zustand are **peer dependencies**: npm 7+ installs
+them for you; with pnpm, Yarn or `--legacy-peer-deps`, add them yourself
+(`npm view @perssonify/editor peerDependencies` lists the exact ranges). The
+Markdown and rendering libraries — marked, turndown, KaTeX, Mermaid, abcjs, docx,
+mammoth and the rest — are ordinary dependencies that your bundler resolves and
+dedupes against any copy you already have; the heavy renderers stay lazy chunks
+that load the first time a document needs them.
+
+Import two stylesheets once, at your app root:
+
+```js
+import '@perssonify/editor/styles.css';  // the editor — safe to import, see "Style isolation"
+import 'katex/dist/katex.min.css';       // math: without it every formula renders twice, unstyled
+```
+
+`katex` is installed as a dependency of this package. Under pnpm's strict
+`node_modules` layout your own code cannot import it until you add it to your
+dependencies (`pnpm add katex@^0.18`).
+
 ```jsx
 import { PerssonifyEditorIntegration } from '@perssonify/editor';
 import '@perssonify/editor/styles.css';   // safe to import: see "Style isolation" below
+import 'katex/dist/katex.min.css';
 
 function App() {
   return (
