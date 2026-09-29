@@ -57,6 +57,13 @@ describe("fenced code round-trips byte for byte", () => {
     "leading indentation": "```py\ndef f():\n    if True:\n        return 1\n```\n",
     "characters the markdown passes would otherwise rewrite":
       "```md\n- [ ] not a task list\n[[not a wiki link]]\n{not a curly span}\n~~not struck~~\n```\n",
+    // Tabs are code CONTENT (CommonMark). marked up to 14.1.0 expanded every
+    // leading tab in the source to four spaces before it tokenised, fence
+    // bodies included, and this suite pinned that deviation until marked
+    // 14.1.1 fixed it upstream: a Makefile snippet is only a Makefile while
+    // its recipe lines start with a tab.
+    "leading tabs (a Makefile recipe)": "```make\nall:\n\tcc -o app main.c\n\t\t@echo done\n```\n",
+    "tabs inside a line": "```go\nfunc main() {\n\tprintln(1)\t// one\n}\n```\n",
   };
 
   for (const [name, src] of Object.entries(CASES)) {
@@ -64,27 +71,6 @@ describe("fenced code round-trips byte for byte", () => {
       expect(body(roundTrip(src))).toBe(body(src));
     });
   }
-
-  // KNOWN DEVIATION, pre-existing and NOT fixed here. marked expands leading
-  // tabs to four spaces for every line of the source before it tokenises —
-  // `blockTokens` does `src.replace(/^( *)(\t+)/gm, ...)` unconditionally, not
-  // only in pedantic mode — so tabs inside a fence are expanded too. CommonMark
-  // says tabs in code CONTENT are preserved, so this is a marked deviation, and
-  // it matters: a Makefile snippet is not a Makefile once its tabs are spaces.
-  //
-  // TODO(markdown-engine): preserve tabs inside a fence. Fixing it means
-  // masking fence bodies across marked's own lexer (its preprocess/postprocess
-  // hooks are the place), which is a change to the whole markdown rendering
-  // path and deserves its own verification rather than riding along.
-  //
-  // This was an `it.fails` — a trap, not a signal: vitest reports a passing
-  // `fails` test as a FAILURE, so the day someone fixed the bug CI would go red
-  // and blame the fix. The deviation is pinned below as the behaviour it
-  // actually is; when it changes, that assertion fails and names the reason.
-  it("documents exactly what happens to a tab today (a marked deviation)", () => {
-    const src = "```go\nfunc main() {\n\tprintln(1)\n}\n```\n";
-    expect(body(roundTrip(src))).toBe("func main() {\n    println(1)\n}\n");
-  });
 
   it("counts blank runs exactly, not approximately", () => {
     // The specific claim the browser probe got wrong.

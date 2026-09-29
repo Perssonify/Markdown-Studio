@@ -116,14 +116,19 @@ export const mathInlineExtension = {
   tokenizer(src: string) {
     // `$$…$$` mid-line is consumed as literal TEXT, so that neither of its
     // dollars can pair up as inline maths (`$$x^2$$` would otherwise render as
-    // `$` + x^2 + `$`).
+    // `$` + x^2 + `$`). It is a `literal` token of this extension rather than
+    // a `text` token: since marked 15 the text renderer does the escaping and
+    // the lexer appends the next run of prose to a preceding `text` token, so
+    // a pre-escaped `text` token was either escaped twice or, flagged
+    // `escaped`, carried the words after it out unescaped.
     const display = matchInlineDisplay(src);
-    if (display) return { type: "text", raw: display, text: escAttr(display) };
+    if (display) return { type: "mathInline", raw: display, text: display, literal: true };
     const m = matchInlineMath(src);
     if (m) return { type: "mathInline", raw: m.raw, text: m.text };
     return undefined;
   },
-  renderer(token: { text: string }) {
+  renderer(token: { text: string; literal?: boolean }) {
+    if (token.literal) return escAttr(token.text);
     return `<span data-math-inline="${escAttr(token.text)}">${escAttr(token.text)}</span>`;
   },
 };
