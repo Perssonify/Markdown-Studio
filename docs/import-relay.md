@@ -286,8 +286,8 @@ settings an owner has to make once.
 2. **A shared counter, if the platform rule is not available.** The in-memory
    `rateBuckets` resets per instance. A real quota needs shared state — Upstash
    Redis from the Vercel Marketplace with a sliding-window limiter is the usual
-   shape. That is a new dependency, so it is a decision for the owner (and G6's
-   dependency policy), not something to slip in: key it on IP **and** add a
+   shape. That is a new dependency, so it is a decision for the owner, not something
+   to slip in: key it on IP **and** add a
    coarse global ceiling, and fail OPEN to the in-memory limiter if the store is
    unreachable, so a Redis outage does not take imports down.
 3. **Spend management.** Team **Settings → Billing → Spend Management**: set a
