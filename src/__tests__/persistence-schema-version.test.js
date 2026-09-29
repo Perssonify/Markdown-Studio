@@ -148,6 +148,29 @@ describe("hydration of content that does not fit", () => {
     expect(useUIStore.getState().readOnly).toBe(true);
   });
 
+  it("leaving by a path that bypasses the ritual (New document) still lifts the forced read-only", () => {
+    const { result } = mount();
+    act(() => { result.current.hydrateEditorWithDoc("f", fromTheFuture); });
+    expect(useUIStore.getState().readOnly).toBe(true);
+    // handleNewDoc / quick capture: finalizeDoc marks the new document hydrated.
+    act(() => { useDocumentStore.setState({ activeDocId: "new" }); useDocumentStore.getState().markHydrated("new"); });
+    expect(useUIStore.getState().readOnly).toBe(false);
+  });
+
+  it("restoring over a locked document keeps its REAL content as the pre-restore copy", async () => {
+    const { snapshotStore } = await import("../store/snapshot-store");
+    snapshotStore._resetForTests();
+    await snapshotStore.record("f", "Future", { type: "doc", content: [para("an old version")] }, "manual");
+    const [old] = await snapshotStore.listForDoc("f");
+    const { result } = mount();
+    act(() => { result.current.hydrateEditorWithDoc("f", fromTheFuture); });
+    useUIStore.setState({ readOnly: false });                    // the user switched read-only off
+    await act(async () => { await result.current.restoreSnapshotInPlace(old.id); });
+    const pre = (await snapshotStore.listForDoc("f")).find((s) => s.reason === "pre-restore");
+    // Not the lossy display copy the editor showed — the stored content.
+    expect(JSON.stringify(await snapshotStore.getCanonical(pre.id))).toContain("futureWidget");
+  });
+
   it("opening a document that fits afterwards unlocks it and restores read-only", () => {
     const { result } = mount();
     act(() => { result.current.hydrateEditorWithDoc("f", fromTheFuture); });

@@ -427,6 +427,15 @@ export function useDocumentLifecycle({
   // Read-only that WE switched on for a document from a newer build, and what
   // it was before — restored when a document that fits is hydrated again.
   const forcedReadOnlyRef = useRef<{ prev: boolean } | null>(null);
+  // …by ANY path: New document and Cards quick-capture mark the editor
+  // hydrated without going through hydrateEditorWithDoc, and the lock used to
+  // outlive the locked document — the brand-new note opened read-only.
+  useEffect(() => useDocumentStore.subscribe((s) => {
+    const forced = forcedReadOnlyRef.current;
+    if (!forced || !s.hydratedDocId || s.isIncompatible(s.hydratedDocId)) return;
+    forcedReadOnlyRef.current = null;
+    useUIStore.setState({ readOnly: forced.prev });
+  }), []);
 
   /**
    * THE hydration ritual — the invariant-critical sequence for putting a
@@ -858,8 +867,14 @@ export function useDocumentLifecycle({
 
     const editor = tiptapRef.current?.getEditor?.();
     if (editor) {
+      // The copy to keep is what the document really holds: the editor's when
+      // it is hydrated, the stored one when it is not (a document locked
+      // read-only shows only a lossy display copy of it).
+      const current = useDocumentStore.getState().hydratedDocId === activeDocId
+        ? editor.getJSON()
+        : activeDoc?.canonical;
       try {
-        await snapshotStore.record(activeDocId, activeDoc?.title ?? "Untitled", editor.getJSON(), "pre-restore");
+        await snapshotStore.record(activeDocId, activeDoc?.title ?? "Untitled", current, "pre-restore");
       } catch { /* best effort — don't block the restore on the safety snapshot */ }
     }
     if (switchGenRef.current !== myGen) return;
