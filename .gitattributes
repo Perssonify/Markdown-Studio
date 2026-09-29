@@ -1,0 +1,20 @@
+# Every text file in this repo is LF, and must stay LF in the working tree too.
+# Several tests read source files and match on "\n" (sync-perf.test.js pins
+# call sites like "<MenuBar\n"; doc-anchors resolves line numbers), so a CRLF
+# checkout — what `core.autocrlf=true` produces on Windows — failed them on
+# untouched code. `eol=lf` overrides autocrlf for text files.
+* text=auto eol=lf
+
+# Binary assets: never touch their bytes.
+*.png binary
+*.webp binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.zip binary
+*.docx binary
+*.pdf binary
