@@ -331,12 +331,17 @@ describe("one notice at a time, most urgent first", () => {
 
 describe("the boot path in PerssonifyEditor", () => {
   it("checks the library before seeding and skips the seed when it was wiped", () => {
-    const pe = read("src/PerssonifyEditor.tsx").replace(/\r\n/g, "\n");
-    const init = pe.indexOf("const existingDoc = await initialize();");
-    const check = pe.indexOf("noteLibraryAtBoot(useDocumentStore.getState().documents.length)");
-    const seed = pe.indexOf("} else if (initialDocument && !libraryWiped) {");
+    // The boot sequence lives in src/editor/useEditorBoot.ts.
+    const boot = read("src/editor/useEditorBoot.ts").replace(/\r\n/g, "\n");
+    const init = boot.indexOf("const existingDoc = await initialize();");
+    const check = boot.indexOf("noteLibraryAtBoot(useDocumentStore.getState().documents.length)");
+    const seed = boot.indexOf("} else if (initialDocument && !libraryWiped) {");
     expect(init).toBeGreaterThan(-1);
     expect(check).toBeGreaterThan(init);
     expect(seed).toBeGreaterThan(check);
+    // …and the editor runs it with the durabilityNotices prop it was given
+    // (shorthand: the prop itself, not some other value under its name).
+    const pe = read("src/PerssonifyEditor.tsx").replace(/\r\n/g, "\n");
+    expect(pe).toMatch(/useEditorBoot\(\{[^;]*\bdurabilityNotices,/);
   });
 });
