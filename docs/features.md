@@ -34,7 +34,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 - **What:** Show only the markdown pane, only the rich-text pane, or both side by side.
 - **Who:** Any user, at any width. Below 768px wide, Split stacks the panes one above the other — but only when there is height for two (500px or more), or on a touch device held upright; a landscape phone keeps them side by side rather than squeezing two editors into a strip (`splitShouldStack`, [src/ui/split-layout.ts](../src/ui/split-layout.ts)).
 - **Entry point:** `ModeSwitcher` ([src/ui/ModeSwitcher.tsx:34](../src/ui/ModeSwitcher.tsx#L34)) → `useUIStore.setMode`. Mode constants: `MODES` = `{ MD, HTML, SPLIT }` ([src/constants.ts:34](../src/constants.ts#L34)).
-- **Flow:** `setMode(m)` → `useUIStore.mode` updates → `EditorLayout` shows the panes for that mode → `PerssonifyEditor` persists it as `editorMode` in prefs ([src/PerssonifyEditor.tsx:452](../src/PerssonifyEditor.tsx#L452)).
+- **Flow:** `setMode(m)` → `useUIStore.mode` updates → `EditorLayout` shows the panes for that mode → `PerssonifyEditor` persists it as `editorMode` in prefs ([src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx)).
 - **Edge cases:** the toolbar compacts when its OWN width drops below `TOOLBAR_COMPACT_BP` (1080px, measured with a `ResizeObserver`, so a library mount in a narrow container compacts too — [src/constants.ts](../src/constants.ts)); the ☰ menu collapses below 768px ([src/hooks/use-mobile.ts](../src/hooks/use-mobile.ts)); the split stack follows the width-and-height rule above. Below 450px of height the standalone shell lets the page scroll instead of shrinking the editor to nothing (usable at 400% zoom).
 
 ### 3. Menu bar (File · Edit · Insert · View · Format · Tools · Help)
@@ -259,7 +259,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 ### 14. Copy as Prompt
 
 - **What:** Copies the active document **plus its linked neighbors** to the clipboard, formatted as XML-tagged context for an LLM.
-- **Entry point:** **Tools ▸ Copy as Prompt** ([src/ui/MenuBar.tsx](../src/ui/MenuBar.tsx)) → handled by `handleAction`'s `prompt` branch ([src/PerssonifyEditor.tsx:2029](../src/PerssonifyEditor.tsx#L2029)) → `buildContextPrompt` ([src/integration/prompt-builder.ts:232](../src/integration/prompt-builder.ts#L232)). A linked document that cannot be read is left out of the prompt rather than failing it.
+- **Entry point:** **Tools ▸ Copy as Prompt** ([src/ui/MenuBar.tsx](../src/ui/MenuBar.tsx)) → handled by `handleAction`'s `prompt` branch ([src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx)) → `buildContextPrompt` ([src/integration/prompt-builder.ts:232](../src/integration/prompt-builder.ts#L232)). A linked document that cannot be read is left out of the prompt rather than failing it.
 - **Flow:** Resolves forward links (and optionally backlinks) of the active doc, caps at `maxDocs` (default 20), wraps each in `<document …>…</document>` and the set in `<documents>` with an optional `<knowledge_graph_summary>`.
 - **Data:** Reads the link index ([src/store/link-index.ts](../src/store/link-index.ts)) and document records.
 
