@@ -138,4 +138,32 @@ runCase("dataloss", async (rep, onClose) => {
     rep.check("F001 [control]: closing never writes over the other tab's version",
       disk.includes("TAB-A-EDIT"), disk.slice(-200));
   }
+
+  // ── A018: a RELOAD after a conflict must not overwrite the other tab ─────
+  // The conflict message tells the user to reload. The unload handler stashed
+  // the conflicted tab's text; the next boot adopted it against the record on
+  // disk — whose `updated` is the OTHER tab's — so the guard saw no drift and
+  // the first autosave replaced that tab's work (the audit watched it go
+  // within 15s). The stash now carries the revision the draft was written on.
+  {
+    const { b } = await twoTabsInConflict(rep, onClose, {
+      docs: [proseDoc("aaa", "Alpha doc", 1), proseDoc("bbb", "Beta doc", 1)],
+    });
+
+    await b.reload({ waitUntil: "domcontentloaded" });
+    // Nothing typed is lost: the reloaded tab shows its own unsaved text…
+    rep.check("A018: the reloaded tab still has its unsaved text",
+      await until(async () => (await richText(b)).includes("TAB-B-EDIT"), { timeout: 20000 }),
+      (await richText(b)).slice(-160));
+    // …and gives autosave well past its window to do damage.
+    await b.waitForTimeout(12000);
+
+    const disk = canonicalText(await storedDoc(b, "aaa"));
+    rep.check("A018: the other tab's work is STILL on disk after the reload",
+      disk.includes("TAB-A-EDIT"), disk.slice(-200));
+    rep.check("A018: the reloaded draft did not overwrite it",
+      !disk.includes("TAB-B-EDIT"), disk.slice(-200));
+    rep.check("A018: and the reloaded tab says it is not saving",
+      /another tab|conflict|not sav/i.test(await footer(b)), (await footer(b)).slice(0, 160));
+  }
 });
