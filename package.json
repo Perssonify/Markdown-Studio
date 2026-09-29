@@ -95,6 +95,7 @@
     "e2e:bridge": "node e2e/run.mjs bridge",
     "e2e:csp": "node e2e/run.mjs csp",
     "e2e:pwa": "node e2e/run.mjs pwa",
+    "e2e:floor": "node e2e/run.mjs floor",
     "e2e:perf": "node e2e/run.mjs perf"
   },
   "peerDependencies": {
