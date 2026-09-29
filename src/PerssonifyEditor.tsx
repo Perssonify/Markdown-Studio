@@ -25,7 +25,7 @@ import { exportGraph } from "./store/link-index";
 import type { StorageAdapter } from "./store/storage-adapter";
 import { StorageQuotaError } from "./store/storage-adapter";
 import { canonicalToHtml, canonicalToMarkdown } from "./engine/serialize-doc";
-import { extractHeadings } from "./store/doc-outline";
+import { extractHeadings, findHeadingByAnchor } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
@@ -658,8 +658,6 @@ export function PerssonifyEditor({
   const scrollToHeadingByAnchor = useCallback(async (docId: string | null, anchorText: string) => {
     const targetId = docId ?? useDocumentStore.getState().activeDocId;
     if (!targetId) return;
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const wanted = norm(anchorText);
     if (targetId !== useDocumentStore.getState().activeDocId) await handleSwitchDoc(targetId);
     setWorkspaceView("editor");
     if (mode === "md") setMode("split");
@@ -669,11 +667,13 @@ export function PerssonifyEditor({
         const dom = tiptapRef.current?.getEditor()?.view?.dom as HTMLElement | undefined;
         const headings = dom?.querySelectorAll("h1, h2, h3, h4, h5, h6");
         if (headings) {
-          for (const h of Array.from(headings)) {
-            if (norm(h.textContent || "") === wanted) {
-              (h as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" });
-              return;
-            }
+          // The ONE anchor matcher (doc-outline). Its old inline normaliser,
+          // `[^a-z0-9]`, erased every non-Latin heading to "", so an anchor to
+          // any of them jumped to the FIRST non-Latin heading in the document.
+          const i = findHeadingByAnchor(Array.from(headings, (h) => h.textContent || ""), anchorText);
+          if (i >= 0) {
+            (headings[i] as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
           }
           if (headings.length) { toast.show(`Heading not found: "${anchorText}"`, "info"); return; }
         }
