@@ -31,6 +31,7 @@ import { useAutosave } from "./editor/useAutosave";
 import { useCanonicalChangeHandler, useContentChangeEmitter } from "./editor/useChangeNotifications";
 import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation";
 import { usePaneCommands } from "./editor/usePaneCommands";
+import { useBottomTray, useConsoleContext, useTrayTabs } from "./editor/useBottomTray";
 import { canonicalToHtml, canonicalToMarkdown, headlessSchema } from "./engine/serialize-doc";
 import { extractHeadings } from "./store/doc-outline";
 import { historyCache } from "./store/history-cache";
@@ -48,9 +49,7 @@ import { MenuBar } from "./ui/MenuBar";
 import { AdUnit } from "./ui/AdUnit";
 import { DurabilityNotices } from "./ui/DurabilityNotices";
 import { noteLibraryAtBoot, recordFullBackup } from "./store/storage-durability";
-import { BacklinksPanel } from "./ui/BacklinksPanel";
 import { BottomTray } from "./ui/BottomTray";
-import { trayFits } from "./ui/tray-fit";
 import { EditorLayout } from "./ui/EditorPanes";
 import { EditorContextMenu } from "./ui/EditorContextMenu";
 import { Icons } from "./ui/Icons";
@@ -60,11 +59,8 @@ import { EditorToolbar } from "./ui/Toolbar";
 import { diagError } from "./utils/diag";
 
 // Handle types for the sub-panes
-import { FileTextIcon, Link as LinkIcon, TerminalSquare } from "lucide-react";
+import { FileTextIcon } from "lucide-react";
 import { useIsMobile } from "./hooks/use-mobile";
-import { ConsolePanel } from "./ui/ConsolePanel";
-import { getBacklinks, getForwardLinks } from "./store/link-index";
-import type { ConsoleContext } from "./store/console-commands";
 import { Button } from "./components/ui/button";
 import { PanelLeft } from "lucide-react";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -207,11 +203,6 @@ export function PerssonifyEditor({
   const [showMemory, setShowMemory] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showLinkBuilder, setShowLinkBuilder] = useState(false);
-  // Expandable bottom tray (tabbed). Document Links is the first tab; a console /
-  // diagnostics tab is planned (docs/backlog.md). Collapsed by default so it costs
-  // no vertical space; the status-bar links chip / chevron toggle it.
-  const [trayOpen, setTrayOpen] = useState(false);
-  const [trayTab, setTrayTab] = useState("links");
   // The importer opens PRE-FILLED from `initialImportUrl` (the app's
   // `?import_url=` deep link) and never fetches by itself — the visitor reviews
   // the URL and presses Fetch. Seeding the state at construction rather than in
@@ -472,34 +463,6 @@ export function PerssonifyEditor({
   const { activeHeadingIndex, docNavHeadings } = useOutline({
     tiptapRef, getCanonical, activeDocId, mode, showSidebar, workspaceTab,
   });
-  // Read-only context for the diagnostics console tray tab (admin-gated). Every
-  // accessor reads LIVE store/editor state so results reflect the moment a
-  // command runs, not a stale render. No write path is exposed (curated,
-  // read-only registry — see console-commands.ts).
-  const consoleCtx = useMemo<ConsoleContext>(() => ({
-    getLifecycleState: () => useDocumentStore.getState().getLifecycleState(),
-    getStorageMetrics: () => useDocumentStore.getState().getStorageMetrics(),
-    listDocuments: () =>
-      useDocumentStore.getState().documents.map((d) => ({
-        id: d.id, title: d.title, updated: d.updated, tags: d.tags,
-      })),
-    getActiveDocId: () => useDocumentStore.getState().activeDocId,
-    getActiveOutline: () => extractHeadings(getCanonical()).map((h) => ({ level: h.level, text: h.text })),
-    getLinks: (docId) => {
-      const idx = useEditorStore.getState().linkIndex;
-      const docs = useDocumentStore.getState().documents;
-      return {
-        backlinks: getBacklinks(idx, docId, docs).map((b) => ({ id: b.docId, title: b.title })),
-        forwardLinks: getForwardLinks(idx, docId, docs).map((f) => ({ id: f.docId, title: f.title })),
-      };
-    },
-    getGraph: () => {
-      const idx = useEditorStore.getState().linkIndex;
-      const docs = useDocumentStore.getState().documents;
-      const merged = fullDocsRef.current.map((d) => ({ ...d, ...docs.find((s) => s.id === d.id) }));
-      return exportGraph(merged, idx);
-    },
-  }), [getCanonical]);
 
   // ── Stable callbacks for the memoized chrome ──────────────────────────────
   // MenuBar / StatusBar / BottomTray are React.memo'd, but every one of these
@@ -522,39 +485,11 @@ export function PerssonifyEditor({
     setShowFindReplace(false);
     setFindSeed("");
   }, []);
-  // The tray and the editor share one `overflow-hidden` column, and the
-  // editor's floor is not shrinkable — so on a short viewport opening the tray
-  // does not squeeze the editor, it clips the tray and the status bar off the
-  // bottom of the app. Refuse, and say why, rather than hand over a broken
-  // layout. Closing is never blocked.
-  const trayRegionRef = useRef<HTMLDivElement>(null);
-  const refuseTrayIfCramped = useCallback(() => {
-    const h = trayRegionRef.current?.clientHeight ?? 0;
-    if (trayFits(h)) return false;
-    toast.show("Not enough height for the panel — make the window taller", "warning");
-    return true;
-  }, [toast]);
-
-  const toggleTray = useCallback(() => {
-    setTrayOpen((v) => {
-      if (v) return false;
-      return refuseTrayIfCramped() ? false : true;
-    });
-  }, [refuseTrayIfCramped]);
-  // The tray tab is read inside a stable callback, so it rides a ref rather
-  // than the dep array — otherwise every tab change re-created the prop and
-  // re-rendered the memoized status bar.
-  const trayTabRef = useRef(trayTab);
-  useEffect(() => { trayTabRef.current = trayTab; }, [trayTab]);
-  const toggleLinksTray = useCallback(() => {
-    setTrayTab("links");
-    setTrayOpen((v) => {
-      const closing = v && trayTabRef.current === "links";
-      if (closing) return false;
-      return refuseTrayIfCramped() ? false : true;
-    });
-  }, [refuseTrayIfCramped]);
-  const closeTray = useCallback(() => setTrayOpen(false), []);
+  // The bottom tray (useBottomTray): open/tab state and both toggles, which
+  // refuse to open it when the height would clip the app. Closing never is.
+  const {
+    trayOpen, trayTab, setTrayTab, trayRegionRef, toggleTray, toggleLinksTray, closeTray,
+  } = useBottomTray({ toast });
 
   const navigateToDoc = useCallback((id: string) => { handleSwitchDoc(id); }, [handleSwitchDoc]);
   const closeWorkspacePanel = useCallback(() => setShowSidebar(false), [setShowSidebar]);
@@ -578,28 +513,6 @@ export function PerssonifyEditor({
     if (activeDocId) handleCloseTab(activeDocId);
   }, [activeDocId, handleCloseTab]);
 
-  // Freshly-built JSX in an array literal: every render handed the memoized
-  // tray a brand-new tabs array containing brand-new elements.
-  const trayTabs = useMemo(() => [
-    {
-      id: "links",
-      label: "Document Links",
-      icon: LinkIcon,
-      content: (
-        <BacklinksPanel
-          hideHeader
-          backlinks={activeBacklinks}
-          forwardLinks={activeForwardLinks}
-          unresolved={activeUnresolved}
-          onNavigate={navigateToDoc}
-        />
-      ),
-    },
-    ...(consoleEnabled
-      ? [{ id: "console", label: "Console", icon: TerminalSquare, content: <ConsolePanel ctx={consoleCtx} /> }]
-      : []),
-  ], [activeBacklinks, activeForwardLinks, activeUnresolved, navigateToDoc, consoleEnabled, consoleCtx]);
-
   // ── Link index ────────────────────────────────────────────────────────────
   // A stable adapter, not an object literal at the call site: this lands in the
   // deps of useLinkIndex's wiki-link DOM listener effect, so a fresh object
@@ -622,6 +535,13 @@ export function PerssonifyEditor({
       : undefined,
     onAnchorNavigate: scrollToHeadingByAnchor,
     tiptapRef,
+  });
+
+  // The tray's tabs (Document Links, and the admin-gated diagnostics Console
+  // with its read-only context). Both memoized — the tray is React.memo'd.
+  const consoleCtx = useConsoleContext({ getCanonical, fullDocsRef });
+  const trayTabs = useTrayTabs({
+    activeBacklinks, activeForwardLinks, activeUnresolved, navigateToDoc, consoleEnabled, consoleCtx,
   });
 
   const waitForEditor = useCallback((maxMs = 1500): Promise<any> => new Promise((resolve) => {

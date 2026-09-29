@@ -16,6 +16,7 @@ import type { useDocumentLifecycle } from "../hooks/useDocumentLifecycle";
 import type { useDialogs } from "../hooks/useDialogs";
 import type { useLinkIndex } from "../hooks/useLinkIndex";
 import type { useDocumentStore } from "../store/documentStore";
+import type { useEditorStore } from "../store/editorStore";
 import type { useUIStore } from "../store/uiStore";
 import type { CodeMirrorPaneHandle } from "../ui/CodeMirrorPane";
 import type { useConfirm } from "../ui/ConfirmDialog";
@@ -29,6 +30,7 @@ export type TiptapRef = RefObject<TiptapPaneHandle>;
 
 export type DocStore = ReturnType<typeof useDocumentStore.getState>;
 export type UIStore = ReturnType<typeof useUIStore.getState>;
+export type EditorStore = ReturnType<typeof useEditorStore.getState>;
 export type Lifecycle = ReturnType<typeof useDocumentLifecycle>;
 export type SyncEngine = ReturnType<typeof useSyncEngine>;
 export type Engine = ReturnType<typeof useMarkdownEngine>["engine"];
