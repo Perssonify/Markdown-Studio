@@ -8,6 +8,7 @@
 
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
+import { cellSeparators, isSeparatorLine } from "./md-table-ops";
 
 export interface ScopeType {
   id: string;
@@ -40,15 +41,45 @@ export const SCOPE_GROUPS = ["Headings", "Paragraphs & lists", "Blocks", "Inline
 
 interface Range { from: number; to: number }
 
-/** Every range matching `scope` in the raw Markdown text, in document order. */
+// Block markers, stripped from a line-scope selection (see contentOf).
+const HEADING_MARK = /^ {0,3}#{1,6}(?:\s+|$)/;
+const HEADING_CLOSE = /\s+#+\s*$/;              // optional closing sequence: "## Title ##"
+const QUOTE_MARK = /^\s*(?:>\s?)+/;
+const TASK_MARK = /^\s*[-*+]\s+\[[ xX]\]\s*/;
+const BULLET_MARK = /^\s*[-*+]\s+/;
+const ORDERED_MARK = /^\s*\d{1,9}[.)]\s+/;
+
+/**
+ * Every range matching `scope` in the raw Markdown text, in document order.
+ *
+ * Line scopes select the CONTENT of each line — after its block marker (`## `,
+ * `- `, `1. `, `- [ ] `, `> `) and before trailing space. They used to select
+ * the whole line, marker included, so the feature's documented use — Select ▸
+ * All headings, then Bold — turned `## Alpha` into `**## Alpha**`, which is no
+ * longer a heading at all. A table row selects each CELL's content (a row
+ * wrapped as one unit breaks its pipes), and the delimiter row is not content.
+ */
 function mdScopeRanges(doc: string, scope: string): Range[] {
   const lines = doc.split("\n");
   const starts: number[] = [];
   let off = 0;
   for (const l of lines) { starts.push(off); off += l.length + 1; }
-  const lineRange = (i: number): Range => ({ from: starts[i]!, to: starts[i]! + lines[i]!.length });
   const out: Range[] = [];
   const headingLevel = /^h([1-6])$/.exec(scope);
+  /** Line `i` minus `marker` (and `closing`), trimmed; null when nothing is left. */
+  const contentOf = (i: number, marker: RegExp | null, closing?: RegExp): Range | null => {
+    const line = lines[i]!;
+    let start = marker ? (marker.exec(line)?.[0].length ?? 0) : 0;
+    let end = line.length;
+    if (closing) {
+      const c = closing.exec(line.slice(start));
+      if (c) end = start + c.index;
+    }
+    while (start < end && /\s/.test(line[start]!)) start++;
+    while (end > start && /\s/.test(line[end - 1]!)) end--;
+    return end > start ? { from: starts[i]! + start, to: starts[i]! + end } : null;
+  };
+  const push = (r: Range | null) => { if (r) out.push(r); };
 
   // Line-based block scopes (skip inside fenced code, except when selecting code).
   let inFence = false, fenceStart = -1, fenceMark = "";
@@ -64,14 +95,23 @@ function mdScopeRanges(doc: string, scope: string): Range[] {
     }
     if (fenceM) { inFence = true; fenceStart = i; fenceMark = fenceM[1]!; continue; }
 
-    if (scope === "headings" && /^#{1,6}\s/.test(line)) out.push(lineRange(i));
-    else if (headingLevel && new RegExp(`^#{${headingLevel[1]}}\\s`).test(line)) out.push(lineRange(i));
-    else if (scope === "blockquote" && /^>\s?/.test(line)) out.push(lineRange(i));
-    else if (scope === "taskList" && /^\s*[-*+]\s+\[[ xX]\]/.test(line)) out.push(lineRange(i));
-    else if (scope === "bulletList" && /^\s*[-*+]\s+/.test(line) && !/^\s*[-*+]\s+\[[ xX]\]/.test(line)) out.push(lineRange(i));
-    else if (scope === "orderedList" && /^\s*\d+\.\s+/.test(line)) out.push(lineRange(i));
-    else if (scope === "table" && /^\s*\|.*\|\s*$/.test(line)) out.push(lineRange(i));
-    else if (scope === "paragraphs" && line.trim() && !/^(#{1,6}\s|>|\s*[-*+]\s|\s*\d+\.\s|\s*\||\s{0,3}(```|~~~))/.test(line)) out.push(lineRange(i));
+    if (scope === "headings" && /^#{1,6}\s/.test(line)) push(contentOf(i, HEADING_MARK, HEADING_CLOSE));
+    else if (headingLevel && new RegExp(`^#{${headingLevel[1]}}\\s`).test(line)) push(contentOf(i, HEADING_MARK, HEADING_CLOSE));
+    else if (scope === "blockquote" && /^>\s?/.test(line)) push(contentOf(i, QUOTE_MARK));
+    else if (scope === "taskList" && TASK_MARK.test(line)) push(contentOf(i, TASK_MARK));
+    else if (scope === "bulletList" && BULLET_MARK.test(line) && !TASK_MARK.test(line)) push(contentOf(i, BULLET_MARK));
+    else if (scope === "orderedList" && ORDERED_MARK.test(line)) push(contentOf(i, ORDERED_MARK));
+    else if (scope === "table" && /^\s*\|.*\|\s*$/.test(line)) {
+      if (isSeparatorLine(line)) continue;
+      const seps = cellSeparators(line);
+      for (let s = 0; s + 1 < seps.length; s++) {
+        let a = seps[s]! + 1, b = seps[s + 1]!;
+        while (a < b && /\s/.test(line[a]!)) a++;
+        while (b > a && /\s/.test(line[b - 1]!)) b--;
+        if (b > a) out.push({ from: starts[i]! + a, to: starts[i]! + b });
+      }
+    }
+    else if (scope === "paragraphs" && line.trim() && !/^(#{1,6}\s|>|\s*[-*+]\s|\s*\d+\.\s|\s*\||\s{0,3}(```|~~~))/.test(line)) push(contentOf(i, null));
   }
 
   // Inline scopes via regex over the whole document.
