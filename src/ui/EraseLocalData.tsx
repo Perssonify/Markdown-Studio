@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { clearLocalData } from "../store/documentStore";
 import { useDialog } from "./DialogProvider";
+import { useT } from "../i18n";
 
 /**
  * Settings ▸ Local data ▸ Erase all local data.
@@ -13,25 +14,24 @@ import { useDialog } from "./DialogProvider";
  * the "erase my data" control — confirmed first, because it cannot be undone.
  */
 export function EraseLocalDataSection() {
+  const t = useT();
   const { confirm } = useDialog();
   const [busy, setBusy] = useState(false);
 
   const erase = async () => {
     const ok = await confirm({
-      title: "Erase all local data?",
-      description:
-        "Deletes every document, all version history, unsaved drafts and this app's settings from this browser. " +
-        "It cannot be undone — export a backup first if you might need anything.",
-      confirmLabel: "Erase everything",
+      title: t("settings.eraseConfirmTitle"),
+      description: t("settings.eraseConfirmDesc"),
+      confirmLabel: t("settings.eraseConfirmLabel"),
       destructive: true,
     });
     if (!ok) return;
     setBusy(true);
     try {
       await clearLocalData({ preferences: true });
-      toast.success("All local data erased from this browser");
+      toast.success(t("settings.eraseDone"));
     } catch {
-      toast.error("Some data could not be erased");
+      toast.error(t("settings.eraseFailed"));
     } finally {
       setBusy(false);
     }
@@ -40,17 +40,17 @@ export function EraseLocalDataSection() {
   return (
     <section className="space-y-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Local data
+        {t("settings.localData")}
       </h3>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm">Erase all local data</p>
+          <p className="text-sm">{t("settings.eraseAllLocalData")}</p>
           <p className="text-xs text-muted-foreground">
-            Every document, all version history and unsaved drafts, and these settings — from this browser only.
+            {t("settings.eraseAllLocalDataDesc")}
           </p>
         </div>
         <Button variant="destructive" size="sm" disabled={busy} onClick={erase}>
-          Erase…
+          {t("settings.eraseButton")}
         </Button>
       </div>
     </section>

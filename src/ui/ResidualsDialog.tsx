@@ -8,6 +8,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { ResidualItem } from "../store/ingest";
+import { t, useT } from "../i18n";
 
 /**
  * What "N residuals" in the status bar actually means.
@@ -22,35 +23,35 @@ import type { ResidualItem } from "../store/ingest";
 /** Plain-language heading per residual type, so the list explains itself. */
 export const RESIDUAL_KINDS: Record<string, { title: string; blurb: string }> = {
   "blocked-element": {
-    title: "Removed for safety",
-    blurb: "Scripts and other active content are never imported, whatever the source says.",
+    get title() { return t("status.residualBlockedElementTitle"); },
+    get blurb() { return t("status.residualBlockedElementBlurb"); },
   },
   "unknown-element": {
-    title: "No place in the document model",
-    blurb: "The editor has no node for these tags, so their markup was not kept.",
+    get title() { return t("status.residualUnknownElementTitle"); },
+    get blurb() { return t("status.residualUnknownElementBlurb"); },
   },
   "unknown-style": {
-    title: "Inline style not carried over",
-    blurb: "The editor stores formatting as marks, not as arbitrary CSS.",
+    get title() { return t("status.residualUnknownStyleTitle"); },
+    get blurb() { return t("status.residualUnknownStyleBlurb"); },
   },
   "dropped-attribute": {
-    title: "Attribute not kept",
-    blurb: "The element was imported; this attribute on it was not.",
+    get title() { return t("status.residualDroppedAttributeTitle"); },
+    get blurb() { return t("status.residualDroppedAttributeBlurb"); },
   },
   "noted-attribute": {
-    title: "May not survive a round-trip",
-    blurb: "Kept for now, but not guaranteed through every export format.",
+    get title() { return t("status.residualNotedAttributeTitle"); },
+    get blurb() { return t("status.residualNotedAttributeBlurb"); },
   },
   "html-comment": {
-    title: "Comments not kept",
-    blurb: "HTML comments (<!-- … -->) have no place in the document, so they were left out.",
+    get title() { return t("status.residualHtmlCommentTitle"); },
+    get blurb() { return t("status.residualHtmlCommentBlurb"); },
   },
 };
 
 const describe = (r: ResidualItem): string => {
   const parts: string[] = [];
   if (r.tag) parts.push(`<${r.tag}>`);
-  if (r.element && r.attribute) parts.push(`${r.attribute} on <${r.element}>`);
+  if (r.element && r.attribute) parts.push(t("status.residualAttributeOn", { attribute: r.attribute, element: r.element }));
   else if (r.element) parts.push(`<${r.element}>`);
   else if (r.attribute) parts.push(r.attribute);
   if (r.property) parts.push(r.property);
@@ -70,6 +71,7 @@ export function ResidualsDialog({
   residuals: ResidualItem[];
   docTitle?: string;
 }) {
+  const t = useT();
   // Group by kind, preserving the order the types are first seen, so a long list
   // reads as a few explained categories rather than a flat wall of tags.
   const groups: { type: string; items: ResidualItem[] }[] = [];
@@ -83,12 +85,11 @@ export function ResidualsDialog({
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <AlertDialogContent className="max-h-[85dvh] max-w-2xl overflow-y-auto">
         <AlertDialogHeader>
-          <AlertDialogTitle>What didn’t come through</AlertDialogTitle>
+          <AlertDialogTitle>{t("status.residualsDialogTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            {docTitle ? <>When <strong>{docTitle}</strong> was imported, </> : "When this document was imported, "}
-            {residuals.length} {residuals.length === 1 ? "thing" : "things"} in the source had no
-            representation in the editor’s document model, so {residuals.length === 1 ? "it is" : "they are"} not
-            part of the document. Nothing was changed in your original file.
+            {docTitle
+              ? t.rich("status.residualsIntroDoc", { count: residuals.length, title: docTitle, b: (s) => <strong>{s}</strong> })
+              : t("status.residualsIntro", { count: residuals.length })}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -117,7 +118,7 @@ export function ResidualsDialog({
                 </ul>
                 {g.items.length > 40 && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    …and {g.items.length - 40} more of the same kind.
+                    {t("status.residualsMore", { count: g.items.length - 40 })}
                   </p>
                 )}
               </section>
@@ -130,13 +131,11 @@ export function ResidualsDialog({
             already gone by the time anything is counted. Saying so beats a list
             that quietly implies it is exhaustive. */}
         <p className="text-xs leading-relaxed text-muted-foreground">
-          This covers what the importer could still see. Scripts, iframes and form
-          controls are stripped for safety before the check runs on an HTML or
-          pasted source, so they are removed without appearing here.
+          {t("status.residualsBlindSpot")}
         </p>
 
         <AlertDialogFooter>
-          <AlertDialogAction onClick={onClose}>Close</AlertDialogAction>
+          <AlertDialogAction onClick={onClose}>{t("common.close")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

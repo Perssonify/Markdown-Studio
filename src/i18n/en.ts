@@ -11,6 +11,8 @@ import { menu } from "./en/menu";
 import { context } from "./en/context";
 import { toolbar } from "./en/toolbar";
 import { panes } from "./en/panes";
+import { status } from "./en/status";
+import { settings } from "./en/settings";
 import { graph } from "./en/graph";
 import { cards } from "./en/cards";
 import { dialogs } from "./en/dialogs";
@@ -24,6 +26,8 @@ export const en = {
   ...context,
   ...toolbar,
   ...panes,
+  ...status,
+  ...settings,
   ...graph,
   ...cards,
   ...dialogs,

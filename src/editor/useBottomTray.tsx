@@ -9,6 +9,7 @@ import { BacklinksPanel } from "../ui/BacklinksPanel";
 import { ConsolePanel } from "../ui/ConsolePanel";
 import { trayFits } from "../ui/tray-fit";
 import type { EditorStore, LinkIndexApi, SyncEngine, Toast } from "./types";
+import { t, useT } from "../i18n";
 
 /**
  * The expandable bottom tray: whether it is open, which tab it shows, and the
@@ -33,7 +34,7 @@ export function useBottomTray({ toast }: { toast: Toast }) {
   const refuseTrayIfCramped = useCallback(() => {
     const h = trayRegionRef.current?.clientHeight ?? 0;
     if (trayFits(h)) return false;
-    toast.show("Not enough height for the panel — make the window taller", "warning");
+    toast.show(t("status.trayTooShort"), "warning");
     return true;
   }, [toast]);
 
@@ -114,12 +115,13 @@ interface TrayTabsParams {
 export function useTrayTabs({
   activeBacklinks, activeForwardLinks, activeUnresolved, navigateToDoc, consoleEnabled, consoleCtx,
 }: TrayTabsParams) {
+  const t = useT();
   // Freshly-built JSX in an array literal: every render handed the memoized
   // tray a brand-new tabs array containing brand-new elements.
   const trayTabs = useMemo(() => [
     {
       id: "links",
-      label: "Document Links",
+      label: t("status.documentLinks"),
       icon: LinkIcon,
       content: (
         <BacklinksPanel
@@ -132,8 +134,8 @@ export function useTrayTabs({
       ),
     },
     ...(consoleEnabled
-      ? [{ id: "console", label: "Console", icon: TerminalSquare, content: <ConsolePanel ctx={consoleCtx} /> }]
+      ? [{ id: "console", label: t("status.consoleTab"), icon: TerminalSquare, content: <ConsolePanel ctx={consoleCtx} /> }]
       : []),
-  ], [activeBacklinks, activeForwardLinks, activeUnresolved, navigateToDoc, consoleEnabled, consoleCtx]);
+  ], [activeBacklinks, activeForwardLinks, activeUnresolved, navigateToDoc, consoleEnabled, consoleCtx, t]);
   return trayTabs;
 }
