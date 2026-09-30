@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Notices, banners and error screens: DurabilityNotices.tsx, ErrorBoundary.tsx, LazyChunkBoundary.tsx, DiagnosticsActions.tsx, OneEditorPerPage.tsx, AdUnit.tsx, Toast.tsx, pwa/sw-updates.ts. */
+/** Notices, banners and error screens: DurabilityNotices.tsx, TabSyncNotice.tsx, ErrorBoundary.tsx, LazyChunkBoundary.tsx, DiagnosticsActions.tsx, OneEditorPerPage.tsx, AdUnit.tsx, Toast.tsx, pwa/sw-updates.ts. */
 export const notices = {
   // DurabilityNotices — storage unavailable
   "notices.notSaving": "Not saving",
@@ -104,4 +104,22 @@ export const notices = {
   "notices.yesterday": "yesterday",
   "notices.daysAgo": { other: "{count} days ago" },
   "notices.closeToast": "Close toast",
+
+  // TabSyncNotice — another tab changed or deleted the open document
+  "notices.tabChangedLabel": "Changed in another tab",
+  "notices.tabChangedHeadline": "This document was changed in another tab.",
+  "notices.tabChangedBody": "Your changes here aren't saved yet, so this tab won't save until you choose. The version you set aside is kept in Version history.",
+  "notices.tabChangedBodyNoHistory": "Your changes here aren't saved yet, so this tab won't save until you choose. Version history is off here — save yours as a copy to keep both.",
+  "notices.tabKeepMine": "Keep mine",
+  "notices.tabKeepMineTitle": "Save this tab's version over the other one — theirs is kept in Version history",
+  "notices.tabKeepMineReadOnly": "Read-only mode is on — turn it off to save over the other version",
+  "notices.tabUseTheirs": "Use theirs",
+  "notices.tabUseTheirsTitle": "Show the other tab's version here — yours is kept in Version history",
+  "notices.tabSaveCopy": "Save mine as a copy",
+  "notices.tabSaveCopyTitle": "Save this tab's version as a new document, then show the other tab's version here",
+  "notices.tabDeletedLabel": "Deleted in another tab",
+  "notices.tabDeletedHeadline": "This document was deleted in another tab.",
+  "notices.tabDeletedBody": "It isn't saved here any more. Keep it as a new document, or close it — Version history keeps a copy.",
+  "notices.tabKeepAsNew": "Keep as a new document",
+  "notices.tabClose": "Close",
 } satisfies Record<`notices.${string}`, Message>;

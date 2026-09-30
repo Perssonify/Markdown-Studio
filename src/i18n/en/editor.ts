@@ -7,7 +7,9 @@ export const editor = {
   "editor.saveFailed": "Save failed",
   "editor.saveFailedWithError": "Save failed — {error}",
   "editor.autosaveFailed": "Autosave failed — your latest changes are not saved yet",
-  "editor.conflictMessage": "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload.",
+  "editor.conflictMessage": "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — choose Keep mine, Use theirs or Save mine as a copy below.",
+  "editor.deletedElsewhereMessage": "This document was deleted in another tab or window. This tab won't save it back — keep it as a new document or close it.",
+  "editor.deletedInAnotherTab": "Deleted in another tab",
   "editor.notSavedNewerVersion": "Not saved — this document was made by a newer version of the app, so it is open read-only. Open it in the newer version to edit it.",
   "editor.notSavedEditorEmpty": "Not saved — the editor is empty but the stored document is not. Undo to restore it, or use Clear document if you meant to empty it.",
   "editor.notSavedStorageFull": "Not saved — storage is full. Delete documents or old versions to free space.",
@@ -15,6 +17,18 @@ export const editor = {
   "editor.changedInAnotherTab": "Changed in another tab",
   "editor.couldNotReadSavedCopy": "Couldn't read the saved copy to check it is safe to overwrite",
   "editor.refusedBlankOverwrite": "Refused to overwrite this document with an empty one",
+
+  // Live sync between tabs (useTabSync)
+  "editor.updatedFromAnotherTab": "Updated from another tab",
+  "editor.tabKeptMine": "Saved your version. The other tab's version is in Version history.",
+  "editor.tabUsedTheirs": "Showing the other tab's version. Yours is in Version history.",
+  "editor.tabSavedCopy": "Saved your version as “{title}”. Showing the other tab's version here.",
+  "editor.tabCopyTitle": "{title} (my copy)",
+  "editor.tabKeptAsNew": "Kept as a new document.",
+  "editor.tabClosedDeleted": "Closed. Your unsaved text is in Version history.",
+  "editor.tabHistoryFailed": "Couldn't keep a copy in Version history, so nothing was changed.",
+  "editor.tabActionFailed": "That didn't complete — nothing was changed. Try again.",
+  "editor.tabStillTyping": "Still typing — try again in a moment.",
 
   // Cards board (useCardHandlers)
   "editor.couldNotCreateNote": "Could not create the note",

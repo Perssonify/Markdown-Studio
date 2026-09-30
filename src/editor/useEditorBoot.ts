@@ -6,6 +6,7 @@ import { historyCache } from "../store/history-cache";
 import type { IngestFormat } from "../store/ingest";
 import { normalizeMarkdownFeatures } from "../store/settings";
 import { noteLibraryAtBoot } from "../store/storage-durability";
+import { announce, folderStructureSignature, isApplyingRemote } from "../store/tab-sync";
 import { diagError } from "../utils/diag";
 import { t } from "../i18n";
 import type { PerssonifyEditorProps } from "./props";
@@ -41,10 +42,32 @@ export function usePersistPreferences({ initDoneRef, mode, markdownFeatures, doc
     useDocumentStore.getState().getStorage().setPrefs({ markdownFeatures }).catch(() => { });
   }, [markdownFeatures]);
 
-  // Persist the folder tree overlay whenever it changes (after init).
+  // Persist the folder tree overlay whenever it changes (after init), and tell
+  // the other tabs once the write has landed (tab-sync.ts).
   useEffect(() => {
+    // What this tab last wrote or took from another tab. The tree is one
+    // preference, last writer wins: a write that repeats it — pruneOrphans
+    // hands back fresh objects on every listing, pruning nothing — could only
+    // land on top of another tab's newer change and erase it.
+    let lastStructure = folderStructureSignature(useFolderStore.getState());
+    let lastExpanded: unknown = useFolderStore.getState().expanded;
     return useFolderStore.subscribe((state) => {
-      if (!initDoneRef.current) return;
+      const structure = folderStructureSignature(state);
+      // Before boot finishes, the only change is the tree boot loaded from disk.
+      if (!initDoneRef.current) {
+        lastStructure = structure;
+        lastExpanded = state.expanded;
+        return;
+      }
+      // Another tab's tree, applied here: it is already on disk.
+      if (isApplyingRemote()) {
+        lastStructure = structure;
+        return;
+      }
+      if (structure === lastStructure && state.expanded === lastExpanded) return;
+      const changed = structure !== lastStructure;
+      lastStructure = structure;
+      lastExpanded = state.expanded;
       useDocumentStore
         .getState()
         .getStorage()
@@ -56,6 +79,7 @@ export function usePersistPreferences({ initDoneRef, mode, markdownFeatures, doc
             expanded: state.expanded,
           },
         })
+        .then(() => { if (changed) announce({ type: "library" }); })
         .catch(() => { });
     });
   }, []);

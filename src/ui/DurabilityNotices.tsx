@@ -1,7 +1,9 @@
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ArchiveRestore, DownloadCloud, ExternalLink, History, Smartphone, X } from "lucide-react";
-import React, { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { AlertTriangle, ArchiveRestore, DownloadCloud, ExternalLink, History, Smartphone } from "lucide-react";
+import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { NoticeDismiss as Dismiss, NoticeStrip as Strip, noticeButton as btn } from "./NoticeStrip";
+import { TabSyncNotice } from "./TabSyncNotice";
 import { APP_DOMAIN, APP_NAME, APP_URL } from "../constants";
 import { useDocumentStore } from "../store/documentStore";
 import { snapshotStore } from "../store/snapshot-store";
@@ -47,71 +49,17 @@ export interface DurabilityNoticesProps {
   onOpenVersionHistory: () => void;
 }
 
-type Tone = "critical" | "warning" | "info";
-
-const TONE: Record<Tone, string> = {
-  critical: "border-destructive/40 bg-destructive/10",
-  warning: "border-amber-500/40 bg-amber-500/10",
-  info: "border-border bg-muted/60",
-};
-const ICON_TONE: Record<Tone, string> = {
-  critical: "text-destructive",
-  warning: "text-amber-600 dark:text-amber-400",
-  info: "text-primary-strong",
-};
-
-/** One slim strip in the flow above the status bar — never a modal, never over the text. */
-function Strip({
-  tone,
-  icon: Icon,
-  role,
-  label,
-  hook,
-  children,
-  actions,
-}: {
-  tone: Tone;
-  icon: React.ElementType;
-  role: "alert" | "status";
-  label: string;
-  /** The notice's e2e hook — data, so it stays English whatever the interface language. */
-  hook: string;
-  children: ReactNode;
-  actions?: ReactNode;
-}) {
+/**
+ * The strip area above the status bar: another tab changing or deleting the
+ * open document (TabSyncNotice — it needs a choice, so it comes first), then
+ * at most one storage-durability notice.
+ */
+function DurabilityNoticesInner(props: DurabilityNoticesProps) {
   return (
-    <div
-      role={role}
-      aria-label={label}
-      data-durability-notice={hook}
-      className={cn(
-        "flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-1.5 text-xs text-foreground",
-        TONE[tone],
-      )}
-    >
-      <div className="flex min-w-0 flex-1 basis-64 items-start gap-2">
-        <Icon className={cn("mt-0.5 size-3.5 shrink-0", ICON_TONE[tone])} aria-hidden />
-        <div className="min-w-0 leading-snug">{children}</div>
-      </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-1.5">{actions}</div>}
-    </div>
-  );
-}
-
-const btn = "h-7 gap-1 px-2.5 text-xs pointer-coarse:h-9";
-
-function Dismiss({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <Button
-      size="icon"
-      variant="ghost"
-      className="size-7 text-muted-foreground hover:text-foreground pointer-coarse:size-9"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-    >
-      <X className="size-3.5" />
-    </Button>
+    <>
+      <TabSyncNotice />
+      <StorageNotice {...props} />
+    </>
   );
 }
 
@@ -120,7 +68,7 @@ function Dismiss({ onClick, label }: { onClick: () => void; label: string }) {
  * Chooses at most one notice via `pickDurabilityNotice`; see
  * `store/storage-durability.ts` for what each protects against.
  */
-function DurabilityNoticesInner({
+function StorageNotice({
   appNotices,
   checkStorage,
   onBackup,
