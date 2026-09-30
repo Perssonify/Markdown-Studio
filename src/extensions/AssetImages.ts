@@ -108,7 +108,9 @@ export class AssetImageView implements NodeView {
     this.clearMissing();
     this.setAttr("alt", alt);
     this.setAttr("title", title);
-    this.dom.removeAttribute("src");
+    // Whatever is showing (nothing, or the data: URL a paste arrived as —
+    // the same picture) stays until the object URL is ready: re-pointing a
+    // pasted image at its stored copy must not blink it.
     this.held = ref.hash;
     const gen = ++this.generation;
     void assetStore.acquireUrl(ref.hash).then((url) => {

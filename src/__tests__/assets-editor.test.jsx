@@ -215,6 +215,19 @@ describe("image files pasted into the rich pane", () => {
     await vi.waitFor(() => expect(collectImageSrcs(editor.getJSON())).toEqual([dataUrl(12)]));
   });
 
+  it("a file pasted just before the document changes is not inserted into the next one", async () => {
+    const editor = await mount("<p>x</p>");
+    const { EditorState } = await import("@tiptap/pm/state");
+    await act(async () => {
+      pasteFiles(editor, [file(png(14), "late.png", "image/png")]);
+      // A hydration lands while the file is being stored.
+      editor.view.updateState(EditorState.create({ doc: editor.state.doc, plugins: editor.state.plugins }));
+    });
+    await vi.waitFor(async () => expect((await assetStore.stats()).count).toBe(1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(collectImageSrcs(editor.getJSON())).toEqual([]);
+  });
+
   it("files that are not all raster images are left to the default paste", async () => {
     const editor = await mount("<p>x</p>");
     expect(pasteFiles(editor, [file(new TextEncoder().encode("<svg/>"), "x.svg", "image/svg+xml")])).toBe(false);
