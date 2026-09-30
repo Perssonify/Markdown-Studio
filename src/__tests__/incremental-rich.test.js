@@ -265,7 +265,11 @@ function walk(seed, { steps = 50, start = 3, richEvery = 0.12, toggleEvery = 0.0
       } else {
         [md, what] = mdEdit(md, rand, corpus, snippets);
       }
-      project(ed, engine, md);
+      try {
+        project(ed, engine, md);
+      } catch (e) {
+        throw new Error(`seed ${seed}, step ${step} (${what}) threw ${e}\nfrom ${JSON.stringify(before)}\nto ${JSON.stringify(md)}`, { cause: e });
+      }
       paths[engine.lastRichPath().path]++;
       expectSame(ed, ref, engine, md, `seed ${seed}, step ${step} (${what}) from ${JSON.stringify(before)}\n`);
       // Projecting the same markdown again changes nothing — and dispatches
@@ -289,9 +293,11 @@ function walk(seed, { steps = 50, start = 3, richEvery = 0.12, toggleEvery = 0.0
 describe("A083 — the incremental markdown→rich projection is identical to the whole-document parse", () => {
   const totals = { incremental: 0, build: 0, whole: 0 };
 
-  // RICH_SEEDS=500 for a deeper run than CI's.
+  // RICH_SEEDS=500 for a deeper run than CI's; RICH_SEED_FROM=<n> skips the
+  // first n seeds (to split a deep run across processes).
   const seeds = Number(process.env.RICH_SEEDS) || 40;
-  it.each(Array.from({ length: seeds }, (_, i) => [2000 + i * 7919]))("random edit walk, seed %i", (seed) => {
+  const from = Number(process.env.RICH_SEED_FROM) || 0;
+  it.each(Array.from({ length: seeds }, (_, i) => [2000 + (from + i) * 7919]))("random edit walk, seed %i", (seed) => {
     const paths = walk(seed);
     for (const k in paths) totals[k] += paths[k];
   }, 120000);

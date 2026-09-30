@@ -26,7 +26,8 @@
  *  - HTML: after a run whose rendered HTML leaves the browser's parser exactly
  *    where it started — no open element, no pending formatting element to
  *    reconstruct, the tokenizer in its data state. Marked's own output always
- *    does; a run holding raw HTML is checked (`selfContainedHtml`).
+ *    does; a run holding raw HTML is checked (`selfContainedHtml`, and for
+ *    markup it has no rule for, a probe parse: `leavesParserClean`).
  *  - PROSEMIRROR: where the parser has no node open — checked from the parse
  *    itself (`findPositions`), never assumed.
  *
@@ -288,6 +289,18 @@ const MAY_HOLD_STATE_TAG = /<\/?(?:a|pre|code|kbd|script)[\s>]/i;
 const BARE_PIPE_WIKI = /\[\[(?:[^[\]\n\\|]|\\[^\n])*\|/;
 const holdsBarePipe = (md: string): boolean => md.indexOf("[[") !== -1 && BARE_PIPE_WIKI.test(md);
 
+/**
+ * Raw HTML that can change how ProseMirror parses everything AFTER it. Inside a
+ * `<pre>` — or an element whose style's white-space holds "pre" — the parser
+ * marks every context it closes past as whitespace-preserving (`sync`, with
+ * `localPreserveWS`), and when the pre's own context was closed early (a
+ * raw `<pre>` holding a paragraph), that reaches the DOCUMENT's context: from
+ * there on, whitespace is kept everywhere. Marked's own code blocks hold only
+ * text and never do it; raw HTML is refused whole — any `<pre`, and a style
+ * that mentions white-space or holds a CSS escape (`wh\69te-space`).
+ */
+const PRESERVES_WS = /<pre(?![\w-])|style[\s\S]*(?:white-space|\\)/i;
+
 interface Lexed {
   opt: MarkedOptions;
   tokens: TokensList;
@@ -309,10 +322,18 @@ function lex(m: Marked, src: string): Lexed {
   const opt = { ...m.defaults, async: false } as MarkedOptions;
   const lexer = new Lexer(opt);
   const tokens = lexer.lex(src);
-  if (opt.walkTokens) m.walkTokens(tokens, opt.walkTokens);
+  let preserves = false;
+  const walk = opt.walkTokens;
+  m.walkTokens(tokens, function (this: Marked, t: Token) {
+    if (t.type === "html" && PRESERVES_WS.test(t.raw)) preserves = true;
+    return walk ? walk.call(this as never, t) : undefined;
+  });
   const no = (why: string): Lexed => ({ opt, tokens, top: null, clear: [], clearAtEnd: false, why });
   // Link reference definitions: every reference anywhere reads them.
   if (Object.keys(tokens.links).length) return no("link definitions");
+  // ProseMirror keeps whitespace for the REST of the document after some raw
+  // `<pre>` (see PRESERVES_WS): state no cut can carry.
+  if (preserves) return no("raw <pre> or white-space");
   const top: Token[] = [];
   let sum = 0;
   let section = -1; // where marked-footnote's section token sits, in `top` terms
@@ -331,10 +352,11 @@ function lex(m: Marked, src: string): Lexed {
     top.push(t);
   }
   // The section token is pushed where the extension is first asked for a block
-  // — the very start, or after a block another extension claimed first (maths)
-  // — and a single newline right there is appended to ITS raw (marked hands a
-  // one-newline space to the token before it). Put it back where it was, as the
-  // nothing it renders.
+  // — the very start, as build-marked orders the extensions (were another
+  // block extension asked first, after the block it claimed) — and a single
+  // newline right there is appended to ITS raw (marked hands a one-newline
+  // space to the token before it). Put it back where it was, as the nothing it
+  // renders.
   if (section >= 0 && sum === src.length - 1 && src.charCodeAt(sectionAt) === 10) {
     top.splice(section, 0, { type: "space", raw: "\n" } as Token);
     sum++;
@@ -416,12 +438,47 @@ function markerFor(html: string[]): string {
   return mark;
 }
 
+/** The HTML parser's whitespace: tab, line feed, form feed, carriage return, space. */
+const WS_CHAR = new Set([9, 10, 12, 13, 32]);
+
+/**
+ * The pieces with a marker between each two — placed BEFORE the whitespace a
+ * piece ends with (a block's closing newline), not after it, so the node just
+ * before the next piece is the one the whole document has there. That matters
+ * to one parser: jsdom foster-parents text out of a table (`<table>text…`, an
+ * unclosed raw table) to the END of the parent instead of before the table
+ * whenever the node before the table is not Text (its `insertTextBefore` calls
+ * `_append`, ignoring the reference node), so a marker right before `<table>`
+ * moved the text to the end of the document. Browsers follow the spec, where
+ * a comment there only keeps the text from merging — which the marker removal
+ * handles. After a clean piece that whitespace is text in <body>, and leaving
+ * the marker before it changes nothing else the tree builder does.
+ */
+function joinPieces(html: string[], marker: string): string {
+  let out = "";
+  for (let k = 0; k < html.length - 1; k++) {
+    const h = html[k]!;
+    const ws = h.length - trailingWs(h);
+    out += h.slice(0, ws) + marker + h.slice(ws);
+  }
+  return out + (html[html.length - 1] ?? "");
+}
+
+/** How much whitespace a piece's markup ends with (the marker goes before it). */
+function trailingWs(h: string): number {
+  let ws = h.length;
+  while (ws > 0 && WS_CHAR.has(h.charCodeAt(ws - 1))) ws--;
+  return h.length - ws;
+}
+
 interface Parsed {
   nodes: PMNode[];
   /** Top-level node index at each cut between pieces; undefined where the cut was not kept. */
   at: Array<number | undefined>;
   /** No node open at the end of the text. */
   endClean: boolean;
+  /** The markup starts with text, not a node (see the cut rule in parsePieces). */
+  startsWithText: boolean;
 }
 
 /**
@@ -450,7 +507,7 @@ type Placement = "start" | "after";
  */
 function parsePieces(html: string[], schema: Schema, placement: Placement): Parsed | null {
   const mark = markerFor(html);
-  const body = htmlBody(html.join(`<!--${mark}-->`));
+  const body = htmlBody(joinPieces(html, `<!--${mark}-->`));
   const markers: Comment[] = [];
   for (let c = body.firstChild; c; c = c.nextSibling) {
     if (c.nodeType === 8 && (c as Comment).data === mark) markers.push(c as Comment);
@@ -471,8 +528,16 @@ function parsePieces(html: string[], schema: Schema, placement: Placement): Pars
 
   // Out with the markers, rejoining any text they split — the DOM is then the
   // one the whole-document path builds. startOf[k]: the first DOM node of piece
-  // k (null: it is empty and at the end); undefined where a marker split text
-  // (the pieces are one text there, so no cut).
+  // k (null: it is empty and at the end); undefined where the cut is not kept.
+  //
+  // A cut is kept only where the piece after it starts with a NODE. Text there
+  // (an HTML block that opens with a tag the parser ignores, `</div>text`)
+  // is one Text node with the whitespace the piece before ends with — or with
+  // that piece's own last text — and a run parsed on its own would lose the
+  // join. Holding every kept cut to this is what lets a window END at one
+  // without looking past it; a window that STARTS at one checks its own first
+  // node (startsWithText), since an edit can put text there.
+  const startsWithText = body.firstChild?.nodeType === 3;
   const startOf: Array<Node | null | undefined> = new Array(html.length + 1);
   startOf[0] = null; // replaced below
   startOf[html.length] = null;
@@ -484,6 +549,10 @@ function parsePieces(html: string[], schema: Schema, placement: Placement): Pars
     if (prev && next && prev.nodeType === 3 && next.nodeType === 3) {
       (prev as Text).appendData((next as Text).data);
       body.removeChild(next);
+      startOf[k + 1] = undefined;
+    } else if (next && next.nodeType === 3 && (next as Text).data.length !== trailingWs(html[k]!)) {
+      // The marker sits before the piece's trailing whitespace: text after it
+      // that is MORE than that whitespace is the next piece's, joined to it.
       startOf[k + 1] = undefined;
     } else {
       // The whitespace pass below removes some text nodes: the piece starts
@@ -517,7 +586,9 @@ function parsePieces(html: string[], schema: Schema, placement: Placement): Pars
   let endClean = false;
   let cursor: ChildNode | null = body.firstChild;
   for (let start = 0; start < pieces;) {
-    const placeholder = start > 0 || placement === "after";
+    // After a NODE, not merely after a run: a run can make none (a comment),
+    // and the text of the next is then at the document's start.
+    const placeholder = nodes.length > 0 || placement === "after";
     const box = dom.createElement("body");
     if (placeholder) box.appendChild(dom.createElement("hr"));
     const take = (stop: Node | null | undefined) => {
@@ -560,7 +631,7 @@ function parsePieces(html: string[], schema: Schema, placement: Placement): Pars
     endClean = run.clean;
     start = end;
   }
-  return { nodes, at, endClean };
+  return { nodes, at, endClean, startsWithText };
 }
 
 // ─── The model and the projection ───────────────────────────────────────────
@@ -817,7 +888,7 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
   }
 
   /** Re-parse only the runs the edit touched; a reason when that cannot be done. */
-  function incremental(mdl: Model, md: string, state: EditorState, m: Marked): RichPlan | string {
+  function incremental(mdl: Model, md: string, state: EditorState, m: Marked, pre: PreprocessFeatures): RichPlan | string {
     const old = mdl.md;
     const live = state.doc;
     const n = mdl.lens.length;
@@ -880,6 +951,14 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
       if (i === 0 && j === n) return "whole window";
       const ws = starts[i]!;
       const we = starts[j]!;
+      // The window must end where a line starts. Text typed at the very start
+      // of the next run lands at the window's end, but it begins that run's
+      // first line (a tab makes it code) — and marked, lexing the window on
+      // its own, reads a trailing "\t" as a blank line and calls the end clean.
+      if (j < n && md.charCodeAt(we + delta - 1) !== 10) {
+        j++;
+        continue;
+      }
       const text = md.slice(ws, we + delta);
       // marked-footnote numbers references with a counter that only RENDERING
       // a reference resets: lexing a footnote here and then falling back would
@@ -887,6 +966,15 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
       // definition is never cut anyway; this keeps the lexer from ever seeing one.)
       if (text.indexOf("[^") !== -1) return "footnote syntax";
       if (holdsBarePipe(text)) return "alias wiki link";
+      // The cuts are source positions, so the preprocessor must leave the text
+      // as it is. The build checks the whole text; after that only the window
+      // changes, and with alias pipes, front matter and the curly syntax
+      // refused above, the preprocessor's code masking is a pure round trip.
+      // This is a partial net for the day it is not: it sees what the window
+      // alone brings in (a code-mask defect found by the random walks was
+      // caught here for two of the three seeds that hit it, not the third,
+      // whose mask spanned beyond the window) — unreachable today.
+      if (preprocessMarkdown(text, pre) !== text) return "preprocessor";
       const lexed = lex(m, text);
       if (!lexed.top) return lexed.why;
       const pieces = cut(lexed, text, opts.style, runLength);
@@ -898,6 +986,8 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
       }
       const parsed = parsePieces(pieces.html, mdl.schema, nodeStarts[i]! > 0 ? "after" : "start");
       if (!parsed) return "markers";
+      // Text first, after a run: in the document it joins that run's last text.
+      if (i > 0 && parsed.startsWithText) return "text at a run start";
       if (j < n && !parsed.endClean) {
         j = Math.min(n, j + Math.max(1, j - i));
         continue;
@@ -931,7 +1021,7 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
       if (md.indexOf("\r") !== -1) return whole(opts.mdToHtml(md), state, "carriage return");
       const mdl = model && model.marked === m && model.schema === state.schema ? model : null;
       if (!mdl) return build(md, state, m, f, model ? "configuration" : "no model");
-      const planned = incremental(mdl, md, state, m);
+      const planned = incremental(mdl, md, state, m, opts.preprocess(f));
       return typeof planned === "string" ? build(md, state, m, f, planned) : planned;
     },
     forget() {

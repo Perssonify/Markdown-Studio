@@ -247,6 +247,91 @@ describe("the cut rules", () => {
     } finally { r.destroy(); }
   });
 
+  it("text typed at the very start of a run joins that run's first line", () => {
+    // The window ends where the next run starts, so the typed text lands at
+    // its end — and marked, lexing it alone, reads a trailing tab or four
+    // spaces as a blank line. In the document they make the line code.
+    const r = rig(paras(8));
+    try {
+      expect(r.project(r.md.replace("P5 ", "\tP5 ")).path).toBe("incremental");
+      r.same();
+      r.project(r.md.replace("P2 ", "    P2 "));
+      r.same();
+      r.project(r.md.replace("\tP5 ", "P5 "));
+      r.same();
+    } finally { r.destroy(); }
+  });
+
+  it("a run after runs that make no node is at the document's start", () => {
+    // A comment makes no node, so the text in the unknown element after it is
+    // the document's first top-level text: its leading space goes.
+    const r = rig(`<!-- note -->\n\n<span>\n spaced</span>\n\n${paras(3)}`);
+    try {
+      r.same();
+      expect(r.project(r.md.replace("P1 ", "P1 x ")).path).toBe("incremental");
+      r.same();
+    } finally { r.destroy(); }
+  });
+
+  it("never cuts where the next piece starts with text: it joins the whitespace before it", () => {
+    // `</details>` is ignored and opens an HTML block: its text is top-level,
+    // one Text node with the newline the comment's block ends with.
+    const r = rig(`<!-- note -->\n\n</details>\ntop-level text\n\n${paras(3)}`);
+    try {
+      r.same();
+      expect(r.project(r.md.replace("P1 ", "P1 x ")).path).toBe("incremental");
+      r.same();
+    } finally { r.destroy(); }
+  });
+
+  it("a window whose first run now starts with text is not parsed on its own", () => {
+    // An edit inside run 5 (so the window starts there) makes it begin with
+    // text; in the document that text joins the newline run 4 ends with, and
+    // keeps its leading space. (Typed at the run's very first character, the
+    // window would start a run earlier and see the join itself.)
+    const r = rig(paras(8).replace("P5 ", "<div>P5 "));
+    try {
+      expect(r.project(r.md.replace("<div>P5 ", "</div>P5 ")))
+        .toEqual({ path: "build", reason: "text at a run start" });
+      r.same();
+      expect(r.project(r.md.replace("</div>P5 ", "</div>P5 x ")).path).toBe("incremental");
+      r.same();
+    } finally { r.destroy(); }
+  });
+
+  it("text foster-parented out of an unclosed table lands where the whole parse puts it", () => {
+    // `<table>` opening a paragraph line makes an HTML block the parser never
+    // closes; its text goes before the table. jsdom puts it at the END of the
+    // parent when the node before the table is not Text — so a cut marker
+    // there must not be that node.
+    const r = rig(paras(8));
+    try {
+      expect(r.project(r.md.replace("P5 ", "<table>P5 ")).path).toBe("incremental");
+      r.same();
+      r.project(r.md.replace("P2 ", "<table>P2 "));
+      r.same();
+    } finally { r.destroy(); }
+  });
+
+  it("never cuts a document whose raw <pre> makes ProseMirror keep whitespace from there on", () => {
+    // The <pre> holds a paragraph, so its context closes early and the
+    // parser marks the DOCUMENT whitespace-preserving: the last paragraph
+    // keeps its two leading spaces. The inline `</pre>` later clears marked's
+    // raw state (and is ignored by the HTML parser), so without the check the
+    // blocks after it would be cut and parsed without that flag.
+    const md = `${paras(2)}\n\n- list<pre>\n\n  continuation\n\n- end\n\nclosing </pre> here\n\n${paras(3, "Q")}\n\n  spaced para`;
+    const r = rig(md);
+    try {
+      expect(r.first).toEqual({ path: "whole", reason: "raw <pre> or white-space" });
+      r.same();
+      expect(r.ed.state.doc.lastChild.textContent).toBe("  spaced para");
+      for (const style of ['<span style="white-space: pre">x</span>', '<span style="wh\\69te-space: pre">x</span>']) {
+        expect(r.project(`${paras(3)}\n\n${style}\n\n${paras(3, "Q")}`).path).toBe("whole");
+        r.same();
+      }
+    } finally { r.destroy(); }
+  });
+
   it("a markup comment that spells the cut marker is only text to the cuts", () => {
     const r = rig(`${paras(3)}\n\n<!--pf-a083-cut-->\n\n${paras(3, "Q")}`);
     try {
