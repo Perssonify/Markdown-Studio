@@ -7,7 +7,7 @@
  */
 
 import { safeStorage } from "../utils/safe-storage";
-import { t } from "../i18n";
+import { t } from "../i18n/core";
 
 export interface PaletteDef {
   id: string;

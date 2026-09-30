@@ -142,6 +142,10 @@ function lookup(key: MessageKey, locale: string): Message {
 const pluralRules = new Map<string, Intl.PluralRules | null>();
 
 function pluralCategory(n: number, locale: string): string {
+  // English (and the pseudo-locale) is the hot path, and CLDR's English rule
+  // is short: "one" for exactly 1, "other" for everything else — the answer
+  // Intl.PluralRules gives, at a fraction of its cost.
+  if (locale === DEFAULT_LOCALE || locale === PSEUDO_LOCALE) return n === 1 ? "one" : "other";
   let rules = pluralRules.get(locale);
   if (rules === undefined) {
     try {
@@ -166,13 +170,31 @@ export function selectForm(msg: Message, count: unknown, locale: string = getLoc
   return typeof msg === "string" ? msg : pluralForm(msg, count, locale);
 }
 
+/**
+ * Templates split once into [text, name, text, name, …, text]: filling one is
+ * then a loop of concatenations, not a regular expression and a callback per
+ * call (the map, graph and status bar format on every render). Bounded by
+ * the catalog in practice, and capped for anyone formatting arbitrary text.
+ */
+const split = new Map<string, readonly string[]>();
+
 /** Pick the plural form (from `vars.count`) and fill `{name}` placeholders. */
 export function formatMessage(msg: Message, vars?: Vars, locale: string = getLocale()): string {
   const text = selectForm(msg, vars?.["count"], locale);
   if (!vars || !text.includes("{")) return text;
-  return text.replace(/\{(\w+)\}/g, (whole, name: string) =>
-    Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : whole,
-  );
+  let parts = split.get(text);
+  if (!parts) {
+    parts = text.split(/\{(\w+)\}/);
+    if (split.size > 4000) split.clear(); // only a caller formatting arbitrary text gets here
+    split.set(text, parts);
+  }
+  let out = parts[0] ?? "";
+  for (let i = 1; i < parts.length; i += 2) {
+    const name = parts[i] as string;
+    out += Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : `{${name}}`;
+    out += parts[i + 1] ?? "";
+  }
+  return out;
 }
 
 /** The raw catalog entry for a key in the current language (for rich text). */
