@@ -25,7 +25,7 @@ export const BlockId = Extension.create({
           blockId: {
             default: null,
             parseHTML: (el: HTMLElement) => el.getAttribute("data-block-id") || null,
-            renderHTML: (attrs: Record<string, any>) => attrs["blockId"] ? { "data-block-id": attrs["blockId"] } : {},
+            renderHTML: (attrs: Record<string, unknown>) => attrs["blockId"] ? { "data-block-id": attrs["blockId"] } : {},
           },
         },
       },
@@ -108,15 +108,15 @@ export function extractBlockIds(md: string): { cleaned: string; ids: Map<number,
 
 interface ProseMirrorJSONNode {
   type: string;
-  attrs?: Record<string, any>;
+  attrs?: Record<string, unknown>;
   content?: ProseMirrorJSONNode[];
   text?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface CanonicalDocument {
   content?: ProseMirrorJSONNode[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -137,7 +137,7 @@ export function injectBlockIds(md: string, canonical: CanonicalDocument): string
       // Find the text representation of this block
       const text = extractNodeText(node as unknown as ProseMirrorNode).trim();
       if (text) {
-        blockIds.push({ text: text.slice(0, 60), id: node.attrs["blockId"]! });
+        blockIds.push({ text: text.slice(0, 60), id: String(node.attrs["blockId"]) });
       }
     }
   }
@@ -198,12 +198,12 @@ function isBlockNode(node: ProseMirrorJSONNode | ProseMirrorNode): boolean {
  */
 function extractNodeText(node: ProseMirrorJSONNode | ProseMirrorNode | null | undefined): string {
   if (!node) return "";
-  if (node.type === "text") return (node as any).text || "";
+  if (node.type === "text") return String((node as { text?: unknown }).text ?? "");
   if (!node.content) return "";
   
   // Handle both array of JSON nodes and ProseMirror Fragment
   if (Array.isArray(node.content)) {
-    return node.content.map(child => extractNodeText(child as any)).join("");
+    return node.content.map((child: ProseMirrorJSONNode) => extractNodeText(child)).join("");
   }
   
   // For actual ProseMirror nodes with a Fragment

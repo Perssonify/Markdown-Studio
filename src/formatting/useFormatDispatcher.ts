@@ -1,3 +1,4 @@
+import type { Editor } from "@tiptap/core";
 import { indentLess, indentMore, redo as cmRedo, undo as cmUndo } from "@codemirror/commands";
 import { ChangeSpec, EditorSelection, type EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -41,9 +42,9 @@ interface CMRef {
 }
 
 interface TiptapRef {
-  getEditor: () => any;
-  isActive: (name: string, attrs?: any) => boolean;
-  getAttributes: (name: string) => any;
+  getEditor: () => Editor | null;
+  isActive: (name: string, attrs?: Record<string, unknown>) => boolean;
+  getAttributes: (name: string) => Record<string, unknown>;
   getHTML: () => string;
   setHTML: (html: string) => void;
   /** See TiptapPaneHandle — optional so a partial ref in a test still type-checks. */
@@ -697,7 +698,12 @@ export function useFormatDispatcher({
     if (target === "html") {
       const tp = tiptapRef.current;
       if (!tp || typeof tp.isActive !== "function") return { pane };
-      
+      // An attribute the toolbar shows as text; anything else reads as unset.
+      const textAttr = (node: string, key: string): string | null => {
+        const value = tp.getAttributes(node)?.[key];
+        return typeof value === "string" && value ? value : null;
+      };
+
       return {
         bold: tp.isActive("bold"),
         pane,
@@ -714,10 +720,10 @@ export function useFormatDispatcher({
         subscript: tp.isActive("subscript"),
         superscript: tp.isActive("superscript"),
         link: tp.isActive("link"),
-        textAlign: (tp.getAttributes("paragraph")?.textAlign || tp.getAttributes("heading")?.textAlign || "left") as "left" | "center" | "right" | "justify",
-        color: tp.getAttributes("textStyle")?.color || null,
-        highlight: tp.getAttributes("textStyle")?.backgroundColor || null,
-        fontFamily: tp.getAttributes("textStyle")?.fontFamily || null,
+        textAlign: (textAttr("paragraph", "textAlign") || textAttr("heading", "textAlign") || "left") as "left" | "center" | "right" | "justify",
+        color: textAttr("textStyle", "color"),
+        highlight: textAttr("textStyle", "backgroundColor"),
+        fontFamily: textAttr("textStyle", "fontFamily"),
         table: tp.isActive("table"),
       };
     }

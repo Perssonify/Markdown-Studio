@@ -2,6 +2,13 @@ import { RefObject, useEffect, useRef } from "react";
 import { useUIStore } from "../store/uiStore";
 import { isAltGraphInput } from "../utils/alt-graph";
 import { t } from "../i18n";
+import type { useToast } from "../ui/Toast";
+
+/** The rich pane's handle, as far as this hook needs it. */
+interface RichPaneLike {
+  getEditor?: () => { view?: { dom?: HTMLElement | null } } | null;
+  syncSelectionFromDom?: () => void;
+}
 
 /** The markdown pane's handle, as far as this hook needs it. */
 interface MarkdownPaneLike {
@@ -9,11 +16,11 @@ interface MarkdownPaneLike {
 }
 
 interface KeyboardShortcutsOptions {
-  dispatch: (command: string, value?: any) => void;
+  dispatch: (command: string, value?: unknown) => void;
   updateFormats: (forceImmediate: boolean) => void;
   save: () => void;
   newDoc: () => void;
-  toast: any;
+  toast: ReturnType<typeof useToast>;
   toggleFind: () => void;
   /** Open Find & Replace with the replace row expanded (⌘H). */
   openReplace?: () => void;
@@ -24,7 +31,7 @@ interface KeyboardShortcutsOptions {
   /** Toggle the Cards board overlay (⌘⇧K). */
   toggleCards?: () => void;
   cancelPendingSync: () => void;
-  tiptapRef: RefObject<any>;
+  tiptapRef: RefObject<RichPaneLike | null>;
   /** The markdown pane. With the rich pane's view, this is how the hook tells
    *  "the caret is in the document" from "focus is in some other input". */
   cmRef?: RefObject<MarkdownPaneLike | null>;

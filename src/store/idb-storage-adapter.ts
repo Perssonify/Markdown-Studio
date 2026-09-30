@@ -578,8 +578,8 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
         "readwrite",
         async (tx) => {
           const store = tx.objectStore(STORE_DOCS);
-          let existing = 0;
-          let found = false;
+          let existing: number;
+          let found: boolean;
           if (this._maxBytes != null) {
             // A host's HARD cap is checked INSIDE the write transaction against
             // the true current usage (not cached metrics a concurrent save could

@@ -11,11 +11,12 @@
  * custom nodes (math, field blocks, transclusions, emoji, …) included — so the
  * conversion never silently diverges when the extension set changes.
  */
+import type { JSONContent } from "@tiptap/core";
 import { DOMParser as PMDOMParser, type Schema } from "@tiptap/pm/model";
 
 export interface CanonicalDoc {
   type: "doc";
-  content: any[];
+  content: JSONContent[];
 }
 
 /** Parse an HTML string into a canonical `doc` node JSON using the given schema. */
@@ -35,8 +36,9 @@ export function htmlToCanonical(html: string, schema: Schema): CanonicalDoc {
 }
 
 /** Normalize any stored canonical value into a `{type:"doc", content:[]}` shape. */
-export function asCanonicalDoc(canonical: any): CanonicalDoc {
-  if (canonical && canonical.type === "doc" && Array.isArray(canonical.content)) {
+export function asCanonicalDoc(canonical: unknown): CanonicalDoc {
+  const c = canonical as { type?: unknown; content?: unknown } | null | undefined;
+  if (c && c.type === "doc" && Array.isArray(c.content)) {
     return canonical as CanonicalDoc;
   }
   return { type: "doc", content: [] };
@@ -44,7 +46,7 @@ export function asCanonicalDoc(canonical: any): CanonicalDoc {
 
 /** Append the block content of `html` (parsed via `schema`) to an existing doc. */
 export function appendHtmlToCanonical(
-  existing: any,
+  existing: unknown,
   html: string,
   schema: Schema
 ): CanonicalDoc {

@@ -135,8 +135,8 @@ runCase("surfaces-deep", async (rep, onClose) => {
       closeLabel: close.getAttribute("aria-label"),
     };
   });
-  let prev = null, toastGeom = null;
-  toastGeom = await until(async () => {
+  let prev = null;
+  const toastGeom = await until(async () => {
     const v = await readToast();
     if (!v) return null;
     const same = prev && JSON.stringify(prev.toast) === JSON.stringify(v.toast);

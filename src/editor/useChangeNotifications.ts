@@ -6,7 +6,11 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import type { PerssonifyEditorProps } from "./props";
+import type { DocumentRecord } from "../store/document";
 import type { CmRef, DocStore, SyncEngine, TiptapRef } from "./types";
+
+/** The document JSON the sync engine hands over on every projection. */
+type Canonical = DocumentRecord["canonical"];
 
 interface CanonicalChangeParams {
   cmRef: CmRef;
@@ -29,7 +33,7 @@ export function useCanonicalChangeHandler({
   // syncMdToHtml, then handleMdChange, then every pane prop, on every single
   // projection. Latest-body-through-a-stable-ref is the same idiom the sync
   // engine's own force* callbacks use, and for the same reason.
-  const latestCanonicalChange = (pmJson: any) => {
+  const latestCanonicalChange = (pmJson: Canonical) => {
     // NOT wrapped in startTransition. It was tried and measured: with the
     // derived values already reference-stable (Phase 2) and the chrome
     // memoized, deferring this re-render moved total blocking by less than the

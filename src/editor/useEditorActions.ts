@@ -47,7 +47,7 @@ export function useEditorActions({
   getCanonical, resetHashes, setDirty, createDoc, importItems, handleSwitchDoc, handleGraphExport,
   exportDocsRef, setShowUrlImport, toast, confirm, promptText,
 }: EditorActionsParams) {
-  const handleAction = useCallback(async (type: string, data?: any) => {
+  const handleAction = useCallback(async (type: string, data?: unknown) => {
     if (type === "md" || type === "html" || type === "json") {
       const content = type === "md" ? cmRef.current?.getValue() : type === "html" ? tiptapRef.current?.getHTML() : JSON.stringify(getCanonical(), null, 2);
       // Markdown and HTML are copied for ANOTHER application, which cannot
@@ -116,8 +116,8 @@ export function useEditorActions({
       await exportActiveDocAsDocx(activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
       return;
     }
-    if (type === "import" && data?.length) {
-      const files = Array.from(data as FileList | File[]);
+    if (type === "import" && (data instanceof FileList || Array.isArray(data)) && data.length) {
+      const files = Array.from(data as ArrayLike<File>);
       // Expand archives into per-entry items, convert .docx, read the rest as
       // text; files that cannot be taken come back in `skipped`.
       const { items, skipped, assets } = await collectImportItems(files, promptText);
