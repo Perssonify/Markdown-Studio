@@ -8,7 +8,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 - **Symptom:** After "improving" `useSyncEngine`, the app freezes, the CPU spikes, or the two panes flicker endlessly.
 - **Cause:** `forceSyncMdToHtml` / `forceSyncHtmlToMd` deliberately use **empty dependency arrays** and call the current sync function through a ref ([src/engine/useSyncEngine.ts:190-202](../src/engine/useSyncEngine.ts#L190-L202)). Adding any dependency makes the callbacks change identity on render, which re-triggers effects that call sync, which re-renders… an infinite [echo loop](domain-glossary.md#echo-loop).
-- **Fix/Workaround:** Don't add dependencies. If you need fresh values inside, reach them via refs, as the existing code does. The `quickHash` guards ([src/engine/useSyncEngine.ts:62](../src/engine/useSyncEngine.ts#L62), [:124](../src/engine/useSyncEngine.ts#L124) — the rich side checks its doc node's identity, `lastHtmlDoc`, before it hashes) and the `syncing` ref ([:28](../src/engine/useSyncEngine.ts#L28)) are the other two legs of the stool — leave all three intact.
+- **Fix/Workaround:** Don't add dependencies. If you need fresh values inside, reach them via refs, as the existing code does. The `quickHash` guards (in `syncMdToHtml` and `syncHtmlToMd`, [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts) — the rich side checks its doc node's identity, `lastHtmlDoc`, before it hashes) and the `syncing` ref ([:95](../src/engine/useSyncEngine.ts#L95)) are the other two legs of the stool — leave all three intact.
 - **Related:** [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts), [architecture.md ADR-2](architecture.md#adr-2--echo-gated-debounced-bidirectional-sync).
 
 ## ~~`bun run dev` references a `.js` config that doesn't exist~~ (RESOLVED)
@@ -110,7 +110,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## Decorative formatting silently lost in Clean mode
 
 - **Symptom:** You apply text color/highlight/font, switch to Clean mode, and it vanishes from the markdown.
-- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:149](../src/engine/useSyncEngine.ts#L149)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
+- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:70](../src/engine/useSyncEngine.ts#L70)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
 - **Fix/Workaround:** Use Styled mode to preserve styling, or export as JSON for a lossless copy.
 - **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/fidelity.ts](../src/store/fidelity.ts).
 
