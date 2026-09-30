@@ -244,6 +244,40 @@ describe("a large map", () => {
     expect(worst).toBeLessThan(0.02);
   }, 60000);
 
+  it("a folder map that drops back to FOLDER_LAYOUT_MAX notes leaves the two-level layout cleanly", async () => {
+    // 501 notes get a plan; 500 do not. The regions' positions mean nothing to
+    // the single-level layout, so every note starts again — and the map rests
+    // exactly where one opened on those 500 notes does.
+    const graphOfN = (n) => {
+      const nodes = Array.from({ length: n }, (_, i) => ({ id: `n${i}`, title: `Note number ${i}`, backlinks: i % 4, forwardLinks: 1 }));
+      const edges = nodes.slice(1).map((node, i) => ({ source: node.id, target: `n${Math.floor(i / 3)}` }));
+      const folders = Array.from({ length: 40 }, (_, f) => ({
+        id: `f${f}`, name: `Folder ${f}`, docIds: nodes.filter((_, i) => i % 50 === f).map((x) => x.id),
+      }));
+      return { graph: { nodes, edges }, folders };
+    };
+    const view = ({ graph, folders }) => <GraphView graph={graph} folders={folders} activeDocId="n0" onNavigate={vi.fn()} onClose={vi.fn()} />;
+    const centres = (c) => {
+      const out = new Map();
+      for (const p of c.querySelectorAll(".pf-node-dots")) {
+        const ids = (p.getAttribute("data-doc-ids") || "").split(" ").filter(Boolean);
+        parseCircles(p.getAttribute("d") || "").forEach((d, i) => out.set(ids[i], d));
+      }
+      return out;
+    };
+    const shrinking = render(view(graphOfN(501)));
+    await atRest(shrinking.container);
+    shrinking.rerender(view(graphOfN(500)));
+    await atRest(shrinking.container);
+    const fresh = render(view(graphOfN(500)));
+    await atRest(fresh.container);
+    const want = centres(fresh.container), got = centres(shrinking.container);
+    expect(got.size).toBe(500);
+    let worst = 0;
+    for (const [id, d] of want) worst = Math.max(worst, Math.hypot(d.x - got.get(id).x, d.y - got.get(id).y));
+    expect(worst).toBeLessThan(0.02);
+  }, 60000);
+
   it("under reduced motion, draws nothing until the layout rests — then all of it, still", async () => {
     window.matchMedia = vi.fn((query) => ({ matches: query.includes("reduce"), media: query }));
     const { container } = mount(N);
