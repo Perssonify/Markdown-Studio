@@ -139,8 +139,13 @@ describe("saving, and telling the host", () => {
 
   it("onContentChange reports edits, debounced, with the markdown", async () => {
     onContentChange.mockClear();
-    await typeRich(" a");
-    await typeRich("b");
+    // Two keystrokes inside the debounce window (one act, so a loaded machine
+    // cannot stretch the gap between them past it).
+    await act(async () => {
+      const ed = richEditor();
+      ed.view.dispatch(ed.state.tr.insertText(" a", ed.state.doc.content.size - 1));
+      ed.view.dispatch(ed.state.tr.insertText("b", ed.state.doc.content.size - 1));
+    });
     await until(() => onContentChange.mock.calls.length > 0, "onContentChange");
     await tick(400);
     expect(onContentChange).toHaveBeenCalledTimes(1);
