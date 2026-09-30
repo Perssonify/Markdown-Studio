@@ -73,6 +73,14 @@ describe("Mermaid config hardening", () => {
     expect(String(cfg.fontFamily)).not.toContain("evil-font");
   });
 
+  it("lays out with dagre unless a diagram asks for ELK (Mermaid 12's default)", async () => {
+    // Mermaid 12 switched its default layout to ELK: every existing diagram
+    // would re-layout, and every flowchart would fetch the 1.6 MB ELK chunk.
+    expect((await configAfter("flowchart TD\n  A-->B")).layout).toBe("dagre");
+    // `layout` is deliberately not a secure key: a diagram may still opt in.
+    expect((await configAfter('%%{init: {"layout": "elk"}}%%\nflowchart TD\n  A-->B')).layout).toBe("elk");
+  });
+
   it("a directive cannot lower the security level", async () => {
     const cfg = await configAfter('%%{init: {"securityLevel": "loose"}}%%\nflowchart TD\n  A-->B');
     expect(cfg.securityLevel).toBe("strict");
