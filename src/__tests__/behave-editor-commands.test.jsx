@@ -73,10 +73,11 @@ describe("the right-click menu", () => {
     await contextMenu(pm(), "Link to heading", "Setup");
     const link = await until(() => pm().querySelector('a[data-anchor="Setup"]'), "the heading link");
     expect(link.getAttribute("data-doc-link")).toBe("");
-    expect(link.textContent).toBe("Setup");
-    // Written with its display text as an alias, since the rich pane shows the
-    // bare heading name where `[[#Setup]]` typed as markdown shows "#Setup".
-    await until(() => /\[\[#Setup\|Setup\]\]/.test(mdText()), "the heading link in the markdown pane");
+    // It reads "#Setup", like `[[#Setup]]` typed in the markdown pane, so it
+    // round-trips as that — not as the alias form `[[#Setup|Setup]]`.
+    expect(link.textContent).toBe("#Setup");
+    await until(() => /\[\[#Setup\]\]/.test(mdText()), "the heading link in the markdown pane");
+    expect(mdText()).not.toMatch(/\[\[#Setup\|/);
   });
 
   it("Add link… asks for the URL and links the selection", async () => {

@@ -11,5 +11,8 @@ import { escapeAttr } from "../engine/css-safety";
  */
 export function headingLinkHtml(anchor: string): string {
   const a = escapeAttr(anchor);
-  return `<a data-doc-link="" data-anchor="${a}" class="wiki-link" href="#">${a}</a>`;
+  // The link READS "#Heading", exactly what `[[#Heading]]` typed in the markdown
+  // pane renders as — so turndown writes it back as `[[#Heading]]`. Showing the
+  // bare name made the two differ and serialised as `[[#Heading|Heading]]`.
+  return `<a data-doc-link="" data-anchor="${a}" class="wiki-link" href="#">#${a}</a>`;
 }
