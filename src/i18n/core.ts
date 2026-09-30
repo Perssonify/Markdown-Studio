@@ -181,7 +181,7 @@ export function messageFor(key: MessageKey): Message {
 }
 
 /**
- * Translate. `t("menu.file")`, `t("status.words", { count: 3 })`.
+ * Translate. `t("menu.file")`, `t("library.documentCount", { count: 3 })`.
  * Reads the language at call time, so it is never stale in a callback.
  */
 export function t(key: MessageKey, vars?: Vars): string {
