@@ -7,6 +7,10 @@ import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimes
 import { printHtmlDocument } from "../store/print-export";
 import { recordFullBackup } from "../store/storage-durability";
 import { buildZipAsync, readDocuments } from "../store/zip-builder";
+import { extForMime, replaceRefsInText } from "../store/asset-refs";
+import {
+  collectAssetsFor, encodeEnvelopeAssets, inlineAssetRefsInText, missingImagesNote, relativeAssetPath,
+} from "../store/assets";
 import type { CmRef, DocStore, Engine, SyncEngine, TiptapRef, Toast } from "./types";
 import type { useAutosave } from "./useAutosave";
 
@@ -49,7 +53,7 @@ export function useExportActions({
       const storage = useDocumentStore.getState().getStorage();
       const sanitize = (s: string) =>
         s.replace(/[/\\:*?"<>|]+/g, "_").trim() || "untitled";
-      const files: Record<string, string> = {};
+      const files: Record<string, string | Uint8Array> = {};
       const used = new Set<string>();
       // Persist what is being edited RIGHT NOW before reading the library off
       // disk. Bulk and backup export sourced every document from storage alone,
@@ -60,6 +64,14 @@ export function useExportActions({
       // Read everything up front — one transaction on IndexedDB, parallel
       // batches elsewhere — instead of one awaited read per document.
       const { docs: records, unreadable } = await readDocuments(storage, entries.map((e) => e.docId));
+      // The images these documents refer to (A086) travel as FILES beside them,
+      // `assets/<sha256>.<ext>`: a backup keeps its references and restores the
+      // files into the asset store; a markdown export points at them by
+      // relative path. Either way the archive stands on its own.
+      const { assets, missing } = await collectAssetsFor(
+        entries.map((e) => records.get(e.docId)?.canonical).filter(Boolean)
+      );
+      const assetExt = (hash: string) => extForMime(assets.get(hash)!.mime);
       // Serialising a document to markdown is main-thread work as well: yield
       // between slices so a big export does not freeze the page (see buildZipAsync).
       let sliceStart = performance.now();
@@ -87,7 +99,9 @@ export function useExportActions({
         while (used.has(path)) path = `${base} (${i++}).${ext}`;
         used.add(path);
         if (md != null) {
-          files[path] = md;
+          files[path] = replaceRefsInText(md, (hash) =>
+            assets.has(hash) ? relativeAssetPath(hash, assetExt(hash), dirSegments.length) : null
+          ).text;
         } else {
           // Full-fidelity backup entry: the `perssonify-document` envelope so
           // title/id/tags/metadata/created/updated all round-trip on re-import
@@ -104,6 +118,9 @@ export function useExportActions({
       }
       const count = Object.keys(files).length;
       if (count === 0) return 0;
+      for (const [hash, a] of assets) files[`assets/${hash}.${extForMime(a.mime)}`] = a.bytes;
+      const note = missingImagesNote(missing.length);
+      if (note) toastRef.current.show(`${note} in this export`, "warning");
       const zip = await buildZipAsync(files);
       // Timestamped filename (YYYYMMDD-HHMMSSmmm) so each export is implicitly
       // version-stamped — a rudimentary portability/backup system.
@@ -152,24 +169,37 @@ export function useExportActions({
           canonical,
           title: resolveDocTitle(rec, canonical).title,
         } as DocumentRecord;
-        const getHtml = () => canonicalToHtml(docForExport.canonical);
+        // Every single-file export is self-contained (A086): the images a
+        // document keeps as assets go into the file as data.
+        let missing: string[] = [];
         if (format === "json") {
-          exportAsJson(docForExport);
+          const embedded = await collectAssetsFor([canonical]);
+          missing = embedded.missing;
+          exportAsJson(docForExport, { assets: encodeEnvelopeAssets(embedded.assets) });
         } else if (format === "html") {
-          exportAsHtml(docForExport, { getHtml });
+          const inlined = await inlineAssetRefsInText(canonicalToHtml(docForExport.canonical));
+          missing = inlined.missing;
+          exportAsHtml(docForExport, { getHtml: () => inlined.text });
         } else if (format === "md") {
-          exportAsMarkdown(docForExport, {
-            getHtml, htmlToMd: engine?.htmlToMd, htmlToCleanMd: engine?.htmlToCleanMd,
+          const inlined = await inlineAssetRefsInText(canonicalToHtml(docForExport.canonical));
+          const cache = docForExport.markdownCache ? await inlineAssetRefsInText(docForExport.markdownCache) : null;
+          missing = inlined.missing;
+          exportAsMarkdown({ ...docForExport, markdownCache: cache ? cache.text : docForExport.markdownCache }, {
+            getHtml: () => inlined.text, htmlToMd: engine?.htmlToMd, htmlToCleanMd: engine?.htmlToCleanMd,
             syncMode: syncMode as "clean" | "styled",
           });
         } else {
           const md =
             docForExport.markdownCache ??
             (engine ? canonicalToMarkdown(docForExport.canonical, engine.htmlToCleanMd) : "") ?? "";
+          const inlined = await inlineAssetRefsInText(md);
+          missing = inlined.missing;
           const { exportAsDocx } = await import("../store/docx-export");
-          await exportAsDocx(docForExport.title || "Untitled", md);
+          await exportAsDocx(docForExport.title || "Untitled", inlined.text);
         }
         toast.show("Document exported", "success");
+        const note = missingImagesNote(missing.length);
+        if (note) toast.show(note, "warning");
       } catch { toast.show("Export failed", "error"); }
     },
     [engine, syncMode, getCanonical, toast]
@@ -237,21 +267,30 @@ export interface ActiveDocExport {
 type ActiveDoc = NonNullable<DocStore["activeDoc"]>;
 
 /** File ▸ Export ▸ PDF / Print: the rich document through the print dialog. */
-export function exportActiveDocAsPdf(activeDoc: ActiveDoc, { tiptapRef, getCanonical }: ActiveDocExport) {
-  const html = tiptapRef.current?.getHTML() ?? "";
+export async function exportActiveDocAsPdf(activeDoc: ActiveDoc, { tiptapRef, getCanonical, toast }: ActiveDocExport) {
+  // Images kept as assets print from their data (A086): the print frame is a
+  // separate document, and a reference means nothing there.
+  const { text: html, missing } = await inlineAssetRefsInText(tiptapRef.current?.getHTML() ?? "");
   // Honor a user rename (pinned userTitle) over the content-derived heading —
   // resolveDocTitle applies the correct precedence (pin → userTitle → derived).
   const title = resolveDocTitle(activeDoc, getCanonical()).title;
   printHtmlDocument(title, html);
+  const note = missingImagesNote(missing.length);
+  if (note) toast.show(note, "warning");
 }
 
 /** File ▸ Export ▸ Markdown / HTML / JSON for the open document. */
-export function exportActiveDocAsFile(
+export async function exportActiveDocAsFile(
   type: "export-md" | "export-html" | "export-json",
   activeDoc: ActiveDoc,
   { tiptapRef, getCanonical, engine, syncMode, toast }: ActiveDocExport,
 ) {
-  const getHtml = () => tiptapRef.current?.getHTML() ?? "";
+  // Self-contained (A086): references are replaced by the images' data.
+  const inlined = type === "export-json"
+    ? null
+    : await inlineAssetRefsInText(tiptapRef.current?.getHTML() ?? "");
+  const getHtml = () => inlined?.text ?? "";
+  let missing = inlined?.missing ?? [];
   // The live editor's content only when it genuinely holds this document —
   // a document locked read-only (content from a newer build) shows a
   // display copy, and exporting THAT as the JSON would lose what it lacks.
@@ -266,7 +305,8 @@ export function exportActiveDocAsFile(
   };
   try {
     if (type === "export-md") {
-      exportAsMarkdown(docForExport as DocumentRecord, {
+      const cache = docForExport.markdownCache ? await inlineAssetRefsInText(docForExport.markdownCache) : null;
+      exportAsMarkdown({ ...docForExport, markdownCache: cache ? cache.text : docForExport.markdownCache } as DocumentRecord, {
         getHtml, htmlToMd: engine?.htmlToMd, htmlToCleanMd: engine?.htmlToCleanMd,
         syncMode: syncMode as "clean" | "styled",
       });
@@ -275,9 +315,13 @@ export function exportActiveDocAsFile(
       exportAsHtml(docForExport as DocumentRecord, { getHtml });
       toast.show("HTML exported", "success");
     } else if (type === "export-json") {
-      exportAsJson(docForExport as DocumentRecord);
+      const embedded = await collectAssetsFor([canonical]);
+      missing = embedded.missing;
+      exportAsJson(docForExport as DocumentRecord, { assets: encodeEnvelopeAssets(embedded.assets) });
       toast.show("JSON exported", "success");
     }
+    const note = missingImagesNote(missing.length);
+    if (note) toast.show(note, "warning");
   } catch (e) { toast.show("Export failed", "error"); }
 }
 
@@ -294,8 +338,12 @@ export async function exportActiveDocAsDocx(
         ? engine.htmlToCleanMd(tiptapRef.current?.getHTML() ?? "")
         : cmRef.current?.getValue() ?? "");
     const title = resolveDocTitle(activeDoc, canonical).title;
+    // The docx writer embeds `data:` images as pictures (A086).
+    const inlined = await inlineAssetRefsInText(md);
     const { exportAsDocx } = await import("../store/docx-export");
-    await exportAsDocx(title, md);
+    await exportAsDocx(title, inlined.text);
     toast.show("Word document exported", "success");
+    const note = missingImagesNote(inlined.missing.length);
+    if (note) toast.show(note, "warning");
   } catch { toast.show("Word export failed", "error"); }
 }

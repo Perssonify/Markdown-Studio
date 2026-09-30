@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { headlessSchema } from "../engine/serialize-doc";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, extractArchive, isArchiveName, type ArchiveEntry } from "../store/archive";
+import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, extractArchive, isArchiveName, type ArchiveAsset, type ExtractedArchive } from "../store/archive";
+import { prepareImportedDocAssets, type AssetPayload } from "../store/assets";
 import type { DocumentRecord } from "../store/document";
 import { useDocumentStore } from "../store/documentStore";
 import { useFolderStore } from "../store/folders";
@@ -67,6 +68,10 @@ export function useImportPipeline({
    */
   const activateAndCapture = useCallback(async (doc: DocumentRecord) => {
     captureIngestHeadless(doc, tiptapRef.current?.getEditor?.()?.schema ?? headlessSchema());
+    // Images to the asset store before the record is written (A086). The
+    // document object is self-contained, so this await borrows nothing the
+    // user can overtake; the activeDocId check below still decides hydration.
+    await prepareImportedDocAssets(doc);
     await finalizeDoc(doc, null, false);     // persist + activate (the editor mounts if it was not)
     const editor = await waitForEditor(2000);
     if (editor && useDocumentStore.getState().activeDocId === doc.id) {
@@ -100,11 +105,17 @@ export function useImportPipeline({
   // folder path), creating folders as needed. Shared by file-drop import and
   // URL import so both get identical folder handling and canonical capture.
   const importItems = useCallback(async (
-    items: { raw: string; format: IngestFormat; folderPath: string[] }[]
+    items: { raw: string; format: IngestFormat; folderPath: string[] }[],
+    opts: { assets?: ArchiveAsset[] } = {}
   ): Promise<{ importedCount: number; failedCount: number; firstDocId: string | null }> => {
     let importedCount = 0;
     let failedCount = 0;
     let firstDocId: string | null = null;
+    // Image assets the archive carried (a backup's `assets/` folder, A086),
+    // by hash — each document restores the ones it refers to.
+    const carried = new Map<string, AssetPayload>(
+      (opts.assets ?? []).map((a) => [a.hash, { mime: a.mime, bytes: a.bytes }])
+    );
 
     // Import ACTIVATES the first imported document and overwrites both panes, so
     // it is a document-leaving path like a switch or a close — and it was the
@@ -155,6 +166,9 @@ export function useImportPipeline({
       // can report the truth instead of "Imported N".
       try {
         captureIngestHeadless(doc as DocumentRecord, schema);
+        // Its images: carried assets back into the store, `data:` images out
+        // of the document into it (or inline where the store is unavailable).
+        await prepareImportedDocAssets(doc as DocumentRecord, carried);
         await saveNewDoc(doc as DocumentRecord);
       } catch (e) {
         console.warn("[importItems] Persist failed for imported doc:", e);
@@ -202,7 +216,9 @@ export function useImportPipeline({
 
       if (!items.length) { toast.show("Nothing selected to import", "warning"); return; }
 
-      const { importedCount, failedCount, firstDocId } = await importItems(items);
+      const { importedCount, failedCount, firstDocId } = await importItems(items, {
+        assets: resource.kind === "archive" ? resource.assets : undefined,
+      });
       if (firstDocId) {
         await handleSwitchDoc(firstDocId); // hydrates the editor (see file-import path)
       }
@@ -235,8 +251,10 @@ export function useImportPipeline({
 export async function collectImportItems(
   files: File[],
   promptText: PromptText,
-): Promise<{ items: { raw: string; format: IngestFormat; folderPath: string[] }[]; skipped: string[] }> {
+): Promise<{ items: { raw: string; format: IngestFormat; folderPath: string[] }[]; skipped: string[]; assets: ArchiveAsset[] }> {
   const skipped: string[] = [];
+  // Image assets carried by archives (a backup's `assets/` folder, A086).
+  const assets: ArchiveAsset[] = [];
 
   // Expand archives (zip/tar/tgz/gz) into per-entry items carrying their
   // in-archive folder path; regular files import at the root.
@@ -246,7 +264,7 @@ export async function collectImportItems(
     if (isArchiveName(file.name)) {
       // Password-protected ZIPs are detected inside extractArchive; prompt for
       // the password (masked) and retry, up to a few attempts on a wrong one.
-      let extracted: ArchiveEntry[] | null = null;
+      let extracted: ExtractedArchive | null = null;
       let password: string | undefined;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
@@ -269,6 +287,7 @@ export async function collectImportItems(
         for (const e of archiveEntriesToItems(extracted, file.name)) {
           items.push({ raw: e.text, format: e.format, folderPath: e.folderPath });
         }
+        assets.push(...(extracted.assets ?? []));
       } else {
         skipped.push(file.name);
       }
@@ -298,5 +317,5 @@ export async function collectImportItems(
     const { raw, format } = await getFileContentAndFormat(file);
     items.push({ raw, format: format as IngestFormat, folderPath: [] });
   }
-  return { items, skipped };
+  return { items, skipped, assets };
 }

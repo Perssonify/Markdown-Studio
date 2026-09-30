@@ -18,7 +18,7 @@
  */
 
 import type { IngestFormat } from "./ingest";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError, extractArchive, isArchiveName, type ArchiveEntry } from "./archive";
+import { ArchiveEncryptedError, ArchiveWrongPasswordError, extractArchive, isArchiveName, type ArchiveAsset, type ArchiveEntry, type ExtractedArchive } from "./archive";
 import { normalizeImportUrl } from "./import-url-normalize";
 import { safeStorage } from "../utils/safe-storage";
 
@@ -156,6 +156,8 @@ export type ImportResource =
       kind: "archive";
       name: string;
       entries: ArchiveEntry[];
+      /** Image assets the archive carried (A086) — restored with the documents. */
+      assets?: ArchiveAsset[];
       sourceUrl: string;
       provider: string;
       viaProxy: boolean;
@@ -409,7 +411,7 @@ export async function fetchImportResource(
   if (isArchiveName(archiveName) || looksLikeArchiveBytes(bytes)) {
     const zipName = isArchiveName(archiveName) ? archiveName : `${name || "archive"}.zip`;
     const file = new File([bytes as BlobPart], zipName);
-    let entries: ArchiveEntry[];
+    let entries: ExtractedArchive;
     try {
       // Match the fetch ceiling so archives up to MAX_ARCHIVE_BYTES actually
       // extract (extractArchive's own default compressed cap is smaller).
@@ -425,7 +427,7 @@ export async function fetchImportResource(
     if (!entries.length) {
       throw new UrlImportError("That archive has no importable text documents in it.");
     }
-    return { kind: "archive", name: zipName, entries, sourceUrl: rawUrl, provider, viaProxy };
+    return { kind: "archive", name: zipName, entries, assets: entries.assets, sourceUrl: rawUrl, provider, viaProxy };
   }
 
   if (bytes.length > MAX_URL_BYTES) {

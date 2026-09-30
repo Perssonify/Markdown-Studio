@@ -8,13 +8,15 @@
  *
  * Coverage: headings, paragraphs, ordered/unordered (nested) lists, blockquotes,
  * fenced code, tables, horizontal rules, and inline bold/italic/strikethrough/
- * inline-code/links. Images, math, and diagrams are emitted as their source text
- * (same fidelity ceiling as the other text exports).
+ * inline-code/links. Images given as `data:` URLs (PNG, JPEG, GIF, BMP — the
+ * caller inlines stored assets first) are embedded as pictures; remote images
+ * and other types, math and diagrams are emitted as their text.
  */
 
 import { Marked, type Token, type Tokens } from "marked";
 import { emStrongMaskFix } from "../engine/marked-emphasis-mask";
 import { downloadBlob, sanitizeFilename } from "./import-export";
+import { parseDataUrl } from "./asset-refs";
 
 // Our own instance rather than marked's shared default: in the library build
 // marked is the HOST's copy, and anything the host registered on the default
@@ -27,14 +29,93 @@ const lexMarkdown = (markdown: string): Token[] =>
 // docx types are only referenced via the dynamic import; keep this module light.
 type DocxModule = typeof import("docx");
 
+// ─── Images (A086) ───────────────────────────────────────────────────────────
+// A document's images reach this exporter as `data:` URLs (the caller inlines
+// asset references first) and are embedded as real pictures. A remote image is
+// NOT fetched — an export must not reach out to a third party — and stays its
+// alt text, as every image used to.
+
+const DOCX_TYPE: Record<string, "png" | "jpg" | "gif" | "bmp"> = {
+  "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/gif": "gif", "image/bmp": "bmp",
+};
+
+/** Largest width an embedded picture is given (points of a Letter/A4 text column). */
+const MAX_IMAGE_WIDTH = 600;
+
+/** Natural pixel size from the file header, or null when it cannot be read. */
+export function imageDimensions(bytes: Uint8Array, type: string): { width: number; height: number } | null {
+  const u16be = (i: number) => (bytes[i]! << 8) | bytes[i + 1]!;
+  const u32be = (i: number) => ((bytes[i]! << 24) >>> 0) + (bytes[i + 1]! << 16) + (bytes[i + 2]! << 8) + bytes[i + 3]!;
+  const u16le = (i: number) => bytes[i]! | (bytes[i + 1]! << 8);
+  const i32le = (i: number) => bytes[i]! | (bytes[i + 1]! << 8) | (bytes[i + 2]! << 16) | (bytes[i + 3]! << 24);
+  try {
+    if (type === "png" && bytes.length >= 24) return { width: u32be(16), height: u32be(20) };
+    if (type === "gif" && bytes.length >= 10) return { width: u16le(6), height: u16le(8) };
+    if (type === "bmp" && bytes.length >= 26) return { width: Math.abs(i32le(18)), height: Math.abs(i32le(22)) };
+    if (type === "jpg") {
+      let i = 2;
+      while (i + 9 < bytes.length) {
+        if (bytes[i] !== 0xff) { i++; continue; }
+        const marker = bytes[i + 1]!;
+        // SOF0–SOF15, except DHT (C4), JPG (C8) and DAC (CC), carry the size.
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          return { width: u16be(i + 7), height: u16be(i + 5) };
+        }
+        i += 2 + u16be(i + 2);
+      }
+    }
+  } catch { /* truncated header */ }
+  return null;
+}
+
+/** An embedded picture for a `data:` source, or null (remote, unsupported type). */
+function imageRun(
+  D: DocxModule,
+  src: string,
+  alt: string,
+  size: { width?: unknown; height?: unknown } = {}
+): InstanceType<DocxModule["ImageRun"]> | null {
+  if (!src.startsWith("data:")) return null;
+  const parsed = parseDataUrl(src.replace(/#.*$/, ""));
+  const type = parsed ? DOCX_TYPE[parsed.mime] : undefined;
+  if (!parsed || !type) return null;
+  const natural = imageDimensions(parsed.bytes, type) ?? { width: 400, height: 300 };
+  const w = Number(size.width) > 0 ? Number(size.width) : natural.width;
+  const h = Number(size.height) > 0 ? Number(size.height) : Math.round((w * natural.height) / Math.max(1, natural.width));
+  const scale = w > MAX_IMAGE_WIDTH ? MAX_IMAGE_WIDTH / w : 1;
+  return new D.ImageRun({
+    type,
+    data: parsed.bytes,
+    transformation: { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) },
+    altText: { name: alt || "Image", description: alt || undefined, title: alt || undefined },
+  });
+}
+
+/** `src`/`alt`/`width`/`height` of an `<img …>` tag (a sized image serialises
+ *  to one), or null when the HTML is not a lone image. */
+function imgTagAttrs(html: string): Record<string, string> | null {
+  const m = /^\s*(?:<picture\b[^>]*>[\s\S]*?)?<img\b([^>]*)\/?>(?:[\s\S]*?<\/picture>)?\s*$/i.exec(html);
+  if (!m) return null;
+  const attrs: Record<string, string> = {};
+  for (const a of m[1]!.matchAll(/([a-zA-Z-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+    attrs[a[1]!.toLowerCase()] = (a[2] ?? a[3] ?? "").replace(/&amp;/g, "&").replace(/&quot;/g, '"');
+  }
+  return attrs;
+}
+
+type InlineRun =
+  | InstanceType<DocxModule["TextRun"]>
+  | InstanceType<DocxModule["ExternalHyperlink"]>
+  | InstanceType<DocxModule["ImageRun"]>;
+
 /** Build docx TextRuns from marked inline tokens, carrying formatting inward. */
 function inlineRuns(
   D: DocxModule,
   tokens: Token[] | undefined,
   fmt: { bold?: boolean; italics?: boolean; strike?: boolean; code?: boolean } = {}
-): (InstanceType<DocxModule["TextRun"]> | InstanceType<DocxModule["ExternalHyperlink"]>)[] {
+): InlineRun[] {
   const { TextRun, ExternalHyperlink } = D;
-  const runs: (InstanceType<DocxModule["TextRun"]> | InstanceType<DocxModule["ExternalHyperlink"]>)[] = [];
+  const runs: InlineRun[] = [];
   if (!tokens) return runs;
   for (const t of tokens) {
     switch (t.type) {
@@ -74,9 +155,24 @@ function inlineRuns(
         );
         break;
       }
-      case "image":
-        runs.push(new TextRun({ text: (t as Tokens.Image).text || (t as Tokens.Image).href, italics: true }));
+      case "image": {
+        const img = t as Tokens.Image;
+        const pic = imageRun(D, img.href, img.text);
+        runs.push(pic ?? new TextRun({ text: img.text || img.href, italics: true }));
         break;
+      }
+      case "html": {
+        // A sized image is written as an `<img …>` tag (the sizedImage rule).
+        const attrs = imgTagAttrs((t as Tokens.HTML).raw ?? (t as Tokens.HTML).text ?? "");
+        if (attrs) {
+          const pic = attrs["src"] ? imageRun(D, attrs["src"], attrs["alt"] ?? "", attrs) : null;
+          runs.push(pic ?? new TextRun({ text: attrs["alt"] || attrs["src"] || "", italics: true }));
+          break;
+        }
+        const raw = (t as Tokens.HTML).text ?? (t as Tokens.HTML).raw;
+        if (raw) runs.push(new TextRun({ text: raw, ...fmt }));
+        break;
+      }
       case "checkbox":
         // A task item's box has been a token since marked 17 — inside the
         // item's first paragraph when the list is loose. It carries no text.
@@ -219,6 +315,21 @@ function blocksFromTokens(
         break;
       case "space":
         break;
+      case "html": {
+        // An image on a line of its own (a sized image or a theme <picture>)
+        // lexes as a BLOCK of HTML.
+        const attrs = imgTagAttrs((token as Tokens.HTML).raw ?? "");
+        const pic = attrs?.["src"] ? imageRun(D, attrs["src"], attrs["alt"] ?? "", attrs) : null;
+        if (pic) { blocks.push(new Paragraph({ children: [pic] })); break; }
+        if (attrs) {
+          const alt = attrs["alt"] || attrs["src"] || "";
+          if (alt) blocks.push(new Paragraph({ children: [new D.TextRun({ text: alt, italics: true })] }));
+          break;
+        }
+        const raw = (token as { text?: string; raw?: string }).text ?? (token as { raw?: string }).raw;
+        if (raw && raw.trim()) blocks.push(new Paragraph({ children: [new D.TextRun(raw)] }));
+        break;
+      }
       default: {
         const raw = (token as { text?: string; raw?: string }).text ?? (token as { raw?: string }).raw;
         if (raw && raw.trim()) blocks.push(new Paragraph({ children: [new D.TextRun(raw)] }));
