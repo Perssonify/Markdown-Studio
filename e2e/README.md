@@ -178,6 +178,15 @@ several were in the plan this campaign was built from and were not written.
   asserts the collapsed tray is `inert`. Each was mutation-tested against a
   build with its fix reverted.
 
+- **Renaming a heading** (`cases/journeys.mjs`, R1): real keystrokes rename a
+  heading in each pane, nothing is offered while the caret stays in it, the
+  arrow key that leaves it brings the offer, and Update rewrites the other note
+  on disk. The markdown pane's half is the one jsdom cannot reach (its caret is
+  judged by CodeMirror's parse tree); it was mutation-tested against a build
+  with that detection disabled. NOT driven in a browser: the offer on the
+  leaving paths, a real composition during the check, a mouse click as the way
+  out — those are in `behave-heading-renames.test.jsx` only.
+
 **Firefox and WebKit — five suites, not a device.** Harness, surfaces,
 surfaces-deep, dataloss and floor run on all three engines (CI: `e2e-engines`).
 Journeys (real IME composition is Chromium's DevTools protocol), faults,

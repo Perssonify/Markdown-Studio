@@ -49,6 +49,10 @@ interface DocumentLifecycleParams {
    *  "Deleted" toast — the editor uses it to offer erasing the document's
    *  version history too (a recoverable copy is otherwise kept). */
   onDocDeleted?: (docId: string, title: string) => void;
+  /** A document is being LEFT (switch, new, close, import…) while the editor
+   *  still holds it, its pending projection flushed. Renamed headings are
+   *  checked here (editor/useHeadingRenameLinks). */
+  onLeavingDoc?: (docId: string) => void;
 }
 
 
@@ -80,6 +84,7 @@ export function useDocumentLifecycle({
   confirm,
   confirmUnsaved,
   onDocDeleted,
+  onLeavingDoc,
 }: DocumentLifecycleParams) {
   const mdDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const htmlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,6 +107,9 @@ export function useDocumentLifecycle({
   // onCanonicalChange → store → re-render chain — an infinite loop).
   const syncMdToHtmlRef = useRef(syncMdToHtml);
   useEffect(() => { syncMdToHtmlRef.current = syncMdToHtml; }, [syncMdToHtml]);
+  // Read through a ref so no leaving path's dependencies change for it.
+  const onLeavingDocRef = useRef(onLeavingDoc);
+  useEffect(() => { onLeavingDocRef.current = onLeavingDoc; }, [onLeavingDoc]);
 
   /**
    * End any live IME / voice-dictation composition in either pane.
@@ -523,6 +531,7 @@ export function useDocumentLifecycle({
     // the doc we're leaving is truly saved (word counts / links / graph stay
     // honest). History capture must happen before hydrating the next doc.
     flushAndCacheIfDirty();
+    if (activeDocId) onLeavingDocRef.current?.(activeDocId);
     captureHistoryFor(activeDocId);
     await autosaveOnLeave();
     // Superseded during the leave-autosave: don't even touch the store — the
@@ -581,6 +590,9 @@ export function useDocumentLifecycle({
     const hasUnsavedContent = saveStatus === "editing" || saveStatus === "saving" ||
       saveStatus === "error" || saveStatus === "conflict" || saveStatus === "blocked" ||
       saveStatus === "full";
+    // Whether the document leaves with its current content (not discarded) —
+    // only then can a heading renamed in it break links.
+    let keptContent = docId === activeDocId;
     if (docId === activeDocId && hasUnsavedContent) {
       const result = await confirmUnsaved();
       if (result === "cancel") return;
@@ -621,6 +633,7 @@ export function useDocumentLifecycle({
         if (mdDebounceRef.current) { clearTimeout(mdDebounceRef.current); mdDebounceRef.current = null; }
         if (htmlDebounceRef.current) { clearTimeout(htmlDebounceRef.current); htmlDebounceRef.current = null; }
         clearUnsavedEdit(docId);
+        keptContent = false;
       }
     } else {
       // If closing a non-active tab, check if it has cached unsaved edits
@@ -676,6 +689,7 @@ export function useDocumentLifecycle({
     // Closing a tab discards its editing context — including cached history
     // (matches VS Code: reopening a closed file starts with fresh undo).
     historyCache.drop(docId);
+    if (keptContent && useDocumentStore.getState().activeDocId === docId) onLeavingDocRef.current?.(docId);
 
     const editor = tiptapRef.current?.getEditor?.();
     const switchedDoc = await closeTab(docId, editor);
@@ -740,7 +754,9 @@ export function useDocumentLifecycle({
     // doc's undo history so switching back to it restores ⌘Z; then persist the
     // departing doc so it doesn't linger as a stale draft.
     flushAndCacheIfDirty();
-    captureHistoryFor(useDocumentStore.getState().activeDocId);
+    const leaving = useDocumentStore.getState().activeDocId;
+    if (leaving) onLeavingDocRef.current?.(leaving);
+    captureHistoryFor(leaving);
     await autosaveOnLeave();
     if (switchGenRef.current !== myGen) return;
 
@@ -995,6 +1011,7 @@ export function useDocumentLifecycle({
     const { activeDocId } = useDocumentStore.getState();
     if (!activeDocId) return;
     flushAndCacheIfDirty();
+    onLeavingDocRef.current?.(activeDocId);
     captureHistoryFor(activeDocId);
     await autosaveOnLeave();
   }, [flushAndCacheIfDirty, captureHistoryFor, autosaveOnLeave]);
