@@ -20,7 +20,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 - **Happy-path flow** (you type in the markdown pane):
   1. CodeMirror fires its change handler → `handleMdChange()` in [src/hooks/useDocumentLifecycle.ts:251](../src/hooks/useDocumentLifecycle.ts#L251).
   2. The change is debounced, with a ceiling so the other pane keeps up during continuous typing; both delays come from the measured cost of recent projections (see [src/hooks/sync-schedule.ts](../src/hooks/sync-schedule.ts)).
-  3. `syncMdToHtml()` runs — [src/engine/useSyncEngine.ts:108](../src/engine/useSyncEngine.ts#L108): `quickHash(md)` guard → `engine.mdToHtml(md)` → `tiptapRef.setHTML(html)`.
+  3. `syncMdToHtml()` runs — [src/engine/useSyncEngine.ts:108](../src/engine/useSyncEngine.ts#L108): `quickHash(md)` guard → `engine.planRich(md, state)` → one transaction that re-parses only the top-level blocks the edit touched ([src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts), A083; the result equals `setContent(engine.mdToHtml(md))`).
   4. Tiptap re-serializes to its canonical ProseMirror JSON; `onCanonicalChange(editor.getJSON())` fires ([src/engine/useSyncEngine.ts:97](../src/engine/useSyncEngine.ts#L97)).
   5. Autosave is scheduled; after `AUTOSAVE_MS` the doc is written to IndexedDB.
 - **Data read/written:** Reads/writes `activeDoc.canonical` (PM JSON) in memory; persists to the `documents` IndexedDB store on autosave.
