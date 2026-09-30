@@ -20,7 +20,7 @@ export function EraseLocalDataSection() {
     const ok = await confirm({
       title: "Erase all local data?",
       description:
-        "Deletes every document, all version history, unsaved drafts and this app's settings from this browser. " +
+        "Deletes every document, all version history, stored images, unsaved drafts and this app's settings from this browser. " +
         "It cannot be undone — export a backup first if you might need anything.",
       confirmLabel: "Erase everything",
       destructive: true,
