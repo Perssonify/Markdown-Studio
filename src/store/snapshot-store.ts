@@ -334,6 +334,29 @@ class SnapshotStore {
     }
   }
 
+  /**
+   * Every snapshot's content — memory ring and database — for the image
+   * garbage collector (asset-gc.ts), which must never delete an image an old
+   * version still shows. Unlike the other readers this THROWS when the
+   * database cannot be read: a collector that took "unreadable" for "no
+   * snapshots" would delete images a restore still needs.
+   */
+  async scanCanonicals(): Promise<unknown[]> {
+    await this.open();
+    const mem = this.mem.map((r) => r.canonical);
+    if (!this.enabled) return mem; // version history is off: nothing was kept
+    if (!this.usable || !this.db) {
+      // No database at all: the ring is everything there is. A database this
+      // tab could not open (or closed for another tab's upgrade) may still
+      // hold versions — refuse rather than guess.
+      if (typeof indexedDB === "undefined") return mem;
+      throw new Error("Version history could not be read");
+    }
+    const tx = this.db.transaction(STORE, "readonly");
+    const stored = (await idbRequest<SnapshotRecord[]>(tx.objectStore(STORE).getAll())) ?? [];
+    return [...stored.map((r) => r.canonical), ...mem];
+  }
+
   // ── Deletion / pruning ───────────────────────────────────────────────────────
 
   /** Remove every snapshot for a doc (rarely needed — kept for hygiene). */

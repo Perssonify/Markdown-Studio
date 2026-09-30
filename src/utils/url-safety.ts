@@ -1,3 +1,5 @@
+import { isAssetRef } from "../store/asset-refs";
+
 const CONTROL_AND_SPACE = /[\u0000-\u0020]+/g;
 
 export function normalizedUrlScheme(value: string): string {
@@ -29,5 +31,10 @@ export function isDangerousUrl(value: unknown): boolean {
   // Allow only raster image data URIs; block data:image/svg+xml and everything
   // else (data:text/html, data:application/*, …).
   if (normalized.startsWith("data:") && !SAFE_DATA_IMAGE.test(normalized)) return true;
+  // An image stored as an asset (A086). The reference is inert — no browser
+  // can fetch the scheme; the editor resolves it to an object URL itself — but
+  // only its exact shape is allowed, so the scheme cannot become a carrier for
+  // anything else a later reader might act on.
+  if (normalized.startsWith("pf-asset:") && !isAssetRef(normalized)) return true;
   return false;
 }
