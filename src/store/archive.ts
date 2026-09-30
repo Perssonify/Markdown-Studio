@@ -1,5 +1,6 @@
 import { Gunzip, strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import type { IngestFormat } from "./ingest";
+import { MAX_ASSET_BYTES, mimeForExt } from "./asset-refs";
 
 /**
  * Archive (ZIP / TAR / TAR.GZ / GZ) import & export. Uses fflate (MIT) for
@@ -14,11 +15,43 @@ export interface ArchiveEntry {
   format: IngestFormat;
 }
 
+/**
+ * An image asset carried by an archive (A086): a full backup's, or a markdown
+ * export's, `assets/<sha256>.<ext>` file. Not a document — it goes back into
+ * the asset store, and documents refer to it by its hash.
+ */
+export interface ArchiveAsset {
+  hash: string;
+  mime: string;
+  bytes: Uint8Array;
+}
+
+/** What `extractArchive` returns: the text documents, plus the image assets
+ *  the archive carried (empty for an archive with none). */
+export type ExtractedArchive = ArchiveEntry[] & { assets: ArchiveAsset[] };
+
+/** An asset file, where a backup and a markdown ZIP export write them: an
+ *  `assets` directory, named by the SHA-256 of the bytes, with an IMAGE
+ *  extension — so a document that merely lives in a folder called "assets"
+ *  (`assets/notes.md`, even one titled with 64 hex digits) is never mistaken
+ *  for one. */
+const ASSET_PATH = /(?:^|\/)assets\/([0-9a-f]{64})\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i;
+
+/** Is this archive path an image asset (rather than a document)? */
+export function assetPathHash(path: string): { hash: string; ext: string } | null {
+  const m = ASSET_PATH.exec(path);
+  return m ? { hash: m[1]!.toLowerCase(), ext: m[2]!.toLowerCase() } : null;
+}
+
 export interface ExtractArchiveOptions {
   maxCompressedBytes?: number;
   maxTotalBytes?: number;
   maxEntryBytes?: number;
   maxEntries?: number;
+  /** Image assets are budgeted apart from text: pictures are big and do not
+   *  compress, and a backup of a library with images must still restore. */
+  maxAssetBytes?: number;
+  maxAssetTotalBytes?: number;
   /** Password for an encrypted ZIP (decrypted lazily via @zip.js/zip.js). */
   password?: string;
 }
@@ -80,8 +113,17 @@ async function unzipEncrypted(
   try {
     const zipEntries = await reader.getEntries();
     let total = 0;
+    let assetTotal = 0;
     for (const e of zipEntries) {
-      if (e.directory || !TEXT_EXT.test(e.filename)) continue;
+      if (e.directory) continue;
+      if (assetPathHash(e.filename)) {
+        if ((e.uncompressedSize ?? 0) > limits.maxAssetBytes) continue; // too big to be one image: skipped
+        assetTotal += e.uncompressedSize ?? 0;
+        if (assetTotal > limits.maxAssetTotalBytes) throw new Error("Archive too large after decompression");
+        map[e.filename] = await e.getData!(new Uint8ArrayWriter());
+        continue;
+      }
+      if (!TEXT_EXT.test(e.filename)) continue;
       if ((e.uncompressedSize ?? 0) > limits.maxEntryBytes) throw new Error("Archive entry too large");
       total += e.uncompressedSize ?? 0;
       if (total > limits.maxTotalBytes) throw new Error("Archive too large after decompression");
@@ -98,10 +140,15 @@ async function unzipEncrypted(
 }
 
 const DEFAULT_EXTRACT_LIMITS: Required<Omit<ExtractArchiveOptions, "password">> = {
-  maxCompressedBytes: 5 * 1024 * 1024,
+  // Raised from 5 MB for A086: a backup now carries its images as files, and a
+  // library with a few photos is past 5 MB compressed. The text budgets below
+  // are unchanged, and every entry is still size-checked BEFORE it is inflated.
+  maxCompressedBytes: 300 * 1024 * 1024,
   maxTotalBytes: 20 * 1024 * 1024,
   maxEntryBytes: 5 * 1024 * 1024,
   maxEntries: 500,
+  maxAssetBytes: MAX_ASSET_BYTES,
+  maxAssetTotalBytes: 256 * 1024 * 1024,
 };
 
 const TEXT_EXT = /\.(md|markdown|mdown|txt|html?|json)$/i;
@@ -234,7 +281,7 @@ function boundedGunzip(buf: Uint8Array, maxBytes: number): Uint8Array {
 export async function extractArchive(
   file: File,
   options: ExtractArchiveOptions = {}
-): Promise<ArchiveEntry[]> {
+): Promise<ExtractedArchive> {
   const limits = { ...DEFAULT_EXTRACT_LIMITS, ...options };
   if (file.size > limits.maxCompressedBytes) {
     throw new Error("Archive compressed file too large");
@@ -256,8 +303,17 @@ export async function extractArchive(
     // BEFORE inflating, so oversized entries — and any archive whose declared
     // total exceeds the cap — are rejected without ever allocating the bomb.
     let declaredTotal = 0;
+    let declaredAssets = 0;
     fileMap = unzipSync(buf, {
       filter: (f) => {
+        if (assetPathHash(f.name)) {
+          if (f.originalSize > limits.maxAssetBytes) return false; // skipped, not fatal
+          declaredAssets += f.originalSize;
+          if (declaredAssets > limits.maxAssetTotalBytes) {
+            throw new Error("Archive too large after decompression");
+          }
+          return true;
+        }
         if (f.originalSize > limits.maxEntryBytes) {
           throw new Error("Archive entry too large");
         }
@@ -280,7 +336,9 @@ export async function extractArchive(
   }
 
   const entries: ArchiveEntry[] = [];
+  const assets: ArchiveAsset[] = [];
   let totalBytes = 0;
+  let assetBytes = 0;
   for (const [rawPath, data] of Object.entries(fileMap)) {
     if (rawPath.endsWith("/")) continue; // directory marker
     if (rawPath.includes("__MACOSX")) continue; // archiver junk
@@ -299,6 +357,16 @@ export async function extractArchive(
     // a `../escape.md` traversal entry is still flattened rather than dropped.
     if (segments.slice(0, -1).some((seg) => seg.startsWith("."))) continue;
     if (base === ".DS_Store" || base === ".gitkeep") continue;
+    const asset = assetPathHash(path);
+    if (asset) {
+      // Budgeted apart from the documents (see maxAssetBytes). The TYPE comes
+      // from the extension; the asset store refuses anything but a raster image.
+      if (data.byteLength > limits.maxAssetBytes) continue;
+      assetBytes += data.byteLength;
+      if (assetBytes > limits.maxAssetTotalBytes) throw new Error("Archive too large after decompression");
+      assets.push({ hash: asset.hash, mime: mimeForExt(asset.ext), bytes: data });
+      continue;
+    }
     if (!TEXT_EXT.test(path)) continue; // only text documents
 
     if (entries.length >= limits.maxEntries) {
@@ -314,7 +382,7 @@ export async function extractArchive(
 
     entries.push({ path, text: strFromU8(data), format: formatForName(path) });
   }
-  return entries;
+  return Object.assign(entries, { assets });
 }
 
 /** One document extracted from an archive, ready for the import pipeline. */
@@ -377,11 +445,12 @@ export function archiveEntriesToItems(
   });
 }
 
-/** Zip a map of `path → text content` into a single archive byte array. */
-export function buildZip(files: Record<string, string>): Uint8Array {
-  const map: Record<string, Uint8Array> = {};
+/** Zip a map of `path → content` into a single archive byte array. Text is
+ *  deflated; bytes (image assets, which do not compress) are stored as-is. */
+export function buildZip(files: Record<string, string | Uint8Array>): Uint8Array {
+  const map: Record<string, Uint8Array | [Uint8Array, { level: 0 }]> = {};
   for (const [path, content] of Object.entries(files)) {
-    map[path] = strToU8(content);
+    map[path] = typeof content === "string" ? strToU8(content) : [content, { level: 0 }];
   }
   return zipSync(map);
 }

@@ -3,6 +3,7 @@ import { buildContextPrompt } from "../integration/prompt-builder";
 import { extractText } from "../store/document";
 import { useDocumentStore } from "../store/documentStore";
 import { useUIStore } from "../store/uiStore";
+import { inlineAssetRefsInText } from "../store/assets";
 import type { CmRef, Confirm, DocStore, Engine, Lifecycle, LinkIndexApi, PromptText, SyncEngine, TiptapRef, Toast, UIStore } from "./types";
 import {
   type ExportDocs,
@@ -48,7 +49,11 @@ export function useEditorActions({
   const handleAction = useCallback(async (type: string, data?: any) => {
     if (type === "md" || type === "html" || type === "json") {
       const content = type === "md" ? cmRef.current?.getValue() : type === "html" ? tiptapRef.current?.getHTML() : JSON.stringify(getCanonical(), null, 2);
-      navigator.clipboard.writeText(content || "").then(() => toast.show(`${type.toUpperCase()} copied!`, "success"));
+      // Markdown and HTML are copied for ANOTHER application, which cannot
+      // resolve an asset reference: they carry the image data (A086). The JSON
+      // is the canonical itself, references and all.
+      const text = type === "json" ? content || "" : (await inlineAssetRefsInText(content || "")).text;
+      navigator.clipboard.writeText(text).then(() => toast.show(`${type.toUpperCase()} copied!`, "success"));
       return;
     }
     if (type === "clear") {
@@ -81,7 +86,7 @@ export function useEditorActions({
       return;
     }
     if (type === "export-pdf" && activeDoc) {
-      exportActiveDocAsPdf(activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
+      await exportActiveDocAsPdf(activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
       return;
     }
     if (type === "prompt" && activeDoc) {
@@ -103,7 +108,7 @@ export function useEditorActions({
       return;
     }
     if ((type === "export-md" || type === "export-html" || type === "export-json") && activeDoc) {
-      exportActiveDocAsFile(type, activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
+      await exportActiveDocAsFile(type, activeDoc, { cmRef, tiptapRef, getCanonical, engine, syncMode, toast });
       return;
     }
     if (type === "export-docx" && activeDoc) {
@@ -114,10 +119,10 @@ export function useEditorActions({
       const files = Array.from(data as FileList | File[]);
       // Expand archives into per-entry items, convert .docx, read the rest as
       // text; files that cannot be taken come back in `skipped`.
-      const { items, skipped } = await collectImportItems(files, promptText);
+      const { items, skipped, assets } = await collectImportItems(files, promptText);
 
       try {
-        const { importedCount, failedCount, firstDocId } = await importItems(items);
+        const { importedCount, failedCount, firstDocId } = await importItems(items, { assets });
         if (skipped.length > 0) {
           toast.show(`Skipped ${skipped.length} file(s): ${skipped.join(", ")}`, "warning");
         }
