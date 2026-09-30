@@ -100,6 +100,19 @@ describe("asset store: availability and the inline fallback", () => {
     expect(await assetStore.put(png(7), "image/png")).toBeNull();
   });
 
+  it("a database of the same name WITHOUT the asset stores is reported unavailable, not used", async () => {
+    const name = `assets-bare-${n}`;
+    await new Promise((res, rej) => {
+      const r = indexedDB.open(name, 1); // no upgrade handler: no object stores
+      r.onsuccess = () => { r.result.close(); res(); };
+      r.onerror = () => rej(r.error);
+    });
+    assetStore._resetForTests({ useIndexedDB: true, dbName: name });
+    expect(await assetStore.available()).toBe(false);
+    expect(await assetStore.put(png(21), "image/png")).toBeNull();
+    expect(await assetStore.get("0".repeat(64))).toBeNull();
+  });
+
   it("is unavailable when a host turns it off", async () => {
     assetStore.configure({ enabled: false });
     expect(await assetStore.available()).toBe(false);

@@ -294,6 +294,10 @@ function warmSelection(view: EditorView): void {
 const COMPOSITION_RETRY_MS = 250;
 const COMPOSITION_RETRIES = 40;
 
+/** How long a selection must hold still before its images are pre-loaded for
+ *  a copy. Short: ⌘A then ⌘C is a quick gesture. */
+const WARM_DELAY_MS = 60;
+
 export const AssetImages = Extension.create({
   name: "assetImages",
 
@@ -346,6 +350,9 @@ export const AssetImages = Extension.create({
           const inflight = new Set<string>();
           let lastFound: string[] | null = null;
           let destroyed = false;
+          // A drag-select changes the selection on every mouse move; look at
+          // what it holds once it settles, not each time.
+          let warmTimer: ReturnType<typeof setTimeout> | null = null;
 
           const rewrite = (view: EditorView, map: Map<string, string>, token: object, attempt: number) => {
             // Two guards against writing into a document other than the one
@@ -407,9 +414,18 @@ export const AssetImages = Extension.create({
                   })();
                 }
               }
-              if (!view.state.selection.eq(prevState.selection)) warmSelection(view);
+              if (!view.state.selection.eq(prevState.selection) && !view.state.selection.empty) {
+                if (warmTimer) clearTimeout(warmTimer);
+                warmTimer = setTimeout(() => {
+                  warmTimer = null;
+                  if (!destroyed) warmSelection(view);
+                }, WARM_DELAY_MS);
+              }
             },
-            destroy: () => { destroyed = true; },
+            destroy: () => {
+              destroyed = true;
+              if (warmTimer) clearTimeout(warmTimer);
+            },
           };
         },
       }),
