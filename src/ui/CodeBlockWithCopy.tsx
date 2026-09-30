@@ -17,10 +17,10 @@ interface CodeBlockComponentProps {
     };
   };
   editor?: { isEditable?: boolean };
-  updateAttributes: (attrs: Record<string, any>) => void;
+  updateAttributes: (attrs: Record<string, unknown>) => void;
   extension: {
     options: {
-      lowlight: any;
+      lowlight: unknown;
     };
   };
 }

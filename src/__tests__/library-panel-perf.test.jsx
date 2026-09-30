@@ -105,7 +105,6 @@ describe("A082 — the library does not grow with the library", () => {
         saves.push({ wall: performance.now() - t0, commit: commits.reduce((s, c) => s + c.actualDuration, 0) });
       }
       const med = (xs) => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)];
-      // eslint-disable-next-line no-console
       console.log(`[A082] n=${n} mount=${mountMs.toFixed(0)}ms treeitems=${treeitems} elements=${elements} ` +
         `save(wall median)=${med(saves.map((s) => s.wall)).toFixed(1)}ms save(commit median)=${med(saves.map((s) => s.commit)).toFixed(1)}ms`);
     }, 120_000);

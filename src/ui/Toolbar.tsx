@@ -54,7 +54,7 @@ import { useUIStore } from '../store/uiStore';
 import { TableGridPicker } from './TableGridPicker';
 import { Icons } from "./Icons";
 import { useRovingFocus } from "./use-roving-focus";
-import { promptImage } from "../formatting/image-insert";
+import { type ImageInsert, promptImage } from "../formatting/image-insert";
 import { t, useT } from "../i18n";
 
 /**
@@ -94,7 +94,7 @@ export interface ActiveFormats {
 
 export interface EditorToolbarProps {
   toast: { show: (msg: string, type: "info" | "success" | "error" | "warning") => void };
-  dispatch: (cmd: string, val?: string | number | { rows: number; cols: number; withHeaderRow: boolean }) => void;
+  dispatch: (cmd: string, val?: string | number | { rows: number; cols: number; withHeaderRow: boolean } | ImageInsert) => void;
   updateFormats: (forceImmediate?: boolean) => void;
   setFocusedPane: (pane: "md" | "html") => void;
   showFindReplace?: boolean;
@@ -404,7 +404,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const execTickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (execTickRef.current) clearTimeout(execTickRef.current); }, []);
 
-  const exec = useCallback((cmd: string, val?: any) => {
+  const exec = useCallback((cmd: string, val?: Parameters<typeof dispatch>[1]) => {
     dispatch(cmd, val);
     // Tiptap transactions flush asynchronously — defer the format query by one
     // macrotask so the editor state is fully committed before we read it.

@@ -13,6 +13,16 @@ import { EMOJI_MAP } from "../engine/emoji-map";
  */
 const emojiSuggestionKey = new PluginKey("emojiSuggestion");
 
+/** The open suggestion list, as handleKeyDown drives it. */
+interface SuggestControl {
+  isOpen: () => boolean;
+  move: (delta: number) => void;
+  accept: () => void;
+  close: () => void;
+}
+/** Each view's list, kept beside the view rather than as an expando on it. */
+const controls = new WeakMap<EditorView, SuggestControl>();
+
 type Match = { name: string; char: string };
 
 const ALL: Match[] = Object.entries(EMOJI_MAP).map(([name, char]) => ({ name, char }));
@@ -123,8 +133,8 @@ export function emojiSuggestionPlugin(getType: () => NodeType): Plugin {
         editorView.focus();
       };
 
-      // Expose current state to handleKeyDown via the plugin instance closure.
-      (editorView as any).__emojiSuggest = {
+      // Expose current state to handleKeyDown, keyed by the view.
+      controls.set(editorView, {
         isOpen: () => box.style.display === "block" && items.length > 0,
         move: (delta: number) => {
           if (items.length === 0) return;
@@ -133,7 +143,7 @@ export function emojiSuggestionPlugin(getType: () => NodeType): Plugin {
         },
         accept: () => choose(index),
         close,
-      };
+      });
 
       return {
         update(view) {
@@ -154,13 +164,13 @@ export function emojiSuggestionPlugin(getType: () => NodeType): Plugin {
         },
         destroy() {
           box.remove();
-          delete (editorView as any).__emojiSuggest;
+          controls.delete(editorView);
         },
       };
     },
     props: {
       handleKeyDown(view, event) {
-        const s = (view as any).__emojiSuggest;
+        const s = controls.get(view);
         if (!s || !s.isOpen()) return false;
         if (event.key === "ArrowDown") { s.move(1); return true; }
         if (event.key === "ArrowUp") { s.move(-1); return true; }

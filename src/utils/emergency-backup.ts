@@ -58,7 +58,7 @@ export async function buildBackupFiles(src: BackupSources): Promise<Record<strin
   const files: Record<string, string> = {};
   const used = new Set<string>();
   for (const { id } of await src.storage.list()) {
-    let rec: DocumentRecord | null = null;
+    let rec: DocumentRecord | null;
     try {
       rec = await src.storage.get(id);
     } catch {

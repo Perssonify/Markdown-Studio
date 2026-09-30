@@ -8,7 +8,7 @@ const BOLD = 'button[aria-label*="Bold" i], button[title*="Bold" i]';
 
 runCase("surfaces", async (rep, onClose) => {
   const srv = await serve(APP_DIR);
-  const { browser, page: pg, errors } = await open(srv.port);
+  const { browser, page: pg } = await open(srv.port);
   onClose(async () => { await browser.close(); srv.close(); });
   await boot(pg, srv.port, { mode: "Split", settle: 6000 });
 

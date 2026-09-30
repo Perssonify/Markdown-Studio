@@ -5,7 +5,7 @@
 // the same line is recorded under several keys — the stress tier reported
 // "300/60 tokens" for a 60-token run. CodeMirror also holds the exact text in
 // its own state, which needs no scrolling at all.
-import { serve, open, boot, seed, ROOT, APP_DIR } from "../lib.mjs";
+import { serve, open, boot, seed, APP_DIR } from "../lib.mjs";
 import { proseDoc } from "../docs.mjs";
 
 const srv = await serve(APP_DIR);
