@@ -65,6 +65,39 @@ export const editor = {
   "editor.copyFailed": "Copy failed",
   "editor.documentNotFoundNamed": "Document not found: \"{title}\"",
 
+  // Renamed headings keep their links (useHeadingRenameLinks). `{notes}` is
+  // editor.headingRenameNotes, so each count gets its own plural form.
+  "editor.headingRenameNotes": { one: "{count} note", other: "{count} notes" },
+  "editor.headingRenamedOffer": {
+    one: "Heading renamed — update {count} link in {notes} to “{heading}”?",
+    other: "Heading renamed — update {count} links in {notes} to “{heading}”?",
+  },
+  /** The same offer for the document just left (a switch, a new document…). */
+  "editor.headingRenamedOfferIn": {
+    one: "Heading renamed in “{title}” — update {count} link in {notes} to “{heading}”?",
+    other: "Heading renamed in “{title}” — update {count} links in {notes} to “{heading}”?",
+  },
+  "editor.headingsRenamedOffer": {
+    one: "Headings renamed — update {count} link in {notes} to the new headings?",
+    other: "Headings renamed — update {count} links in {notes} to the new headings?",
+  },
+  "editor.headingsRenamedOfferIn": {
+    one: "Headings renamed in “{title}” — update {count} link in {notes} to the new headings?",
+    other: "Headings renamed in “{title}” — update {count} links in {notes} to the new headings?",
+  },
+  "editor.headingLinksUpdate": "Update",
+  "editor.headingLinksDismiss": "Dismiss",
+  "editor.headingLinksUpdated": { one: "Updated {count} link", other: "Updated {count} links" },
+  /** `{titles}`: the notes that were left alone, as a list. */
+  "editor.headingLinksPartlyUpdated": {
+    zero: "No links updated — could not change {titles} (changed elsewhere, locked or unreadable)",
+    one: "Updated {count} link — could not change {titles} (changed elsewhere, locked or unreadable)",
+    other: "Updated {count} links — could not change {titles} (changed elsewhere, locked or unreadable)",
+  },
+  "editor.headingLinksReadOnly": "Read-only is on — no links were updated",
+  /** One note's name in the list `{titles}` above. */
+  "editor.headingLinksNoteName": "“{title}”",
+
   // Import (useImportPipeline)
   "editor.nothingSelectedToImport": "Nothing selected to import",
   "editor.documentsNotSaved": { other: "{count} document(s) could not be saved — storage may be full" },
