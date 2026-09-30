@@ -7,7 +7,7 @@ import { clearLocalData, useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 import type { IngestFormat } from "../store/ingest";
 import { exportGraph } from "../store/link-index";
-import type { PerssonifyEditorProps } from "./props";
+import type { HostDocumentInput, PerssonifyEditorProps } from "./props";
 import type { CmRef, DocStore, Engine, Lifecycle, LinkIndexApi, SyncEngine, TiptapRef, UIStore } from "./types";
 import type { useEditorActions } from "./useEditorActions";
 import type { useImportPipeline } from "./useImportPipeline";
@@ -68,7 +68,7 @@ export function useHostApi({
    * the store's PURE createDoc and threw the results away).
    */
   const addDocumentsImpl = useCallback(async (
-    inputs: Array<{ id?: string; title?: string; markdown?: string; canonical?: any }>
+    inputs: HostDocumentInput[]
   ): Promise<{ ids: string[] }> => {
     const ids: string[] = [];
     let createdCount = 0;
@@ -212,12 +212,12 @@ export function useHostApi({
      * of any shipped build, so nothing can depend on it and it does NOT delete
      * the user's existing documents.
      */
-    setDocuments: async (docs: any[]): Promise<{ ids: string[] }> => {
-      const inputs = (docs ?? []).map((d: any) =>
-        typeof d === "string"
-          ? { markdown: d }
-          : { id: d?.id, title: d?.title, markdown: d?.markdown, canonical: d?.canonical }
-      );
+    setDocuments: async (docs: unknown[]): Promise<{ ids: string[] }> => {
+      const inputs = (docs ?? []).map((d): HostDocumentInput => {
+        if (typeof d === "string") return { markdown: d };
+        const doc = (d ?? {}) as HostDocumentInput;
+        return { id: doc.id, title: doc.title, markdown: doc.markdown, canonical: doc.canonical };
+      });
       return await addDocumentsImpl(inputs);
     },
     // Append documents to the store (persisted), non-destructively. Reuses the
@@ -234,7 +234,7 @@ export function useHostApi({
     // silently creates).
     updateDocument: async (
       id: string,
-      patch: { title?: string; markdown?: string; canonical?: any } = {}
+      patch: Omit<HostDocumentInput, "id"> = {}
     ): Promise<{ id: string; updated: boolean }> => {
       if (!id) return { id, updated: false };
       const existing = await useDocumentStore.getState().getDocById(id);
@@ -256,7 +256,9 @@ export function useHostApi({
       }
 
       const editor = tiptapRef.current?.getEditor();
-      let canonical: any = patch.canonical ?? null;
+      // A host's canonical is taken as the PM JSON it claims to be (the type
+      // says so; nothing here checks it — the host is trusted with the API).
+      let canonical = (patch.canonical as DocumentRecord["canonical"] | undefined) ?? null;
       if (canonical == null) {
         const html = engine?.mdToHtml ? engine.mdToHtml(patch.markdown ?? "") : (patch.markdown ?? "");
         if (editor?.schema) {
@@ -331,7 +333,9 @@ export function useHostApi({
       await emitGraphUpdate();
       return { id, updated: !!patched };
     },
-    setFieldSchemas: (schemas: any) => { (window as any).__perssonifyFieldSchemas = schemas; },
+    setFieldSchemas: (schemas: unknown) => {
+      (window as Window & { __perssonifyFieldSchemas?: unknown }).__perssonifyFieldSchemas = schemas;
+    },
     setMode: (m: "md" | "html" | "split") => setMode(m),
     setChrome: (level: "full" | "minimal" | "none") => setChrome(level),
     // Route through handleSwitchDoc (not the raw store switchToDoc): it also

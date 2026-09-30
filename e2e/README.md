@@ -73,7 +73,12 @@ quietly weakening a check:
   out of the Tab order by default (Safari's "Press Tab to highlight each item";
   Playwright's WebKit reaches them with neither Tab nor Alt+Tab), so there the
   skip-link case asserts what the link is for — first in the focus order, and
-  it lands in the editor — instead of "the first Tab stop".
+  it lands in the editor — instead of "the first Tab stop". WebKit fires
+  `selectionchange` after the key press has resolved, and a click's own
+  selection update can land after a Ctrl+End sent right behind it, so text
+  typed at once went where the CLICK put the caret (inheriting its bold): the
+  surfaces suite now waits until ProseMirror's selection is at the end
+  (`richCaretToEnd`) before typing.
 - **`rep.skip(name, reason)`** — the engine lacks the capability: the memory
   sheet's heap gauge reads `performance.memory`, which only Chromium has.
   `requireChromium()` does the same for blocks that need CDP, and `open({ cdp })`

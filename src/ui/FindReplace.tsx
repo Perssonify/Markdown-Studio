@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 import { RefObject, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EditorSelection } from "@codemirror/state";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import type { CodeMirrorPaneHandle } from "./CodeMirrorPane";
+import type { TiptapPaneHandle } from "./TiptapPane";
 import { MODES } from "../constants";
 import { applyCase, type CaseMode } from "../formatting/case-transform";
 import {
@@ -174,8 +177,8 @@ const CM_WRAP: Record<string, [string, string]> = {
 };
 
 export interface FindReplaceBarProps {
-  sourceRef: RefObject<any>;
-  previewRef: RefObject<any>;
+  sourceRef: RefObject<CodeMirrorPaneHandle | null>;
+  previewRef: RefObject<TiptapPaneHandle | null>;
   mode: string;
   onSync?: () => void;
   syncHtmlToMd?: () => void;
@@ -402,7 +405,7 @@ export function FindReplaceBar({
     } else {
       // Per text node, as before — so the rich pane never matches across a
       // node boundary (which is also where the marks change).
-      (doc as { descendants: (f: (n: any, p: number, parent: any) => void) => void }).descendants((node, p, parent) => {
+      (doc as PMNode).descendants((node, p, parent) => {
         if (!node.isText) return;
         if (L.headingsOnly && parent?.type?.name !== "heading") return;
         texts.push(node.text || "");
@@ -744,7 +747,7 @@ export function FindReplaceBar({
       // TEXT, never HTML. This went through insertContent(), which parses its
       // argument as HTML: replacing with "<b>x</b>" inserted a bold x, and a
       // "<" in the replacement could swallow what followed it.
-      editor.chain().focus().command(({ tr }: { tr: any }) => {
+      editor.chain().focus().command(({ tr }) => {
         if (text) tr.insertText(text, r.from, r.to);
         else tr.delete(r.from, r.to);
         return true;
@@ -831,7 +834,7 @@ export function FindReplaceBar({
       spans = set.ranges;
     } else {
       spans = [];
-      editor.state.doc.descendants((node: any, p: number, parent: any) => {
+      editor.state.doc.descendants((node, p, parent) => {
         if (!node.isText || parent?.type?.name !== "heading") return;
         const text: string = node.text || "";
         if (text) spans.push({ from: p, to: p + text.length });
@@ -841,27 +844,28 @@ export function FindReplaceBar({
     const { state } = editor;
     const marks = state.schema.marks;
     const markType =
-      kind === "bold" ? marks.bold
-      : kind === "italic" ? marks.italic
-      : kind === "underline" ? marks.underline
-      : kind === "strike" ? marks.strike
+      kind === "bold" ? marks["bold"]
+      : kind === "italic" ? marks["italic"]
+      : kind === "underline" ? marks["underline"]
+      : kind === "strike" ? marks["strike"]
       : null;
+    const textStyle = marks["textStyle"];
     let tr = state.tr;
     for (let i = spans.length - 1; i >= 0; i--) {
       const r = spans[i]!;
       if (r.to <= r.from) continue;
       if (markType) tr = tr.addMark(r.from, r.to, markType.create());
-      else if (kind === "highlight" && marks.textStyle) {
+      else if (kind === "highlight" && textStyle) {
         // MERGE into each run's existing textStyle. addMark REPLACES a mark of
         // the same type, and colour, highlight and font all live on textStyle —
         // so this used to wipe the text colour and font a run already had.
-        state.doc.nodesBetween(r.from, r.to, (node: any, p: number) => {
+        state.doc.nodesBetween(r.from, r.to, (node, p) => {
           if (!node.isText) return;
           const from = Math.max(p, r.from);
           const to = Math.min(p + node.nodeSize, r.to);
           if (from >= to) return;
-          const existing = node.marks.find((mk: any) => mk.type === marks.textStyle);
-          tr = tr.addMark(from, to, marks.textStyle.create({ ...(existing?.attrs ?? {}), backgroundColor: "#fef08a" }));
+          const existing = node.marks.find((mk) => mk.type === textStyle);
+          tr = tr.addMark(from, to, textStyle.create({ ...(existing?.attrs ?? {}), backgroundColor: "#fef08a" }));
         });
       } else if (kind === "upper" || kind === "lower" || kind === "title") {
         const text = state.doc.textBetween(r.from, r.to);
@@ -885,7 +889,7 @@ export function FindReplaceBar({
         const editor = previewRef.current?.getEditor?.();
         if (editor) {
           let c = 0;
-          editor.state.doc.descendants((n: any) => { if (n.type?.name === "heading") c++; });
+          editor.state.doc.descendants((n) => { if (n.type?.name === "heading") c++; });
           setHeadingCount(c);
           return;
         }

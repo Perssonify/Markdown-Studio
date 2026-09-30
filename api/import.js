@@ -26,7 +26,13 @@
 
 import dns from "node:dns/promises";
 import net from "node:net";
-import { Agent } from "undici";
+// `fetch` comes from the SAME package as `Agent`, never from Node's global.
+// Node's built-in fetch is its own bundled copy of undici (7.x in Node 24), and
+// a dispatcher only works with the fetch of its own major: undici 8 dropped the
+// legacy handler API that Node 24's fetch still drives, so the global fetch
+// with an undici-8 Agent failed every request ("invalid onRequestStart
+// method") — measured, and pinned by import-relay-dispatcher.test.js.
+import { Agent, fetch } from "undici";
 
 // Vercel Functions cannot return a response body much over 4.5 MB, so a larger
 // upstream used to be fetched in full and then fail at the platform with an
@@ -178,6 +184,10 @@ export async function assertPublicUrl(url) {
  *  connection can't be rebound to a different (internal) address after validation. */
 function pinnedDispatcher(hostname, addrs) {
   return new Agent({
+    // undici 8 negotiates HTTP/2 by default. Each Agent carries exactly one
+    // request and is closed after it, so multiplexing buys nothing; the relay
+    // stays on the HTTP/1.1 it was verified with.
+    allowH2: false,
     connect: {
       lookup(hn, opts, cb) {
         if (hn.replace(/^\[|\]$/g, "") !== hostname) return cb(new Error("host mismatch"));
@@ -189,6 +199,19 @@ function pinnedDispatcher(hostname, addrs) {
   });
 }
 
+/** One request to `href` over a connection pinned to `addrs`, the pre-vetted
+ *  IPs of `hostname`. It does NOT vet anything itself — `assertPublicUrl`
+ *  must have produced `addrs`. The dispatcher is closed gracefully once the
+ *  headers arrive, which lets the body finish streaming. */
+export async function pinnedFetch(href, hostname, addrs, init = {}) {
+  const dispatcher = pinnedDispatcher(hostname, addrs);
+  try {
+    return await fetch(href, { ...init, dispatcher });
+  } finally {
+    dispatcher.close().catch(() => {});
+  }
+}
+
 /** Fetch following redirects manually, re-validating AND re-pinning each hop.
  *  `trace` records the hops taken and the host that finally answered, for the
  *  request's log line. */
@@ -198,18 +221,11 @@ async function safeFetch(startUrl, trace = {}) {
     trace.hops = hop;
     trace.finalHost = current.hostname;
     const { hostname, addrs } = await assertPublicUrl(current);
-    const dispatcher = pinnedDispatcher(hostname, addrs);
-    let resp;
-    try {
-      resp = await fetch(current.href, {
-        redirect: "manual",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        dispatcher,
-        headers: { "user-agent": "Mozilla/5.0 (compatible; PerssonifyImport/1.0)" },
-      });
-    } finally {
-      dispatcher.close().catch(() => {});
-    }
+    const resp = await pinnedFetch(current.href, hostname, addrs, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { "user-agent": "Mozilla/5.0 (compatible; PerssonifyImport/1.0)" },
+    });
     if (resp.status >= 300 && resp.status < 400 && resp.headers.get("location")) {
       current = new URL(resp.headers.get("location"), current);
       continue;

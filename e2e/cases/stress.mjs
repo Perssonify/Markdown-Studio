@@ -36,7 +36,7 @@ runCase("stress", async (rep, onClose) => {
   ];
   for (const [label, doc] of shapes) {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, [doc]);
@@ -56,7 +56,7 @@ runCase("stress", async (rep, onClose) => {
   // trailing: while you kept typing, the other pane NEVER updated.
   {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, [proseDoc("t1", "Typing doc", 10)]);
@@ -95,7 +95,7 @@ runCase("stress", async (rep, onClose) => {
   // ── a large library ─────────────────────────────────────────────────────
   {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, library(120, { kb: 1 }));
@@ -295,7 +295,7 @@ runCase("stress", async (rep, onClose) => {
   // Where per-render listener churn and uncancelled timers would show up.
   {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, library(8, { kb: 2 }));

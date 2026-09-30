@@ -12,6 +12,9 @@ import type { ImportResource } from "../store/url-import";
 import { t } from "../i18n";
 import type { DocStore, Engine, Lifecycle, PromptText, TiptapRef, Toast } from "./types";
 
+/** The live rich editor, as the pane hands it out. */
+type LiveEditor = NonNullable<ReturnType<NonNullable<TiptapRef["current"]>["getEditor"]>>;
+
 interface ImportPipelineParams {
   tiptapRef: TiptapRef;
   engine: Engine;
@@ -40,7 +43,7 @@ export function useImportPipeline({
   prepareToLeaveActiveDoc, hydrateEditorWithDoc, handleSwitchDoc, toast,
   setShowUrlImport, setImportUrlSeed,
 }: ImportPipelineParams) {
-  const waitForEditor = useCallback((maxMs = 1500): Promise<any> => new Promise((resolve) => {
+  const waitForEditor = useCallback((maxMs = 1500): Promise<LiveEditor | null> => new Promise((resolve) => {
     const start = Date.now();
     const check = () => {
       const ed = tiptapRef.current?.getEditor();

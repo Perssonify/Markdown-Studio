@@ -1,7 +1,7 @@
 import { type MutableRefObject, useEffect, useRef } from "react";
 import { toast as toastSonner } from "sonner";
 import { configureLocalStores, useDocumentStore } from "../store/documentStore";
-import { useFolderStore } from "../store/folders";
+import { type FolderTreeData, useFolderStore } from "../store/folders";
 import { historyCache } from "../store/history-cache";
 import type { IngestFormat } from "../store/ingest";
 import { normalizeMarkdownFeatures } from "../store/settings";
@@ -176,7 +176,7 @@ export function useEditorBoot({
           );
         }
         if (prefs["folderTree"] && typeof prefs["folderTree"] === "object") {
-          useFolderStore.getState().setInitialTree(prefs["folderTree"] as any);
+          useFolderStore.getState().setInitialTree(prefs["folderTree"] as Partial<FolderTreeData>);
         }
 
         // A `?view_mode=` deep link (applied by App.tsx before this async init ran)
@@ -265,7 +265,7 @@ export function useEditorBoot({
             
             // Activate the doc in the store WITHOUT persisting (sets activeDocId)
             // This causes EditorLayout to mount and Tiptap to initialize
-            await finalizeDoc(doc as any, null, true);
+            await finalizeDoc(doc, null, true);
             
             // Set editor ready so EditorLayout mounts and Tiptap starts initializing
             setEditorReady(true);
@@ -281,7 +281,7 @@ export function useEditorBoot({
               await new Promise((r) => requestAnimationFrame(r));
               await new Promise((r) => requestAnimationFrame(r));
               // Now finalize with the editor instance to capture canonical and persist
-              await finalizeDoc(doc as any, editor, false);
+              await finalizeDoc(doc, editor, false);
               // Seed the companion documents AFTER the initial doc is live,
               // through the ordinary import path (which converts headlessly
               // against the live schema and never activates mid-loop, A031),
@@ -328,7 +328,7 @@ export function useEditorBoot({
           toastSonner.dismiss(loadingId);
         }
         initDoneRef.current = true;
-      } catch (e: any) {
+      } catch (e) {
         setEditorReady(true); // Ensure the loading screen is dismissed
         // Optionally, store an error state if you want to display an error UI component
         // setInitError(e instanceof Error ? e : new Error(String(e)));

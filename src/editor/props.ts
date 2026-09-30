@@ -1,13 +1,72 @@
+import type { JSONContent } from "@tiptap/core";
 import type { RefObject } from "react";
 import type { LinkClickPayload } from "../hooks/useLinkIndex";
+import type { EditorChromeLevel, EditorViewMode } from "../integration/host-bridge";
+import type { DocumentRecord, DocumentSummary } from "../store/document";
+import type { FidelityReport } from "../store/fidelity";
 import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
+import type { GraphEdge, GraphNode } from "../store/link-index";
 import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter";
 
+/** The document graph the editor exports (wiki links between documents). */
+export interface EditorGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+/** A document a host adds or updates: markdown, or canonical PM JSON (an
+ *  object or its JSON text), with an optional id and title. */
+export interface HostDocumentInput {
+  id?: string;
+  title?: string;
+  markdown?: string;
+  canonical?: unknown;
+}
+
+/** What `_onIntegrationChange` receives after an edit to the open document. */
+export interface IntegrationChange {
+  docId: string;
+  canonical: JSONContent;
+  md: string;
+  html: string;
+  metadata: Record<string, unknown>;
+  fidelity: FidelityReport | null;
+}
+
+/**
+ * The core editor's own handle, which `useHostApi` fills in through
+ * `_integrationRef`. `PerssonifyEditorIntegration` builds the public
+ * `EditorHandle` on top of it; nothing else reads it.
+ */
+export interface InternalEditorHandle {
+  getCanonical(): JSONContent | null;
+  getMarkdown(): string;
+  getHTML(): string;
+  getFidelityReport(): FidelityReport | null;
+  getGraph(): EditorGraph;
+  getDocuments(): DocumentSummary[];
+  getActiveDocument(): DocumentRecord | null;
+  getDocById(id: string): Promise<DocumentRecord | null>;
+  importContent(content: string, format: string): Promise<DocumentRecord | null>;
+  /** @deprecated Forwards to addDocuments. */
+  setDocuments(docs: unknown[]): Promise<{ ids: string[] }>;
+  addDocuments(inputs: HostDocumentInput[]): Promise<{ ids: string[] }>;
+  updateDocument(id: string, patch?: Omit<HostDocumentInput, "id">): Promise<{ id: string; updated: boolean }>;
+  appendToDocument(id: string, markdown: string): Promise<{ id: string; updated: boolean }>;
+  /** @deprecated Stores the schemas where nothing reads them. */
+  setFieldSchemas(schemas: unknown): void;
+  setMode(mode: EditorViewMode): void;
+  setChrome(level: EditorChromeLevel): void;
+  openDocument(id: string): Promise<void>;
+  exportAs(format: string): Promise<void>;
+  clearLocalData(opts?: { preferences?: boolean }): Promise<void>;
+}
+
 export interface PerssonifyEditorProps {
-  _integrationRef?: RefObject<any>;
-  _onIntegrationChange?: (payload: any) => void;
+  _integrationRef?: RefObject<InternalEditorHandle | null>;
+  _onIntegrationChange?: (payload: IntegrationChange) => void;
   _onIntegrationLinkClick?: (payload: LinkClickPayload) => boolean | void;
-  _onIntegrationGraphUpdate?: (graph: any) => void;
+  _onIntegrationGraphUpdate?: (graph: EditorGraph) => void;
 
   /**
    * Inject a fully custom StorageAdapter. When provided, the editor will not

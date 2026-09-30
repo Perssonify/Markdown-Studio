@@ -57,7 +57,7 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 | Persistence | IndexedDB in the browser (no account, no server copy) |
 | UI primitives | Base UI (menus, dialogs, popovers) |
 | Build Tool | Vite 8 (Rolldown) + vite-plugin-pwa (service worker) |
-| Test Framework | Vitest 4 + Testing Library; Playwright-driven Chromium, Firefox and WebKit for `e2e/` |
+| Test Framework | Vitest 5 (jsdom 30) + Testing Library; Playwright-driven Chromium, Firefox and WebKit for `e2e/` |
 | Lint | ESLint 10 + typescript-eslint + React hook rules |
 | Package Manager | Bun 1.4.0 (pinned by `packageManager`) |
 | Deployment | Vercel (static SPA + one serverless function, the import relay) |
@@ -92,7 +92,7 @@ the offline caches, never runs there. See
 - [Bun](https://bun.sh) (canonical — `bun.lock` is committed and Vercel builds with Bun),
   at the version pinned by `packageManager` in `package.json`. Install with
   `bun install --frozen-lockfile` to get exactly the locked tree.
-- Node.js 20+
+- Node.js `^22.22.2 || ^24.15.0 || >=26` (`engines.node`; CI runs the major in `.node-version`)
 
 ### Install and Run
 

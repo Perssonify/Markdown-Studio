@@ -16,7 +16,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 ### 1. Dual-pane editing
 
 - **What:** Edit raw markdown (left) and rich text (right) simultaneously; changes in one pane appear in the other.
-- **Entry point:** `EditorLayout` ([src/ui/EditorPanes.tsx:698](../src/ui/EditorPanes.tsx#L698)), rendering [src/ui/CodeMirrorPane.tsx](../src/ui/CodeMirrorPane.tsx) and [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
+- **Entry point:** `EditorLayout` ([src/ui/EditorPanes.tsx:704](../src/ui/EditorPanes.tsx#L704)), rendering [src/ui/CodeMirrorPane.tsx](../src/ui/CodeMirrorPane.tsx) and [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
 - **Happy-path flow** (you type in the markdown pane):
   1. CodeMirror fires its change handler → `handleMdChange()` in [src/hooks/useDocumentLifecycle.ts:251](../src/hooks/useDocumentLifecycle.ts#L251).
   2. The change is debounced, with a ceiling so the other pane keeps up during continuous typing; both delays come from the measured cost of recent projections (see [src/hooks/sync-schedule.ts](../src/hooks/sync-schedule.ts)).
@@ -93,7 +93,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 ### 6. Colors, highlight, font family, alignment
 
 - **What:** Text color, highlight color, font-family selector, and text alignment (left/center/right/justify).
-- **Entry point:** [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) (color/highlight/font controls), shortcuts `Cmd+Shift+L/E/R/J` for alignment (`alignMap`, [src/hooks/useKeyboardShortcuts.ts:202](../src/hooks/useKeyboardShortcuts.ts#L202)).
+- **Entry point:** [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) (color/highlight/font controls), shortcuts `Cmd+Shift+L/E/R/J` for alignment (`alignMap`, [src/hooks/useKeyboardShortcuts.ts:210](../src/hooks/useKeyboardShortcuts.ts#L210)).
 - **Edge cases:** These are **decorative** commands, and they divide into two cases:
   - **Colour, highlight and font family survive as inline HTML.** In the markdown pane they wrap the selection in `<span style="…">` ([src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts)); in **Clean** sync mode that HTML is stripped, the toolbar shows a warning toast ([src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx)) and the fidelity report flags the loss.
   - **Alignment is not representable in either mode.** `setTextAlign` sets a paragraph attribute that no turndown rule emits, and a `text-align` style on an inline `<span>` is inert, so alignment is app-only: it does not survive a round-trip through the markdown pane or any export. It is the one formatting feature in this list with no markdown or inline-HTML carrier. `computeFidelity` ([src/store/fidelity.ts](../src/store/fidelity.ts)) counts it as an attribute loss so the status-bar indicator reports it; the toolbar and Format ▸ Align tooltips say so up front. Changing a Markdown feature setting re-projects only the markdown pane of a document the current mode cannot carry losslessly, so the switch itself no longer strips alignment (or, in Clean mode, colour).
@@ -101,7 +101,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 ### 7. Links (inline) & link bubble menu
 
 - **What:** Insert/edit inline `[text](url)` links.
-- **Entry point:** `Cmd+K` (the `promptLink` branch, [src/hooks/useKeyboardShortcuts.ts:162](../src/hooks/useKeyboardShortcuts.ts#L162)) or toolbar; editing popup is `LinkBubbleMenu` ([src/ui/LinkBubbleMenu.tsx:17](../src/ui/LinkBubbleMenu.tsx#L17)). In the markdown pane the link is written with the URL that was entered; one containing spaces or parentheses becomes an angle-bracket destination so it stays one link (`mdLinkDestination`).
+- **Entry point:** `Cmd+K` (the `promptLink` branch, [src/hooks/useKeyboardShortcuts.ts:173](../src/hooks/useKeyboardShortcuts.ts#L173)) or toolbar; editing popup is `LinkBubbleMenu` ([src/ui/LinkBubbleMenu.tsx:17](../src/ui/LinkBubbleMenu.tsx#L17)). In the markdown pane the link is written with the URL that was entered; one containing spaces or parentheses becomes an angle-bracket destination so it stays one link (`mdLinkDestination`).
 - **Note:** Distinct from wiki links (`[[…]]`), which are document-to-document — see [#wiki-links--knowledge-graph](#wiki-links--knowledge-graph).
 
 ### 8. Find & Replace

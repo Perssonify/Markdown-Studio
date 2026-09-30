@@ -6,9 +6,39 @@ import fs from "node:fs";
 
 const BOLD = 'button[aria-label*="Bold" i], button[title*="Bold" i]';
 
+/**
+ * Click into the rich pane and put the caret at the end of the document — and
+ * wait until ProseMirror's own selection says so before anyone types.
+ *
+ * WebKit fires `selectionchange` asynchronously, after Playwright's key press
+ * has resolved, and a click's own selection update can land AFTER a Ctrl+End
+ * sent right behind it. Measured on WebKit/Windows (6 fresh boots): the click
+ * lands inside the starter document's bold "growth.perssonify.com"; in 5 of 6
+ * ProseMirror still held the click position when typing began, and in 2 the
+ * typed " betaRICH" went there, inheriting the bold, so ⌘B REMOVED bold and
+ * "toolbar reflects bold at the caret" failed. That is the harness racing the
+ * engine with keystrokes no person types that fast, not an editor defect. With
+ * this wait: 8 of 8 on the first press. The retry covers a Ctrl+End the click
+ * undid.
+ */
+async function richCaretToEnd(pg) {
+  const atEnd = () => pg.evaluate(() => {
+    const ed = document.querySelector(".ProseMirror")?.editor;
+    if (!ed) return false;
+    const { from, empty } = ed.state.selection;
+    return empty && from === ed.state.selection.constructor.atEnd(ed.state.doc).from;
+  });
+  await pg.locator(".ProseMirror").first().click();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await pg.keyboard.press("Control+End");
+    if (await until(atEnd, { timeout: 2000 })) return true;
+  }
+  return false;
+}
+
 runCase("surfaces", async (rep, onClose) => {
   const srv = await serve(APP_DIR);
-  const { browser, page: pg, errors } = await open(srv.port);
+  const { browser, page: pg } = await open(srv.port);
   onClose(async () => { await browser.close(); srv.close(); });
   await boot(pg, srv.port, { mode: "Split", settle: 6000 });
 
@@ -19,8 +49,7 @@ runCase("surfaces", async (rep, onClose) => {
   rep.check("md → rich mirror",
     await until(async () => (await richText(pg)).includes("MIRRORCHECK alpha")));
 
-  await pg.locator(".ProseMirror").first().click();
-  await pg.keyboard.press("Control+End");
+  rep.check("the rich pane's caret reaches the end of the document", await richCaretToEnd(pg));
   await pg.keyboard.type(" betaRICH");
   rep.check("rich → md mirror",
     await until(async () => (await mdText(pg)).includes("betaRICH")));
@@ -55,8 +84,7 @@ runCase("surfaces", async (rep, onClose) => {
   rep.check("round trip: fenced code survives", text.includes("const a = 1;") && text.includes("const b = 2;"));
   rep.check("round trip: wiki link survives", text.includes("Changelog"));
 
-  await pg.locator(".ProseMirror").first().click();
-  await pg.keyboard.press("Control+End");
+  await richCaretToEnd(pg);
   await pg.keyboard.type(" .");
   await until(async () => (await mdText(pg)).includes("const b = 2;"));
   const md = await mdText(pg);

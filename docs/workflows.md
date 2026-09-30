@@ -38,8 +38,8 @@
 
 ## CI/CD pipeline
 
-- **CI: GitHub Actions** — [.github/workflows/ci.yml](../.github/workflows/ci.yml), on every PR to `main` and every push to it. Bun is pinned (`BUN_VERSION`, the version that produced `bun.lock`), every action is pinned to a commit SHA, and the workflow only has `contents: read`.
-  - job **`verify`**: `bun install --frozen-lockfile` → `bun run lint` → `bunx tsc --noEmit` → `bun run test` → `build:app` (which also writes the third-party licence notice from the build's hidden sourcemaps) → the CSP-hash test again against the BUILT `index.html` → strip sourcemaps (kept as a 90-day artifact on pushes) → library build → `pkg-cjs-require.test.js` again, now against the BUILT `dist/*.cjs` (every entry `require`d in plain Node, exports compared with the ES build) → embed build.
+- **CI: GitHub Actions** — [.github/workflows/ci.yml](../.github/workflows/ci.yml), on every PR to `main` and every push to it. Bun is pinned (`BUN_VERSION`, the version that produced `bun.lock`), and so is Node: every job that installs the toolchain first runs `actions/setup-node` with [`.node-version`](../.node-version), a major inside `engines.node` (A113; `ops-node-range.test.js` checks both, and that `engines.node` admits no Node a direct dependency refuses). Every action is pinned to a commit SHA, and the workflow only has `contents: read`.
+  - job **`verify`**: `bun install --frozen-lockfile` → `bun run lint` → `bunx tsc --noEmit` → `bun run test` → `build:app` (which also writes the third-party licence notice from the build's hidden sourcemaps) → the CSP-hash test again against the BUILT `index.html` → strip sourcemaps (kept as a 90-day artifact on pushes) → library build → `pkg-cjs-require.test.js` and `pkg-declarations.test.js` again, now against the BUILT `dist/` (every CommonJS entry `require`d in plain Node, exports compared with the ES build; a consumer file type-checked against the declarations with `skipLibCheck: false` under `bundler` and `nodenext` resolution) → embed build.
   - job **`react18`** (A113): the repo develops on React 19, but the library's peer range still admits `^18.3.0`, so this job installs from the lockfile, then swaps in React 18.3.1 and its 18.3 types with `bun add -d` (in that job only — nothing is written back) and runs `bunx tsc --noEmit` and `bun run test` against them. The same check locally — it rewrites `package.json` and `bun.lock`, so restore them afterwards:
     ```bash
     bun add -d react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
@@ -61,7 +61,7 @@
 ## Release & deployment
 
 - **App:** merge to `main` → Vercel builds and deploys (once gated: after `verify` and `e2e` pass). Open tabs are **prompted** to reload onto the new version; nothing force-reloads them ([decisions.md](decisions.md)). Rollback = Vercel ▸ Deployments ▸ promote a previous deployment.
-- **Library (`@perssonify/editor`):** bump `version` in [package.json](../package.json) (the single source — Vite injects it as `__APP_VERSION__`, re-exported as `VERSION` in `src/constants.ts`), merge, then push a `vX.Y.Z` tag. [.github/workflows/publish.yml](../.github/workflows/publish.yml) verifies the tag, runs the type check, tests and library build, `require`s the built CommonJS entries, and publishes with **npm provenance** behind the `npm` environment. Never publish from a laptop. Owner setup (npm org, 2FA, token or trusted publishing): [deployment.md ▸ Publishing](deployment.md#publishing-the-npm-package).
+- **Library (`@perssonify/editor`):** bump `version` in [package.json](../package.json) (the single source — Vite injects it as `__APP_VERSION__`, re-exported as `VERSION` in `src/constants.ts`), merge, then push a `vX.Y.Z` tag. [.github/workflows/publish.yml](../.github/workflows/publish.yml) verifies the tag, runs the type check, tests and library build, `require`s the built CommonJS entries, type-checks a consumer against the built declarations, and publishes with **npm provenance** behind the `npm` environment. Never publish from a laptop. Owner setup (npm org, 2FA, token or trusted publishing): [deployment.md ▸ Publishing](deployment.md#publishing-the-npm-package).
 - **Feature flags:** none. Build-time gates exist for dev-only surfaces (the ad placeholders; the Settings Admin section, which a support session can reveal with `localStorage["pf:admin"] = "1"` — [src/utils/build-gates.ts](../src/utils/build-gates.ts)).
 
 ## TypeScript 7
@@ -77,6 +77,8 @@ What 7.0.2 does today, measured against this tree (30 September 2026): `tsc --no
 bunx -p typescript@7 tsc --noEmit
 bunx -p typescript@7 tsc -p tsconfig.build.json --outDir /tmp/ts7-dts
 ```
+
+Re-checked 1 October 2026: still blocked. typescript-eslint 8.71.0 and its newest canary (8.71.1-alpha.2) still declare `typescript >=4.8.4 <6.1.0`, and `typescript@7.0.2`'s main entry still exports only `version` (its `exports` map offers the compiler only as `./unstable/*`).
 
 The move, once unblocked: (1) a typescript-eslint release whose peer range includes 7; (2) `converter-escape.test.js` reads regex literals through an API 7 provides — `typescript/unstable/ast`, or `@typescript/typescript6`, the compatibility package that re-exports the 6.0 API (with a `tsc6` binary) beside 7; (3) bump `typescript` to `^7`, update `src/data/credits.ts` and run every gate. Installing 7 as `typescript` next to an aliased 6 is not a shortcut: typescript-eslint imports the package named `typescript`.
 

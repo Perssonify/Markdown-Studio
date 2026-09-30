@@ -1,5 +1,5 @@
 import { act, fireEvent, render } from "@testing-library/react";
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { isRovingCandidate, rovingNextIndex, useRovingFocus } from "../ui/use-roving-focus";
 

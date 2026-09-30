@@ -8,6 +8,7 @@
 
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
+import type { Editor } from "@tiptap/core";
 import { cellSeparators, isSeparatorLine } from "./md-table-ops";
 import { t } from "../i18n/core";
 
@@ -180,7 +181,7 @@ export function selectScopeCM(view: EditorView, scope: string): number {
 }
 
 /** Select the block/node containing the cursor in the rich editor (contiguous). */
-export function selectBlockRich(editor: any): boolean {
+export function selectBlockRich(editor: Editor): boolean {
   const { state } = editor;
   const $from = state.selection.$from;
   const depth = $from.depth;

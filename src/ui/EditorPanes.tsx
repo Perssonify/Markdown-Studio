@@ -4,13 +4,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { FileCode2, Mouse, MouseOff } from "lucide-react";
 import { useThemeMode } from "../theme/useThemeMode";
-import React, { forwardRef, RefObject, useCallback, useEffect, useRef, useState } from "react";
+import React, { forwardRef, type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
 import { MODES } from "../constants";
 import { useUIStore } from "../store/uiStore";
-import { CodeMirrorPane } from "./CodeMirrorPane";
+import { CodeMirrorPane, type CodeMirrorPaneHandle } from "./CodeMirrorPane";
 import { isHandledImageDrop } from "../extensions/AssetImages";
 import { Icons } from "./Icons";
-import { TiptapPane } from "./TiptapPane";
+import { TiptapPane, type TiptapPaneHandle } from "./TiptapPane";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
 import { markdownHeadings } from "./scroll-anchors";
 import { currentSplitShouldStack } from "./split-layout";
@@ -156,7 +156,7 @@ interface MarkdownPaneProps {
   isSplit?: boolean;
 }
 
-const MarkdownPane = React.memo(forwardRef<any, MarkdownPaneProps>(function MarkdownPane(
+const MarkdownPane = React.memo(forwardRef<CodeMirrorPaneHandle, MarkdownPaneProps>(function MarkdownPane(
   { onChange, onKeyDown, syncMode, onSyncModeChange, onFocus, headerRef, syncScroll, onSyncScrollChange, isSplit },
   ref
 ) {
@@ -232,7 +232,7 @@ interface HtmlPaneProps {
   setShowImages: (show: boolean) => void;
 }
 
-const HtmlPane = React.memo(forwardRef<any, HtmlPaneProps>(function HtmlPane(
+const HtmlPane = React.memo(forwardRef<TiptapPaneHandle, HtmlPaneProps>(function HtmlPane(
   { isDark, onChange, onPaste, onEditLink, pasteStyled, setPasteStyled, onFocus, headerRef, showImages, setShowImages },
   ref
 ) {
@@ -265,8 +265,10 @@ const HtmlPane = React.memo(forwardRef<any, HtmlPaneProps>(function HtmlPane(
 
 export interface EditorLayoutProps {
   mode: string;
-  cmRef: RefObject<any>;
-  tiptapRef: RefObject<any>;
+  // Read here AND forwarded to `ref=`: MutableRefObject is the one ref type
+  // both React 18's and 19's `Ref<T>` accept for that (CLAUDE.md, the React 18 job).
+  cmRef: MutableRefObject<CodeMirrorPaneHandle | null>;
+  tiptapRef: MutableRefObject<TiptapPaneHandle | null>;
   onMdChange?: () => void;
   onHtmlChange?: () => void;
   onHtmlPaste?: (html: string, mods?: { shiftKey?: boolean }) => boolean;
@@ -458,7 +460,7 @@ function EditorLayoutInner({
     // contained a `#` comment line — measured 216px of drift.
     type Anchor = { top: number; key: string };
     const norm = (text: string) =>
-      text.toLowerCase().replace(/[`*_~\[\]()#]/g, "").replace(/\s+/g, " ").trim();
+      text.toLowerCase().replace(/[`*_~[\]()#]/g, "").replace(/\s+/g, " ").trim();
 
     // Ask CodeMirror's parse tree rather than scanning lines with a regex. The
     // regex saw ATX headings only — unindented and unquoted — while the rich

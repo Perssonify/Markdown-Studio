@@ -56,7 +56,7 @@ runCase("pwa", async (rep, onClose) => {
     // First use of every lazy renderer — while offline.
     await pg.waitForTimeout(1500);
     await pasteMarkdown(pg, PROBE_MD);
-    rep.check("offline: KaTeX, Mermaid and abcjs render on first use (chunks from the precache)",
+    rep.check("offline: KaTeX, Mermaid (dagre and ELK) and abcjs render on first use (chunks from the precache)",
       await until(async () => allRendered(await renderers(pg)), { timeout: 30000 }),
       JSON.stringify(await renderers(pg)));
 

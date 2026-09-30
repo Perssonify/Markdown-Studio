@@ -8,7 +8,7 @@ await boot(pg, srv.port, { mode: "Split", settle: 6000 });
 const probe = async (label) => {
   const out = {};
   // ⌘⇧G — route change
-  let before = await pg.evaluate(() => location.pathname);
+  const before = await pg.evaluate(() => location.pathname);
   await pg.keyboard.press("Control+Shift+G");
   await pg.waitForTimeout(2000);
   out.graph = (await pg.evaluate(() => location.pathname)) !== before ? "works" : "DEAD";

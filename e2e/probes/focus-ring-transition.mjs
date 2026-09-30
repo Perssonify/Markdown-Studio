@@ -38,7 +38,7 @@ try {
       st.remove();
     }
     // Is the app's own rule present in a stylesheet the page is using?
-    let found = [];
+    const found = [];
     for (const sheet of document.styleSheets) {
       try {
         for (const r of sheet.cssRules) {
