@@ -337,6 +337,8 @@ describe("the open document deleted in another tab", () => {
     expect(richText()).toContain("UNSAVED-BEFORE-DELETE");
     expect(store().saveStatus).toBe("conflict");
     expect(document.querySelector("footer").textContent).toMatch(/Deleted in another tab/);
+    // …and a screen reader is told the same thing, not "changed".
+    await until(() => /deleted in another tab/.test(document.querySelector('footer [role="status"]')?.textContent ?? ""), "the spoken status");
     // Kept the moment the deletion arrived — before any save was attempted
     // (parking the status cancelled the pending autosave).
     await until(async () => (await historyFor("alpha", "pre-delete")).some((t) => t.includes("UNSAVED-BEFORE-DELETE")), "the unsaved text in Version history");

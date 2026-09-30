@@ -88,7 +88,11 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
   useEffect(() => {
     const { state, message } = nextAnnouncement(announcerRef.current, { status: saveStatus, error: saveError });
     announcerRef.current = state;
-    if (message) setAnnouncement((a) => ({ text: message, seq: a.seq + 1 }));
+    // A deletion elsewhere parks the same "conflict" as a change elsewhere;
+    // spoken as a change, it sent a screen-reader user looking for edits.
+    const spoken = message && deletedElsewhere && state.kind === "conflict" ? t("status.announceDeleted") : message;
+    if (spoken) setAnnouncement((a) => ({ text: spoken, seq: a.seq + 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announced on a save-state change only; deletedElsewhere is read as it stands then
   }, [saveStatus, saveError]);
 
   // Surface storage usage as it gets high, so users aren't surprised by a
