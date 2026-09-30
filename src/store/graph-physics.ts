@@ -506,16 +506,18 @@ function inForeign(rects: FolderBounds[], ownIds: string[], x: number, y: number
 // dozens of containers, each of which must hold its members' NAMES, kept apart
 // by a pairwise positional constraint, pinned in by the walls and shoved by an
 // uncapped 1/d² repulsion from the whole library. Measured at 2,000 notes in 60
-// folders, it came to rest with 340 distinct positions (the old layout: 751) and
-// stacks of up to 89 notes — and a stacked dot has no room for a name.
+// folders, it came to rest with 340 distinct positions — worse than the old
+// single-level layout's ~750–800, which piled up to 89 notes on one spot — and
+// a stacked dot has no room for a name.
 //
 // So a large folder map is laid out on two levels. First the FOLDERS, as units:
 // each is a rectangle sized for its members and their names, and the rectangles
 // are packed — never overlapping, by construction — with linked folders pulled
-// towards each other (`planFolderLayout`, once, when the map opens). Then each
-// note is laid out INSIDE its own folder's rectangle by forces local to it, and
-// held there as a hard constraint (`stepTwoLevel`). The notes in no folder get a
-// region of their own. A container is drawn around its members' dots and names
+// towards each other (`planFolderLayout`, whenever the map is seeded: when it
+// opens, and when its notes or their folders change). Then each note is laid
+// out INSIDE its own folder's rectangle by forces local to it, and held there
+// as a hard constraint (`stepTwoLevel`). The notes in no folder get a region
+// of their own. A container is drawn around its members' dots and names
 // (`folderRects`), so a region that holds them holds their container too: two
 // containers cannot overlap and no note sits in someone else's.
 
