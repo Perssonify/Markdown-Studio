@@ -52,7 +52,14 @@ export const measureMap = () => {
   }));
   const chips = [...svg.querySelectorAll(".pf-folder-chip")].map((r) => box(r.getBoundingClientRect()));
 
-  const count = { labelLabel: 0, labelDot: 0, labelChip: 0, labelEdge: 0, strangerLabel: 0, boxBox: 0, strangerDot: 0, chipChip: 0, chipDot: 0 };
+  // strangerLabel: a name inside a folder box its note is not in, while its DOT
+  // is outside that box — the false membership the label veto forbids.
+  // strangerLabelOwnDot: the same where the veto allows it — the dot already
+  // sits in that box, or the name lies wholly inside the note's OWN box (both
+  // only happen where folders overlap; see crossesForeignContainer).
+  const count = { labelLabel: 0, labelDot: 0, labelChip: 0, labelEdge: 0, strangerLabel: 0, strangerLabelOwnDot: 0, boxBox: 0, strangerDot: 0, chipChip: 0, chipDot: 0 };
+  const dotCentre = new Map(dots.map((d) => [d.id, { x: (d.b.x0 + d.b.x1) / 2, y: (d.b.y0 + d.b.y1) / 2 }]));
+  const within = (p, b) => !!p && p.x > b.x0 && p.x < b.x1 && p.y > b.y0 && p.y < b.y1;
   for (let i = 0; i < labels.length; i++) {
     for (let j = i + 1; j < labels.length; j++) if (hit(labels[i].b, labels[j].b)) count.labelLabel++;
     for (const d of dots) if (hit(labels[i].b, d.b)) count.labelDot++;
@@ -63,7 +70,12 @@ export const measureMap = () => {
   for (let i = 0; i < boxes.length; i++) {
     for (let j = i + 1; j < boxes.length; j++) if (hit(boxes[i].b, boxes[j].b)) count.boxBox++;
     for (const d of dots) if (!boxes[i].docs.has(d.id) && hit(boxes[i].b, d.b)) count.strangerDot++;
-    for (const l of labels) if (!boxes[i].docs.has(l.id) && hit(boxes[i].b, l.b)) count.strangerLabel++;
+    for (const l of labels) {
+      if (boxes[i].docs.has(l.id) || !hit(boxes[i].b, l.b)) continue;
+      const ownHolds = boxes.some((o) => o.docs.has(l.id) && l.b.x0 >= o.b.x0 && l.b.x1 <= o.b.x1 && l.b.y0 >= o.b.y0 && l.b.y1 <= o.b.y1);
+      if (ownHolds || within(dotCentre.get(l.id), boxes[i].b)) count.strangerLabelOwnDot++;
+      else count.strangerLabel++;
+    }
   }
   for (let i = 0; i < chips.length; i++) {
     for (let j = i + 1; j < chips.length; j++) if (hit(chips[i], chips[j])) count.chipChip++;

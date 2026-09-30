@@ -323,6 +323,50 @@ export interface PlaceLabelsOptions {
   limit?: number;
 }
 
+/** A folder container as the label veto sees it, in SCREEN space. */
+export interface ForeignContainer {
+  docs: Set<string>;
+  box: LabelBox;
+}
+
+/**
+ * The map's `reject` for `placeLabels`: does this note's label box lie across a
+ * folder container the note does not belong to? A name drawn across someone
+ * else's box reads as membership — the one thing the box exists to say.
+ *
+ * Two cases are not counted, both of which arise only where folders OVERLAP —
+ * dozens of them at library scale, which the layout cannot always keep apart:
+ *  - a container the note's DOT already sits in: the dot already reads as
+ *    inside it, and a name beside it adds nothing false;
+ *  - any foreign container, when the label lies wholly inside the note's OWN
+ *    container: containers are built to enclose their members' names, so a
+ *    member's name inside its own box can only touch a foreign one where the
+ *    two boxes overlap — the layout's failure, not a misleading name.
+ * Vetoing those cost notes their names wholesale: at 2,000 notes in 60 folders
+ * the map placed no labels at any zoom (A088). A note in no folder keeps the
+ * full veto, and every other obstacle (dots, chips, other labels, the canvas
+ * edge) still holds, so nothing is ever drawn over text.
+ */
+export function crossesForeignContainer(
+  id: string,
+  dot: { x: number; y: number },
+  box: LabelBox,
+  containers: ForeignContainer[],
+): boolean {
+  for (const own of containers) {
+    const b = own.box;
+    if (own.docs.has(id) && box.x0 >= b.x0 && box.x1 <= b.x1 && box.y0 >= b.y0 && box.y1 <= b.y1) return false;
+  }
+  for (const f of containers) {
+    if (f.docs.has(id)) continue;
+    const b = f.box;
+    if (!(box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+    if (dot.x > b.x0 && dot.x < b.x1 && dot.y > b.y0 && dot.y < b.y1) continue;
+    return true;
+  }
+  return false;
+}
+
 /**
  * Where each node label can be drawn without touching anything else, resolved
  * greedily in SCREEN space (highest priority first).
