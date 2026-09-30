@@ -82,6 +82,56 @@ describe("the browser campaign runs on Firefox and WebKit too (A100)", () => {
   });
 });
 
+describe("library consumers still on React 18 stay tested (A113)", () => {
+  const ci = read(`${GH}/workflows/ci.yml`);
+  const job = ci.slice(ci.indexOf("\n  react18:"), ci.indexOf("\n  e2e:"));
+  const pkg = JSON.parse(read("package.json"));
+  /** `name@version` pairs the job installs over the lockfile's React. */
+  const swapped = Object.fromEntries(
+    (job.match(/run: bun add -d (.+)\n/)?.[1] ?? "").trim().split(/\s+/).map((spec) => {
+      const at = spec.lastIndexOf("@");
+      return [spec.slice(0, at), spec.slice(at + 1)];
+    }),
+  );
+  /** Enough semver for the `^x.y.z || ^x.y.z` shape the peer ranges use. */
+  const inCaretRange = (version, range) => {
+    const [a, b, c] = version.split(".").map(Number);
+    return range.split("||").some((clause) => {
+      const m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(clause.trim());
+      return !!m && a === +m[1] && (b > +m[2] || (b === +m[2] && c >= +m[3]));
+    });
+  };
+
+  it("a job installs React 18 AFTER the frozen install, then runs the type gate and the unit suite on it", () => {
+    expect(ci).toMatch(/\n {2}react18:\n/);
+    const at = (s) => job.indexOf(s);
+    expect(at("bun install --frozen-lockfile")).toBeGreaterThan(-1);
+    expect(at("bun add -d")).toBeGreaterThan(at("bun install --frozen-lockfile"));
+    expect(at("bunx tsc --noEmit")).toBeGreaterThan(at("bun add -d"));
+    expect(at("bun run test")).toBeGreaterThan(at("bun add -d"));
+    expect(job).toMatch(/timeout-minutes: \d+/);
+  });
+
+  it("installs an exact React 18 inside the published peer range, with types of the same major", () => {
+    for (const name of ["react", "react-dom", "@types/react", "@types/react-dom"]) {
+      expect(swapped[name], name).toMatch(/^18\.\d+\.\d+$/);
+    }
+    for (const name of ["react", "react-dom"]) {
+      expect(inCaretRange(swapped[name], pkg.peerDependencies[name]), `${name}@${swapped[name]} vs peer ${pkg.peerDependencies[name]}`).toBe(true);
+    }
+  });
+
+  it("the repo itself develops on a newer React than the one that job swaps in", () => {
+    // Otherwise the job re-runs exactly what `verify` already ran.
+    expect(Number(pkg.devDependencies.react.replace(/^[\^~]/, "").split(".")[0])).toBeGreaterThan(18);
+  });
+
+  it("no other job, and no publish, rewrites the manifest", () => {
+    expect(ci.replace(job, "")).not.toMatch(/bun add/);
+    expect(read(`${GH}/workflows/publish.yml`)).not.toMatch(/bun add/);
+  });
+});
+
 describe("npm publishing happens from CI, with provenance (A006)", () => {
   const pub = read(`${GH}/workflows/publish.yml`);
   it("runs on version tags only, behind a protected environment", () => {

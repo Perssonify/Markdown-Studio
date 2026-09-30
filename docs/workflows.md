@@ -40,6 +40,12 @@
 
 - **CI: GitHub Actions** — [.github/workflows/ci.yml](../.github/workflows/ci.yml), on every PR to `main` and every push to it. Bun is pinned (`BUN_VERSION`, the version that produced `bun.lock`), every action is pinned to a commit SHA, and the workflow only has `contents: read`.
   - job **`verify`**: `bun install --frozen-lockfile` → `bun run lint` → `bunx tsc --noEmit` → `bun run test` → `build:app` (which also writes the third-party licence notice from the build's hidden sourcemaps) → the CSP-hash test again against the BUILT `index.html` → strip sourcemaps (kept as a 90-day artifact on pushes) → library build → `pkg-cjs-require.test.js` again, now against the BUILT `dist/*.cjs` (every entry `require`d in plain Node, exports compared with the ES build) → embed build.
+  - job **`react18`** (A113): the repo develops on React 19, but the library's peer range still admits `^18.3.0`, so this job installs from the lockfile, then swaps in React 18.3.1 and its 18.3 types with `bun add -d` (in that job only — nothing is written back) and runs `bunx tsc --noEmit` and `bun run test` against them. The same check locally — it rewrites `package.json` and `bun.lock`, so restore them afterwards:
+    ```bash
+    bun add -d react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
+    bunx tsc --noEmit && bun run test
+    git checkout package.json bun.lock && bun install --frozen-lockfile
+    ```
   - job **`e2e`**: the three builds, Chromium, then harness → surfaces → deep → dataloss → **floor** → library → bridge → journeys → faults → **csp** → **pwa** (and stress on pushes).
   - job **`e2e-engines`** (A100): a Firefox + WebKit matrix running harness → surfaces → deep → dataloss → floor on each, the suites `e2e/run.mjs` lists for all three engines (`ops-release-config.test.js` keeps the two in step). Checks an engine cannot run print SKIP; checks failing for a reported app defect print XFAIL — see [e2e/README.md](../e2e/README.md#engines).
   - [dependabot.yml](../.github/dependabot.yml): weekly grouped PRs for the Bun lockfile and the pinned actions.

@@ -36,7 +36,7 @@ interface KeyboardShortcutsOptions {
 }
 
 export function useKeyboardShortcuts(
-  containerRef: RefObject<HTMLElement>,
+  containerRef: RefObject<HTMLElement | null>,
   {
     dispatch,
     updateFormats,
