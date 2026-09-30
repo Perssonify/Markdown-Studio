@@ -291,8 +291,11 @@ finding IDs (A001–A114) are cited below.
   map with folders piled notes onto the same spot — a 150-note map in 15 folders
   hid about a quarter of its notes under others. Each folder now starts as its
   own cluster in a space sized to the library, and folders move as units; every
-  note gets its own spot up to 500 notes. Maps without folders look exactly as
-  before, and folder maps over 500 notes keep the previous layout for now. (A088)
+  note gets its own spot. A map over 500 notes in folders gives each folder its
+  own area, placed next to the folders it links to, with its notes laid out
+  inside it — no two folders overlap, no note sits in someone else's folder,
+  zooming in names the notes, and it settles faster (1–2 s instead of 12–24 s at
+  600 notes). Maps without folders look exactly as before. (A088)
 - **The relationship map at 2,000 notes** (measured with the CPU slowed 4×): the
   first frame appears in 1.0 s instead of 8.9 s, the page is blocked for 6 s
   instead of 64 s, the layout settles in 17–23 s instead of 65 s, and zooming

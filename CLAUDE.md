@@ -193,8 +193,10 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     sit in the global status bar, visible to users who had never opened the map.
   - **NO TEXT IS EVER DRAWN OVER** — re-measured in a real browser across 3/12/25/40/153-note
     workspaces, desktop AND phone widths, at fit / 4 clicks out / 8 clicks in:
-    label↔label, label↔dot, label↔chip, chip↔chip and label↔canvas-edge are all
-    **zero**. **Container↔container and a stranger's dot inside a container are NOT
+    label↔label, label↔dot, label↔chip and label↔canvas-edge are all **zero**.
+    **chip↔chip is not always zero** — that claim was here too and was wrong on the
+    old build and the new alike: a 150-note `mapLibrary` workspace measures 1 at
+    desktop 4-out and phone fit, a 400-note folder map 24 at phone 4-out. **Container↔container and a stranger's dot inside a container are NOT
     zero** — that claim used to be here too and was wrong: with `e2e/map-library.mjs`
     at 153 notes in 15 skewed folders they measure 20 and 158 at fit (25 / 339 before
     A088), while every TEXT overlap stays zero.
@@ -211,13 +213,35 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     apart were clamped to the wall member by member (now `shiftGroup` moves a
     folder as a unit). Measured (`e2e/probes/map-stacks.mjs`): every note on its
     own spot at 150 and 400 notes. **A folderless map is untouched** — its seed,
-    world and dynamics are the old ones, pinned bit-for-bit. **Above 500 notes a
-    folder map keeps the OLD layout** (pinned too): there the settle is chaotic and
-    at 2,000 notes in 60 folders it measured WORSE (340 distinct against 751). The
-    fix there is a two-level layout (place folder boxes as units, then each
-    folder's notes inside its box); until then a 2,000-note folder map still stacks
-    and names only a handful of notes. The zoom floor is 6% so Fit can show a folder
-    map's larger world.
+    world and dynamics are the old ones, pinned bit-for-bit. The zoom floor is 6%
+    so Fit can show a folder map's larger world.
+  - **Above `FOLDER_LAYOUT_MAX` a folder map is laid out on TWO LEVELS**
+    (`planFolderLayout` + `stepTwoLevel`): the single-level settle is chaotic there
+    (2,000 notes in 60 folders rested at ~790 distinct positions, stacks of 89).
+    **Level 1** is made whenever the map is seeded — on open, and when a note changes
+    folder (`planKey`, sorted: the graph arrives in varying order). Each folder is a
+    rectangle sized for a grid of its notes' dots and names (at least its name tab),
+    plus one for notes in no folder; they are packed largest first at the free spot
+    that best balances "next to linked folders" against "grows the block"
+    (`PACK_COMPACT`). Candidates sit flush against placed rectangles and are
+    accepted only where nothing is, so no two regions come within `REGION_GAP` BY
+    CONSTRUCTION; a cell grid keeps that test local (a full scan was cubic — 2.5 s
+    for 1,000 folders). The plan does not depend on arrival order. Each note gets a
+    HOME cell — breadth-first along its region's links, middle first, with a hashed
+    wobble. **Level 2:** repulsion and springs act only WITHIN a region
+    (cross-region springs drove notes into walls and stacked them again); each note
+    is pulled to its HOME, not the region's middle (the centre packed densest and
+    names ran through each other); each note is HELD where its dot, name and
+    container padding lie inside its region, and a container its name tab widens
+    past the region is shifted back as a unit — so containers cannot overlap and no
+    stranger sits in one, at any zoom down to Fit. Entering or leaving a plan
+    re-seeds EVERY note, so a library always rests the same way; a dragged note is
+    held inside its region (`clampToRegion`); the world comes from the plan, not
+    `worldFor`. Measured: 600 and 2,000 notes in 60 folders — every note distinct,
+    0 overlapping boxes, 0 stranger dots, 0 text overlaps; settles in 1–2 s at 600
+    (was 12–24 s). Pinned by `graph-two-level.test.js`, the 600-note case in
+    `graph-large-map.test.jsx` and the stress tier. Adding, removing or refiling a
+    note on an open large folder map re-settles the whole map.
     **`chip↔dot` is NOT zero and cannot be** — that claim used to be here and was
     wrong. Below ~40% zoom the dots converge into a band by design (density, not a
     defect) and a screen-constant chip covers a lot of world, so no slot along a
