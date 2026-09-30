@@ -41,6 +41,7 @@ const REASON_LABEL: Record<SnapshotReason, string> = {
   get "pre-delete"() { return t("dialogs.reasonPreDelete"); },
   get "pre-restore"() { return t("dialogs.reasonPreRestore"); },
   get "pre-link-update"() { return t("dialogs.reasonPreLinkUpdate"); },
+  get "tab-conflict"() { return t("dialogs.reasonTabConflict"); },
   get manual() { return t("dialogs.reasonManual"); },
 };
 

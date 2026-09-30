@@ -41,9 +41,12 @@ export const status = {
   "status.storageFullTitle": "Storage is full, so your latest changes are not saved. Delete documents or old versions (Version history) to free space, then keep typing to retry.",
   "status.storageFullNotSaving": "Storage full — not saving",
   "status.storageFull": "Storage full",
-  "status.conflictTitle": "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — copy any changes you need, then reload.",
+  "status.conflictTitle": "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save until you choose Keep mine, Use theirs or Save mine as a copy.",
   "status.conflictNotSaving": "Changed in another tab — not saving",
   "status.tabConflict": "Tab conflict",
+  "status.deletedTitle": "This document was deleted in another tab or window. This tab won't save it back — keep it as a new document or close it.",
+  "status.deletedNotSaving": "Deleted in another tab — not saving",
+  "status.deletedElsewhere": "Deleted elsewhere",
 
   // Status bar: what the live region SAYS (save-announcer.ts) — failures and recovery only.
   "status.announceSaveFailed": "Save failed. Retrying; your work is still on screen.",

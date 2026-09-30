@@ -18,6 +18,7 @@ import { MODES } from "../constants";
 import { SCHEMA_LOCK_ERROR, useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 import { formatEstBytes, historyCache } from "../store/history-cache";
+import { useTabSyncStore } from "../store/tab-sync";
 import { useUIStore } from "../store/uiStore";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import { ResidualsDialog } from "./ResidualsDialog";
@@ -65,6 +66,11 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
   const saveError = useDocumentStore((s) => s.saveError);
   const counts = useDocumentStore((s) => s.counts);
   const activeDoc = useDocumentStore((s) => s.activeDoc);
+  // A document deleted in another tab parks the same terminal "conflict" as
+  // one changed there (useTabSync); the words must say which.
+  const deletedElsewhere = useTabSyncStore(
+    (s) => s.notice?.kind === "deleted" && s.notice.docId === activeDoc?.id
+  );
 
   const fidelityReport = useDocumentStore((s) => s.fidelityReport);
   const storageMetrics = useDocumentStore((s) => s.storageMetrics);
@@ -289,7 +295,7 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <span className="sm:hidden">{t("status.storageFull")}</span>
           </div>
         )}
-        {saveStatus === "conflict" && (
+        {saveStatus === "conflict" && !deletedElsewhere && (
           <div
             className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
             title={t("status.conflictTitle")}
@@ -297,6 +303,18 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             <AlertTriangle className="size-3 shrink-0" />
             <span className="hidden sm:inline">{t("status.conflictNotSaving")}</span>
             <span className="sm:hidden">{t("status.tabConflict")}</span>
+          </div>
+        )}
+        {saveStatus === "conflict" && deletedElsewhere && (
+          // TERMINAL: another tab deleted the open document. Saving would bring
+          // it back behind that tab's back; the notice above offers the ways out.
+          <div
+            className="flex items-center gap-1.5 text-destructive font-bold whitespace-nowrap"
+            title={t("status.deletedTitle")}
+          >
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="hidden sm:inline">{t("status.deletedNotSaving")}</span>
+            <span className="sm:hidden">{t("status.deletedElsewhere")}</span>
           </div>
         )}
       </div>
