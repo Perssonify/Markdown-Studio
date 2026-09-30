@@ -1148,7 +1148,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   When no doc node is available (editor unmounted) it falls back to the old
   hash — the echo gate must NOT depend on the fast path. `cm.setValue` likewise
   returns the text the pane settled on (null when it wrote nothing), so the md
-  side never reads the rope back just to hash it.
+  side never reads the rope back just to hash it. The per-block projection
+  combines each block's hash into EXACTLY `quickHash(getHTML())` (31^n weights,
+  `pow31` in incremental-md.ts), so the echo gate is unchanged — changing
+  `quickHash` means changing `pow31`. `onCanonicalChange` reuses each unchanged
+  block's JSON.
 - **Derived values are published only when they CHANGE.** `updateDerived`
   computes the fidelity report and the word/char counts in ONE walk of the
   canonical (`computeCanonicalStats`) and keeps the previous object when the
@@ -1502,12 +1506,37 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   a join that makes V8 flatten the whole accumulated string — quadratic in
   top-level blocks, on every projection. The top level now converts in runs of 64
   blocks joined with turndown's own separator rule, byte-identical to
-  `td.turndown(html)`: any new rule must keep `converter-linear.test.js` green
-  (A083 — large documents are still slow; incremental projection is deferred).
+  `td.turndown(html)`: any new rule must keep `converter-linear.test.js` green.
   `converter-roundtrip.test.js` drives md → rich → md′ → rich → md″ through the real
   engine and schema (`converter-harness.js`) and pins hard breaks (A037), content
   nested under checklist items (A038), blank lines inside list items and their code
   (A041) and footnotes, which now ROUND-TRIP as `[^label]` (A043).
+- **Rich→markdown projects PER TOP-LEVEL BLOCK** (`engine/incremental-md.ts`, A083),
+  byte-identical to `htmlToMd(getHTML())`. A WeakMap keyed on each top-level PM
+  node caches its HTML hash, cleaned HTML, turndown output (per mode and escaper
+  setting) and the whitespace-passed result, so a keystroke re-converts only the
+  blocks that changed; seams follow `turndownLinear`'s rules and runs are joined
+  with turndown's own seam rule. **A turndown rule that reads OUTSIDE its own
+  top-level block** (a sibling, like `footnoteHeading`) must be handled in
+  `holdsNextSibling` (turndown-rules.ts), or the per-block and linear paths
+  diverge — `converter-incremental.test.js` (seeded random edit walks, both modes,
+  after every step) and `converter-linear.test.js` must both stay green. A change
+  to `normalizeMarkdown`'s fence placeholder must follow `FENCE_PLACEHOLDER`
+  (pinned). Blocks are serialised into an INERT document only — a live one loads
+  each `<img>`, which the CSP and dataloss suites caught with stored images.
+  Measured at 1.6 MB: keystroke → markdown pane 23 s → 0.6 s at 4× CPU, 2.5 s →
+  0.17 s at 1×. Still whole-document: markdown→rich (`setContent`), opening a
+  large document (each code-block node view forces a layout), and `updateDerived`'s
+  fidelity/word-count walk and `UnresolvedWikiLinks`' rescan on every change.
+- **Exported markdown writes hard breaks as `\` + newline** (A051,
+  `engine/portable-breaks.ts`): the app's `breaks: true` dialect draws a line
+  break for a bare newline, which stock markdown renderers drop, so File ▸ Export,
+  the per-document export and the ZIP export (`canonicalToPortableMarkdown`) run
+  the converter inside `withPortableBreaks`. **The editor's own projection must
+  NOT** — `docToMd` always runs with the switch off. A break stays as it was inside
+  a table cell (written `<br>`) and inside link text, where marked rejects `\` +
+  newline. Backups, the clipboard, a card's source and the append API are unchanged
+  (`converter-portable-breaks.test.js`).
 - **Indent/outdent mean LIST NESTING, in both panes.** Markdown has no paragraph
   indent, so the rich side is `sinkListItem`/`liftListItem` — with the item type
   taken from the SELECTION, since a task item's node is `taskItem` and hardcoding
@@ -1842,7 +1871,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `components/ui/context-menu.tsx`) wraps the panes and reuses `dispatch`; its
   "Link to heading" submenu inserts `[[#Heading]]` via `insertHeadingLink`, and the
   rich-pane link is built by `headingLinkHtml`, which ESCAPES the text — a heading
-  `Use <b> tags` inserted bold text, and one holding `<img …>` an image.
+  `Use <b> tags` inserted bold text, and one holding `<img …>` an image. **Never
+  compute document-derived data in its render**: it re-renders on every keystroke,
+  and building the heading list there (a full `getJSON()` plus a walk) cost ~300 ms
+  per key on a large document at 4× CPU; `HeadingLinkItems` reads them only when
+  the submenu opens (A083).
 - **Split-pane scroll sync** (`EditorPanes.tsx`) uses value-based echo
   suppression (remembers the exact scrollTop it wrote to the other pane and
   swallows that one echo) — never a timer. Do not reintroduce a setTimeout
@@ -2145,8 +2178,12 @@ The product ships three ways from one codebase: the standalone app
   `<sub>`/`<sup>` HTML** (turndown-rules.ts, mirroring the `<u>` underline rule and
   the MD pane's own `<sub>`/`<sup>` insertion) — NOT `~x~`/`^x^`, which collided
   with strikethrough. So single `~`/`^` carry no inline-format meaning.
-- **Right-to-left text is VIEW-ONLY** (A099): `BidiAuto` (a decoration plugin, rich
-  pane, maintained incrementally) gives every text block `dir="auto"`, and
+- **Right-to-left text is VIEW-ONLY** (A099): `BidiAuto` (rich pane) gives every text
+  block `dir="auto"` through NODE VIEWS for paragraph, heading, listItem, blockquote,
+  callout, table cells and summary, and a decoration only for taskItem — never go
+  back to a decoration per block: ProseMirror's decoration handling made it
+  quadratic (one keystroke at 1.6 MB: 714 ms → 8 ms, A083). An extension that adds
+  its own node view for one of those types must take the `dir` over. And
   `extensions/cm-bidi.ts` does the same per visible CodeMirror line with
   `perLineTextDirection`. Do NOT use TipTap's `textDirection` option: it adds a
   `dir` attr to every node of the canonical JSON — rewriting every stored document

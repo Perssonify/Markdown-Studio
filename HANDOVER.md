@@ -247,8 +247,9 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   after tab B saves, tab A parks a terminal `"conflict"` status by design, and a reload
   keeps the other tab's work (A018). Live invalidation is the natural trigger for the
   save-FSM work (§5).
-- **Large documents:** every edit still re-converts the whole document; the audit's cheap
-  fixes made it linear, not incremental (A083).
+- **Large documents:** rich→markdown projects per block now (A083), so typing stays
+  responsive at 1.6–4 MB. Still whole-document: markdown→rich, opening a large document
+  (quadratic with many code blocks) and the fidelity/word-count and broken-link walks.
 - **Graph performance:** measured at 2,000 notes (A088): above 300 notes the layout is
   Barnes–Hut, above 250 the drawing is batched and each frame either steps or paints.
   First frame 1.0 s, settle 17–23 s under a 4× CPU slowdown. At 2,000 notes in 60 folders
