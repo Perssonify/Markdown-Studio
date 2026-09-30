@@ -41,9 +41,9 @@ const FOLDER_NAMES = ["Projects", "Meetings", "Research", "Journal", "Clients", 
  * notes; ~6% of notes link to nothing and ~3% carry a broken link.
  *
  * `folders: false` files nothing: every note at the root, links still
- * hub-and-cluster. (Sixty skewed folders in the world the map gives 2,000 notes
- * overlap one another, and the map then vetoes nearly every name — so a case
- * that checks how LABELS are placed at that scale needs a library without.)
+ * hub-and-cluster — the shape of a large FOLDERLESS map, which is laid out
+ * differently (a folder map above 500 notes is laid out on two levels, each
+ * folder in its own region; see graph-physics.ts).
  *
  * Returns `{ docs, folderTree }`, both for `seedFresh()`.
  */
