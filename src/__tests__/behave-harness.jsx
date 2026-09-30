@@ -99,6 +99,20 @@ export function readBlobBytes(blob) {
   });
 }
 
+/**
+ * Run `fn` the way a browser would: React rendering on its own schedule, NOT
+ * inside an act() scope. Inside act, React holds every render until the scope
+ * ends — so a path that changes the store and then WAITS for the editor it
+ * mounts (a host call with no editor open) would wait forever in a test and
+ * never in a browser.
+ */
+export async function outsideAct(fn) {
+  const prev = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = false;
+  try { return await fn(); }
+  finally { globalThis.IS_REACT_ACT_ENVIRONMENT = prev; }
+}
+
 export const tick = (ms = 50) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 
 /** Poll (never sleep) until `fn()` is truthy; returns its value. Throws with
