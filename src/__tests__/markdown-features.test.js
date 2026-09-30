@@ -52,6 +52,18 @@ describe('markdown flavors & features', () => {
     expect(buildMarked(feat({ footnotes: false })).parse(src)).not.toContain('footnote');
   });
 
+  it('renders footnotes in a document that opens with a display formula (A083)', () => {
+    // marked tries the last-registered extension first; with maths asked
+    // before marked-footnote, the footnote section token was not tokens[0] and
+    // every reference threw — and kept throwing for the next document too.
+    const m = buildMarked(feat({ footnotes: true, math: true }));
+    const html = m.parse('$$\nx^2\n$$\n\nA claim[^1].\n\n[^1]: The source.');
+    expect(html).toContain('data-math-block');
+    expect(html).toContain('The source.');
+    expect(html).toContain('href="#footnote-1"');
+    expect(m.parse('Plain[^a].\n\n[^a]: note')).toContain('note');
+  });
+
   it('tokenizes LaTeX math into placeholders when enabled', () => {
     const html = buildMarked(feat({ math: true })).parse('inline $x^2$ here');
     expect(html).toContain('data-math-inline="x^2"');
