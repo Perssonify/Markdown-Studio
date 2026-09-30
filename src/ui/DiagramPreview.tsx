@@ -53,6 +53,11 @@ export function mermaidConfig(dark: boolean) {
     securityLevel: "strict" as const,
     theme: dark ? ("dark" as const) : ("default" as const),
     secure: [...MERMAID_SECURE_KEYS],
+    // Mermaid 12 made ELK the default layout. Staying on dagre keeps every
+    // existing diagram laid out as it was, and keeps ELK (a 1.6 MB chunk,
+    // loaded on first use) off the path of every flowchart. A diagram can
+    // still ask for ELK itself (`config: layout: elk`).
+    layout: "dagre",
     // Mermaid's defaults, stated so an upgrade that raises them cannot quietly
     // let a pasted document spend longer laying out a hostile graph.
     maxTextSize: 50_000,
