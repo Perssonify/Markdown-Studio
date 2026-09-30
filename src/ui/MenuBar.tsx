@@ -599,7 +599,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
                 `truncate`'s overflow:hidden a tall diacritic (Å, Ą) or a descender is
                 clipped. `leading-tight` costs a pixel and stops that. */}
             <span className="truncate text-[13px] font-medium leading-tight text-foreground/90">
-              {props.docTitle || "Untitled"}
+              {props.docTitle || t("common.untitled")}
             </span>
           </div>
         )}

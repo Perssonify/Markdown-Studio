@@ -7,6 +7,7 @@ import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimes
 import { printHtmlDocument } from "../store/print-export";
 import { recordFullBackup } from "../store/storage-durability";
 import { buildZipAsync, readDocuments } from "../store/zip-builder";
+import { t } from "../i18n";
 import type { CmRef, DocStore, Engine, SyncEngine, TiptapRef, Toast } from "./types";
 import type { useAutosave } from "./useAutosave";
 
@@ -100,7 +101,7 @@ export function useExportActions({
       // An unreadable document is reported, never silently left out of what
       // the user believes is a complete backup.
       if (unreadable.length) {
-        toastRef.current.show(`${unreadable.length} document(s) could not be read and are NOT in this export`, "error");
+        toastRef.current.show(t("editor.documentsUnreadableNotExported", { count: unreadable.length }), "error");
       }
       const count = Object.keys(files).length;
       if (count === 0) return 0;
@@ -123,11 +124,11 @@ export function useExportActions({
     const { folders, docParents } = useFolderStore.getState();
     const root = folders.find((f) => f.id === folderId);
     const entries = collectFolderExport(folderId, folders, docParents);
-    if (entries.length === 0) { toast.show("Folder has no documents", "warning"); return; }
+    if (entries.length === 0) { toast.show(t("editor.folderHasNoDocuments"), "warning"); return; }
     try {
       const count = await exportDocsToZip(entries, (root?.name || "folder") + (opts.canonical ? "-backup" : ""), opts);
-      toast.show(`Exported ${count} document(s)`, "success");
-    } catch { toast.show("Folder export failed", "error"); }
+      toast.show(t("editor.exportedDocuments", { count }), "success");
+    } catch { toast.show(t("editor.folderExportFailed"), "error"); }
   }, [exportDocsToZip, toast]);
 
   // Export ONE library document (active or not) as a single file in the chosen
@@ -138,7 +139,7 @@ export function useExportActions({
     async (docId: string, format: "md" | "html" | "docx" | "json") => {
       try {
         const rec = await useDocumentStore.getState().getStorage().get(docId);
-        if (!rec) { toast.show("Document not found", "error"); return; }
+        if (!rec) { toast.show(t("editor.documentNotFound"), "error"); return; }
         // Prefer the LIVE canonical when this is the doc currently in the editor
         // (its stored copy can lag by up to one autosave interval).
         const live =
@@ -169,8 +170,8 @@ export function useExportActions({
           const { exportAsDocx } = await import("../store/docx-export");
           await exportAsDocx(docForExport.title || "Untitled", md);
         }
-        toast.show("Document exported", "success");
-      } catch { toast.show("Export failed", "error"); }
+        toast.show(t("editor.documentExported"), "success");
+      } catch { toast.show(t("editor.exportFailed"), "error"); }
     },
     [engine, syncMode, getCanonical, toast]
   );
@@ -178,7 +179,7 @@ export function useExportActions({
   // Export an explicit set of document IDs (from sidebar multi-select, or all
   // documents) as a ZIP, preserving each doc's folder path within the archive.
   const handleExportDocs = useCallback(async (docIds: string[], zipName: string, opts: { canonical?: boolean } = {}): Promise<number> => {
-    if (docIds.length === 0) { toast.show("No documents selected", "warning"); return 0; }
+    if (docIds.length === 0) { toast.show(t("editor.noDocumentsSelected"), "warning"); return 0; }
     const { folders, docParents } = useFolderStore.getState();
     const byId = new Map(folders.map((f) => [f.id, f]));
     const pathOf = (folderId: string | undefined): string[] => {
@@ -198,9 +199,9 @@ export function useExportActions({
     }));
     try {
       const count = await exportDocsToZip(entries, zipName, opts);
-      toast.show(`Exported ${count} document(s)`, "success");
+      toast.show(t("editor.exportedDocuments", { count }), "success");
       return count;
-    } catch { toast.show("Export failed", "error"); return 0; }
+    } catch { toast.show(t("editor.exportFailed"), "error"); return 0; }
   }, [exportDocsToZip, toast]);
   exportDocsRef.current = handleExportDocs;
 
@@ -270,15 +271,15 @@ export function exportActiveDocAsFile(
         getHtml, htmlToMd: engine?.htmlToMd, htmlToCleanMd: engine?.htmlToCleanMd,
         syncMode: syncMode as "clean" | "styled",
       });
-      toast.show("Markdown exported", "success");
+      toast.show(t("editor.markdownExported"), "success");
     } else if (type === "export-html") {
       exportAsHtml(docForExport as DocumentRecord, { getHtml });
-      toast.show("HTML exported", "success");
+      toast.show(t("editor.htmlExported"), "success");
     } else if (type === "export-json") {
       exportAsJson(docForExport as DocumentRecord);
-      toast.show("JSON exported", "success");
+      toast.show(t("editor.jsonExported"), "success");
     }
-  } catch (e) { toast.show("Export failed", "error"); }
+  } catch (e) { toast.show(t("editor.exportFailed"), "error"); }
 }
 
 /** File ▸ Export ▸ Word for the open document (the docx writer is a lazy chunk). */
@@ -296,6 +297,6 @@ export async function exportActiveDocAsDocx(
     const title = resolveDocTitle(activeDoc, canonical).title;
     const { exportAsDocx } = await import("../store/docx-export");
     await exportAsDocx(title, md);
-    toast.show("Word document exported", "success");
-  } catch { toast.show("Word export failed", "error"); }
+    toast.show(t("editor.wordExported"), "success");
+  } catch { toast.show(t("editor.wordExportFailed"), "error"); }
 }

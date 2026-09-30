@@ -8,6 +8,7 @@ import { captureIngestHeadless } from "../store/headless-ingest";
 import { getFileContentAndFormat } from "../store/import-export";
 import type { IngestFormat } from "../store/ingest";
 import type { ImportResource } from "../store/url-import";
+import { t } from "../i18n";
 import type { DocStore, Engine, Lifecycle, PromptText, TiptapRef, Toast } from "./types";
 
 interface ImportPipelineParams {
@@ -200,7 +201,7 @@ export function useImportPipeline({
         items = [{ raw: resource.text, format: resource.format, folderPath: [] }];
       }
 
-      if (!items.length) { toast.show("Nothing selected to import", "warning"); return; }
+      if (!items.length) { toast.show(t("editor.nothingSelectedToImport"), "warning"); return; }
 
       const { importedCount, failedCount, firstDocId } = await importItems(items);
       if (firstDocId) {
@@ -209,16 +210,16 @@ export function useImportPipeline({
       setShowUrlImport(false);
       setImportUrlSeed(null);
       if (failedCount > 0) {
-        toast.show(`${failedCount} document(s) could not be saved — storage may be full`, "error");
+        toast.show(t("editor.documentsNotSaved", { count: failedCount }), "error");
       }
       if (importedCount > 0) {
         toast.show(
-          importedCount > 1 ? `Imported ${importedCount} documents` : "Imported from URL",
+          importedCount > 1 ? t("editor.importedDocuments", { count: importedCount }) : t("editor.importedFromUrl"),
           "success",
         );
       }
     } catch {
-      toast.show("Import failed", "error");
+      toast.show(t("editor.importFailed"), "error");
     }
   }, [importItems, handleSwitchDoc, toast]);
 
@@ -255,8 +256,8 @@ export async function collectImportItems(
         } catch (err) {
           if (err instanceof ArchiveEncryptedError || err instanceof ArchiveWrongPasswordError) {
             const pw = await promptText(
-              err instanceof ArchiveWrongPasswordError ? "Incorrect password — try again" : "Enter password",
-              { description: `"${file.name}" is password-protected.`, placeholder: "Password", type: "password" }
+              err instanceof ArchiveWrongPasswordError ? t("editor.incorrectPassword") : t("editor.enterPassword"),
+              { description: t("editor.passwordProtected", { name: file.name }), placeholder: t("editor.passwordPlaceholder"), type: "password" }
             );
             if (!pw) break; // cancelled
             password = pw;

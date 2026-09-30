@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { FileTextIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchResult } from "@/store/search";
+import { useT } from "../i18n";
 
 interface SearchPanelProps {
   open: boolean;
@@ -17,6 +18,7 @@ interface SearchPanelProps {
  * Opens the chosen document and hands the query back so the editor can jump to it.
  */
 export function SearchPanel({ open, search, onOpenResult, onClose }: SearchPanelProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -78,7 +80,7 @@ export function SearchPanel({ open, search, onOpenResult, onClose }: SearchPanel
     >
       <div
         role="dialog"
-        aria-label="Search all notes"
+        aria-label={t("find.searchAllNotes")}
         className="flex max-h-[70vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-background ring-1 ring-foreground/10 shadow-2xl"
         onKeyDown={onKeyDown}
       >
@@ -88,21 +90,21 @@ export function SearchPanel({ open, search, onOpenResult, onClose }: SearchPanel
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search all notes…"
+            placeholder={t("find.searchAllNotesPlaceholder")}
             className="h-11 border-0 bg-transparent px-0 text-base md:text-sm shadow-none focus-visible:ring-0"
-            aria-label="Search all notes"
+            aria-label={t("find.searchAllNotes")}
           />
           {query.trim() && (
             <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
-              {results.length} result{results.length === 1 ? "" : "s"}
+              {t("find.resultCount", { count: results.length })}
             </span>
           )}
         </div>
 
-        <ul ref={listRef} className="flex-1 overflow-y-auto p-1" role="listbox" aria-label="Search results">
+        <ul ref={listRef} className="flex-1 overflow-y-auto p-1" role="listbox" aria-label={t("find.searchResults")}>
           {query.trim() && results.length === 0 && (
             <li className="px-3 py-8 text-center text-xs text-muted-foreground/60">
-              No matches for “{query.trim()}”
+              {t("find.noMatchesFor", { query: query.trim() })}
             </li>
           )}
           {results.map((r, i) => (
@@ -131,7 +133,7 @@ export function SearchPanel({ open, search, onOpenResult, onClose }: SearchPanel
                     {r.snippet.after}
                   </span>
                 ) : (
-                  <span className="pl-5 text-[11px] text-muted-foreground/60">Title match</span>
+                  <span className="pl-5 text-[11px] text-muted-foreground/60">{t("find.titleMatch")}</span>
                 )}
               </button>
             </li>
@@ -139,9 +141,9 @@ export function SearchPanel({ open, search, onOpenResult, onClose }: SearchPanel
         </ul>
 
         <div className="flex items-center gap-3 border-t border-border px-3 py-1.5 text-[10px] text-muted-foreground/60">
-          <span><kbd className="font-sans">↑↓</kbd> navigate</span>
-          <span><kbd className="font-sans">↵</kbd> open</span>
-          <span><kbd className="font-sans">esc</kbd> close</span>
+          <span>{t.rich("find.hintNavigate", { keys: <kbd className="font-sans">↑↓</kbd> })}</span>
+          <span>{t.rich("find.hintOpen", { keys: <kbd className="font-sans">↵</kbd> })}</span>
+          <span>{t.rich("find.hintClose", { keys: <kbd className="font-sans">esc</kbd> })}</span>
         </div>
       </div>
     </div>

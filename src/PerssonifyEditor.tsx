@@ -60,6 +60,7 @@ import { TiptapPaneHandle } from "./ui/TiptapPane";
 // Lazy-loaded panels (bundle splitting - load only when feature is used)
 import { LazyChunkBoundary } from "./ui/LazyChunkBoundary";
 import { OneEditorPerPage } from "./ui/OneEditorPerPage";
+import { useT } from "./i18n";
 const FindReplaceBar = React.lazy(() => import("./ui/FindReplace").then((m) => ({ default: m.FindReplaceBar })));
 const GraphView = React.lazy(() => import("./ui/GraphView").then((m) => ({ default: m.GraphView })));
 const CardsView = React.lazy(() => import("./ui/CardsView").then((m) => ({ default: m.CardsView })));
@@ -104,6 +105,7 @@ function PerssonifyEditorInstance({
   readOnly: readOnlyProp,
   fitParent = false,
 }: PerssonifyEditorProps) {
+  const t = useT();
 
   // Chrome level (host-controlled): drives which UI shells render. Seeded from
   // the prop; the imperative setChrome() can change it at runtime.
@@ -261,18 +263,18 @@ function PerssonifyEditorInstance({
   // and offer to erase that too — the only way it could otherwise go was to
   // wait out the snapshot age cap.
   const onDocDeleted = useCallback((docId: string, title: string) => {
-    toastSonner("Deleted — a recoverable copy is kept in Version history", {
+    toastSonner(t("app.deletedRecoverableCopyKept"), {
       duration: 8000,
       action: {
-        label: "Erase history",
+        label: t("app.eraseHistory"),
         onClick: () => {
           void useDocumentStore.getState().purgeDocHistory(docId)
-            .then(() => toastSonner.success(`Version history of “${title}” erased`))
-            .catch(() => toastSonner.error("Version history could not be erased"));
+            .then(() => toastSonner.success(t("app.versionHistoryErased", { title })))
+            .catch(() => toastSonner.error(t("app.versionHistoryCouldNotBeErased")));
         },
       },
     });
-  }, []);
+  }, [t]);
   const { prompt: promptText, promptState, handlePromptClose, equation: equationPrompt, equationState, handleEquationClose } = useDialogs();
   // Single dialog surface handed to all children via context (see DialogProvider).
   const dialogApi = React.useMemo<DialogApi>(
@@ -460,16 +462,16 @@ function PerssonifyEditorInstance({
   }, [handleSwitchDoc, isMobile, setShowSidebar]);
   const handleRenameFromPanel = useCallback(async (id: string, title: string) => {
     try { await renameDoc(id, title); }
-    catch { toastRef.current.show("Rename could not be saved", "error"); }
-  }, [renameDoc]);
+    catch { toastRef.current.show(t("app.renameCouldNotBeSaved"), "error"); }
+  }, [renameDoc, t]);
   const handleDuplicateFromPanel = useCallback(async (docId?: string) => {
     // Forward the ROW's id. Dropping it made every per-row Duplicate copy
     // whichever document happened to be open — FolderTree passed the id, this
     // handler swallowed it, and the store did not accept one. Rename, right
     // beside it in the same menu, forwarded its id correctly all along.
     try { await duplicateDoc(docId); }
-    catch { toastRef.current.show("Duplicate could not be saved — storage may be full", "error"); }
-  }, [duplicateDoc]);
+    catch { toastRef.current.show(t("app.duplicateCouldNotBeSaved"), "error"); }
+  }, [duplicateDoc, t]);
   const closeActiveTab = useCallback(() => {
     if (activeDocId) handleCloseTab(activeDocId);
   }, [activeDocId, handleCloseTab]);
@@ -647,7 +649,7 @@ function PerssonifyEditorInstance({
     return (
       <div className={`flex ${fitParent ? "h-full" : "h-dvh"} flex-col items-center justify-center gap-4 bg-background`}>
         <Icons.Flask className="size-8 animate-pulse text-primary" />
-        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Initializing Engine...</p>
+        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("app.initializingEngine")}</p>
       </div>
     );
   }
@@ -669,7 +671,7 @@ function PerssonifyEditorInstance({
         {chrome === "full" && (
           <MenuBar
             activeDocId={activeDocId}
-            docTitle={activeDoc?.title || "Untitled"}
+            docTitle={activeDoc?.title || t("common.untitled")}
             mode={mode}
             setMode={handleSetMode}
             onAction={handleAction}
@@ -704,7 +706,7 @@ function PerssonifyEditorInstance({
         {chrome === "minimal" && activeDocId && (
           <div className="flex h-8 shrink-0 items-center border-b border-border bg-background px-3">
             <span className="truncate text-xs font-medium text-muted-foreground">
-              {activeDoc?.title || "Untitled"}
+              {activeDoc?.title || t("common.untitled")}
             </span>
           </div>
         )}
@@ -738,7 +740,7 @@ function PerssonifyEditorInstance({
 
 
             {showFindReplace && (
-              <LazyChunkBoundary label="Find & Replace">
+              <LazyChunkBoundary label={t("app.findAndReplace")}>
                 <React.Suspense fallback={null}>
                   <FindReplaceBar sourceRef={cmRef} previewRef={tiptapRef} mode={mode} onSync={forceSyncMdToHtml} syncHtmlToMd={forceSyncHtmlToMd} initialQuery={findSeed} initialMode={frMode} initialTarget={lastFocusedPaneRef.current === "md" ? "md" : "richtext"} onClose={closeFindReplace} />
                 </React.Suspense>
@@ -790,9 +792,9 @@ function PerssonifyEditorInstance({
               <button
                 type="button"
                 onClick={openWorkspacePanel}
-                title="Open workspace panel"
+                title={t("app.openWorkspacePanel")}
                 data-print-hide
-                aria-label="Open workspace panel"
+                aria-label={t("app.openWorkspacePanel")}
                 className="absolute left-1 top-1 z-10 flex size-8 items-center justify-center rounded-md border border-border bg-card/80 text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
               >
                 <PanelLeft className="size-4" />
@@ -817,9 +819,9 @@ function PerssonifyEditorInstance({
               ) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-3 text-foreground select-none">
                   <FileTextIcon className="size-8 opacity-60" />
-                  <p className="text-sm font-medium opacity-60">No document open</p>
-                  <p className="text-xs opacity-60">Select a document from the Files panel or create a new one</p>
-                  <Button variant="default" size="lg" onClick={handleNewDoc}>Create New Document</Button>
+                  <p className="text-sm font-medium opacity-60">{t("app.noDocumentOpen")}</p>
+                  <p className="text-xs opacity-60">{t("app.noDocumentOpenHint")}</p>
+                  <Button variant="default" size="lg" onClick={handleNewDoc}>{t("app.createNewDocument")}</Button>
                 </div>
               )}
 
@@ -847,10 +849,10 @@ function PerssonifyEditorInstance({
                   tabIndex={-1}
                   data-workspace-overlay={workspaceView}
                   role="region"
-                  aria-label={workspaceView === "map" ? "Relationship map" : "Cards"}
+                  aria-label={workspaceView === "map" ? t("app.overlayMap") : t("app.overlayCards")}
                   className="absolute inset-0 z-30 bg-background outline-none"
                 >
-                  <React.Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">Loading {workspaceView === "map" ? "graph" : "cards"}…</div>}>
+                  <React.Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground">{workspaceView === "map" ? t("app.loadingGraph") : t("app.loadingCards")}</div>}>
                     {workspaceView === "map" ? (
                       <GraphView
                         graph={graphData ?? { nodes: [], edges: [] }}
@@ -927,7 +929,7 @@ function PerssonifyEditorInstance({
                 offset puts a bottom-right toast straight over it — worst on a
                 phone, where the bar is exactly where the save state and the
                 fidelity warning live. Clear the bar's height plus a margin. */}
-            <Toaster position="bottom-right" offset={48} expand={false} richColors closeButton dir={toasterDir} />
+            <Toaster position="bottom-right" offset={48} expand={false} richColors closeButton dir={toasterDir} containerAriaLabel={t("app.notifications")} />
             {ConfirmDialog}
             {UnsavedChangesDialog}
             <PromptDialog

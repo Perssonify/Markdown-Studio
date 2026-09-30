@@ -100,7 +100,7 @@ function SyncModePills({ syncMode, onSyncModeChange }: SyncModePillsProps) {
     <Label htmlFor="sync-mode" className="text-[10px] md:text-xs whitespace-nowrap" title={explainer}>
       {t("panes.styled")}
     </Label>
-    <Switch id="sync-mode" checked={styled} onCheckedChange={(checked) => onSyncModeChange(checked ? "styled" : "clean")} aria-label="Styled Markdown" aria-describedby={descId} />
+    <Switch id="sync-mode" checked={styled} onCheckedChange={(checked) => onSyncModeChange(checked ? "styled" : "clean")} aria-label={t("panes.styledMarkdown")} aria-describedby={descId} />
     <SwitchExplainer id={descId} text={explainer} />
   </div>;
 }
@@ -122,7 +122,7 @@ function PasteStyledPill({ pasteStyled, setPasteStyled }: PasteStyledPillProps) 
     <Label htmlFor="paste-styled" className="text-[10px] md:text-xs whitespace-nowrap" title={explainer}>
       {t("panes.styledPaste")}
     </Label>
-    <Switch id="paste-styled" checked={pasteStyled} onCheckedChange={setPasteStyled} aria-label="Styled paste" aria-describedby={descId} />
+    <Switch id="paste-styled" checked={pasteStyled} onCheckedChange={setPasteStyled} aria-label={t("panes.styledPaste")} aria-describedby={descId} />
     <SwitchExplainer id={descId} text={explainer} />
   </div>;
 }
@@ -164,7 +164,7 @@ const MarkdownPane = React.memo(forwardRef<any, MarkdownPaneProps>(function Mark
   const isDark = themeMode === "dark" || themeMode === undefined;
   return (
     <div className="flex flex-col flex-1 min-h-0 min-w-0 bg-background" onFocus={onFocus}>
-      <PaneHeader icon={FileCode2} label="Markdown" headerRef={headerRef} clearsTrigger>
+      <PaneHeader icon={FileCode2} label={t("panes.markdown")} headerRef={headerRef} clearsTrigger>
         <div className="flex items-center gap-2">
           <SyncModePills syncMode={syncMode} onSyncModeChange={onSyncModeChange} />
           {isSplit && (
@@ -184,7 +184,7 @@ const MarkdownPane = React.memo(forwardRef<any, MarkdownPaneProps>(function Mark
                 // "Disable…" contradicts the pressed state it sits beside, and
                 // aria-roledescription replaced the "toggle button" role a
                 // screen reader would otherwise announce.
-                aria-label="Sync scrolling"
+                aria-label={t("panes.syncScrolling")}
                 aria-pressed={syncScroll}
               >
                 {syncScroll ? <Mouse /> : <MouseOff />}

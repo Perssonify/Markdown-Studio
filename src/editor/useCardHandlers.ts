@@ -9,6 +9,7 @@ import type { FolderTreeData } from "../store/folders";
 import { sanitizeForIngest } from "../store/ingest";
 import { canonicalMisfit, isNewerSchema } from "../store/schema-version";
 import { snapshotStore } from "../store/snapshot-store";
+import { t } from "../i18n";
 import type { DocStore, Engine, Lifecycle, LinkIndexApi, SyncEngine, TiptapRef, Toast } from "./types";
 import type { useImportPipeline } from "./useImportPipeline";
 
@@ -108,7 +109,7 @@ export function useCardHandlers({
 
   const handleCardCreate = useCallback(async (markdown: string) => {
     const doc = createDoc(markdown, "markdown", "api", { mdToHtml: engine?.mdToHtml });
-    if (!doc) { toast.show("Could not create the note", "error"); return; }
+    if (!doc) { toast.show(t("editor.couldNotCreateNote"), "error"); return; }
     // Quick capture ACTIVATES the new note and overwrites both panes (setFromHtml
     // also drops both undo stacks), so it is a document-LEAVING path and owes
     // the open document the same goodbye as import and addDocuments. It had
@@ -129,7 +130,7 @@ export function useCardHandlers({
 
   const handleCardSave = useCallback(async (id: string, markdown: string) => {
     const editor = tiptapRef.current?.getEditor();
-    if (!editor?.schema) { toast.show("Editor not ready — note not saved", "error"); return; }
+    if (!editor?.schema) { toast.show(t("editor.editorNotReadyNoteNotSaved"), "error"); return; }
     const html = engine?.mdToHtml ? engine.mdToHtml(markdown) : markdown;
     const canonical = htmlToCanonical(html, editor.schema);
     // A note from a newer build cannot be shown as a card (its source reads
@@ -138,7 +139,7 @@ export function useCardHandlers({
     const current = await useDocumentStore.getState().getDocById(id).catch(() => null);
     if (current && (isNewerSchema(current.schemaVersion) || canonicalMisfit(current.canonical, editor.schema))) {
       void snapshotStore.record(id, current.title || "Untitled", canonical, "manual").catch(() => {});
-      toast.show("This note was made by a newer version of the app and can't be edited as a card — your typing is kept in Version history.", "warning");
+      toast.show(t("editor.cardNewerVersion"), "warning");
       return;
     }
     // What this edit REPLACES — the live editor's copy when it holds the note.
@@ -167,15 +168,15 @@ export function useCardHandlers({
       void snapshotStore.record(id, title, canonical, "manual").catch(() => {});
       toast.show(
         e instanceof ConflictError
-          ? "This note was changed in another tab — your card edit was not saved over it. It is kept in Version history."
-          : "The note could not be saved — your card edit is kept in Version history.",
+          ? t("editor.cardConflict")
+          : t("editor.cardSaveFailed"),
         "warning",
       );
       return;
     }
     if (patched) cardBasesRef.current.set(id, patched.updated);
     if (carried.lost > 0) {
-      toast.show("Alignment on the paragraphs you changed can't be kept in a card edit — the previous version is in Version history.", "info");
+      toast.show(t("editor.cardAlignmentLost"), "info");
     }
     // Re-check AFTER the await, never before it. `patchDocById` writes to
     // IndexedDB, which is slow enough that a document switch routinely lands
@@ -197,7 +198,7 @@ export function useCardHandlers({
       try {
         await patchDocById(id, { metadata, touchUpdated: false });
       } catch {
-        toastRef.current.show("That change to the card could not be saved", "error");
+        toastRef.current.show(t("editor.cardChangeNotSaved"), "error");
       }
     },
     [patchDocById]

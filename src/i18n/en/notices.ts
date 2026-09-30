@@ -103,4 +103,5 @@ export const notices = {
   "notices.today": "today",
   "notices.yesterday": "yesterday",
   "notices.daysAgo": { other: "{count} days ago" },
+  "notices.closeToast": "Close toast",
 } satisfies Record<`notices.${string}`, Message>;

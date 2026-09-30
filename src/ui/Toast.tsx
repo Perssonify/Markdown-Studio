@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { t } from "../i18n";
 
 export type ToastType = "info" | "success" | "error" | "warning";
 
@@ -18,6 +19,8 @@ export function useToast() {
     if (interiorMuted && type !== "error") return;
     const options = {
       duration: duration,
+      // sonner's own default name for the × is English.
+      closeButtonAriaLabel: t("notices.closeToast"),
     };
 
     switch (type) {

@@ -32,6 +32,7 @@ import { clearStash, configureRecovery, takeStashed, type RecoveryEntry } from "
 import { historyCache } from "./history-cache";
 import { useFolderStore } from "./folders";
 import { safeStorage } from "../utils/safe-storage";
+import { t } from "../i18n/core";
 
 /**
  * A canonical doc is "blank" when it holds no real content — an empty/absent
@@ -101,23 +102,23 @@ export function describeUncommittedSave(
       // "the editor is empty" sent them looking for content that was never lost.
       if (s.saveError === SCHEMA_LOCK_ERROR) {
         return {
-          message: "Not saved — this document was made by a newer version of the app, so it is open read-only. Open it in the newer version to edit it.",
+          message: t("editor.notSavedNewerVersion"),
           type: "warning",
         };
       }
       return {
-        message: "Not saved — the editor is empty but the stored document is not. Undo to restore it, or use Clear document if you meant to empty it.",
+        message: t("editor.notSavedEditorEmpty"),
         type: "warning",
       };
     case "conflict":
-      return { message: CONFLICT_MESSAGE, type: "warning" };
+      return { message: t("editor.conflictMessage"), type: "warning" };
     case "full":
-      return { message: "Not saved — storage is full. Delete documents or old versions to free space.", type: "error" };
+      return { message: t("editor.notSavedStorageFull"), type: "error" };
     case "error":
-      return { message: s.saveError ? `Save failed — ${s.saveError}` : "Save failed", type: "error" };
+      return { message: s.saveError ? t("editor.saveFailedWithError", { error: s.saveError }) : t("editor.saveFailed"), type: "error" };
     default:
       // An ownership abort: the document changed under the save.
-      return { message: "Save did not complete — try again", type: "warning" };
+      return { message: t("editor.saveDidNotComplete"), type: "warning" };
   }
 }
 
@@ -856,7 +857,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         openTabs: [{ id: doc.id, title: doc.title }],
         counts: computeCounts(canonical),
         saveStatus: conflicted ? "conflict" : draft ? "editing" : "ready",
-        saveError: conflicted ? "Changed in another tab" : null,
+        saveError: conflicted ? t("editor.changedInAnotherTab") : null,
       });
       return record;
     };
@@ -1016,7 +1017,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         // persistently (the status bar) instead of it flickering through the
         // generic transient "error". Set before throwing so it survives the
         // caller's catch. A later real edit (setDirty → "editing") resumes.
-        set({ saveStatus: "conflict", saveError: "Changed in another tab" });
+        set({ saveStatus: "conflict", saveError: t("editor.changedInAnotherTab") });
         throw new ConflictError();
       }
     } catch (e) {
@@ -1057,7 +1058,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // the only good copy, so a non-blank save may repair it (the blank backstop
     // below still refuses a blank one).
     if (storedReadFailed && !storedCorrupt) {
-      set({ saveStatus: "error", saveError: "Couldn't read the saved copy to check it is safe to overwrite" });
+      set({ saveStatus: "error", saveError: t("editor.couldNotReadSavedCopy") });
       scheduleReadyReset((fn) => set(fn), "error", 3000, "editing");
       return false;
     }
@@ -1084,7 +1085,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         // TERMINAL status — "blocked" does NOT re-arm autosave (unlike "editing"/
         // "error"), so this can't spin the save loop. A later real edit sets
         // "editing" and normal saving resumes.
-        set({ saveStatus: "blocked", saveError: "Refused to overwrite this document with an empty one" });
+        set({ saveStatus: "blocked", saveError: t("editor.refusedBlankOverwrite") });
         return false;
       }
       // Consume the one-shot clear permission whether or not it was needed.
@@ -1170,7 +1171,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // After showing the transient error, return to "editing" — NOT "ready" —
       // because the content is still unsaved. Downgrading to "ready" here used
       // to disarm the unsaved-changes prompt, silently losing edits on close.
-      set({ saveStatus: "error", saveError: e instanceof Error ? e.message : "Save failed" });
+      set({ saveStatus: "error", saveError: e instanceof Error ? e.message : t("editor.saveFailed") });
       scheduleReadyReset((fn) => set(fn), "error", 3000, "editing");
       return false;
     }

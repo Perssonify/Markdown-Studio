@@ -8,6 +8,7 @@ import { DialogProvider } from "../ui/DialogProvider";
 import { ModeSwitcher, modeAccessibleName } from "../ui/ModeSwitcher";
 import { StatusBar } from "../ui/StatusBar";
 import { EditorToolbar } from "../ui/Toolbar";
+import { en } from "../i18n/en";
 
 /**
  * A096 (WCAG 2.5.3 label-in-name) and A094 (the toolbar as ONE tab stop).
@@ -50,12 +51,20 @@ describe("label in name", () => {
 
   it("the pane switches are named by their visible labels, explained by a description", () => {
     const panes = codeOnly(readFileSync(join(process.cwd(), "src/ui/EditorPanes.tsx"), "utf8"));
-    expect(panes).toContain('aria-label="Styled paste" aria-describedby={descId}');
-    expect(panes).toContain('aria-label="Styled Markdown" aria-describedby={descId}');
+    // Since A099 the names come from the catalog: the visible label and the
+    // switch's name are the SAME key, so they agree in every language.
+    expect(panes).toContain('{t("panes.styledPaste")}\n    </Label>');
+    expect(panes).toContain('aria-label={t("panes.styledPaste")} aria-describedby={descId}');
+    expect(panes).toContain('{t("panes.styled")}\n    </Label>');
+    expect(panes).toContain('aria-label={t("panes.styledMarkdown")} aria-describedby={descId}');
+    expect(en["panes.styledPaste"]).toBe("Styled paste");
+    expect(en["panes.styledMarkdown"]).toBe("Styled Markdown");
+    expect(en["panes.styledMarkdown"]).toContain(en["panes.styled"]);
     // The old shape: the whole explanatory sentence AS the name.
     expect(panes).not.toContain("aria-label={explainer}");
     // A toggle button keeps one name; its state is aria-pressed.
-    expect(panes).toContain('aria-label="Sync scrolling"');
+    expect(panes).toContain('aria-label={t("panes.syncScrolling")}');
+    expect(en["panes.syncScrolling"]).toBe("Sync scrolling");
     expect(panes).not.toContain("aria-roledescription");
   });
 });
