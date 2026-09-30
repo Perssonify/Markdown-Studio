@@ -201,6 +201,17 @@ describe("a large map", () => {
     for (const b of rested) for (const [id, d] of dots) if (!b.docs.has(id) && d.x > b.x0 && d.x < b.x1 && d.y > b.y0 && d.y < b.y1) strangers++;
     expect(strangers).toBe(0);
 
+    // The same library handed over again in another order (the graph is
+    // rebuilt with the link index) is not a new plan: nothing moves.
+    const version = () => container.querySelector('[data-map-layer="notes"]')?.getAttribute("data-layout-version");
+    const restVersion = version();
+    rerender(<GraphView graph={{ nodes: [...nodes].reverse(), edges: [...edges].reverse() }}
+      folders={[...folders].reverse().map((f) => ({ ...f, docIds: [...f.docIds].reverse() }))}
+      activeDocId="n0" onNavigate={vi.fn()} onClose={vi.fn()} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 600)); });
+    expect(version()).toBe(restVersion);
+    rerender(view(folders));
+
     // Drag a filed note far off the map: it stops at the edge of its folder's
     // region, so its container cannot be stretched over its neighbours'.
     const svg = container.querySelector("svg[role='group']");
