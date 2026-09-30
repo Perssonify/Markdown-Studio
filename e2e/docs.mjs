@@ -92,6 +92,29 @@ export function mixedDoc(id, title, kb, codeEvery = 48) {
   return doc(id, title, content);
 }
 
+/**
+ * Formula-heavy notes: every paragraph carries two inline formulas, and every
+ * fifth block is a display formula. Maths nodes are React node views, so this
+ * measures what opening such a document costs (DOC=math in perf.mjs, A083).
+ */
+export function mathDoc(id, title, kb) {
+  const t = (text) => ({ type: "text", text });
+  const content = [H(1, title)];
+  let bytes = 0;
+  for (let i = 0; bytes < kb * 1024; i++) {
+    const node = i % 5 === 4
+      ? { type: "mathBlock", attrs: { latex: String.raw`\int_0^{${i}} x^2 \, dx = \frac{${i}^3}{3}` } }
+      : { type: "paragraph", content: [
+          t(`Step ${i}: with `), { type: "mathInline", attrs: { latex: String.raw`a_{${i}} = \sqrt{${i}}` } },
+          t(" and "), { type: "mathInline", attrs: { latex: String.raw`e^{i\pi} + ${i}` } }, t(`, ${LOREM}`),
+        ] };
+    content.push(node);
+    bytes += JSON.stringify(node).length / 1.6;
+  }
+  content.push(P("The end."));
+  return doc(id, title, content);
+}
+
 /** Prose broken up by headings — exercises the split-pane anchor mapping. */
 export function sectionedDoc(id, title, kb) {
   const content = [H(1, title)];
