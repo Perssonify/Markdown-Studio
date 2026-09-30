@@ -82,10 +82,148 @@ export const BARNES_HUT_MIN = 300;
  *  approximation to a few percent of the exact force. */
 export const BARNES_HUT_THETA = 0.9;
 
-/** Stable layout space for `n` documents (independent of the viewport). */
-export function worldFor(n: number) {
-  const w = Math.max(720, Math.min(2600, 520 + n * 90));
+/** World area a note in a FOLDER needs: its dot and its name (about 150 × 40 at
+ *  1×), the room its container keeps around every member's name on any side,
+ *  and the slack a packing of unequal clusters leaves. Measured, not guessed:
+ *  with less, folder maps of 200–300 notes were pushed into the walls. */
+const FOLDER_NOTE_AREA = 45000;
+
+/**
+ * Stable layout space for `n` documents (independent of the viewport).
+ *
+ * Without folders this is the fixed-growth world the map has always used
+ * (2,600 × 1,872 from 23 notes up), and a folderless map lays out exactly as it
+ * did. WITH folders that world was far too small from about 150 notes: every
+ * container must hold its members' names, the containers could not all fit,
+ * and the hard container constraint pushed folders into the walls, where their
+ * notes piled up. A folder map's world grows with the area its notes need.
+ */
+export function worldFor(n: number, withFolders = false) {
+  const fixed = Math.max(720, Math.min(2600, 520 + n * 90));
+  const w = folderAware(n, withFolders) ? Math.max(fixed, Math.round(Math.sqrt((n * FOLDER_NOTE_AREA) / 0.72))) : fixed;
   return { w, h: Math.round(w * 0.72) };
+}
+
+/**
+ * The folder-aware layout — folder clusters as the seed, a world sized to the
+ * folders, a speed limit, folders moved as units — is measured clean up to 400
+ * notes in 40 folders (every note on its own spot, across several libraries).
+ * Beyond this it is not: at 600 notes in 60 folders the settle is chaotic, and
+ * at 2,000 it measured WORSE than the old layout in the browser (340 distinct
+ * positions against 751). Such maps keep the previous layout exactly until
+ * folders are laid out as units (a two-level layout); see CLAUDE.md.
+ */
+export const FOLDER_LAYOUT_MAX = 500;
+
+/** Whether a map of `n` notes gets the folder-aware layout. */
+export function folderAware(n: number, hasFolders: boolean): boolean {
+  return hasFolders && n <= FOLDER_LAYOUT_MAX;
+}
+
+/** Top speed of a note in a folder map, in world units per step. The repulsion
+ *  is 1/d² and uncapped, and the container constraint and the walls keep
+ *  producing close pairs: without a limit a pair two units apart was thrown
+ *  ~1,700 units in one step, and a 150-note map in 15 folders blew up within
+ *  five steps (every note on a wall). Folderless maps never reach it. */
+const FOLDER_MAX_SPEED = 30;
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+/** Seed spacing inside a folder (Vogel's constant): neighbours start about
+ *  SEED_SPACING·√π apart. */
+const SEED_SPACING = 60;
+/** Room a seeded cluster keeps around its dots for the names beside them. */
+const SEED_NAME_W = 80;
+const SEED_NAME_H = 24;
+
+/**
+ * Where the notes start.
+ *
+ * With no folders, the ring the map has always started from — unchanged, so a
+ * folderless map lays out exactly as it did. With folders, each folder starts as
+ * its OWN compact cluster (a sunflower spiral), the clusters shelf-packed across
+ * the world, and notes in no folder as one more cluster. Seeded on one ring, a
+ * folder's members started scattered around it, so every container started as a
+ * box spanning most of the world, all of them overlapping; the hard container
+ * constraint then threw whole folders into the walls, where their notes piled
+ * up — at 2,000 notes in 60 folders, 751 distinct positions for 2,000 notes,
+ * and 150 notes in 15 folders lost about a quarter. Deterministic, and returned
+ * in `ids` order (the insertion order `stepLayout` iterates).
+ */
+export function seedPositions(
+  ids: readonly string[],
+  folders: readonly FolderInput[],
+  world: { w: number; h: number },
+): Map<string, SimPoint> {
+  const { w, h } = world;
+  const n = ids.length || 1;
+  const folderOf = new Map<string, number>();
+  folders.forEach((f, fi) => {
+    for (const id of f.docIds) if (!folderOf.has(id)) folderOf.set(id, fi);
+  });
+  const out = new Map<string, SimPoint>();
+  if (!folderAware(ids.length, ids.some((id) => folderOf.has(id)))) {
+    const r = Math.min(Math.min(w, h) / 2 - PAD - 10, 60 + n * 22);
+    ids.forEach((id, i) => {
+      const angle = (2 * Math.PI * i) / n;
+      out.set(id, { id, x: w / 2 + r * Math.cos(angle), y: h / 2 + r * Math.sin(angle), vx: 0, vy: 0 });
+    });
+    return out;
+  }
+
+  const groups: string[][] = folders.map(() => []);
+  const loose: string[] = [];
+  for (const id of ids) {
+    const f = folderOf.get(id);
+    if (f == null) loose.push(id);
+    else groups[f]!.push(id);
+  }
+  const clusters = groups.filter((g) => g.length);
+  if (loose.length) clusters.push(loose);
+  const sized = clusters
+    .map((members, order) => {
+      const r = SEED_SPACING * Math.sqrt(members.length);
+      return { members, order, hw: r + SEED_NAME_W, hh: r + SEED_NAME_H };
+    })
+    .sort((a, b) => b.hw - a.hw || a.order - b.order);
+
+  // Shelf packing, largest first: left to right, a new row when one is full.
+  const maxW = Math.max(1, w - 2 * PAD);
+  const placed: Array<{ members: string[]; cx: number; cy: number }> = [];
+  let x = 0, y = 0, rowH = 0, usedW = 0;
+  for (const s of sized) {
+    if (x > 0 && x + 2 * s.hw > maxW) {
+      y += rowH + FOLDER_GAP;
+      x = 0;
+      rowH = 0;
+    }
+    placed.push({ members: s.members, cx: x + s.hw, cy: y + s.hh });
+    x += 2 * s.hw + FOLDER_GAP;
+    rowH = Math.max(rowH, 2 * s.hh);
+    usedW = Math.max(usedW, x - FOLDER_GAP);
+  }
+  const usedH = y + rowH;
+  const ox = PAD + Math.max(0, (maxW - usedW) / 2);
+  const oy = PAD + Math.max(0, (h - 2 * PAD - usedH) / 2);
+  const seeded = new Map<string, { x: number; y: number }>();
+  for (const c of placed) {
+    c.members.forEach((id, j) => {
+      const rr = SEED_SPACING * Math.sqrt(j + 0.5);
+      const a = j * GOLDEN_ANGLE;
+      seeded.set(id, { x: ox + c.cx + rr * Math.cos(a), y: oy + c.cy + rr * Math.sin(a) });
+    });
+  }
+  const minX = PAD, maxX = Math.max(PAD + 1, w - PAD), minY = PAD, maxY = Math.max(PAD + 1, h - PAD);
+  for (const id of ids) {
+    const p = seeded.get(id)!;
+    out.set(id, {
+      id,
+      x: Math.max(minX, Math.min(maxX, p.x)),
+      y: Math.max(minY, Math.min(maxY, p.y)),
+      vx: 0,
+      vy: 0,
+    });
+  }
+  return out;
 }
 
 /** Freeze test, shared by the animated loop and the reduced-motion settle. */
@@ -182,12 +320,20 @@ export function stepLayout(input: StepInput): number {
     }
   }
 
+  // Folderless maps keep their exact, familiar dynamics (the speed limit below
+  // is for the container constraint's close pairs), and so do maps too large for
+  // the folder-aware layout (FOLDER_LAYOUT_MAX).
+  const hasFolders = folderAware(ps.length, folders.length > 0);
   let maxV = 0;
   for (const p of ps) {
     p.vx += (cx - p.x) * GRAVITY * alpha;
     p.vy += (cy - p.y) * GRAVITY * alpha;
     if (pinned === p.id) { p.vx = 0; p.vy = 0; continue; }
     p.vx *= DAMPING; p.vy *= DAMPING;
+    if (hasFolders) {
+      const sp = Math.hypot(p.vx, p.vy);
+      if (sp > FOLDER_MAX_SPEED) { p.vx *= FOLDER_MAX_SPEED / sp; p.vy *= FOLDER_MAX_SPEED / sp; }
+    }
     p.x = Math.max(minX, Math.min(maxX, p.x + p.vx));
     p.y = Math.max(minY, Math.min(maxY, p.y + p.vy));
     const v = Math.abs(p.vx) + Math.abs(p.vy);
@@ -204,6 +350,23 @@ export function stepLayout(input: StepInput): number {
   const shift = (p: SimPoint, dx: number, dy: number) => {
     p.x = Math.max(minX, Math.min(maxX, p.x + dx));
     p.y = Math.max(minY, Math.min(maxY, p.y + dy));
+  };
+  /** Move a folder's members TOGETHER. Clamping each member to the world on its
+   *  own (`shift`) flattened every member a push drove into a wall onto the SAME
+   *  coordinate, so folders pushed apart piled their notes up on the walls. The
+   *  shift is limited instead, so the outermost member stops at the wall and the
+   *  folder keeps its shape. */
+  const shiftGroup = (group: SimPoint[], dx: number, dy: number) => {
+    let lo = Infinity, hi = -Infinity, top = Infinity, bottom = -Infinity;
+    for (const p of group) {
+      if (p.x < lo) lo = p.x;
+      if (p.x > hi) hi = p.x;
+      if (p.y < top) top = p.y;
+      if (p.y > bottom) bottom = p.y;
+    }
+    const sx = dx < 0 ? Math.max(dx, Math.min(0, minX - lo)) : Math.min(dx, Math.max(0, maxX - hi));
+    const sy = dy < 0 ? Math.max(dy, Math.min(0, minY - top)) : Math.min(dy, Math.max(0, maxY - bottom));
+    for (const p of group) { p.x += sx; p.y += sy; }
   };
   // A node's footprint for the outsider test is fixed for the step.
   const outHW = new Float64Array(ps.length), outVH = new Float64Array(ps.length);
@@ -246,8 +409,13 @@ export function stepLayout(input: StepInput): number {
           ? ((A.x0 + A.x1) <= (B.x0 + B.x1) ? 1 : -1)
           : ((A.y0 + A.y1) <= (B.y0 + B.y1) ? 1 : -1);
         const step = (horizontal ? ox : oy) / 2;
-        for (const p of members[i]!) shift(p, horizontal ? -step * dir : 0, horizontal ? 0 : -step * dir);
-        for (const p of members[j]!) shift(p, horizontal ? step * dir : 0, horizontal ? 0 : step * dir);
+        if (hasFolders) {
+          shiftGroup(members[i]!, horizontal ? -step * dir : 0, horizontal ? 0 : -step * dir);
+          shiftGroup(members[j]!, horizontal ? step * dir : 0, horizontal ? 0 : step * dir);
+        } else {
+          for (const p of members[i]!) shift(p, horizontal ? -step * dir : 0, horizontal ? 0 : -step * dir);
+          for (const p of members[j]!) shift(p, horizontal ? step * dir : 0, horizontal ? 0 : step * dir);
+        }
       }
     }
     // Container ↔ outsider: measured with the outsider's own label footprint,
