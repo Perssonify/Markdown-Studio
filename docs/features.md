@@ -16,7 +16,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 ### 1. Dual-pane editing
 
 - **What:** Edit raw markdown (left) and rich text (right) simultaneously; changes in one pane appear in the other.
-- **Entry point:** `EditorLayout` ([src/ui/EditorPanes.tsx:698](../src/ui/EditorPanes.tsx#L698)), rendering [src/ui/CodeMirrorPane.tsx](../src/ui/CodeMirrorPane.tsx) and [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
+- **Entry point:** `EditorLayout` ([src/ui/EditorPanes.tsx:704](../src/ui/EditorPanes.tsx#L704)), rendering [src/ui/CodeMirrorPane.tsx](../src/ui/CodeMirrorPane.tsx) and [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
 - **Happy-path flow** (you type in the markdown pane):
   1. CodeMirror fires its change handler → `handleMdChange()` in [src/hooks/useDocumentLifecycle.ts:251](../src/hooks/useDocumentLifecycle.ts#L251).
   2. The change is debounced, with a ceiling so the other pane keeps up during continuous typing; both delays come from the measured cost of recent projections (see [src/hooks/sync-schedule.ts](../src/hooks/sync-schedule.ts)).
