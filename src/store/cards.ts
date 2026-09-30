@@ -11,6 +11,8 @@
  * document schema, the storage adapter, and the save path stay untouched.
  */
 
+import { t } from "../i18n";
+
 /** Metadata keys owned by the Cards view. */
 export const CARD_COLOR_KEY = "cardColor";
 export const CARD_PINNED_KEY = "cardPinned";
@@ -40,15 +42,15 @@ export const CARD_COLORS: {
   light: string;
   dark: string;
 }[] = [
-  { id: "default", label: "Default", light: "", dark: "" },
-  { id: "red", label: "Coral", light: "#faafa8", dark: "#77172e" },
-  { id: "orange", label: "Peach", light: "#f39f76", dark: "#692b17" },
-  { id: "yellow", label: "Sand", light: "#fff8b8", dark: "#7c4a03" },
-  { id: "green", label: "Sage", light: "#e2f6d3", dark: "#264d3b" },
-  { id: "teal", label: "Mint", light: "#b4ddd3", dark: "#0c625d" },
-  { id: "blue", label: "Fog", light: "#d4e4ed", dark: "#256377" },
-  { id: "purple", label: "Dusk", light: "#d3bfdb", dark: "#472e5b" },
-  { id: "pink", label: "Blossom", light: "#f6e2dd", dark: "#6c394f" },
+  { id: "default", get label() { return t("cards.colorDefault"); }, light: "", dark: "" },
+  { id: "red", get label() { return t("cards.colorCoral"); }, light: "#faafa8", dark: "#77172e" },
+  { id: "orange", get label() { return t("cards.colorPeach"); }, light: "#f39f76", dark: "#692b17" },
+  { id: "yellow", get label() { return t("cards.colorSand"); }, light: "#fff8b8", dark: "#7c4a03" },
+  { id: "green", get label() { return t("cards.colorSage"); }, light: "#e2f6d3", dark: "#264d3b" },
+  { id: "teal", get label() { return t("cards.colorMint"); }, light: "#b4ddd3", dark: "#0c625d" },
+  { id: "blue", get label() { return t("cards.colorFog"); }, light: "#d4e4ed", dark: "#256377" },
+  { id: "purple", get label() { return t("cards.colorDusk"); }, light: "#d3bfdb", dark: "#472e5b" },
+  { id: "pink", get label() { return t("cards.colorBlossom"); }, light: "#f6e2dd", dark: "#6c394f" },
 ];
 
 const COLOR_IDS = new Set(CARD_COLORS.map((c) => c.id));
