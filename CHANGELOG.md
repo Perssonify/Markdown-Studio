@@ -19,6 +19,11 @@ person — is listed in [`docs/audit-2026-09.md`](docs/audit-2026-09.md). The
 finding IDs (A001–A114) are cited below.
 
 ### Changed — what you will notice
+- **Exported markdown keeps its line breaks in other apps.** A line break inside a
+  paragraph is written as a backslash at the end of the line in exported markdown
+  (File ▸ Export, the per-document export and ZIP exports), which every markdown
+  renderer honours; before, most renderers joined the lines. The editor's own
+  markdown pane is unchanged. (A051)
 - **Images are stored once.** A pasted, dropped or imported image is kept once in
   this browser, however many documents or saved versions use it, instead of as
   text inside every copy. Exports and backups still carry the image, and a Word
@@ -96,6 +101,8 @@ finding IDs (A001–A114) are cited below.
   rather than one page of the app's chrome. (A100)
 
 ### Fixed — content that was lost or changed
+- In a long document the footnotes section could come back as a literal
+  `## Footnotes` heading when the conversion split it from its definitions.
 - Tabs inside code blocks survive a round trip, text such as `<snake_case>` no
   longer vanishes, Word export no longer shows HTML entities, and bold or italic
   after a code span that ends in a backslash renders correctly (the markdown
@@ -240,10 +247,14 @@ finding IDs (A001–A114) are cited below.
 ### Performance
 - The library panel no longer freezes the editor on every autosave: at 2,000
   documents a save went from ~2.3 s to ~16 ms (measured in jsdom) (A082).
-- Large documents: rich→markdown conversion is linear instead of quadratic and
-  the maths scan is bounded. For a 1.6 MB document (jsdom) markdown→rich went from
-  ~0.4 s to ~0.1 s and rich→markdown from ~5 s to 1.6–3.5 s — but every edit still
-  converts the whole document (A083, partly done).
+- **Typing in a large document no longer stalls the markdown pane.** Only the
+  blocks you changed are re-converted: in a 1.6 MB document the markdown pane
+  follows a keystroke in 0.17 s instead of 2.5 s (0.6 s instead of 23 s with the
+  CPU slowed 4×), and in a 4 MB one in 0.4 s. The right-to-left handling and the
+  right-click menu no longer cost time on every keystroke, the maths scan is
+  bounded, and markdown→rich for a 1.6 MB document went from ~0.4 s to ~0.1 s.
+  Opening a very large document, and edits made in the markdown pane, still
+  convert the whole document (A083, partly done).
 - Startup download 915 → 680 KiB gzip (A084); the Cards board reloads only what
   changed (A087); snapshot pruning, batched backup export and a single KaTeX copy
   (A088).
