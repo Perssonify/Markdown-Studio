@@ -929,7 +929,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     A013, A074). `Sec-Fetch-Site` must be `same-origin`/`none`: that stops OTHER web
     pages from using the relay, NOT curl, which sends whatever headers it likes — to
     non-browser clients it is a bounded proxy, and the rate limit and spend alerts
-    are owner setup in Vercel (`docs/import-relay.md`).
+    are owner setup in Vercel (`docs/import-relay.md`). **Its `fetch` comes from
+    undici, next to its `Agent` — never Node's global**: a dispatcher works only
+    with the fetch of its own major, and undici 8's Agent with Node 24's built-in
+    fetch failed EVERY request (`invalid onRequestStart method`) while the stubbed
+    unit tests stayed green. `import-relay-dispatcher.test.js` sends a real request
+    over a socket; `allowH2: false` (undici 8 defaults HTTP/2 on).
   - **The relay is opt-in** (A076). `fetchImportResource` never relays without a
     stored `"allow"` (`pf:import-relay`) or a `confirmRelay` callback that answers
     yes; the answer is remembered and can be changed in Settings ▸ Privacy. It used
@@ -961,6 +966,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     `initialize()` only, never by a diagram's `%%{init}%%` or front matter. Mermaid
     pastes them into a `<style>` and checks only brace balance, so any opened
     document could restyle the page (A069).
+  - **Mermaid 12 defaults to ELK; `mermaidConfig` pins `layout: "dagre"`** so existing
+    diagrams keep their layout — a diagram may still opt into ELK
+    (`ops-mermaid-secure` pins both). ELK (elkjs, **EPL-2.0**, 436 KiB gzip) is lazy
+    and precached; the csp/pwa renderer probe draws an ELK diagram, found by its own
+    label. Mermaid 12's notes say Safari 17.4+ against our 16.4 floor: a scan of the
+    built chunks found no post-16.4 API, which is evidence, not a device run.
   - **CSP ships REPORT-ONLY and hash-pinned; anti-framing is ENFORCED**
     (`vercel.json`: `frame-ancestors 'none'` + `X-Frame-Options: DENY` everywhere but
     `/embed.html`, A068) — framing the app root is broken by design. **Editing an
@@ -1364,7 +1375,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   clean and hidden (`decideUpdateReload`, `utils/app-health.ts`) and asks otherwise.
   Do NOT re-add any of the three. Tabs check for a new worker hourly
   (`UPDATE_CHECK_MS` — `pushState` routes are not navigations). **Every JS chunk is
-  precached**, so the app works offline after ONE online visit — any lazy feature
+  precached** (about 9.9 MiB since mermaid 12's ELK chunk), so the app works offline after ONE online visit — any lazy feature
   not opened online used to fail offline (A085) — and `public/sw-recover.js` falls
   back to THIS worker's own precached `index.html`. `e2e:pwa` proves both.
 - **The boot watchdog acts only on EVIDENCE, and only online** (A011). The inline
@@ -2186,7 +2197,29 @@ The product ships three ways from one codebase: the standalone app
   `tsconfig.build.json`, and `src/types/side-effect-imports.d.ts` for 6.0's default
   `noUncheckedSideEffectImports` — a new non-`.css` side-effect import needs a line
   there. `bunx -p typescript@7 tsc --noEmit` is clean; see `docs/workflows.md` ▸
-  TypeScript 7.
+  TypeScript 7. Re-checked 1 Oct 2026: typescript-eslint 8.71.0 and its newest canary
+  still peer `<6.1.0` — still blocked.
+- **`engines.node` is the intersection of the direct dependencies' ranges**
+  (`^22.22.2 || ^24.15.0 || >=26.0.0` — jsdom 30 and vitest 5 are the narrowest;
+  vitest 5 skips Node 23 and 25). `.node-version` (24) is what every CI job and the
+  publish job install. `ops-node-range.test.js` reads every installed dependency's
+  Node requirement and fails, naming the tool, if our range admits a Node one of
+  them refuses.
+- **Published declarations are FINISHED by `build/finish-declarations.mjs`** (both
+  `build` and `build:types`): no side-effect CSS imports (TS2882 under
+  `skipLibCheck: false`), explicit `./x.js` specifiers (every extensionless import
+  was TS2834 under node16/nodenext, so the entry points re-exported nothing), no `@/`
+  alias, and a `dist/styles.css.d.ts` behind the `./styles.css` export's `types`
+  condition. `pkg-declarations.test.js` compiles a `skipLibCheck: false` consumer
+  against the built `dist` under `bundler` AND `nodenext`. The bridge's
+  `EditorHandle` is written as methods over `unknown`, the integration passes its
+  ref without a cast, `EditorViewMode`/`EditorChromeLevel` are shared (exported from
+  `./integration`), and the bridge REFUSES an unknown mode or chrome level; the core
+  handle is `InternalEditorHandle` in `editor/props.ts`.
+- **Held dependencies:** docx stays at 9.7.x until the Word-export parity fixture is
+  re-recorded for 9.8 (it writes `w:val="clear"` shading); an `overrides` entry
+  keeps lodash-es at ^4.18.1 (mermaid 12's chevrotain pins 4.17.23, which has
+  advisories).
 - **Never DEFAULT-import an `__esModule` CommonJS external** (every `@tiptap/*`):
   import the named export — `{ StarterKit }`, `{ CodeBlockLowlight }`. The package is
   `"type": "module"`, so Rolldown gives the CJS build Node's interop and the default
@@ -2441,7 +2474,15 @@ the viewport, so it cannot be relied on to move a board across a threshold.
   `src/__tests__/setup.js` gives `Range` the empty geometry jsdom already gives
   elements (`testenv-geometry.test.jsx` reproduces the race). A test with cold
   dynamic imports states its own budget rather than inheriting 5s, and a component
-  using `useIsMobile` needs `window.matchMedia` stubbed (jsdom has none).
+  using `useIsMobile` needs `window.matchMedia` stubbed (jsdom has none). Vitest 5:
+  `clearMocks: false` is DELIBERATE — suites create spies once and 147
+  `not.toHaveBeenCalled()` checks rely on call history. `seededAdapter` keeps a
+  fixture's own `updated` (re-stamping it made which document opened at boot a
+  same-millisecond race — the `behave-editor-surfaces` flake), and a `beforeAll`
+  that clicks a library row waits for the row. In e2e, rich-pane typing after a click
+  and Ctrl+End waits for ProseMirror's selection (`richCaretToEnd`): WebKit fired
+  `selectionchange` late, text inherited the bold it was clicked into, and ⌘B then
+  REMOVED bold.
 - **Line endings are LF everywhere** (`.gitattributes` `* text=auto eol=lf`).
   Source-reading tests match call sites such as `"<MenuBar\n"`, so a CRLF checkout
   (`core.autocrlf=true` on Windows) failed `sync-perf.test.js` on untouched code.

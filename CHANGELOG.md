@@ -183,6 +183,8 @@ finding IDs (A001–A114) are cited below.
   one-click backup (A004).
 
 ### Security and privacy
+- lodash-es is pinned to 4.18.1 (mermaid 12 pulled in a version with advisories);
+  `bun audit` reports none.
 - **Exporting, copying or sending a document to a host no longer fetches its
   images.** The document's HTML was built in the live page, so every image in it
   started loading: a remote image was requested on every export, and WebKit
@@ -317,6 +319,14 @@ finding IDs (A001–A114) are cited below.
   a failed update.
 
 ### npm library
+- **The published types compile for every consumer:** with `skipLibCheck: false`
+  and under node16/nodenext resolution (every extensionless import failed there,
+  so the entry points exported nothing), and `import "@perssonify/editor/styles.css"`
+  now has types. `createHostBridge` accepts the integration's handle ref, and the
+  bridge refuses an unknown mode or chrome level (and no longer answers success to
+  a thrown non-Error). (A113)
+- **Node `^22.22.2 || ^24.15.0 || >=26`** — the range every dependency accepts;
+  older Node versions now get an install warning. (A113)
 - `importFile` names a document by its first heading (it used the file name
   until the host finished the import).
 - Every runtime import is declared (A101); the stylesheet no longer restyles the
@@ -348,6 +358,12 @@ finding IDs (A001–A114) are cited below.
   (A108).
 
 ### Developer
+- mermaid 12 (existing diagrams keep the dagre layout; a diagram can opt into
+  ELK), vitest 5, jsdom 30, lucide-react 1.x, nanoid 6 (with docx 9.7.2) and
+  undici 8 — the import relay now takes `fetch` from undici itself, without which
+  every relayed request failed. CI runs on Node 24 (`.node-version`). Two flaky
+  tests fixed at their cause (a WebKit caret race in the e2e harness, a seeding
+  race in the behavioural harness). Lint warnings 266 → 112. (A113, A100, A107)
 - ESLint with the React hook rules (`bun run lint`, 0 errors) and `noImplicitAny`
   (A109); coverage measured over all of `src`, now 81.8% of lines after sixteen
   behavioural suites that mount the real editor (A108); the unit suite no longer
