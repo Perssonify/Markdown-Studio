@@ -4,6 +4,7 @@ import { Check, Pencil } from "lucide-react";
 import { useState } from "react";
 import { useUIStore } from "../store/uiStore";
 import { CodeBlockCopyButton } from "./CodeBlockCopyButton";
+import { codeBlockRebuildPlugin, isDiagramBlock, PlainCodeBlockView } from "./code-block-plain-view";
 import { DiagramPreview } from "./DiagramPreview";
 import { common, createLowlight } from "lowlight";
 import { useT } from "../i18n";
@@ -100,7 +101,18 @@ const lowlight = createLowlight(common);
 
 export const CodeBlockWithCopy = CodeBlockLowlight.extend({
   addNodeView() {
-    return ReactNodeViewRenderer(CodeBlockComponent);
+    // Only diagrams and scores are React. An ordinary block is a plain DOM view
+    // (code-block-plain-view.ts): a React node view per block made opening a
+    // document quadratic in its code blocks (A083). A plain view that BECOMES a
+    // diagram declines its update and ProseMirror comes back here for a new one.
+    const reactView = ReactNodeViewRenderer(CodeBlockComponent);
+    return (props) =>
+      isDiagramBlock(props.node) ? reactView(props) : new PlainCodeBlockView(props.node, props.view, props.getPos);
+  },
+  addProseMirrorPlugins() {
+    // The parent's (syntax highlighting) plus the one a plain view uses to be
+    // replaced when it becomes a diagram.
+    return [...(this.parent?.() ?? []), codeBlockRebuildPlugin()];
   },
 }).configure({
   lowlight,

@@ -38,7 +38,7 @@ export function numberedDoc(id, title, lines) {
  * roughly `kb` KB of markdown. What a real long document looks like to the
  * converters, where prose alone flatters them (A083).
  */
-export function mixedDoc(id, title, kb) {
+export function mixedDoc(id, title, kb, codeEvery = 48) {
   const t = (text, marks) => (marks ? { type: "text", text, marks } : { type: "text", text });
   const li = (text) => ({ type: "listItem", content: [P(text)] });
   const cell = (text, header) => ({
@@ -60,8 +60,10 @@ export function mixedDoc(id, title, kb) {
     // A code block in one cycle of four: each is a React node view, and opening
     // a document mounts them one by one, each forcing a layout of the whole
     // editor (quadratic — see e2e/cases/perf.mjs). Denser, and a 4 MB fixture
-    // measures that instead of what the case is for.
-    (i) => (i % 48 === 4
+    // measures that instead of what the case is for. `codeEvery` (a multiple
+    // of the 12 shapes; 12 = one per cycle) makes it denser on purpose, to
+    // measure opening a code-heavy document (CODE_EVERY in perf.mjs).
+    (i) => (i % codeEvery === 4
       ? { type: "codeBlock", attrs: { language: "js" }, content: [t(`const value${i} = ${i};\n\nconsole.log(value${i});`)] }
       : P(`Plain paragraph ${i}: ${LOREM}`)),
     (i) => ({ type: "orderedList", attrs: { start: 1 }, content: [li(`one ${i}`), li("two"), li("three")] }),
