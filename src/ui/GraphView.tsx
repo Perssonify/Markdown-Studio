@@ -104,9 +104,11 @@ type Pt = SimPoint;
 
 // ── Physics ──────────────────────────────────────────────────────────────────
 // The force layout itself — its constants, its world-space (`worldFor`), the
-// exact small-map loop and the Barnes–Hut large-map path — lives in
+// exact small-map loop, the Barnes–Hut large-map path and the two-level layout
+// of a large folder map (`planFolderLayout`) — lives in
 // `store/graph-physics.ts`, pure and unit-tested. This component owns the ONE
-// position map it mutates (`posRef`) and the loop that drives it.
+// position map it mutates (`posRef`), the plan it steps it with, and the loop
+// that drives it.
 
 // ── Scale ────────────────────────────────────────────────────────────────────
 // A LARGE map (`isLargeMap`, graph-metrics.ts) is drawn and paced for scale:
@@ -562,14 +564,16 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       ids, folders: foldersRef.current, edges: graph.edges,
       radius: (id) => meta.radius.get(id) ?? 7, label: (id) => meta.label.get(id) ?? "",
     });
+    // With a plan (or coming from one), EVERY note starts afresh: one kept
+    // where it was would sit in whatever region used to be there.
+    const fresh = !!plan || !!planRef.current;
     planRef.current = plan;
     worldRef.current = plan ? plan.world : worldFor(n, foldersRef.current.length > 0);
     // Folderless: the ring the map has always started from. With folders, each
     // folder starts as its own cluster (seedPositions explains why); with a
-    // plan, EVERY note starts at its home in its region — one kept where it
-    // was would sit in whatever region used to be there.
+    // plan, each note at its home in its region.
     const seeded = seedPositions(ids, foldersRef.current, worldRef.current, plan);
-    for (const node of graph.nodes) next.set(node.id, (plan ? null : cur.get(node.id)) ?? seeded.get(node.id)!);
+    for (const node of graph.nodes) next.set(node.id, (fresh ? null : cur.get(node.id)) ?? seeded.get(node.id)!);
     posRef.current = next;
     layoutVersionRef.current += 1;
     // A large map settling under reduced motion draws NOTHING until it rests
