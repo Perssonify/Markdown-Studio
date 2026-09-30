@@ -14,6 +14,7 @@ import { useEditorStore } from "./store/editorStore";
 import type { PerssonifyEditorProps } from "./editor/props";
 import { useOverlayInert, useWorkspaceViews } from "./editor/useWorkspaceViews";
 import { useAutosave } from "./editor/useAutosave";
+import { useTabSync } from "./editor/useTabSync";
 import { useCanonicalChangeHandler, useContentChangeEmitter } from "./editor/useChangeNotifications";
 import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation";
 import { usePaneCommands } from "./editor/usePaneCommands";
@@ -383,6 +384,7 @@ function PerssonifyEditorInstance({
     prepareToLeaveActiveDoc, hydrateEditorWithDoc,
     restoreSnapshotInPlace, restoreSnapshotAsNew,
     cancelPendingSync, flushPendingSync, releaseEditor,
+    endCompositions, claimEditorGeneration, isEditorGeneration, hasPendingProjection,
   } = useDocumentLifecycle({
     tiptapRef, cmRef, engine, syncMdToHtml, syncHtmlToMd, forceSyncMdToHtml, forceSyncHtmlToMd,
     resetHashes, setCanonical, setFromHtml, switchToDoc, closeTab,
@@ -555,6 +557,14 @@ function PerssonifyEditorInstance({
     cmRef, tiptapRef, initDoneRef, activeDoc, saveStatus, saveActiveDoc, getCanonical,
     flushPendingSync, prepareToLeaveActiveDoc, graphVisible, cardsVisible, toast,
     onSave, onStorageQuotaExceeded,
+  });
+
+  // ── Live sync between tabs ────────────────────────────────────────────────
+  // Other tabs' committed writes (useTabSync): the library refreshes, a clean
+  // open document reloads, unsaved work parks a conflict with three choices.
+  useTabSync({
+    tiptapRef, cmRef, hydrateEditorWithDoc, claimEditorGeneration, isEditorGeneration,
+    endCompositions, hasPendingProjection, flushPendingSync, cancelPendingSync, handleCloseTab, toast,
   });
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────

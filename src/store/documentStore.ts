@@ -23,6 +23,8 @@ import {
   createStorageAdapter,
   hasMetrics,
   IndexedDBStorageAdapter,
+  LocalStorageAdapter,
+  WindowStorageAdapter,
   type StorageAdapter,
   type IDBStorageConfig,
 } from "./storage-adapter";
@@ -34,6 +36,13 @@ import { historyCache } from "./history-cache";
 import { useFolderStore } from "./folders";
 import { safeStorage } from "../utils/safe-storage";
 import { t } from "../i18n/core";
+import {
+  announce,
+  configureTabSync,
+  isDeletedElsewhere,
+  isForeignRevision,
+  tabSyncChannelName,
+} from "./tab-sync";
 
 /**
  * A canonical doc is "blank" when it holds no real content — an empty/absent
@@ -70,6 +79,20 @@ export function isNewerThanBase(
   return drift > CONFLICT_TOLERANCE_MS;
 }
 
+/**
+ * The stored revision of `docId` is another tab's, written after `base`. The
+ * drift check alone misses a write made within its tolerance of this tab's
+ * base; a revision another tab ANNOUNCED (tab-sync.ts) is known to be foreign
+ * and needs no tolerance.
+ */
+export function isOvertaken(
+  docId: string,
+  storedUpdated: string | null | undefined,
+  baseUpdated: string | null | undefined
+): boolean {
+  return isNewerThanBase(storedUpdated, baseUpdated) || isForeignRevision(docId, storedUpdated, baseUpdated);
+}
+
 /** The saveError a document gets while it is locked read-only because its
  *  content does not fit this build (see schema-version.ts). */
 export const SCHEMA_LOCK_ERROR = "Made by a newer version of the app — open read-only, not saving";
@@ -94,7 +117,7 @@ export class ConflictError extends Error {
  * document switch, a swallowed write error — none of which put anything on disk.
  */
 export function describeUncommittedSave(
-  s: Pick<DocumentState, "saveStatus" | "saveError">
+  s: Pick<DocumentState, "saveStatus" | "saveError"> & { activeDocId?: string | null }
 ): { message: string; type: "warning" | "error" } {
   switch (s.saveStatus) {
     case "blocked":
@@ -112,6 +135,8 @@ export function describeUncommittedSave(
         type: "warning",
       };
     case "conflict":
+      // Deleted in another tab shares the terminal "conflict" status.
+      if (isDeletedElsewhere(s.activeDocId)) return { message: t("editor.deletedElsewhereMessage"), type: "warning" };
       return { message: t("editor.conflictMessage"), type: "warning" };
     case "full":
       return { message: t("editor.notSavedStorageFull"), type: "error" };
@@ -397,12 +422,51 @@ interface DocumentState {
     unsavedDraftCount: number;
     docCount: number;
   };
+
+  // ── Live sync between tabs (tab-sync.ts, editor/useTabSync.ts) ────────────
+  /** Re-read the library listing — another tab changed it. Publishes only
+   *  when the listing actually differs. */
+  refreshLibrary: () => Promise<void>;
+  /**
+   * Take `doc` — just read from storage — as the open document's record: its
+   * content, title and metadata, and its `updated` as the new base. The caller
+   * puts the same content into the editor (the hydration ritual) in the same
+   * synchronous block, having checked there is no unsaved work to lose.
+   */
+  adoptStoredRevision: (doc: DocumentRecord) => void;
+  /** Another tab changed only the open document's metadata (a card's pin or
+   *  colour, `updated` untouched): take it, so this tab's next save does not
+   *  write the old values back. */
+  adoptStoredMetadata: (docId: string, metadata: Record<string, unknown>) => void;
+  /**
+   * The user chose to write this tab's version over revision `updated`
+   * ("Keep mine"): rebase the open document — and any parked draft of it — on
+   * that revision, so the guard lets exactly that overwrite through.
+   */
+  consentToRevision: (docId: string, updated: string) => void;
+  /** Park the terminal "conflict" status for the open document now — another
+   *  tab changed (or deleted) it while this tab holds unsaved work. */
+  markConflict: (docId: string, kind: "changed" | "deleted") => void;
 }
 
 // ─── Module-level singletons (not reactive) ──────────────────────────────────
 
 let storage: StorageAdapter = createStorageAdapter();
 let initialized = false;
+
+/**
+ * The tab-sync channel for the built-in storage (tab-sync.ts), named after
+ * what the tabs share: the database. The in-memory fallback is per tab, so it
+ * has none. (A host's own adapter is named after its namespace — initStorage /
+ * configureLocalStores.)
+ */
+function tabChannelFor(adapter: StorageAdapter, config?: IDBStorageConfig): string | null {
+  if (adapter instanceof IndexedDBStorageAdapter) return tabSyncChannelName("idb", config?.dbName || "perssonify-docs");
+  if (adapter instanceof LocalStorageAdapter) return tabSyncChannelName("local");
+  if (adapter instanceof WindowStorageAdapter) return tabSyncChannelName("window");
+  return null;
+}
+configureTabSync(tabChannelFor(storage));
 // One-shot permission for the next save to persist a blank canonical over a
 // non-empty stored doc (set by the explicit "Clear document" command). Module
 // scope keeps it out of the reactive store state.
@@ -525,6 +589,7 @@ async function applyTitleOnly(
   syncFieldsToMetadata(stored);
   if (patch.metadata) stored.metadata = { ...stored.metadata, ...patch.metadata };
   await storage.save(stored);
+  announce({ type: "doc", id: docId, updated: stored.updated });
   const list = await storage.list();
   set((s) => ({
     documents: list,
@@ -577,6 +642,9 @@ export function configureLocalStores(
     dbName: ns ? `perssonify-assets:${ns}` : undefined,
     enabled: config?.assets === true,
   });
+  // Live sync between tabs: two host namespaces never hear each other. (The
+  // built-in database is named by its own dbName — see initStorage.)
+  if (ns && !(storage instanceof IndexedDBStorageAdapter)) configureTabSync(tabSyncChannelName("host", ns));
 }
 
 /** localStorage keys other parts of the app keep that describe the LIBRARY
@@ -624,6 +692,9 @@ export async function clearLocalData(opts: { preferences?: boolean } = {}): Prom
     for (const d of await adapter.list()) await adapter.delete(d.id);
     await adapter.setPrefs({ lastActiveDocId: null, folderTree: null }).catch(() => {});
   }
+  // Another tab still showing a document must not write it back after an
+  // erase — a logout on a shared device. It is told, and treats it as deleted.
+  announce({ type: "cleared" });
   await snapshotStore.clearAll?.();
   // Every image the library stored as an asset (A086) goes with it.
   await assetStore.clearAll();
@@ -808,9 +879,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // A host's own adapter: images stay inline unless its storageConfig
       // opts in (useEditorBoot re-configures with that config right after).
       assetStore.configure({ enabled: false });
+      // Whether a host's adapter is shared between tabs is the host's
+      // business; a receiver verifies every message against its OWN storage
+      // before acting, so one that is not shared only re-reads its listing.
+      // A storageConfig namespace narrows the channel (configureLocalStores).
+      configureTabSync(tabSyncChannelName("host"));
     } else {
       storage = new IndexedDBStorageAdapter(adapterOrConfig as IDBStorageConfig);
       configureLocalStores(adapterOrConfig as IDBStorageConfig);
+      configureTabSync(tabChannelFor(storage, adapterOrConfig as IDBStorageConfig));
     }
   },
 
@@ -993,6 +1070,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (!skipPersist) {
       try {
         await storage.save(doc);
+        announce({ type: "doc", id: doc.id, updated: doc.updated });
         const list = await storage.list();
         // Adapters stamp doc.updated during save — sync it onto the (already
         // optimistically-set) activeDoc so later conflict checks don't misfire.
@@ -1015,6 +1093,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   saveNewDoc: async (doc) => {
     await storage.save(doc);
+    announce({ type: "doc", id: doc.id, updated: doc.updated });
     const list = await storage.list();
     set({ documents: list });
     refreshMetrics(set, get);
@@ -1054,7 +1133,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     let storedCorrupt = false;
     try {
       stored = await storage.get(activeDoc.id);
-      if (isNewerThanBase(stored?.updated, activeDoc.updated)) {
+      if (isOvertaken(activeDoc.id, stored?.updated, activeDoc.updated)) {
         // Park a TERMINAL "conflict" status so the UI can surface it
         // persistently (the status bar) instead of it flickering through the
         // generic transient "error". Set before throwing so it survives the
@@ -1091,6 +1170,21 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // two checks above still pass mid-delete — and the write below would put
       // the record straight back after `storage.delete` removed it.
       if (deletingDocs.has(activeDoc.id)) return false;
+    }
+
+    // Deleted in ANOTHER tab while open here (useTabSync): the record is gone,
+    // and writing now would silently resurrect what that tab deliberately
+    // deleted. Terminal, like a conflict — the notice offers "Keep as a new
+    // document" or "Close". Only while the record is still absent: an import
+    // that brings the same id back is a document again. What this tab holds is
+    // kept recoverable on every refused save, since it exists nowhere else.
+    if (!stored && !storedReadFailed && isDeletedElsewhere(activeDoc.id)) {
+      set({ saveStatus: "conflict", saveError: t("editor.deletedInAnotherTab") });
+      const live = tiptapEditor.getJSON();
+      void snapshotStore
+        .record(activeDoc.id, activeDoc.title, live, "pre-delete")
+        ?.catch?.(() => {});
+      return false;
     }
 
     // FAIL CLOSED on a storage that did not answer: it cannot prove there is no
@@ -1166,7 +1260,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       syncFieldsToMetadata(updatedDoc);
 
       await storage.save(updatedDoc);
-      // The write has COMMITTED. A listing that fails now must not turn it
+      // The write has COMMITTED — tell the other tabs (ids and revision only).
+      announce({ type: "doc", id: updatedDoc.id, updated: updatedDoc.updated });
+      // A listing that fails now must not turn it
       // into a reported failure (and a retry loop) — keep the last listing.
       let list = get().documents;
       try {
@@ -1366,6 +1462,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     }
     await storage.delete(docId);
     deletedAtSeq.set(docId, ++deletionSeq);
+    announce({ type: "deleted", id: docId });
     if (opts?.purgeHistory) {
       try { await snapshotStore.deleteForDoc?.(docId); } catch { /* best effort */ }
     }
@@ -1402,7 +1499,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // the stored record: merging this tab's live content into it would replace
     // the other tab's work, and stamping it into the store's activeDoc would
     // launder the conflict so the next autosave saw no drift at all.
-    const conflicted = isNewerThanBase(target.updated, baseRevisionFor(docId));
+    const conflicted = isOvertaken(docId, target.updated, baseRevisionFor(docId));
 
     // If the live editor currently holds this doc, its on-disk canonical lags the
     // editor by up to one autosave interval. Persist the LIVE content alongside
@@ -1423,6 +1520,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     syncFieldsToMetadata(target);
 
     await storage.save(target);
+    announce({ type: "doc", id: docId, updated: target.updated });
     const list = await storage.list();
     // A draft may have advanced while the rename's write/list was pending.
     // Only the live content captured for THIS write is known to be on disk.
@@ -1474,6 +1572,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Tell the adapter's save() to leave `updated` alone — see stampUpdated.
       (stored as DocumentRecord & { _preserveUpdated?: boolean })._preserveUpdated = true;
       await storage.save(stored);
+      // `updated` did not move, so a receiver cannot tell this write from the
+      // revision it already holds — `meta` says to re-read the metadata.
+      announce({ type: "doc", id: docId, updated: stored.updated, meta: true });
       const list = await storage.list();
       set((s) => ({
         documents: list,
@@ -1501,7 +1602,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // The same multi-tab check saveActiveDoc makes. The base is the OLDEST
     // revision this write's content derives from: the open document's, a
     // parked draft's, or the one the caller read it from (a card).
-    const conflicted = !!stored && isNewerThanBase(stored.updated, baseRevisionFor(docId, patch.expectedUpdated));
+    const conflicted = !!stored && isOvertaken(docId, stored.updated, baseRevisionFor(docId, patch.expectedUpdated));
     if (conflicted) {
       // Replacing content would overwrite the other tab's work: refuse.
       if (patch.canonical !== undefined) throw new ConflictError();
@@ -1545,6 +1646,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     delete (target as { _persistedCanonical?: unknown })._persistedCanonical;
 
     await storage.save(target);
+    announce({ type: "doc", id: docId, updated: target.updated });
     const list = await storage.list();
     // A title-only patch of a document with a parked draft moved its stamp by
     // this tab's own write — rebase the draft, as renameDoc does.
@@ -1593,6 +1695,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       updated: undefined,
     });
     await storage.save(dup);
+    announce({ type: "doc", id: dup.id, updated: dup.updated });
     const list = await storage.list();
     set({ documents: list });
     refreshMetrics(set, get);
@@ -1694,6 +1797,57 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       unsavedDraftCount: s._unsavedEdits.size,
       docCount: s.documents.length,
     };
+  },
+
+  // ── Live sync between tabs ─────────────────────────────────────────────────
+  refreshLibrary: async () => {
+    const list = await storage.list();
+    // Every listing is a fresh array of fresh objects. Publishing one that says
+    // nothing new re-renders the library, Cards and the link index's diff for
+    // nothing — and a message about a document this tab cannot see changes
+    // nothing here at all.
+    if (JSON.stringify(list) !== JSON.stringify(get().documents)) set({ documents: list });
+    refreshMetrics(set, get);
+  },
+
+  adoptStoredRevision: (doc) => {
+    cancelReadyReset();
+    get().clearUnsavedEdit(doc.id);
+    set((s) => {
+      if (s.activeDoc?.id !== doc.id) return {};
+      const record = { ...doc };
+      delete (record as { _persistedCanonical?: unknown })._persistedCanonical;
+      return {
+        activeDoc: record,
+        openTabs: s.openTabs.map((t) => (t.id === doc.id ? { ...t, title: doc.title } : t)),
+        counts: computeCounts(doc.canonical),
+        saveStatus: "ready",
+        saveError: null,
+      };
+    });
+  },
+
+  adoptStoredMetadata: (docId, metadata) => {
+    set((s) => (s.activeDoc?.id === docId ? { activeDoc: { ...s.activeDoc, metadata: { ...metadata } } } : {}));
+  },
+
+  consentToRevision: (docId, updated) => {
+    if (get()._draftBases.has(docId)) get()._draftBases.set(docId, updated);
+    cancelReadyReset();
+    set((s) =>
+      s.activeDoc?.id === docId
+        ? { activeDoc: { ...s.activeDoc, updated }, saveStatus: "editing", saveError: null }
+        : {}
+    );
+  },
+
+  markConflict: (docId, kind) => {
+    if (get().activeDocId !== docId) return;
+    cancelReadyReset();
+    set({
+      saveStatus: "conflict",
+      saveError: kind === "deleted" ? t("editor.deletedInAnotherTab") : t("editor.changedInAnotherTab"),
+    });
   },
 }));
 

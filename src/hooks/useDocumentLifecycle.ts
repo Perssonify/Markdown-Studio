@@ -1056,6 +1056,18 @@ export function useDocumentLifecycle({
     }
   }, [flushAndCacheIfDirty]);
 
+  /**
+   * For live sync between tabs (editor/useTabSync), which reloads the open
+   * document when another tab changed it and nothing here is unsaved. It must
+   * not hydrate over a projection still on its way — that is typing about to
+   * land — nor after a newer path took the editor while it read storage.
+   */
+  const hasPendingProjection = useCallback(
+    () => mdDebounceRef.current != null || htmlDebounceRef.current != null || pasteSyncRef.current != null,
+    []
+  );
+  const isEditorGeneration = useCallback((gen: number) => switchGenRef.current === gen, []);
+
   return {
     handleMdChange,
     handleHtmlChange,
@@ -1073,5 +1085,9 @@ export function useDocumentLifecycle({
     cancelPendingSync,
     flushPendingSync,
     releaseEditor,
+    endCompositions,
+    claimEditorGeneration,
+    isEditorGeneration,
+    hasPendingProjection,
   };
 }
