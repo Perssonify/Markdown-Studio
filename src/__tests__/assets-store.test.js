@@ -131,26 +131,39 @@ describe("asset store: namespacing (configureLocalStores)", () => {
     expect(await assetStore.get(hash)).not.toBeNull();
   });
 
-  it("maps storageConfig like version history: default name, host namespace, off switch", () => {
-    configureLocalStores();
+  it("maps storageConfig like version history: default name, host namespace", () => {
+    configureLocalStores({ assets: true });
     expect(assetStore.databaseName()).toBe(ASSETS_DB_NAME);
     expect(assetStore.isEnabled()).toBe(true);
 
-    configureLocalStores({ dbName: "tenant-a" });
+    configureLocalStores({ dbName: "tenant-a", assets: true });
     expect(assetStore.databaseName()).toBe("perssonify-assets:tenant-a");
 
-    configureLocalStores({ namespace: "user-7" });
+    configureLocalStores({ namespace: "user-7", assets: true });
     expect(assetStore.databaseName()).toBe("perssonify-assets:user-7");
-
-    configureLocalStores({ assets: false });
-    expect(assetStore.isEnabled()).toBe(false);
   });
 
-  it("is OFF for a host's own adapter unless its config opts in", () => {
-    configureLocalStores({ dbName: "server-backed" }, { customAdapter: true });
+  it("is OPT-IN for a host: off unless its storageConfig says `assets: true`", () => {
+    configureLocalStores();
     expect(assetStore.isEnabled()).toBe(false);
-    configureLocalStores({ dbName: "server-backed", assets: true }, { customAdapter: true });
+    configureLocalStores({ dbName: "tenant-b" });
+    expect(assetStore.isEnabled()).toBe(false);
+    configureLocalStores({ dbName: "tenant-b", assets: false });
+    expect(assetStore.isEnabled()).toBe(false);
+    configureLocalStores({ dbName: "tenant-b", assets: true });
     expect(assetStore.isEnabled()).toBe(true);
+  });
+
+  it("the store starts OFF; the standalone app shell is what turns it on", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/store/asset-store.ts", "utf8");
+    expect(src).toMatch(/private enabled = false;/);
+    const app = readFileSync("src/App.tsx", "utf8");
+    expect(app).toMatch(/^assetStore\.configure\(\{ enabled: true \}\);$/m);
+    // …and neither library entry does.
+    for (const entry of ["src/index.tsx", "src/integration/index.ts", "src/embed.tsx"]) {
+      expect(readFileSync(entry, "utf8"), entry).not.toMatch(/assetStore\.configure/);
+    }
   });
 
   it("a host adapter injected without any config keeps images inline", () => {

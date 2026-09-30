@@ -122,9 +122,8 @@ export function useEditorBoot({
       initStorage(storageAdapter);
       // With a host's own adapter, storageConfig still decides where the
       // editor's OTHER browser stores go (version history, the crash stash) —
-      // or that they are off (see configureLocalStores). Images stay inline
-      // unless that config opts in with `assets: true`.
-      if (storageConfig) configureLocalStores(storageConfig, { customAdapter: true });
+      // or that they are off (see configureLocalStores).
+      if (storageConfig) configureLocalStores(storageConfig);
     } else if (storageConfig) {
       initStorage(storageConfig);
     }
