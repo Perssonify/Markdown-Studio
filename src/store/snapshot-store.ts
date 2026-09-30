@@ -33,6 +33,7 @@ export type SnapshotReason =
   | "pre-delete"  // the doc was about to be deleted
   | "pre-restore" // captured current state before restoring an older snapshot
   | "pre-link-update" // before links to a renamed heading were retargeted (heading-renames.ts)
+  | "tab-conflict" // the version set aside when two tabs changed a document (useTabSync.ts)
   | "manual";     // user asked to snapshot now
 
 export interface SnapshotMeta {
@@ -198,6 +199,12 @@ class SnapshotStore {
     this.dbName = dbName;
     this.enabled = enabled;
     this.emit();
+  }
+
+  /** Whether version history is kept at all — a host can turn it off. A path
+   *  that promises "the other version is in Version history" must ask. */
+  isEnabled(): boolean {
+    return this.enabled;
   }
 
   /** Erase every snapshot, stored and in memory (see clearLocalData). */

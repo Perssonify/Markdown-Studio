@@ -96,6 +96,7 @@ export const dialogs = {
   "dialogs.reasonPreDelete": "Before the document was deleted",
   "dialogs.reasonPreRestore": "Before a restore",
   "dialogs.reasonPreLinkUpdate": "Before links to a renamed heading were updated",
+  "dialogs.reasonTabConflict": "Set aside when two tabs changed it",
   "dialogs.reasonManual": "Manual snapshot",
   "dialogs.deleteVersionInLibrary": "This saved version is removed from Version history for good. The document itself is not changed.",
   "dialogs.deleteVersionLastCopy": "This is the last remaining copy of “{title}”, which is no longer in your library. Once it is deleted, the document cannot be recovered.",
