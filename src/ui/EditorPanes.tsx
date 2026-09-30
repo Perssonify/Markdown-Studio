@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { FileCode2, Mouse, MouseOff } from "lucide-react";
 import { useThemeMode } from "../theme/useThemeMode";
-import React, { forwardRef, RefObject, useCallback, useEffect, useRef, useState } from "react";
+import React, { forwardRef, type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
 import { MODES } from "../constants";
 import { useUIStore } from "../store/uiStore";
 import { CodeMirrorPane, type CodeMirrorPaneHandle } from "./CodeMirrorPane";
@@ -265,8 +265,10 @@ const HtmlPane = React.memo(forwardRef<TiptapPaneHandle, HtmlPaneProps>(function
 
 export interface EditorLayoutProps {
   mode: string;
-  cmRef: RefObject<CodeMirrorPaneHandle | null>;
-  tiptapRef: RefObject<TiptapPaneHandle | null>;
+  // Read here AND forwarded to `ref=`: MutableRefObject is the one ref type
+  // both React 18's and 19's `Ref<T>` accept for that (CLAUDE.md, the React 18 job).
+  cmRef: MutableRefObject<CodeMirrorPaneHandle | null>;
+  tiptapRef: MutableRefObject<TiptapPaneHandle | null>;
   onMdChange?: () => void;
   onHtmlChange?: () => void;
   onHtmlPaste?: (html: string, mods?: { shiftKey?: boolean }) => boolean;
