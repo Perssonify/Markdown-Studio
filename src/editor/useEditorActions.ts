@@ -3,6 +3,7 @@ import { buildContextPrompt } from "../integration/prompt-builder";
 import { extractText } from "../store/document";
 import { useDocumentStore } from "../store/documentStore";
 import { useUIStore } from "../store/uiStore";
+import { t } from "../i18n";
 import type { CmRef, Confirm, DocStore, Engine, Lifecycle, LinkIndexApi, PromptText, SyncEngine, TiptapRef, Toast, UIStore } from "./types";
 import {
   type ExportDocs,
@@ -48,12 +49,12 @@ export function useEditorActions({
   const handleAction = useCallback(async (type: string, data?: any) => {
     if (type === "md" || type === "html" || type === "json") {
       const content = type === "md" ? cmRef.current?.getValue() : type === "html" ? tiptapRef.current?.getHTML() : JSON.stringify(getCanonical(), null, 2);
-      navigator.clipboard.writeText(content || "").then(() => toast.show(`${type.toUpperCase()} copied!`, "success"));
+      navigator.clipboard.writeText(content || "").then(() => toast.show(t("editor.formatCopied", { format: type.toUpperCase() }), "success"));
       return;
     }
     if (type === "clear") {
       if (useUIStore.getState().readOnly) return; // read-only: don't wipe the doc
-      const ok = await confirm({ title: "Clear document?", description: "All content will be removed. This cannot be undone.", confirmLabel: "Clear", destructive: true });
+      const ok = await confirm({ title: t("editor.clearDocumentTitle"), description: t("editor.clearDocumentDescription"), confirmLabel: t("common.clear"), destructive: true });
       if (!ok) return;
       cmRef.current?.setValue("");
       tiptapRef.current?.setHTML("");
@@ -67,7 +68,7 @@ export function useEditorActions({
       // an accidental/stale blank overwrite.
       useDocumentStore.getState().allowBlankSaveOnce();
       setDirty();
-      toast.show("Content cleared", "info");
+      toast.show(t("editor.contentCleared"), "info");
       return;
     }
     if (type === "export-graph") { handleGraphExport(); return; }
@@ -96,9 +97,9 @@ export function useEditorActions({
           maxDocs: 20,
         });
         await navigator.clipboard.writeText(promptText);
-        toast.show("Prompt copied to clipboard", "success");
+        toast.show(t("editor.promptCopied"), "success");
       } catch (e) {
-        toast.show("Failed to build prompt", "error");
+        toast.show(t("editor.promptBuildFailed"), "error");
       }
       return;
     }
@@ -119,21 +120,21 @@ export function useEditorActions({
       try {
         const { importedCount, failedCount, firstDocId } = await importItems(items);
         if (skipped.length > 0) {
-          toast.show(`Skipped ${skipped.length} file(s): ${skipped.join(", ")}`, "warning");
+          toast.show(t("editor.skippedFiles", { count: skipped.length, files: skipped.join(", ") }), "warning");
         }
         if (failedCount > 0) {
-          toast.show(`${failedCount} file(s) could not be saved — storage may be full`, "error");
+          toast.show(t("editor.filesNotSaved", { count: failedCount }), "error");
         }
         if (firstDocId) {
           // handleSwitchDoc hydrates the editor with the target's canonical —
           // a bare switchToDoc left the LAST imported file's content in the
           // editor while activating the FIRST, corrupting it on next save.
           await handleSwitchDoc(firstDocId);
-          if (importedCount > 0) toast.show(`Imported ${importedCount} file(s)`, "success");
+          if (importedCount > 0) toast.show(t("editor.importedFiles", { count: importedCount }), "success");
         } else if (importedCount === 0 && skipped.length === 0 && failedCount === 0) {
-          toast.show("No supported files found", "warning");
+          toast.show(t("editor.noSupportedFiles"), "warning");
         }
-      } catch (e) { toast.show("Import failed", "error"); }
+      } catch (e) { toast.show(t("editor.importFailed"), "error"); }
       return;
     }
   }, [toast, getCanonical, engine, activeDoc, syncMode, handleGraphExport, linkIndex, createDoc, importItems, handleSwitchDoc, confirm, promptText]);

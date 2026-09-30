@@ -15,6 +15,7 @@ import { useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 import { useUIStore } from "../store/uiStore";
 import { isDangerousUrl, isExternalHref } from "../utils/url-safety";
+import { t } from "../i18n";
 
 /** Discriminated payload for a link activation inside the rich editor. */
 export type LinkClickPayload =
@@ -264,8 +265,8 @@ export function useLinkIndex({
     navigator.clipboard
       .writeText(JSON.stringify(data, null, 2))
       .then(
-        () => toast.show("Graph JSON copied!", "success"),
-        () => toast.show("Copy failed", "error")
+        () => toast.show(t("editor.graphJsonCopied"), "success"),
+        () => toast.show(t("editor.copyFailed"), "error")
       );
   }, [documents, linkIndex, toast]);
 
@@ -314,7 +315,7 @@ export function useLinkIndex({
           }
         } else {
           const handled = onLinkClick?.({ kind: "doc", targetId: null, targetTitle: linkTarget, notFound: true });
-          if (handled !== true) toast.show(`Document not found: "${linkTarget}"`, "info");
+          if (handled !== true) toast.show(t("editor.documentNotFoundNamed", { title: linkTarget }), "info");
         }
         return;
       }

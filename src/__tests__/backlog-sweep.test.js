@@ -42,7 +42,10 @@ describe("A8 — the menu-bar document title does not clip its own letters", () 
     // codeOnly: the comment beside the fix names `leading-none`, so the raw
     // source would satisfy the "not to contain" check for the wrong reason.
     const menu = codeOnly(read("src/ui/MenuBar.tsx"));
-    const title = menu.slice(menu.indexOf("{props.docTitle || \"Untitled\"}") - 400, menu.indexOf("{props.docTitle || \"Untitled\"}"));
+    // Anchored on the title expression (its fallback is translated since A099).
+    const anchor = '{props.docTitle || t("common.untitled")}';
+    expect(menu).toContain(anchor);
+    const title = menu.slice(menu.indexOf(anchor) - 400, menu.indexOf(anchor));
     expect(title).toContain("leading-tight");
     expect(title).not.toContain("leading-none");
   });
@@ -64,7 +67,7 @@ describe("A9 — only the header under the floating trigger pays for it", () => 
   });
 
   it("gives it to the markdown pane, which is the one on top when stacked", () => {
-    expect(panes).toContain('label="Markdown" headerRef={headerRef} clearsTrigger');
+    expect(panes).toContain('label={t("panes.markdown")} headerRef={headerRef} clearsTrigger');
   });
 });
 

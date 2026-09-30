@@ -3,6 +3,7 @@ import { extractHeadings } from "../store/doc-outline";
 import { docSearchText, docSearchTextLower } from "../store/doc-text";
 import { useDocumentStore } from "../store/documentStore";
 import { searchDocuments } from "../store/search";
+import { t } from "../i18n";
 import type { DocStore, Lifecycle, LinkIndexApi, SyncEngine, UIStore } from "./types";
 
 interface LibraryQueriesParams {
@@ -62,7 +63,7 @@ export function useLibraryQueries({
     const titleById = new Map(documents.map((s) => [s.id, s.title]));
     const docs = fullDocsRef.current.map((d) => ({
       id: d.id,
-      title: titleById.get(d.id) ?? d.title ?? "Untitled",
+      title: titleById.get(d.id) ?? d.title ?? t("common.untitled"),
       text: docSearchText(d),
     }));
     return searchDocuments(docs, query);

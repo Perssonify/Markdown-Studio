@@ -19,6 +19,7 @@ import { createDocument } from "../store/document";
 import { useUIStore } from "../store/uiStore";
 import { DialogProvider } from "../ui/DialogProvider";
 import { VersionHistorySheet, snapshotDeleteConfirm } from "../ui/VersionHistorySheet";
+import { en } from "../i18n/en";
 
 const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
@@ -150,15 +151,27 @@ describe("the document-delete dialogs tell the truth", () => {
   });
 
   it("neither delete confirmation claims it cannot be undone", () => {
+    // Since A099 the copy is in the catalog: resolve every key a confirmation
+    // uses to its English text, every plural form included, and check that.
+    const said = (source) =>
+      [...source.matchAll(/\bt\("([\w.]+)"/g)]
+        .flatMap(([, key]) => {
+          const m = en[key];
+          expect(m, key).toBeDefined();
+          return typeof m === "string" ? [m] : Object.values(m);
+        })
+        .join("\n");
+
     const lifecycle = read("src/hooks/useDocumentLifecycle.ts");
-    const single = lifecycle.slice(lifecycle.indexOf('title: "Delete document?"'));
-    expect(single.slice(0, 400)).toMatch(/Version history/);
-    expect(single.slice(0, 400)).not.toMatch(/cannot be undone/);
+    const single = lifecycle.slice(lifecycle.indexOf('title: t("editor.deleteDocumentTitle")')).slice(0, 400);
+    expect(said(single)).toMatch(/Delete document\?/);
+    expect(said(single)).toMatch(/Version history/);
+    expect(said(single)).not.toMatch(/cannot be undone/);
 
     const panel = read("src/ui/WorkspacePanel.tsx");
     const bulk = panel.slice(panel.indexOf("const handleBulkDelete"));
     const bulkConfirm = bulk.slice(0, bulk.indexOf("if (!ok) return;"));
-    expect(bulkConfirm).toMatch(/Version history/);
-    expect(bulkConfirm).not.toMatch(/cannot be undone/);
+    expect(said(bulkConfirm)).toMatch(/Version history/);
+    expect(said(bulkConfirm)).not.toMatch(/cannot be undone/);
   });
 });

@@ -3,6 +3,7 @@ import { headingLinkHtml } from "../formatting/heading-link";
 import { promptImage } from "../formatting/image-insert";
 import { extractHeadings } from "../store/doc-outline";
 import { useUIStore } from "../store/uiStore";
+import { t } from "../i18n";
 import type {
   CmRef, EquationPrompt, FormatDispatcher, Lifecycle, PromptText, SyncEngine, TiptapRef, Toast, UIStore,
 } from "./types";
@@ -90,7 +91,7 @@ export function usePaneCommands({
         if (pane === "md") { cmRef.current?.insertAtCursor(text); handleMdChange(); }
         else { tiptapRef.current?.getEditor?.()?.chain().focus().insertContent(text).run(); handleHtmlChange(); }
       } catch {
-        toast.show("Clipboard access was blocked by the browser", "info");
+        toast.show(t("editor.clipboardBlocked"), "info");
       }
       return;
     }
@@ -123,8 +124,8 @@ export function usePaneCommands({
    */
   const promptInsert = useCallback(async (kind: "link" | "image" | "mathInline" | "mathBlock") => {
     if (kind === "link") {
-      const url = await promptText("Insert Link", {
-        placeholder: "https://example.com", description: "Enter the URL for the link.",
+      const url = await promptText(t("editor.insertLink"), {
+        placeholder: t("editor.linkUrlPlaceholder"), description: t("editor.insertLinkDescription"),
       });
       if (url) dispatch("createLink", url);
       return;
@@ -135,9 +136,9 @@ export function usePaneCommands({
       return;
     }
     const block = kind === "mathBlock";
-    const latex = await equationPrompt(block ? "Insert Formula (block)" : "Insert inline formula", {
+    const latex = await equationPrompt(block ? t("editor.insertFormulaBlock") : t("editor.insertInlineFormula"), {
       display: block ? "block" : "inline",
-      description: block ? "LaTeX rendered with KaTeX ($$…$$)." : "Inline LaTeX ($…$).",
+      description: block ? t("editor.formulaBlockDescription") : t("editor.inlineFormulaDescription"),
     });
     if (latex && latex.trim()) dispatch(block ? "insertMathBlock" : "insertMathInline", latex);
   }, [promptText, equationPrompt, dispatch]);
@@ -149,17 +150,17 @@ export function usePaneCommands({
 
   /** The link bubble menu's "Edit" — through the styled dialog, not window.prompt. */
   const editLinkCb = useCallback(
-    (currentUrl: string) => promptText("Edit link", {
-      placeholder: "https://example.com",
-      description: "Enter the URL for this link. Leave it empty to remove the link.",
+    (currentUrl: string) => promptText(t("editor.editLink"), {
+      placeholder: t("editor.linkUrlPlaceholder"),
+      description: t("editor.editLinkDescription"),
       defaultValue: currentUrl,
     }),
     [promptText]
   );
   const promptLinkCb = useCallback(
-    () => promptText("Insert Link", {
-      placeholder: "https://example.com",
-      description: "Enter the URL for the link.",
+    () => promptText(t("editor.insertLink"), {
+      placeholder: t("editor.linkUrlPlaceholder"),
+      description: t("editor.insertLinkDescription"),
     }),
     [promptText]
   );

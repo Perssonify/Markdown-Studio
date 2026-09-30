@@ -99,7 +99,7 @@ describe("handleSave branches on the commit (source pin)", () => {
   it("reports success and fires onSave only after a committed write", () => {
     const committedAt = body.indexOf("const committed = await saveActiveDoc(editor)");
     const bailAt = body.indexOf("if (!committed)");
-    const successAt = body.indexOf('toast.show("Changes saved"');
+    const successAt = body.indexOf('toast.show(t("editor.changesSaved")');
     const onSaveAt = body.indexOf("onSave({");
     expect(committedAt).toBeGreaterThan(-1);
     expect(bailAt).toBeGreaterThan(committedAt);
