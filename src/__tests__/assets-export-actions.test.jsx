@@ -7,7 +7,7 @@ import { assetRef, bytesToDataUrl } from "../store/asset-refs";
 import { createDocument } from "../store/document";
 import { useDocumentStore } from "../store/documentStore";
 import { useFolderStore } from "../store/folders";
-import { exportActiveDocAsFile, useExportActions } from "../editor/useExportActions";
+import { exportActiveDocAsFile, exportActiveDocAsPdf, useExportActions } from "../editor/useExportActions";
 
 /**
  * The export CALL SITES (A086): what a user downloads from the library row
@@ -113,6 +113,24 @@ describe("library exports are self-contained", () => {
 });
 
 describe("File ▸ Export of the open document is self-contained", () => {
+  it("PDF / Print: the print frame gets the image data, not the reference", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const html = `<h1>Photo</h1><p><img src="${assetRef(hash)}" alt="p"></p>`;
+      await exportActiveDocAsPdf(record, {
+        tiptapRef: { current: { getHTML: () => html } }, cmRef: { current: null },
+        getCanonical: () => record.canonical, engine, syncMode: "clean", toast: { show: vi.fn() },
+      });
+      const frame = document.querySelector("iframe");
+      const printed = frame.contentDocument.body.innerHTML;
+      expect(printed).not.toContain("pf-asset:");
+      expect(printed).toContain(bytesToDataUrl(png(1), "image/png"));
+      frame.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("HTML", async () => {
     const toast = { show: vi.fn() };
     const html = `<h1>Photo</h1><p><img src="${assetRef(hash)}" alt="p"></p>`;
