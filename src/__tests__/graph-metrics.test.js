@@ -22,6 +22,7 @@ import {
   CAMERA_HOLD_MS,
   LARGE_MAP_MIN,
   BoxGrid,
+  crossesForeignContainer,
 } from "../store/graph-metrics";
 import { legacyFolderRects, legacyPlaceLabels } from "./graph-legacy";
 
@@ -142,6 +143,62 @@ describe("rankByDegree", () => {
   it("honours the limit, and returns everything for a negative one", () => {
     expect(rankByDegree(ranked, 2)).toHaveLength(2);
     expect(rankByDegree(ranked, -1)).toHaveLength(3);
+  });
+});
+
+describe("crossesForeignContainer (the map's label veto)", () => {
+  const labelAt = (x0, x1) => ({ x0, y0: 50, x1, y1: 60 });
+  // SEPARATED folders — the layout's normal outcome: A 0..100 holds "a", B 150..300 holds "b".
+  const apart = [
+    { docs: new Set(["a"]), box: { x0: 0, y0: 0, x1: 100, y1: 200 } },
+    { docs: new Set(["b"]), box: { x0: 150, y0: 0, x1: 300, y1: 200 } },
+  ];
+  // OVERLAPPING folders — what 60 folders at 2,000 notes produce: A 0..200, B 100..300.
+  const overlapping = [
+    { docs: new Set(["a"]), box: { x0: 0, y0: 0, x1: 200, y1: 200 } },
+    { docs: new Set(["b"]), box: { x0: 100, y0: 0, x1: 300, y1: 200 } },
+  ];
+
+  it("vetoes a label that reaches out of its folder into another", () => {
+    expect(crossesForeignContainer("a", { x: 50, y: 55 }, labelAt(40, 170), apart)).toBe(true);
+  });
+
+  it("allows a label that stays clear of foreign folders", () => {
+    expect(crossesForeignContainer("a", { x: 50, y: 55 }, labelAt(10, 90), apart)).toBe(false);
+  });
+
+  it("a note's own folder never blocks its label", () => {
+    expect(crossesForeignContainer("b", { x: 250, y: 55 }, labelAt(210, 290), apart)).toBe(false);
+  });
+
+  it("a note in no folder may not put its name into a folder", () => {
+    expect(crossesForeignContainer("z", { x: 120, y: 55 }, labelAt(110, 170), apart)).toBe(true);
+  });
+
+  it("does not count a foreign folder the DOT already sits in", () => {
+    // A note in no folder whose dot the layout could not keep out of B: the dot
+    // already reads as inside B, so a name beside it says nothing new…
+    expect(crossesForeignContainer("z", { x: 200, y: 55 }, labelAt(190, 260), apart)).toBe(false);
+    // …but a folder the dot is NOT in still vetoes.
+    const three = [...apart, { docs: new Set(["c"]), box: { x0: 250, y0: 0, x1: 400, y1: 200 } }];
+    expect(crossesForeignContainer("z", { x: 200, y: 55 }, labelAt(190, 260), three)).toBe(true);
+  });
+
+  it("a name wholly inside the note's OWN folder may touch an overlapping foreign one", () => {
+    // The dot at x 60 is not in B, but the label 60..150 lies inside A — only
+    // the overlap of the two boxes puts it in B.
+    expect(crossesForeignContainer("a", { x: 60, y: 55 }, labelAt(60, 150), overlapping)).toBe(false);
+    // Sticking OUT of its own box into B is still a veto.
+    expect(crossesForeignContainer("a", { x: 60, y: 55 }, labelAt(60, 250), overlapping)).toBe(true);
+  });
+
+  it("through placeLabels: overlapping folders no longer leave a note nameless", () => {
+    // The note is in no folder and its dot sits inside B: every candidate overlaps B.
+    const positions = new Map([["z", { x: 150, y: 100 }]]);
+    const wide = [{ docs: new Set(["b"]), box: { x0: 20, y0: 20, x1: 280, y1: 280 } }];
+    const reject = (id, box) => crossesForeignContainer(id, positions.get(id), box, wide);
+    const out = placeLabels({ order: ["z"], positions, radius: () => 8, label: (id) => id, cam: { k: 1, tx: 0, ty: 0 }, reject });
+    expect(out.size).toBe(1);
   });
 });
 

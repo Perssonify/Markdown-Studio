@@ -11,6 +11,7 @@ import {
   stepsPerFrame,
   brokenLinks as computeBrokenLinks,
   brokenSourceIds as computeBrokenSourceIds,
+  crossesForeignContainer,
   FOLDER_CHIP_H,
   folderRects,
   findOrphans,
@@ -890,11 +891,15 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   /** Foreign containers, in screen space. A note's name drawn across someone
    *  else's folder box reads as membership — the one thing the box exists to
    *  say. The layout keeps DOTS out of foreign boxes; a label placed to the SIDE
-   *  of its dot reaches further than that, so the placer vetoes it here. */
+   *  of its dot reaches further than that, so the placer vetoes it here — except
+   *  across a box the dot itself sits in (see crossesForeignContainer). */
   const foreignBoxes = rects.map((r) => ({ docs: new Set(r.docIds), box: toScreen(r) }));
-  const crossesForeignFolder = (id: string, box: LabelBox) =>
-    foreignBoxes.some((f) => !f.docs.has(id)
-      && box.x0 < f.box.x1 && box.x1 > f.box.x0 && box.y0 < f.box.y1 && box.y1 > f.box.y0);
+  const crossesForeignFolder = (id: string, box: LabelBox) => {
+    const p = positions.get(id);
+    if (!p) return false;
+    const dot = { x: p.x * k + camRef.current.tx, y: p.y * k + camRef.current.ty };
+    return crossesForeignContainer(id, dot, box, foreignBoxes);
+  };
 
   // Ghost targets are an explicit request ("show me the broken links"), so their
   // stub labels claim their space before ordinary node labels compete for it.
@@ -929,11 +934,21 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const forcedLabels = new Set(
     [selectedId, activeDocId ?? null, hoveredId].filter((v): v is string => !!v)
   );
+  // Only notes whose dot is ON the canvas compete for the LABEL_CANDIDATES
+  // slots. The limit used to take the best-connected notes of the whole map, so
+  // zoomed in on a region whose notes were not among them it named nothing —
+  // zooming in must bring names back (A088).
+  const onCanvas = (id: string) => {
+    const p = positions.get(id);
+    if (!p) return false;
+    const sx = p.x * k + camRef.current.tx, sy = p.y * k + camRef.current.ty;
+    return sx >= 0 && sx <= dims.w && sy >= 0 && sy <= dims.h;
+  };
   const labelPlacements = placeLabels({
     order: [
       ...forcedLabels,
-      ...byImportance.filter((id) => !forcedLabels.has(id)),
-      ...unranked.filter((id) => !forcedLabels.has(id)),
+      ...byImportance.filter((id) => !forcedLabels.has(id) && onCanvas(id)),
+      ...unranked.filter((id) => !forcedLabels.has(id) && onCanvas(id)),
     ],
     forced: forcedLabels,
     positions: anyFilter
