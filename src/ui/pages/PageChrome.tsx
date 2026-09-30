@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ReactNode, useEffect, useRef } from "react";
+import { useT } from "../../i18n";
 
 interface PageChromeProps {
   title: string;
@@ -16,6 +17,7 @@ interface PageChromeProps {
  * editor. Theme-aware via the app's design tokens.
  */
 export function PageChrome({ title, onClose, children, actions }: PageChromeProps) {
+  const t = useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Skip if a layer above us (dialog, tour) already consumed this Escape.
@@ -65,7 +67,7 @@ export function PageChrome({ title, onClose, children, actions }: PageChromeProp
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card/60 px-3 backdrop-blur">
         <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5">
           <ArrowLeft className="size-4" />
-          <span className="hidden sm:inline">Back to editor</span>
+          <span className="hidden sm:inline">{t("pages.backToEditor")}</span>
         </Button>
         <span className="ml-1 truncate text-sm font-semibold">{title}</span>
         {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}

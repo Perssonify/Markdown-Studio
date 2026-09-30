@@ -9,9 +9,10 @@ import {
   type ShortcutPlatform,
 } from "../../data/shortcuts";
 import { LinkBuilder } from "../LinkBuilder";
-import { HELP_SECTIONS, type HelpBlock, SHORTCUT_GROUPS } from "./help-content";
+import { HELP_CONTENT, HELP_SECTIONS, type HelpBlock, SHORTCUT_GROUPS } from "./help-content";
 import { PageChrome } from "./PageChrome";
 import { scrollBehavior } from "../../utils/reduced-motion";
+import { localizedContent, useT } from "../../i18n";
 
 interface HelpPageProps {
   onClose: () => void;
@@ -26,14 +27,17 @@ const sectionMatches = (s: (typeof HELP_SECTIONS)[number], q: string) =>
   (s.title + " " + s.blocks.map(blockText).join(" ")).toLowerCase().includes(q);
 
 export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState<ShortcutPlatform>(IS_MAC ? "mac" : "other");
 
   const q = query.trim().toLowerCase();
 
+  // Prose is content, one version per language (help-content.ts).
+  const helpSections = localizedContent(HELP_CONTENT);
   const sections = useMemo(
-    () => (q ? HELP_SECTIONS.filter((s) => sectionMatches(s, q)) : HELP_SECTIONS),
-    [q]
+    () => (q ? helpSections.filter((s) => sectionMatches(s, q)) : helpSections),
+    [q, helpSections]
   );
 
   const shortcutGroups = useMemo(() => {
@@ -50,7 +54,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
 
   const toc = [
     ...sections.map((s) => ({ id: s.id, title: s.title })),
-    ...(showShortcuts ? [{ id: "shortcuts", title: "Keyboard shortcuts" }] : []),
+    ...(showShortcuts ? [{ id: "shortcuts", title: t("pages.keyboardShortcuts") }] : []),
   ];
 
   const [active, setActive] = useState<string>(HELP_SECTIONS[0]!.id);
@@ -63,34 +67,34 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
 
   return (
     <PageChrome
-      title={`${APP_NAME} Help`}
+      title={t("pages.helpTitle", { app: APP_NAME })}
       onClose={onClose}
       actions={
         onStartTour && (
           <Button size="sm" variant="default" className="gap-1.5" onClick={onStartTour}>
             <Compass className="size-4" />
-            <span className="hidden sm:inline">Take a tour</span>
+            <span className="hidden sm:inline">{t("pages.takeATour")}</span>
           </Button>
         )
       }
     >
       <div className="mx-auto flex max-w-5xl gap-8 px-4 py-6 sm:px-8 sm:py-8">
         {/* Sticky table of contents (desktop) */}
-        <nav className="sticky top-6 hidden h-fit w-52 shrink-0 lg:block" aria-label="Help contents">
+        <nav className="sticky top-6 hidden h-fit w-52 shrink-0 lg:block" aria-label={t("pages.helpContents")}>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            On this page
+            {t("pages.onThisPage")}
           </p>
           <ul className="space-y-0.5 text-sm">
-            {toc.map((t) => (
-              <li key={t.id}>
+            {toc.map((entry) => (
+              <li key={entry.id}>
                 <button
                   type="button"
-                  onClick={() => go(t.id)}
+                  onClick={() => go(entry.id)}
                   className={`block w-full rounded px-2 py-1 text-left transition-colors hover:bg-accent ${
-                    active === t.id ? "bg-accent font-medium text-foreground" : "text-muted-foreground"
+                    active === entry.id ? "bg-accent font-medium text-foreground" : "text-muted-foreground"
                   }`}
                 >
-                  {t.title}
+                  {entry.title}
                 </button>
               </li>
             ))}
@@ -100,9 +104,9 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
         {/* Content */}
         <div className="min-w-0 flex-1">
           <header className="mb-6 sm:mb-8">
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">How to use {APP_NAME}</h1>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("pages.howToUse", { app: APP_NAME })}</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Everything you can do, where to find it, and the shortcuts that make it fast.
+              {t("pages.everythingYouCanDoWhere")}
             </p>
             {/* Search */}
             <div className="relative mt-4 max-w-md">
@@ -110,9 +114,9 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search help…"
+                placeholder={t("pages.searchHelpPlaceholder")}
                 className="h-9 pl-9"
-                aria-label="Search help"
+                aria-label={t("pages.searchHelpLabel")}
               />
             </div>
           </header>
@@ -120,16 +124,16 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
           {/* Collapsible table of contents (mobile / tablet) */}
           {toc.length > 0 && (
             <details className="mb-6 rounded-lg border border-border bg-card/40 lg:hidden">
-              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">On this page</summary>
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">{t("pages.onThisPage")}</summary>
               <ul className="border-t border-border/60 px-2 py-2 text-sm">
-                {toc.map((t) => (
-                  <li key={t.id}>
+                {toc.map((entry) => (
+                  <li key={entry.id}>
                     <button
                       type="button"
-                      onClick={() => go(t.id)}
+                      onClick={() => go(entry.id)}
                       className="block w-full rounded px-2 py-1.5 text-left text-muted-foreground hover:bg-accent"
                     >
-                      {t.title}
+                      {entry.title}
                     </button>
                   </li>
                 ))}
@@ -139,7 +143,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
 
           {noResults && (
             <p className="rounded-md border border-border bg-card/40 px-4 py-6 text-center text-sm text-muted-foreground">
-              No help topics match “{query}”. Try a different word.
+              {t("pages.noHelpMatches", { query })}
             </p>
           )}
 
@@ -167,7 +171,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
                   if (b.tip)
                     return (
                       <p key={i} className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm leading-relaxed text-foreground">
-                        <span className="font-semibold text-primary-strong">Tip · </span>
+                        <span className="font-semibold text-primary-strong">{t("pages.tip")} </span>
                         {b.tip}
                       </p>
                     );
@@ -181,7 +185,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
                      could construct. */
                   <div className="mt-4 rounded-lg border border-border bg-card/40 p-3">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Build a share / embed link
+                      {t("pages.buildAShareEmbedLink")}
                     </p>
                     <LinkBuilder variant="page" />
                   </div>
@@ -195,7 +199,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
             <section id="help-shortcuts" className="scroll-mt-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-                  <Keyboard className="size-5 text-primary" /> Keyboard shortcuts
+                  <Keyboard className="size-5 text-primary" /> {t("pages.keyboardShortcuts")}
                 </h2>
                 {/* Platform toggle — Mac ⌘ glyphs vs Windows/Linux Ctrl+ text. */}
                 <div className="inline-flex overflow-hidden rounded-md border border-border text-xs">
@@ -209,7 +213,7 @@ export function HelpPage({ onClose, onStartTour }: HelpPageProps) {
                         platform === p ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
                       }`}
                     >
-                      {p === "mac" ? "macOS" : "Windows / Linux"}
+                      {p === "mac" ? t("pages.macos") : t("pages.windowsLinux")}
                     </button>
                   ))}
                 </div>
