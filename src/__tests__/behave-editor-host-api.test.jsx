@@ -6,7 +6,7 @@
  *
  * One mount; the cases are one journey (see behave-harness.jsx).
  */
-import React, { createRef } from "react";
+import { createRef } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup } from "@testing-library/react/pure";
 import {

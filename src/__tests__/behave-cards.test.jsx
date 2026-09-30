@@ -295,10 +295,10 @@ describe("the card editor", () => {
   it("closing without a change saves nothing; Done after a change saves the markdown", async () => {
     const props = rig([note()]);
     await mount(props);
-    let dialog = await openCard("Note");
+    await openCard("Note");
     await act(async () => { fireEvent.click(screen.getByText("Done")); });
     expect(props.onSaveCard).not.toHaveBeenCalled();
-    dialog = await openCard("Note");
+    const dialog = await openCard("Note");
     const area = dialog.querySelector("textarea");
     await act(async () => { fireEvent.change(area, { target: { value: "# Note\n\nrewritten" } }); });
     await act(async () => { fireEvent.click(screen.getByText("Done")); });
@@ -315,7 +315,7 @@ describe("the card editor", () => {
       await act(async () => { fireEvent.change(area, { target: { value: `# Note\n\n${suffix}` } }); });
       return { dialog, area };
     };
-    let { area } = await edit("one");
+    const { area } = await edit("one");
     await act(async () => { fireEvent.keyDown(area, { key: "Enter", ctrlKey: true }); });
     expect(props.onSaveCard).toHaveBeenLastCalledWith("n", "# Note\n\none");
     const { dialog } = await edit("two");

@@ -7,7 +7,7 @@
  *
  * One mount; the cases are one journey (see behave-harness.jsx).
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, it, vi } from "vitest";
 import { cleanup, screen } from "@testing-library/react/pure";
 import {
   act, click, fireEvent, installBrowserStubs, mdText, mdView, menuClick, mountEditor, para, richEditor,
