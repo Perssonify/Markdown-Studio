@@ -18,7 +18,7 @@ import { undoDepth } from "@tiptap/pm/history";
 import { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, JSONContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import { StarterKit } from "@tiptap/starter-kit";
 import { COMPOSITION_STALL_MS } from "../constants";
 import type { HighlightSpec } from "../formatting/find-engine";
 import { useUIStore } from "../store/uiStore";

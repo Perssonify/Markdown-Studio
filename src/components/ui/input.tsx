@@ -4,11 +4,12 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 // NOTE: wrapped in forwardRef deliberately. The upstream shadcn source is written
-// for React 19 (where `ref` is an ordinary prop); this project is on React 18.3.1,
-// which DROPS `ref` from function components — every consumer ref read back null.
-// That silently broke ⌘F (focus stayed in the document and the query was typed into
-// the user's content), inline rename, and prompt-dialog autofocus. Keep the
-// forwardRef when regenerating this file until the project moves to React 19.
+// for React 19 (where `ref` is an ordinary prop). The app runs 19, but the library
+// still supports React 18.3 (its peer range), and 18 DROPS `ref` from function
+// components — every consumer ref read back null. That silently broke ⌘F (focus
+// stayed in the document and the query was typed into the user's content), inline
+// rename, and prompt-dialog autofocus. Keep the forwardRef when regenerating this
+// file for as long as React 18 is in the peer range (forwardRef works on both).
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
   function Input({ className, type, ...props }, ref) {
   return (

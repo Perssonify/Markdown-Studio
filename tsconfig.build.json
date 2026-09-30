@@ -14,6 +14,9 @@
     // so a consumer's "go to definition" would only find a dangling reference.
     "declarationMap": false,
     "outDir": "dist",
+    // Explicit since TypeScript 6, whose default is the tsconfig's own directory:
+    // the package exports map expects dist/index.d.ts, not dist/src/index.d.ts.
+    "rootDir": "./src",
     // Declaration emit must not fail on the app-only surface or on generated
     // primitives; the real type gate still covers those.
     "skipLibCheck": true
