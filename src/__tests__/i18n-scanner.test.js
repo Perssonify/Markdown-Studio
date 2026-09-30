@@ -10,7 +10,13 @@ import { scanFiles, scanSource, sourceFiles } from "./i18n-scan";
  */
 
 const ROOT = process.cwd();
-const ROOTS = ["src/ui", "src/editor", "src/App.tsx", "src/PerssonifyEditor.tsx", "src/EditorHeader.tsx"];
+// Every client module that renders, toasts or asks: the UI and editor, the
+// hooks and formatting commands behind them, node views, the integration
+// wrapper, the PWA prompts and the three entry shells.
+const ROOTS = [
+  "src/ui", "src/editor", "src/hooks", "src/formatting", "src/extensions", "src/integration", "src/pwa",
+  "src/App.tsx", "src/PerssonifyEditor.tsx", "src/EditorHeader.tsx", "src/embed.tsx",
+];
 
 /**
  * Literals that stay literal. Each is [file, exact text, reason]; an entry
@@ -50,6 +56,10 @@ describe("the scanner can fail", () => {
       .toEqual(["toast:Saved", "toast:Failed", "toast:Try again"]);
     expect(kinds(`confirm({ title: "Delete it?", confirmLabel: "Delete" }); prompt("Rename", { placeholder: "Title" });`, "x.ts"))
       .toEqual(["dialog:Delete it?", "dialog:Delete", "dialog:Rename", "dialog:Title"]);
+    // The wrappers around the dialog API, and the browser's own prompt — but a
+    // command id in front of the title is not text.
+    expect(kinds(`promptText("Edit link", {}); insertWithPrompt("createLink", "Insert link"); window.prompt("Enter URL:");`, "x.ts"))
+      .toEqual(["dialog:Edit link", "dialog:Insert link", "dialog:Enter URL:"]);
   });
 
   it("ignores translated text, glyphs, code and non-visible attributes", () => {
