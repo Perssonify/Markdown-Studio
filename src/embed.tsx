@@ -2,7 +2,7 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/inter";
 import "katex/dist/katex.min.css";
 import { ThemeProvider } from "next-themes";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { PerssonifyEditorIntegration, type EditorHandle } from "./integration/PerssonifyEditorIntegration";
 import { embedStorageConfig, resolveEmbedAllowedOrigins } from "./integration/embed-origins";
@@ -12,6 +12,7 @@ import { sanitizeCssColor } from "./theme/palette";
 import "./styles.css";
 import { initPalette } from "./theme/palette";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
+import { localeDir, useLocale } from "./i18n";
 
 // The embed owns its document (it is its own iframe), so it may capture that
 // document's uncaught errors — locally, like the standalone app. Never done by
@@ -84,6 +85,14 @@ const embedStorage = embedStorageConfig(window.location.hostname);
 
 function EmbedApp() {
   const ref = useRef<EditorHandle>(null);
+  // The iframe is its own document, so — like the app shell, and unlike the
+  // library, which never touches its host's page — it declares the interface
+  // language (A099).
+  const locale = useLocale();
+  useLayoutEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = localeDir(locale);
+  }, [locale]);
   const params = new URLSearchParams(window.location.search);
 
   // `view_mode` is a synonym for `mode` (md|html|split); the URL builder emits it.
