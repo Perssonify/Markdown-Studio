@@ -1,4 +1,5 @@
 import { useRef, useCallback, RefObject } from "react";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { quickHash } from "../utils/index";
 import { MarkdownEngine } from "./useMarkdownEngine";
 
@@ -9,6 +10,72 @@ interface SyncEngineParams {
   syncMode: "styled" | "clean" | string;
   onCanonicalChange?: (pmJson: any) => void;
 }
+
+/**
+ * The canonical JSON handed to onCanonicalChange — `editor.getJSON()`, with
+ * each top-level block's JSON cached on its node (A083). PM nodes are
+ * immutable, so an unchanged block's JSON is the one built last time;
+ * getJSON() rebuilt every block of the document on every projection.
+ * Deep-equal to getJSON() (it follows Node.toJSON: type, attrs, content,
+ * marks, in that order). Like getJSON()'s — which already shares each node's
+ * attrs object with the live document — it is for reading, not mutating. A
+ * node's JSON depends on nothing but the node, so one cache serves every editor.
+ */
+const blockJSON = new WeakMap<PMNode, unknown>();
+function canonicalOf(editor: { state?: { doc?: PMNode }; getJSON(): unknown }): unknown {
+  const doc = editor.state?.doc;
+  if (!doc || typeof doc.forEach !== "function") return editor.getJSON();
+  const json: { type: string; attrs?: unknown; content?: unknown[]; marks?: unknown[] } = { type: doc.type.name };
+  // (The editor's document has no attributes today, so this cannot be
+  // observed; it keeps the JSON Node.toJSON's for any schema.)
+  for (const _ in doc.attrs) {
+    json.attrs = doc.attrs;
+    break;
+  }
+  if (doc.content.size) {
+    const content: unknown[] = [];
+    doc.forEach((child) => {
+      let j = blockJSON.get(child);
+      if (j === undefined) {
+        j = child.toJSON();
+        blockJSON.set(child, j);
+      }
+      content.push(j);
+    });
+    json.content = content;
+  }
+  if (doc.marks.length) json.marks = doc.marks.map((m) => m.toJSON());
+  return json;
+}
+
+/**
+ * The rich pane as the sync engine sees it: `quickHash(getHTML())` for the
+ * gate, and the markdown projection of that HTML — per top-level block when
+ * the engine can (A083, incremental-md.ts), which yields the SAME hash and the
+ * SAME markdown without serializing, cleaning and converting the whole
+ * document on every projection. The whole-document path remains for a doc
+ * node that is not there, or an engine that does not offer the per-block one.
+ */
+function readRich(
+  doc: unknown,
+  eng: MarkdownEngine,
+  mode: string,
+  getHTML: () => string,
+): { hash: number; toMd: () => string } {
+  if (doc !== null && eng.docToMd && eng.docHtmlHash) {
+    const node = doc as PMNode;
+    const toMd = eng.docToMd;
+    return { hash: eng.docHtmlHash(node), toMd: () => toMd(node, mode === "styled" ? "styled" : "clean") };
+  }
+  const convert = mode === "styled" ? eng.htmlToMd : eng.htmlToCleanMd;
+  const html = getHTML();
+  return { hash: quickHash(html), toMd: () => convert(html) };
+}
+
+/** quickHash of `text` — the markdown pane's content after writing `md` —
+ *  taken from the per-block converter when that is the markdown it produced. */
+const mdHash = (eng: MarkdownEngine, md: string, text: string): number =>
+  (text === md ? eng.docMdHash?.(md) : null) ?? quickHash(text);
 
 export function useSyncEngine({
   cmRef,
@@ -94,7 +161,7 @@ export function useSyncEngine({
 
       if (onCanonicalChange) {
         const editor = tiptapRef.current.getEditor?.();
-        if (editor) onCanonicalChange(editor.getJSON());
+        if (editor) onCanonicalChange(canonicalOf(editor));
       }
     } finally {
       syncing.current = false;
@@ -120,8 +187,8 @@ export function useSyncEngine({
     const doc = currentHtmlDoc();
     if (doc !== null && doc === lastHtmlDoc.current) return false;
 
-    const html = tiptapRef.current.getHTML();
-    const hash = quickHash(html);
+    const rich = readRich(doc, engine, syncMode, () => tiptapRef.current.getHTML());
+    const hash = rich.hash;
     if (hash === lastHtmlHash.current) {
       // Record the node as seen before bailing. The content is identical to what
       // was last projected, so this is correct — and without it the cheap gate
@@ -146,8 +213,7 @@ export function useSyncEngine({
       // Committed AFTER the conversion — see syncMdToHtml. Recording the gate
       // first meant a throw out of turndown left both sentinels saying the panes
       // agree, and nothing retried.
-      const convert = syncMode === "styled" ? engine.htmlToMd : engine.htmlToCleanMd;
-      const md = convert(html);
+      const md = rich.toMd();
       lastHtmlHash.current = hash;
       lastHtmlDoc.current = doc;
       // `setValue` reports the text the pane settled on, so there is no need to
@@ -163,13 +229,13 @@ export function useSyncEngine({
       // this line is not trusting content the pane lacks — it is projecting the
       // pane's emptiness into the other pane.
       const settled = cmRef.current.setValue(md);
-      lastMdHash.current = quickHash(
-        typeof settled === "string" ? settled : cmRef.current.getValue?.() ?? ""
+      lastMdHash.current = mdHash(
+        engine, md, typeof settled === "string" ? settled : cmRef.current.getValue?.() ?? ""
       );
 
       if (onCanonicalChange) {
         const editor = tiptapRef.current.getEditor?.();
-        if (editor) onCanonicalChange(editor.getJSON());
+        if (editor) onCanonicalChange(canonicalOf(editor));
       }
     } finally {
       syncing.current = false;
@@ -235,13 +301,15 @@ export function useSyncEngine({
       }
 
       if (cmRef.current) {
-        const html = tiptapRef.current.getHTML();
-        const convert = syncMode === "styled" ? engine.htmlToMd : engine.htmlToCleanMd;
-        const md = convert(html);
+        // A document load is where the per-block cache (A083) is filled, so the
+        // first edit after it converts one block, not the whole document.
+        const doc = currentHtmlDoc();
+        const rich = readRich(doc, engine, syncMode, () => tiptapRef.current.getHTML());
+        const md = rich.toMd();
 
-        lastMdHash.current = quickHash(md);
-        lastHtmlHash.current = quickHash(html);
-        lastHtmlDoc.current = currentHtmlDoc();
+        lastMdHash.current = mdHash(engine, md, md);
+        lastHtmlHash.current = rich.hash;
+        lastHtmlDoc.current = doc;
 
         cmRef.current.setValue(md);
       }
@@ -264,15 +332,16 @@ export function useSyncEngine({
       tiptapRef.current.setHTML(html);
 
       if (cmRef.current) {
-        // One serialization, used for both the conversion and the hash — this
-        // called getHTML() twice, i.e. serialized the whole document twice.
-        const actualHtml = tiptapRef.current.getHTML();
-        const convert = syncMode === "styled" ? engine.htmlToMd : engine.htmlToCleanMd;
-        const md = convert(actualHtml);
+        // What the pane ACTUALLY holds after parsing — the hash and markdown of
+        // the input string would describe something else — read once for both
+        // (see readRich; this used to serialize the whole document twice).
+        const doc = currentHtmlDoc();
+        const rich = readRich(doc, engine, syncMode, () => tiptapRef.current.getHTML());
+        const md = rich.toMd();
 
-        lastMdHash.current = quickHash(md);
-        lastHtmlHash.current = quickHash(actualHtml);
-        lastHtmlDoc.current = currentHtmlDoc();
+        lastMdHash.current = mdHash(engine, md, md);
+        lastHtmlHash.current = rich.hash;
+        lastHtmlDoc.current = doc;
 
         cmRef.current.setValue(md);
       }
@@ -284,7 +353,7 @@ export function useSyncEngine({
 
       if (onCanonicalChange) {
         const editor = tiptapRef.current.getEditor?.();
-        if (editor) onCanonicalChange(editor.getJSON());
+        if (editor) onCanonicalChange(canonicalOf(editor));
       }
     } finally {
       syncing.current = false;

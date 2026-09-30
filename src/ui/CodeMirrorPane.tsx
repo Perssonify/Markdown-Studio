@@ -251,6 +251,8 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
     const spellcheckCompartment = useRef(new Compartment());
     const onChangeRef = useRef(onChange);
     const suppressNextUpdate = useRef(false);
+    // What setValue last left in the pane (see there).
+    const lastSet = useRef<{ doc: unknown; text: string } | null>(null);
     // When this pane last produced input while composing (COMPOSITION_STALL_MS).
     const composeStampRef = useRef(0);
     const readOnly = useUIStore((s) => s.readOnly);
@@ -435,8 +437,11 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
       resetHistory: () => {
         const view = viewRef.current;
         if (!view) return;
+        // The document itself, not its text: it is immutable, and keeping it
+        // spares a copy of a large document — and keeps setValue's memory of
+        // what it last wrote (which is keyed on this very document) valid.
         view.setState(
-          EditorState.create({ doc: view.state.doc.toString(), extensions: extensionsRef.current })
+          EditorState.create({ doc: view.state.doc, extensions: extensionsRef.current })
         );
         reapplyLiveConfig(view);
       },
@@ -448,15 +453,34 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         // the return value, and a hash for text the pane does not hold would
         // make the next projection skip a real change.
         if (!view) return null;
-        const current = view.state.doc.toString();
-        if (current === md) return md;
+        // The text this pane was last set to, while its document is still the
+        // one that produced (CodeMirror documents are immutable: any edit makes
+        // a new one) — reading the whole rope back out on every projection was
+        // a copy of the document each time.
+        const known = lastSet.current && lastSet.current.doc === view.state.doc ? lastSet.current.text : null;
+        const current = known ?? view.state.doc.toString();
+        if (current === md) {
+          lastSet.current = { doc: view.state.doc, text: current };
+          return md;
+        }
 
+        // The common prefix and suffix, compared a block at a time before
+        // character by character: a projection typically changes a few
+        // characters of a large document, and a character loop from the start
+        // walked all of it in JavaScript whenever the change was near the end
+        // (typing at the bottom of the rich pane) — slices compare natively.
+        const BLOCK = 4096;
         let prefixLen = 0;
         const minLen = Math.min(current.length, md.length);
+        while (prefixLen + BLOCK <= minLen &&
+               current.slice(prefixLen, prefixLen + BLOCK) === md.slice(prefixLen, prefixLen + BLOCK)) prefixLen += BLOCK;
         while (prefixLen < minLen && current[prefixLen] === md[prefixLen]) prefixLen++;
 
         let suffixLen = 0;
-        const maxSuffix = minLen - prefixLen; 
+        const maxSuffix = minLen - prefixLen;
+        while (suffixLen + BLOCK <= maxSuffix &&
+               current.slice(current.length - suffixLen - BLOCK, current.length - suffixLen) ===
+                 md.slice(md.length - suffixLen - BLOCK, md.length - suffixLen)) suffixLen += BLOCK;
         while (suffixLen < maxSuffix &&
                current[current.length - 1 - suffixLen] === md[md.length - 1 - suffixLen]) suffixLen++;
 
@@ -481,7 +505,9 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         // rewritten, and only the rare unequal case pays for reading the rope.
         // The caller hashes this to decide whether the panes agree, so claiming
         // text the pane does not hold costs a redundant projection.
-        return view.state.doc.length === md.length ? md : view.state.doc.toString();
+        const settled = view.state.doc.length === md.length ? md : view.state.doc.toString();
+        lastSet.current = { doc: view.state.doc, text: settled };
+        return settled;
       },
 
       getSelection: () => {

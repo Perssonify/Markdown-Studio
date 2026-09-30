@@ -2,6 +2,7 @@
 import TurndownService from "turndown";
 import { matchBlockMath, matchInlineDisplay, matchInlineMath } from "./math-marked";
 import { isCurlyGroup } from "./preprocessor";
+import { BREAK_MARK, portableBreaksActive } from "./portable-breaks";
 
 // Minimal interface for TurndownService (package has no types)
 interface TurndownInstance {
@@ -37,14 +38,23 @@ export const BLOCK_ELEMENTS = new Set([
 const isBlockElement = (el: Element): boolean =>
   BLOCK_ELEMENTS.has(el.nodeName) || el.nodeName === "DETAILS";
 
-/** Boundary markers for turndownLinear (see there); never part of the output. */
-const SEAM_OPEN = "";
-const SEAM_CLOSE = "";
+/** Boundary markers for a converted run (see convertRun); never part of the output. */
+const SEAM_OPEN = "\uE000";
+const SEAM_CLOSE = "\uE001";
+/** Separates the runs of one batched conversion (see convertRuns). */
+const RUN_SEP = "\uE003";
 
 const VOID_ELEMENTS = new Set([
   "AREA", "BASE", "BR", "COL", "COMMAND", "EMBED", "HR", "IMG", "INPUT", "KEYGEN",
   "LINK", "META", "PARAM", "SOURCE", "TRACK", "WBR",
 ]);
+
+export interface TopLevelElement {
+  start: number;
+  end: number;
+  /** Upper-case tag name, as `nodeName` spells it. */
+  tag: string;
+}
 
 /**
  * The top-level elements of SERIALIZED markup (the output of innerHTML /
@@ -54,8 +64,8 @@ const VOID_ELEMENTS = new Set([
  * even `</p>` (serialization does not escape those), so tags are scanned
  * quote-aware.
  */
-function topLevelElements(html: string): Array<{ start: number; end: number; tag: string }> | null {
-  const out: Array<{ start: number; end: number; tag: string }> = [];
+export function topLevelElements(html: string): TopLevelElement[] | null {
+  const out: TopLevelElement[] = [];
   let depth = 0;
   let open: { start: number; tag: string } | null = null;
   let i = 0;
@@ -99,6 +109,138 @@ function topLevelElements(html: string): Array<{ start: number; end: number; tag
 }
 
 /**
+ * Whether a run may never END with this element: the `footnoteHeading` rule
+ * reads the heading's next ELEMENT sibling (is it the footnote list?), so a
+ * heading converted apart from the element after it lost that, and came out as
+ * a literal `## Footnotes` above the definitions.
+ *
+ * Decided on the markup, as a superset of what the rule matches: any H2 whose
+ * text, with every whitespace character dropped, CONTAINS "Footnotes". The rule
+ * compares `textContent.trim()` after turndown's whitespace pass, and neither
+ * can do more than remove whitespace; the text is read by stripping tags from
+ * serialized markup, where only `&`, `<`, `>` and no-break spaces are written as
+ * references — none of them a letter of the word.
+ */
+export function holdsNextSibling(html: string, el: TopLevelElement): boolean {
+  if (el.tag !== "H2") return false;
+  return html.slice(el.start, el.end).replace(/<[^>]*>/g, "").replace(/\s+/g, "").includes("Footnotes");
+}
+
+/**
+ * A run of top-level blocks, converted: its markdown WITHOUT the newlines at
+ * either end, which are only counted — they belong to the seams, where turndown
+ * decides them from both neighbours. A run that converted to nothing but
+ * newlines has an empty `body` and its newline count in `lead`.
+ */
+export interface RunOutput {
+  lead: number;
+  body: string;
+  trail: number;
+}
+
+function splitRun(out: string): RunOutput {
+  let lead = 0;
+  while (lead < out.length && out[lead] === "\n") lead++;
+  if (lead === out.length) return { lead, body: "", trail: 0 };
+  let trail = 0;
+  while (out[out.length - 1 - trail] === "\n") trail++;
+  return { lead, body: out.slice(lead, out.length - trail), trail };
+}
+
+/**
+ * `td.turndown` of one run. A run that does not begin the document is
+ * converted behind a sentinel character, and one that does not end it ahead of
+ * another, so turndown's final trim cannot eat the newlines a seam needs to
+ * see. Null if a sentinel did not come through (the caller converts whole).
+ *
+ * The sentinels are text nodes, so only a BLOCK may stand next to one: before
+ * anything else, turndown's whitespace pass would carry state across it. A
+ * run that begins (ends) the document with a non-block is converted without
+ * the opening (closing) sentinel — `open` / `close` false — which is exactly
+ * what the whole conversion sees there.
+ */
+export function convertRun(td: TurndownInstance, html: string, open: boolean, close: boolean): RunOutput | null {
+  let out = td.turndown((open ? SEAM_OPEN : "") + html + (close ? SEAM_CLOSE : ""));
+  if (open) {
+    if (!out.startsWith(SEAM_OPEN)) return null;
+    out = out.slice(SEAM_OPEN.length);
+  }
+  if (close) {
+    if (!out.endsWith(SEAM_CLOSE)) return null;
+    out = out.slice(0, out.length - SEAM_CLOSE.length);
+  }
+  return splitRun(out);
+}
+
+/**
+ * Convert runs that each BEGIN and END with a block element (and never end
+ * with a heading that holds its next sibling), up to `batch` per turndown
+ * pass, or null if a sentinel did not come through.
+ *
+ * The runs of one pass are separated by a sentinel that turndown sees as a
+ * text node between two blocks. A block takes no flanking whitespace, the
+ * whitespace pass starts over at every block boundary, and no rule reads past
+ * a text node to a block's neighbour (the one that reads a sibling at all,
+ * `footnoteHeading`, reads the next ELEMENT — hence the heading condition). So
+ * the output between two sentinels is exactly what converting that run alone
+ * gives: one parse serves many runs, and the runs need not be neighbours. Runs
+ * that already hold the separator are converted one by one. (That scan and the
+ * piece count each cover for the other; see incremental-md.ts cleanPieces.)
+ */
+export function convertRuns(td: TurndownInstance, runs: readonly string[], batch = 64): RunOutput[] | null {
+  const out: RunOutput[] = [];
+  for (let i = 0; i < runs.length; i += batch) {
+    const group = runs.slice(i, i + batch);
+    if (group.length > 1 && group.every((h) => h.indexOf(RUN_SEP) === -1)) {
+      const text = td.turndown(SEAM_OPEN + group.join(RUN_SEP) + SEAM_CLOSE);
+      if (text.startsWith(SEAM_OPEN) && text.endsWith(SEAM_CLOSE)) {
+        const pieces = text.slice(SEAM_OPEN.length, text.length - SEAM_CLOSE.length).split(RUN_SEP);
+        if (pieces.length === group.length) {
+          for (const p of pieces) out.push(splitRun(p));
+          continue;
+        }
+      }
+    }
+    for (const h of group) {
+      const run = convertRun(td, h, true, true);
+      if (!run) return null;
+      out.push(run);
+    }
+  }
+  return out;
+}
+
+/** JavaScript's `\s`, one UTF-16 unit at a time (what `/\s/` matches). */
+const isSpace = (s: string, i: number): boolean => /\s/.test(s[i]!);
+
+/**
+ * Join converted runs exactly as turndown joins sibling blocks — the seam gets
+ * max(newlines ending the left run, newlines starting the right run), at most
+ * two — then apply turndown's final trim to the whole: `^[\t\r\n]+` and
+ * `[\t\r\n\s]+$`, done from each end rather than by a regex scan of the
+ * entire document.
+ */
+export function joinRuns(runs: Iterable<RunOutput>): string {
+  const parts: string[] = [];
+  let pending = 0; // newlines owed after the text so far
+  for (const r of runs) {
+    if (!r.body) {
+      pending = Math.max(pending, r.lead);
+      continue;
+    }
+    if (parts.length) parts.push("\n\n".slice(0, Math.min(2, Math.max(pending, r.lead))));
+    parts.push(r.body);
+    pending = r.trail;
+  }
+  const s = parts.join("");
+  let a = 0;
+  while (a < s.length && (s[a] === "\t" || s[a] === "\r" || s[a] === "\n")) a++;
+  let b = s.length;
+  while (b > a && isSpace(s, b - 1)) b--;
+  return a === 0 && b === s.length ? s : s.slice(a, b);
+}
+
+/**
  * `td.turndown(html)`, in linear time.
  *
  * Turndown folds a node's children into one string with `join(output, next)`,
@@ -108,16 +250,15 @@ function topLevelElements(html: string): Array<{ start: number; end: number; tag
  * conversion runs on every rich→markdown projection.
  *
  * So the top level is converted in runs of `chunk` blocks and the runs joined
- * here with turndown's OWN separator rule: the seam gets max(newlines ending
- * the left run, newlines starting the right run), at most two. Each run is
- * bracketed by a sentinel character, so turndown's final trim cannot eat the
- * newlines a seam needs to see. Runs split only between two elements turndown
- * itself treats as blocks, with nothing but whitespace between them — where
- * its whitespace pass removes that whitespace anyway — so the output is
- * byte-identical to the plain conversion (`converter-linear.test.js`). The
- * split is made on the markup STRING: taking the nodes out of one parsed tree
- * costs more than it saves wherever child lists are arrays (jsdom measured
- * slower than doing nothing at all). Small documents take the plain path.
+ * with turndown's OWN separator rule (joinRuns). Runs split only between two
+ * elements turndown itself treats as blocks, with nothing but whitespace
+ * between them — where its whitespace pass removes that whitespace anyway —
+ * and never right after a heading that reads its next sibling
+ * (holdsNextSibling), so the output is byte-identical to the plain conversion
+ * (`converter-linear.test.js`). The split is made on the markup STRING: taking
+ * the nodes out of one parsed tree costs more than it saves wherever child
+ * lists are arrays (jsdom measured slower than doing nothing at all). Small
+ * documents take the plain path.
  */
 export function turndownLinear(td: TurndownInstance, html: string, chunk = 64): string {
   const elements = html.length > 4096 || chunk < 64 ? topLevelElements(html) : null;
@@ -132,6 +273,7 @@ export function turndownLinear(td: TurndownInstance, html: string, chunk = 64): 
     const prev = elements[k - 1];
     if (
       isBlock && prev && BLOCK_ELEMENTS.has(prev.tag) && blocksInRun >= chunk &&
+      !holdsNextSibling(html, prev) &&
       !/[^ \t\r\n]/.test(html.slice(prev.end, el.start))
     ) {
       cuts.push([prev.end, el.start]);
@@ -141,38 +283,15 @@ export function turndownLinear(td: TurndownInstance, html: string, chunk = 64): 
   }
   if (!cuts.length) return td.turndown(html);
 
-  const parts: string[] = [];
-  let pending = 0; // newlines owed after the text so far
-  let started = false;
+  const runs: RunOutput[] = [];
   for (let i = 0; i <= cuts.length; i++) {
     const from = i === 0 ? 0 : cuts[i - 1]![1];
     const to = i === cuts.length ? html.length : cuts[i]![0];
-    const first = i === 0;
-    const last = i === cuts.length;
-    let out = td.turndown((first ? "" : SEAM_OPEN) + html.slice(from, to) + (last ? "" : SEAM_CLOSE));
-    if (!first) {
-      if (!out.startsWith(SEAM_OPEN)) return td.turndown(html);
-      out = out.slice(1);
-    }
-    if (!last) {
-      if (!out.endsWith(SEAM_CLOSE)) return td.turndown(html);
-      out = out.slice(0, -1);
-    }
-    let lead = 0;
-    while (lead < out.length && out[lead] === "\n") lead++;
-    if (lead === out.length) {
-      pending = Math.max(pending, lead);
-      continue;
-    }
-    let trail = 0;
-    while (out[out.length - 1 - trail] === "\n") trail++;
-    if (started) parts.push("\n\n".slice(0, Math.min(2, Math.max(pending, lead))));
-    parts.push(out.slice(lead, out.length - trail));
-    started = true;
-    pending = trail;
+    const run = convertRun(td, html.slice(from, to), i > 0, i < cuts.length);
+    if (!run) return td.turndown(html);
+    runs.push(run);
   }
-  // turndown's own final trim, over the whole document.
-  return parts.join("").replace(/^[\t\r\n]+/, "").replace(/[\t\r\n\s]+$/, "");
+  return joinRuns(runs);
 }
 
 /**
@@ -292,7 +411,60 @@ export function installEscape(td: TurndownInstance, getOptions: () => EscapeOpti
   return td;
 }
 
+// ── Portable hard breaks (A051) ─────────────────────────────────────────────
+//
+// While an export converts (portable-breaks.ts), a <br> is written with a
+// marker in front, and the paragraph rule turns a marked break into `\` +
+// newline wherever the app would draw it: with text on its line and on the
+// next. Everywhere else — the edges of a paragraph, a heading (where the
+// newline ends the heading), a code span — the converter drops the marker
+// (stripBreakMarks), leaving exactly what the editor writes.
+
+/** A line of a paragraph the app would draw: anything but spaces and tabs. */
+const drawsLine = (line: string): boolean => /[^ \t]/.test(line.split(BREAK_MARK).join(""));
+
+/**
+ * A paragraph's marked breaks, written `\` + newline where the app draws the
+ * break — text on the break's line AND on the next. Elsewhere the break's
+ * newline merges into the blank line around the paragraph and the app draws
+ * nothing, and a `\` there would print as a literal backslash, so those keep
+ * their marker for stripBreakMarks.
+ */
+function portableBreaksIn(content: string): string {
+  let out = "";
+  let at = 0;
+  for (let p = content.indexOf(BREAK_MARK); p !== -1; p = content.indexOf(BREAK_MARK, p + 1)) {
+    if (!content.startsWith("  \n", p + 1)) continue;
+    const lineStart = content.lastIndexOf("\n", p - 1) + 1;
+    const next = p + 4;
+    const nextEnd = content.indexOf("\n", next);
+    if (!drawsLine(content.slice(lineStart, p)) || !drawsLine(content.slice(next, nextEnd === -1 ? content.length : nextEnd))) continue;
+    out += content.slice(at, p) + "\\";
+    at = p + 3; // past the marker and the two spaces; the newline stays
+  }
+  return out + content.slice(at);
+}
+
 export function addBaseRules(td: TurndownInstance): TurndownInstance {
+  // Hard break: turndown's own `lineBreak` output — `options.br` (two spaces;
+  // the engine never changes it) and a newline — marked during an export.
+  // Not inside a table cell, which writes its breaks as `<br>` (cellLine), and
+  // not inside link text: marked, the app's own reader, does not take `\` +
+  // newline inside a link's brackets and would drop the link. There the
+  // editor's newline stays (a known limit of the export: such a break reads as
+  // a space outside the app).
+  td.addRule("hardBreak", {
+    filter: "br",
+    replacement: (_content: string, node?: Node): string =>
+      (portableBreaksActive() && !(node as Element | undefined)?.closest?.("a, td, th") ? BREAK_MARK : "") + "  \n",
+  });
+  // Paragraph: turndown's own output, plus the export's portable breaks.
+  td.addRule("paragraph", {
+    filter: "p",
+    replacement: (content: string): string =>
+      "\n\n" + (portableBreaksActive() && content.indexOf(BREAK_MARK) !== -1 ? portableBreaksIn(content) : content) + "\n\n",
+  });
+
   // Math: <span data-math-inline="x"> → $x$ ; <div data-math-block="x"> → $$x$$.
   // What is written must parse back as maths under math-marked's rules:
   // inline maths may not open or close on a space, a block may not contain a

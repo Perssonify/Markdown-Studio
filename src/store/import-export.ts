@@ -11,6 +11,7 @@ import { computeFidelity, type FidelityReport } from "./fidelity";
 import type { DocumentRecord } from "./document";
 import { APP_NAME } from "../constants";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version";
+import { withPortableBreaks } from "../engine/portable-breaks";
 
 // --- Types ---
 
@@ -203,6 +204,15 @@ export function downloadBlob(blob: Blob, filename: string): void {
 }
 
 /**
+ * The markdown of a `.md` file that leaves the app: the converter's output with
+ * hard breaks written `\` + newline, which renderers without the app's
+ * `breaks: true` dialect still draw (A051, engine/portable-breaks.ts).
+ */
+export function exportMarkdown(html: string, convert: (html: string) => string): string {
+  return withPortableBreaks(() => convert(html));
+}
+
+/**
  * Export document as Markdown.
  */
 export function exportAsMarkdown(
@@ -212,15 +222,16 @@ export function exportAsMarkdown(
   const { htmlToMd, htmlToCleanMd, getHtml, syncMode = "clean" } = opts;
 
   let md: string;
-  if (doc.markdownCache) {
-    md = doc.markdownCache;
-  } else if (getHtml && (htmlToMd || htmlToCleanMd)) {
-    const html = getHtml();
+  // The converter first: `markdownCache` would be the editor's own dialect,
+  // without portable hard breaks (and storage never keeps one).
+  if (getHtml && (htmlToMd || htmlToCleanMd)) {
     const convert =
       syncMode === "styled"
         ? htmlToMd ?? htmlToCleanMd
         : htmlToCleanMd ?? htmlToMd;
-    md = convert!(html);
+    md = exportMarkdown(getHtml(), convert!);
+  } else if (doc.markdownCache) {
+    md = doc.markdownCache;
   } else {
     throw new Error("Markdown converter not available — please try again.");
   }
