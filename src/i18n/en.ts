@@ -7,11 +7,15 @@
  * `<area>.`), merged here. See docs/i18n.md.
  */
 import { common } from "./en/common";
+import { menu } from "./en/menu";
+import { context } from "./en/context";
 import { pages } from "./en/pages";
 import { shortcuts } from "./en/shortcuts";
 
 export const en = {
   ...common,
+  ...menu,
+  ...context,
   ...pages,
   ...shortcuts,
 };
