@@ -23,36 +23,38 @@ import { PrivacySection } from "./SettingsPrivacy";
 import { StorageBackupSection } from "./SettingsStorage";
 import { AccentCircleRow, ThemeCircleRow } from "./ThemeControls";
 import { EraseLocalDataSection } from "./EraseLocalData";
+import { LanguageSetting } from "./LanguageSetting";
+import { t, useT } from "../i18n";
 
 const FLAVORS: { id: MarkdownFlavor; label: string; desc: string }[] = [
   {
     id: "commonmark",
-    label: "CommonMark",
-    desc: "Strict baseline — no tables or task lists.",
+    get label() { return t("settings.flavorCommonmark"); },
+    get desc() { return t("settings.flavorCommonmarkDesc"); },
   },
   {
     id: "gfm",
-    label: "GitHub Flavored",
-    desc: "Tables, task lists, strikethrough, autolinks.",
+    get label() { return t("settings.flavorGfm"); },
+    get desc() { return t("settings.flavorGfmDesc"); },
   },
-  { id: "markdown-extra", label: "Markdown Extra", desc: "GFM plus footnotes." },
+  { id: "markdown-extra", get label() { return t("settings.flavorMarkdownExtra"); }, get desc() { return t("settings.flavorMarkdownExtraDesc"); } },
 ];
 
 const CORE_TOGGLES: { key: keyof MarkdownFeatureSettings; label: string }[] = [
-  { key: "tables", label: "Tables" },
-  { key: "taskLists", label: "Task lists" },
-  { key: "strikethrough", label: "Strikethrough" },
-  { key: "autolink", label: "Autolink URLs" },
-  { key: "footnotes", label: "Footnotes" },
+  { key: "tables", get label() { return t("settings.featureTables"); } },
+  { key: "taskLists", get label() { return t("settings.featureTaskLists"); } },
+  { key: "strikethrough", get label() { return t("settings.featureStrikethrough"); } },
+  { key: "autolink", get label() { return t("settings.featureAutolink"); } },
+  { key: "footnotes", get label() { return t("settings.featureFootnotes"); } },
 ];
 
 const RICH_TOGGLES: { key: keyof MarkdownFeatureSettings; label: string }[] = [
-  { key: "math", label: "LaTeX math (KaTeX)" },
-  { key: "diagrams", label: "UML / diagrams (Mermaid)" },
-  { key: "music", label: "Music scores (ABC)" },
-  { key: "emoji", label: "Emoji shortcodes" },
-  { key: "callouts", label: "Callouts (> [!NOTE])" },
-  { key: "details", label: "Collapsible details" },
+  { key: "math", get label() { return t("settings.extensionMath"); } },
+  { key: "diagrams", get label() { return t("settings.extensionDiagrams"); } },
+  { key: "music", get label() { return t("settings.extensionMusic"); } },
+  { key: "emoji", get label() { return t("settings.extensionEmoji"); } },
+  { key: "callouts", get label() { return t("settings.extensionCallouts"); } },
+  { key: "details", get label() { return t("settings.extensionDetails"); } },
 ];
 
 function SettingsSheetInner({
@@ -65,6 +67,7 @@ function SettingsSheetInner({
   /** Run the full, restorable backup (shown in Storage & backup when given). */
   onBackup?: () => void;
 }) {
+  const t = useT();
   const markdownFeatures = useUIStore((s) => s.markdownFeatures);
   const setMarkdownFeatures = useUIStore((s) => s.setMarkdownFeatures);
   const readOnly = useUIStore((s) => s.readOnly);
@@ -101,9 +104,9 @@ function SettingsSheetInner({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[min(360px,100vw)] p-0 sm:w-[400px]">
         <SheetHeader className="px-5 py-4">
-          <SheetTitle>Settings</SheetTitle>
+          <SheetTitle>{t("common.settings")}</SheetTitle>
           <SheetDescription>
-            Appearance &amp; Markdown preferences. Saved automatically.
+            {t("settings.appearanceAndMarkdownPreferencesSaved")}
           </SheetDescription>
         </SheetHeader>
         <Separator />
@@ -112,16 +115,17 @@ function SettingsSheetInner({
             {/* Appearance — theme + accent, mirrored in the View ▸ Appearance menu */}
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Appearance
+                {t("settings.appearance")}
               </h3>
               <div className="space-y-1.5">
-                <Label className="text-sm">Theme</Label>
+                <Label className="text-sm">{t("settings.theme")}</Label>
                 <ThemeCircleRow />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">Accent</Label>
+                <Label className="text-sm">{t("settings.accent")}</Label>
                 <AccentCircleRow />
               </div>
+              <LanguageSetting />
             </section>
 
             <Separator />
@@ -129,7 +133,7 @@ function SettingsSheetInner({
             {/* Markdown flavor */}
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Markdown flavor
+                {t("settings.markdownFlavor")}
               </h3>
               <div className="grid gap-2">
                 {FLAVORS.map((f) => (
@@ -161,17 +165,17 @@ function SettingsSheetInner({
             {/* Core features */}
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Features
+                {t("settings.features")}
               </h3>
-              {CORE_TOGGLES.map((t) => (
-                <div key={t.key} className="flex items-center justify-between">
-                  <Label htmlFor={`feat-${t.key}`} className="text-sm">
-                    {t.label}
+              {CORE_TOGGLES.map((feature) => (
+                <div key={feature.key} className="flex items-center justify-between">
+                  <Label htmlFor={`feat-${feature.key}`} className="text-sm">
+                    {feature.label}
                   </Label>
                   <Switch
-                    id={`feat-${t.key}`}
-                    checked={Boolean(markdownFeatures[t.key])}
-                    onCheckedChange={toggle(t.key)}
+                    id={`feat-${feature.key}`}
+                    checked={Boolean(markdownFeatures[feature.key])}
+                    onCheckedChange={toggle(feature.key)}
                   />
                 </div>
               ))}
@@ -182,17 +186,17 @@ function SettingsSheetInner({
             {/* Rich renderers */}
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Extensions
+                {t("settings.extensions")}
               </h3>
-              {RICH_TOGGLES.map((t) => (
-                <div key={t.key} className="flex items-center justify-between">
-                  <Label htmlFor={`feat-${t.key}`} className="text-sm">
-                    {t.label}
+              {RICH_TOGGLES.map((feature) => (
+                <div key={feature.key} className="flex items-center justify-between">
+                  <Label htmlFor={`feat-${feature.key}`} className="text-sm">
+                    {feature.label}
                   </Label>
                   <Switch
-                    id={`feat-${t.key}`}
-                    checked={Boolean(markdownFeatures[t.key])}
-                    onCheckedChange={toggle(t.key)}
+                    id={`feat-${feature.key}`}
+                    checked={Boolean(markdownFeatures[feature.key])}
+                    onCheckedChange={toggle(feature.key)}
                   />
                 </div>
               ))}
@@ -203,15 +207,15 @@ function SettingsSheetInner({
             {/* Editor behaviour */}
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Editor
+                {t("settings.editor")}
               </h3>
               <div className="space-y-1.5">
-                <Label className="text-sm">View mode</Label>
+                <Label className="text-sm">{t("settings.viewMode")}</Label>
                 <div className={cn("inline-flex w-full rounded-md border border-border p-0.5", readOnly && "opacity-50")}>
                   {[
-                    { v: MODES.MD, label: "Markdown" },
-                    { v: MODES.HTML, label: "Rich text" },
-                    { v: MODES.SPLIT, label: "Split" },
+                    { v: MODES.MD, label: t("settings.viewMarkdown") },
+                    { v: MODES.HTML, label: t("settings.viewRichText") },
+                    { v: MODES.SPLIT, label: t("settings.viewSplit") },
                   ].map((o) => (
                     <button
                       key={o.v}
@@ -229,20 +233,20 @@ function SettingsSheetInner({
                   ))}
                 </div>
                 {readOnly && (
-                  <p className="text-[11px] text-muted-foreground">View is locked while read-only mode is on.</p>
+                  <p className="text-[11px] text-muted-foreground">{t("settings.viewIsLockedWhileRead")}</p>
                 )}
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="pref-readonly" className="text-sm">Read-only mode</Label>
-                  <p className="text-xs text-muted-foreground">Disable editing; hide the formatting toolbar.</p>
+                  <Label htmlFor="pref-readonly" className="text-sm">{t("settings.readOnlyMode")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.disableEditingHideTheFormatting")}</p>
                 </div>
                 <Switch id="pref-readonly" checked={readOnly} onCheckedChange={setReadOnly} />
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="pref-shortcuts" className="text-sm">Keyboard shortcuts</Label>
-                  <p className="text-xs text-muted-foreground">Turn off all app keyboard shortcuts (⌘B, ⌘F, ⌘S, …).</p>
+                  <Label htmlFor="pref-shortcuts" className="text-sm">{t("settings.keyboardShortcuts")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.turnOffAllAppKeyboard")}</p>
                 </div>
                 <Switch id="pref-shortcuts" checked={keyboardShortcutsEnabled} onCheckedChange={setKeyboardShortcutsEnabled} />
               </div>
@@ -254,16 +258,16 @@ function SettingsSheetInner({
                 so both panes honor them; all sticky via localStorage. */}
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Reading &amp; typography
+                {t("settings.readingAndTypography")}
               </h3>
               <div className="space-y-1.5">
-                <Label className="text-sm">Font size</Label>
+                <Label className="text-sm">{t("settings.fontSize")}</Label>
                 <div className="inline-flex w-full rounded-md border border-border p-0.5">
                   {[
-                    { v: 13, label: "S" },
-                    { v: 15, label: "M" },
-                    { v: 17, label: "L" },
-                    { v: 19, label: "XL" },
+                    { v: 13, label: t("settings.fontSizeS") },
+                    { v: 15, label: t("settings.fontSizeM") },
+                    { v: 17, label: t("settings.fontSizeL") },
+                    { v: 19, label: t("settings.fontSizeXl") },
                   ].map((o) => (
                     <button
                       key={o.v}
@@ -281,13 +285,13 @@ function SettingsSheetInner({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">Line height</Label>
+                <Label className="text-sm">{t("settings.lineHeight")}</Label>
                 <div className="inline-flex w-full rounded-md border border-border p-0.5">
                   {[
-                    { v: 1.4, label: "Tight" },
-                    { v: 1.6, label: "Normal" },
-                    { v: 1.8, label: "Relaxed" },
-                    { v: 2.1, label: "Loose" },
+                    { v: 1.4, label: t("settings.lineHeightTight") },
+                    { v: 1.6, label: t("settings.lineHeightNormal") },
+                    { v: 1.8, label: t("settings.lineHeightRelaxed") },
+                    { v: 2.1, label: t("settings.lineHeightLoose") },
                   ].map((o) => (
                     <button
                       key={o.v}
@@ -305,7 +309,7 @@ function SettingsSheetInner({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">Reading width</Label>
+                <Label className="text-sm">{t("settings.readingWidth")}</Label>
                 <div className="inline-flex w-full rounded-md border border-border p-0.5">
                   {/* Characters, not pixels. A reading measure IS a character
                       count, so it must scale with the font-size preference —
@@ -314,10 +318,10 @@ function SettingsSheetInner({
                       in the default split layout every option was identical
                       while the control still highlighted and persisted. */}
                   {[
-                    { v: 0, label: "Full" },
-                    { v: 65, label: "Narrow" },
-                    { v: 80, label: "Medium" },
-                    { v: 100, label: "Wide" },
+                    { v: 0, label: t("settings.readingWidthFull") },
+                    { v: 65, label: t("settings.readingWidthNarrow") },
+                    { v: 80, label: t("settings.readingWidthMedium") },
+                    { v: 100, label: t("settings.readingWidthWide") },
                   ].map((o) => (
                     <button
                       key={o.v}
@@ -334,22 +338,20 @@ function SettingsSheetInner({
                   ))}
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Caps the text column at roughly that many characters per line. A pane
-                  already narrower than the measure is left alone, so in Split view on a
-                  narrow window this may have no visible effect.
+                  {t("settings.readingWidthHint")}
                 </p>
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="pref-focus" className="text-sm">Focus mode</Label>
-                  <p className="text-xs text-muted-foreground">Dim the menus, toolbar, and status bar so the document leads.</p>
+                  <Label htmlFor="pref-focus" className="text-sm">{t("settings.focusMode")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.dimTheMenusToolbarAnd")}</p>
                 </div>
                 <Switch id="pref-focus" checked={focusMode} onCheckedChange={setFocusMode} />
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="pref-spellcheck" className="text-sm">Spellcheck</Label>
-                  <p className="text-xs text-muted-foreground">Browser spellcheck squiggles in both panes.</p>
+                  <Label htmlFor="pref-spellcheck" className="text-sm">{t("settings.spellcheck")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.browserSpellcheckSquigglesInBoth")}</p>
                 </div>
                 <Switch id="pref-spellcheck" checked={spellcheck} onCheckedChange={setSpellcheck} />
               </div>
@@ -370,27 +372,27 @@ function SettingsSheetInner({
             {showAdmin && (
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Admin
+                {t("settings.admin")}
               </h3>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="pref-context-menu" className="text-sm">Enable right-click menu</Label>
-                  <p className="text-xs text-muted-foreground">Custom editor context menu; off falls back to the browser menu.</p>
+                  <Label htmlFor="pref-context-menu" className="text-sm">{t("settings.enableRightClickMenu")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.customEditorContextMenuOff")}</p>
                 </div>
                 <Switch id="pref-context-menu" checked={contextMenuEnabled} onCheckedChange={setContextMenuEnabled} />
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="pref-console" className="text-sm">Diagnostics console</Label>
-                  <p className="text-xs text-muted-foreground">Adds a read-only console tab to the bottom tray (lifecycle, storage, links).</p>
+                  <Label htmlFor="pref-console" className="text-sm">{t("settings.diagnosticsConsole")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.addsAReadOnlyConsole")}</p>
                 </div>
                 <Switch id="pref-console" checked={consoleEnabled} onCheckedChange={setConsoleEnabled} />
               </div>
               {adsAvailable() && (
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="pref-ads" className="text-sm">Show ads</Label>
-                    <p className="text-xs text-muted-foreground">Placeholder ad slots for layout work — development builds only; never shown in embeds.</p>
+                    <Label htmlFor="pref-ads" className="text-sm">{t("settings.showAds")}</Label>
+                    <p className="text-xs text-muted-foreground">{t("settings.placeholderAdSlotsForLayout")}</p>
                   </div>
                   <Switch id="pref-ads" checked={showAds} onCheckedChange={setShowAds} />
                 </div>

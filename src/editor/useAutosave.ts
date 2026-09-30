@@ -4,13 +4,13 @@ import { stashUnsaved, type RecoveryEntry } from "../store/crash-recovery";
 import type { DocumentRecord } from "../store/document";
 import { collectUnloadStash, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "../store/documentStore";
 import { StorageQuotaError } from "../store/storage-adapter";
+import { t } from "../i18n";
 import type { PerssonifyEditorProps } from "./props";
 import type { CmRef, DocStore, Lifecycle, SyncEngine, TiptapRef, Toast } from "./types";
 
 /** What the user is told when autosave finds storage full — what happened
  *  and, more to the point, what would fix it. */
-const STORAGE_FULL_MESSAGE =
-  "Storage is full — your latest changes are NOT saved. Free space by deleting documents or old versions (Tools ▸ Version history), then keep typing to retry.";
+const STORAGE_FULL_MESSAGE = () => t("editor.storageFullNotSaved");
 
 interface AutosaveParams {
   cmRef: CmRef;
@@ -68,7 +68,7 @@ export function useAutosave({
         toast.show(message, type);
         return;
       }
-      toast.show("Changes saved", "success");
+      toast.show(t("editor.changesSaved"), "success");
       if (onSave && activeDoc) {
         const markdown = cmRef.current?.getValue() || "";
         const html = tiptapRef.current?.getHTML() || "";
@@ -83,7 +83,7 @@ export function useAutosave({
           toast.show(e.message, "error");
         }
       } else {
-        toast.show("Save failed", "error");
+        toast.show(t("editor.saveFailed"), "error");
       }
     }
   }, [saveActiveDoc, toast, onStorageQuotaExceeded, onSave, activeDoc, getCanonical, flushPendingSync]);
@@ -130,7 +130,7 @@ export function useAutosave({
         if (onStorageQuotaExceeded) onStorageQuotaExceeded(e);
         else if (Date.now() - lastAutosaveToastRef.current > 30_000) {
           lastAutosaveToastRef.current = Date.now();
-          toast.show(STORAGE_FULL_MESSAGE, "error");
+          toast.show(STORAGE_FULL_MESSAGE(), "error");
         }
         return;
       } else {
@@ -138,8 +138,8 @@ export function useAutosave({
         // staying silent here let edits vanish on close with zero warning.
         // Throttle the toast (failures retry every few seconds — see below).
         const msg = isConflict
-          ? e.message
-          : "Autosave failed — your latest changes are not saved yet";
+          ? t("editor.conflictMessage")
+          : t("editor.autosaveFailed");
         if (Date.now() - lastAutosaveToastRef.current > 30_000) {
           lastAutosaveToastRef.current = Date.now();
           toast.show(msg, "warning");

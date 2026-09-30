@@ -18,6 +18,8 @@
  * at once, and a clean background tab has no right to do that to a busy one.
  */
 import { toast } from "sonner";
+import { APP_NAME } from "../constants";
+import { t } from "../i18n";
 import { decideUpdateReload, isOnline, pageActions, unsavedNow } from "../utils/app-health";
 import { recordDiagnostic } from "../utils/diagnostics";
 
@@ -177,22 +179,23 @@ export function setupServiceWorkerUpdates(registerSW: RegisterSW, env: SwUpdateE
 
 const TOAST_ID = "pf-sw-update";
 
+// Getters: read when the notice is shown, so they follow the interface language.
 const COPY: Record<UpdateNotice, { title: string; description: string }> = {
   ready: {
-    title: "A new version of Markdown Studio is ready",
-    description: "Reload when it suits you — nothing changes until you do.",
+    get title() { return t("notices.updateReadyTitle", { app: APP_NAME }); },
+    get description() { return t("notices.updateReadyDescription"); },
   },
   activated: {
-    title: "Markdown Studio was updated in another tab",
-    description: "Reload this tab to finish updating. It will not reload while you have unsaved changes.",
+    get title() { return t("notices.updateActivatedTitle", { app: APP_NAME }); },
+    get description() { return t("notices.updateActivatedDescription"); },
   },
   offline: {
-    title: "You're offline",
-    description: "The update will be ready to apply once you're back online.",
+    get title() { return t("notices.updateOfflineTitle"); },
+    get description() { return t("notices.updateOfflineDescription"); },
   },
   applying: {
-    title: "Updating…",
-    description: "Markdown Studio will reload in a moment.",
+    get title() { return t("notices.updateApplyingTitle"); },
+    get description() { return t("notices.updateApplyingDescription", { app: APP_NAME }); },
   },
 };
 
@@ -222,7 +225,7 @@ function showUpdateToast(notice: UpdateNotice, apply: () => void) {
       // Stays until acted on: an update notice that times out is an update
       // the user never hears about again this session.
       duration: Infinity,
-      ...(notice === "applying" ? {} : { action: { label: "Reload", onClick: apply } }),
+      ...(notice === "applying" ? {} : { action: { label: t("common.reload"), onClick: apply } }),
     });
   });
 }

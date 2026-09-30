@@ -2,6 +2,7 @@ import { mergeAttributes, Node } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 import { cachedImport } from "../utils/lazy-import";
+import { useT } from "../i18n";
 
 /**
  * TipTap nodes that render LaTeX with KaTeX (lazy-loaded). The LaTeX source is
@@ -32,6 +33,7 @@ function MathView({
   updateAttributes?: (attrs: Record<string, unknown>) => void;
   editable?: boolean;
 }) {
+  const t = useT();
   const ref = useRef<HTMLSpanElement>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(latex);
@@ -102,7 +104,7 @@ function MathView({
           spellCheck={false}
           rows={inline ? undefined : 2}
           className="math-source-input"
-          placeholder={inline ? "LaTeX…" : "LaTeX (Shift+Enter for newline)"}
+          placeholder={inline ? t("panes.latex") : t("panes.latexShiftEnterForNewline")}
         />
       </NodeViewWrapper>
     );
@@ -127,8 +129,8 @@ function MathView({
       }
       tabIndex={editable ? 0 : undefined}
       role={editable ? "button" : undefined}
-      aria-label={editable ? `Math: ${latex || "empty"} (Enter to edit)` : undefined}
-      title={editable ? "Double-click or press Enter to edit" : undefined}
+      aria-label={editable ? (latex ? t("panes.mathLabel", { latex }) : t("panes.mathLabelEmpty")) : undefined}
+      title={editable ? t("panes.doubleClickOrPressEnter") : undefined}
       style={editable ? { cursor: "pointer" } : undefined}
     >
       <span ref={ref} />

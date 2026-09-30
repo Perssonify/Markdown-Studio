@@ -3,6 +3,8 @@ import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, VERSION } from "../../constan
 import { CREDITS, LICENSE_SUMMARY, THIRD_PARTY_NOTICES_PATH } from "../../data/credits";
 import { PageChrome } from "./PageChrome";
 import { CopyDiagnosticsButton } from "../DiagnosticsActions";
+import { localizedContent, renderRich, useT } from "../../i18n";
+import { ABOUT_CONTENT } from "./about-content";
 
 interface AboutPageProps {
   onClose: () => void;
@@ -21,8 +23,11 @@ function Highlight({ icon: Icon, title, children }: { icon: React.ElementType; t
 }
 
 export function AboutPage({ onClose }: AboutPageProps) {
+  const t = useT();
+  // Prose is content, one version per language (about-content.ts).
+  const copy = localizedContent(ABOUT_CONTENT);
   return (
-    <PageChrome title={`About ${APP_NAME}`} onClose={onClose}>
+    <PageChrome title={t("pages.aboutTitle", { app: APP_NAME })} onClose={onClose}>
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-8 sm:py-10">
         {/* Hero */}
         <div className="flex flex-col items-center text-center">
@@ -31,16 +36,13 @@ export function AboutPage({ onClose }: AboutPageProps) {
           </div>
           <h1 className="mt-4 text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Version {VERSION} · <span className="font-medium">{APP_BRAND}</span>
+            {t.rich("pages.aboutVersion", { version: VERSION, b: (s) => <span className="font-medium">{s}</span>, brand: APP_BRAND })}
           </p>
           <p className="mt-4 inline-flex items-center gap-1.5 text-base font-medium">
-            Made with <Heart className="size-4 fill-rose-500 text-rose-500" aria-label="love" /> by Perssonify
+            {t.rich("pages.madeWith", { heart: <Heart className="size-4 fill-rose-500 text-rose-500" aria-label={t("pages.love")} /> })}
           </p>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            A dual-pane Markdown editor that keeps a raw-Markdown source and a rich-text
-            preview perfectly in sync — with math, diagrams, music, tables, folders, a
-            knowledge graph, a card board, and one-click export. It runs in your browser:
-            there is no account, and your documents are stored on your device, not on a server.
+            {copy.intro}
           </p>
           <a
             href={APP_URL}
@@ -54,41 +56,40 @@ export function AboutPage({ onClose }: AboutPageProps) {
 
         {/* Principles */}
         <div className="mt-10 grid gap-3 sm:grid-cols-3">
-          <Highlight icon={Shield} title="Private by design">
-            Your documents are stored in this browser. There is no account, and no server
-            stores or reads them. Importing from a URL asks before using our relay, and
-            remote images can be blocked — both in Settings ▸ Privacy.
+          <Highlight icon={Shield} title={copy.principles.privacy.title}>
+            {copy.principles.privacy.body}
           </Highlight>
-          <Highlight icon={WifiOff} title="Works offline">
-            Installable as an app and cached for offline use, so you can keep writing
-            without a connection.
+          <Highlight icon={WifiOff} title={copy.principles.offline.title}>
+            {copy.principles.offline.body}
           </Highlight>
-          <Highlight icon={FileText} title="Open formats">
-            Import Markdown, HTML, JSON and Word; export all of those and PDF — your work
-            is never locked in.
+          <Highlight icon={FileText} title={copy.principles.formats.title}>
+            {copy.principles.formats.body}
           </Highlight>
         </div>
 
         {/* Credits */}
         <section className="mt-12">
-          <h2 className="text-lg font-semibold tracking-tight">Built with open source</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{t("pages.builtWithOpenSource")}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {APP_NAME} stands on the shoulders of these projects. Versions reflect what this
-            build was tested against. Licenses in use:{" "}
-            <span className="font-medium text-foreground">{LICENSE_SUMMARY.join(" · ")}</span>.
+            {renderRich(copy.creditsIntro, {
+              app: APP_NAME,
+              licenses: LICENSE_SUMMARY.join(" · "),
+              b: (s) => <span className="font-medium text-foreground">{s}</span>,
+            })}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            These are the highlights. The complete list of open-source software in this
-            build, with every licence and notice text, is in the{" "}
-            <a
-              href={THIRD_PARTY_NOTICES_PATH}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-primary-strong hover:underline"
-            >
-              third-party licences
-            </a>
-            .
+            {renderRich(copy.creditsNote, {
+              link: (s) => (
+                <a
+                  href={THIRD_PARTY_NOTICES_PATH}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary-strong hover:underline"
+                >
+                  {s}
+                </a>
+              ),
+            })}
           </p>
 
           <div className="mt-6 space-y-8">
@@ -101,10 +102,10 @@ export function AboutPage({ onClose }: AboutPageProps) {
                   <table className="w-full min-w-[340px] text-left text-xs">
                     <thead className="bg-muted/40 text-muted-foreground">
                       <tr>
-                        <th className="px-3 py-2 font-medium">Package</th>
-                        <th className="hidden px-3 py-2 font-medium sm:table-cell">Used for</th>
-                        <th className="px-3 py-2 font-medium">Version</th>
-                        <th className="px-3 py-2 font-medium">License</th>
+                        <th className="px-3 py-2 font-medium">{t("pages.creditsPackage")}</th>
+                        <th className="hidden px-3 py-2 font-medium sm:table-cell">{t("pages.creditsUsedFor")}</th>
+                        <th className="px-3 py-2 font-medium">{t("pages.creditsVersion")}</th>
+                        <th className="px-3 py-2 font-medium">{t("pages.creditsLicense")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -132,20 +133,18 @@ export function AboutPage({ onClose }: AboutPageProps) {
             types, versions, browser; never document content), so it can be
             pasted into a support request as-is (utils/diagnostics.ts, A009). */}
         <section className="mt-12">
-          <h2 className="text-lg font-semibold tracking-tight">Something not working?</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{t("pages.somethingNotWorking")}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Copy a diagnostics report and include it when you get in touch. It lists recent
-            errors, the app version and your browser — never the contents of your documents.
+            {copy.diagnostics}
           </p>
           <CopyDiagnosticsButton className="mt-3" />
         </section>
 
         <footer className="mt-12 border-t border-border pt-6 text-center text-xs text-muted-foreground">
-          © {APP_NAME} · Made with 💗 by Perssonify. All trademarks and licenses belong to
-          their respective owners.
+          {renderRich(copy.footer, { app: APP_NAME })}
           <span className="mt-2 block">
             <a href={THIRD_PARTY_NOTICES_PATH} target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
-              Third-party licences
+              {t("pages.thirdPartyLicences")}
             </a>
           </span>
         </footer>

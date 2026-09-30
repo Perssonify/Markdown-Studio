@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import { runBubbleCommand } from "./bubble-menu-command";
+import { useT } from "../i18n";
 export interface TableBubbleMenuProps {
   editor: Editor | null;
   isDark: boolean;
@@ -66,6 +67,7 @@ function TblSep() {
  * Redesigned with Tailwind CSS v4, Lucide icons, and high-density layouts.
  */
 export function TableBubbleMenu({ editor }: TableBubbleMenuProps) {
+  const t = useT();
   if (!editor) return null;
 
   return (
@@ -85,20 +87,20 @@ export function TableBubbleMenu({ editor }: TableBubbleMenuProps) {
         <div className="flex items-center">
           <TblBtn 
             icon={ArrowUpToLine} 
-            label="Row Above" 
-            title="Insert row before" 
+            label={t("toolbar.rowAbove")} 
+            title={t("toolbar.insertRowBefore")} 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().addRowBefore().run())} 
           />
           <TblBtn 
             icon={ArrowDownToLine} 
-            label="Row Below" 
-            title="Insert row after" 
+            label={t("toolbar.rowBelow")} 
+            title={t("toolbar.insertRowAfter")} 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().addRowAfter().run())} 
           />
           <TblBtn 
             icon={Rows} 
-            label="Del Row" 
-            title="Delete current row" 
+            label={t("toolbar.delRow")} 
+            title={t("toolbar.deleteCurrentRow")} 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().deleteRow().run())} 
           />
         </div>
@@ -109,20 +111,20 @@ export function TableBubbleMenu({ editor }: TableBubbleMenuProps) {
         <div className="flex items-center">
           <TblBtn 
             icon={ArrowLeftToLine} 
-            label="Col Left" 
-            title="Insert column before" 
+            label={t("toolbar.colLeft")} 
+            title={t("toolbar.insertColumnBefore")} 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().addColumnBefore().run())} 
           />
           <TblBtn 
             icon={ArrowRightToLine} 
-            label="Col Right" 
-            title="Insert column after" 
+            label={t("toolbar.colRight")} 
+            title={t("toolbar.insertColumnAfter")} 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().addColumnAfter().run())} 
           />
           <TblBtn 
             icon={Columns} 
-            label="Del Col" 
-            title="Delete current column" 
+            label={t("toolbar.delCol")} 
+            title={t("toolbar.deleteCurrentColumn")} 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().deleteColumn().run())} 
           />
         </div>
@@ -133,14 +135,14 @@ export function TableBubbleMenu({ editor }: TableBubbleMenuProps) {
         <div className="flex items-center">
           <TblBtn 
             icon={PlaySquare} 
-            label="Header" 
-            title="Toggle header row" 
+            label={t("toolbar.header")} 
+            title={t("toolbar.toggleHeaderRow")} 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().toggleHeaderRow().run())} 
           />
           <TblBtn 
             icon={Trash2} 
-            label="Delete" 
-            title="Remove entire table" 
+            label={t("common.delete")} 
+            title={t("toolbar.removeEntireTable")} 
             danger 
             onClick={() => runBubbleCommand(editor, (ed) => ed.chain().focus().deleteTable().run())} 
           />

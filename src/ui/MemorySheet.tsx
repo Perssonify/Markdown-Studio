@@ -22,6 +22,7 @@ import {
   HISTORY_CACHE_LIMITS,
   historyCache,
 } from "../store/history-cache";
+import { useT } from "../i18n";
 
 interface MemorySheetProps {
   open: boolean;
@@ -45,6 +46,7 @@ function readHeap(): { used: number; limit: number } | null {
  * object-graph size, so they derive from content length + per-step allowance.
  */
 function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
+  const t = useT();
   const stats = useSyncExternalStore(
     (cb) => historyCache.subscribe(cb),
     () => historyCache.getStats(),
@@ -59,7 +61,7 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
   const heap = open ? readHeap() : null;
 
   const titleOf = (docId: string) =>
-    documents.find((d) => d.id === docId)?.title ?? "(deleted document)";
+    documents.find((d) => d.id === docId)?.title ?? t("dialogs.deletedDocument");
 
   const pct = stats.budgetBytes > 0 ? Math.min(100, (stats.totalEstBytes / stats.budgetBytes) * 100) : 0;
   const barColor = pct >= 100 ? "bg-destructive" : pct >= 75 ? "bg-amber-500" : "bg-primary";
@@ -68,10 +70,9 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[360px] p-0 sm:w-[420px]">
         <SheetHeader className="px-5 py-4">
-          <SheetTitle>Memory &amp; undo history</SheetTitle>
+          <SheetTitle>{t("dialogs.memoryAndUndoHistory")}</SheetTitle>
           <SheetDescription>
-            Undo history kept per document so {displayKeys("⌘Z")} survives switching.
-            Sizes are estimates; everything here lives in memory for this session only.
+            {t("dialogs.memorySheetDescription", { keys: displayKeys("⌘Z") })}
           </SheetDescription>
         </SheetHeader>
         <Separator />
@@ -81,11 +82,10 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <Label htmlFor="history-enabled" className="text-sm font-medium">
-                  Keep undo history per document
+                  {t("dialogs.keepUndoHistoryPerDocument")}
                 </Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Off: switching documents starts each one with fresh undo
-                  (uses the least memory).
+                  {t("dialogs.offSwitchingDocumentsStartsEach")}
                 </p>
               </div>
               <Switch
@@ -99,7 +99,7 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
             <div>
               <div className="mb-1.5 flex items-baseline justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Estimated usage
+                  {t("dialogs.estimatedUsage")}
                 </span>
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {formatEstBytes(stats.totalEstBytes)} / {formatEstBytes(stats.budgetBytes)}
@@ -109,9 +109,9 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
                 <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${pct}%` }} />
               </div>
               <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {stats.entryCount} of {stats.maxDocs} documents cached
-                {draftsCount > 0 && <> · {draftsCount} unsaved draft{draftsCount === 1 ? "" : "s"} in memory</>}
-                {heap && <> · JS heap {formatEstBytes(heap.used)} of {formatEstBytes(heap.limit)}</>}
+                {t("dialogs.documentsCached", { cached: stats.entryCount, count: stats.maxDocs })}
+                {draftsCount > 0 && <> · {t("dialogs.unsavedDraftsInMemory", { count: draftsCount })}</>}
+                {heap && <> · {t("dialogs.jsHeap", { used: formatEstBytes(heap.used), limit: formatEstBytes(heap.limit) })}</>}
               </p>
             </div>
 
@@ -119,7 +119,7 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
             <div className={cn("space-y-4", !config.enabled && "pointer-events-none opacity-50")}>
               <div>
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Documents to remember
+                  {t("dialogs.documentsToRemember")}
                 </Label>
                 <div className="mt-2 flex gap-1.5">
                   {HISTORY_CACHE_LIMITS.maxDocsOptions.map((n) => (
@@ -137,7 +137,7 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
               </div>
               <div>
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Memory budget (estimated)
+                  {t("dialogs.memoryBudgetEstimated")}
                 </Label>
                 <div className="mt-2 flex gap-1.5">
                   {HISTORY_CACHE_LIMITS.maxMBOptions.map((mb) => (
@@ -148,12 +148,12 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
                       className="h-7 flex-1 text-xs tabular-nums"
                       onClick={() => historyCache.setConfig({ maxMB: mb })}
                     >
-                      {mb} MB
+                      {t("dialogs.megabytes", { count: mb })}
                     </Button>
                   ))}
                 </div>
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Least-recently-used documents are dropped first when a limit is reached.
+                  {t("dialogs.leastRecentlyUsedDocumentsAre")}
                 </p>
               </div>
             </div>
@@ -162,7 +162,7 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Cached documents
+                  {t("dialogs.cachedDocuments")}
                 </span>
                 {stats.entryCount > 0 && (
                   <Button
@@ -171,14 +171,13 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
                     className="h-6 px-2 text-[11px] text-muted-foreground hover:text-destructive"
                     onClick={() => historyCache.clear()}
                   >
-                    Clear all
+                    {t("dialogs.clearAll")}
                   </Button>
                 )}
               </div>
               {stats.entryCount === 0 ? (
                 <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-                  Nothing cached yet — switch between documents to build up
-                  restorable undo history.
+                  {t("dialogs.nothingCachedYetSwitchBetween")}
                 </p>
               ) : (
                 <ul className="overflow-hidden rounded-md border border-border">
@@ -193,14 +192,14 @@ function MemorySheetInner({ open, onOpenChange }: MemorySheetProps) {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-medium">{titleOf(e.docId)}</p>
                         <p className="text-[11px] text-muted-foreground">
-                          {e.undoSteps} undo step{e.undoSteps === 1 ? "" : "s"} · ~{formatEstBytes(e.estBytes)}
+                          {t("dialogs.undoSteps", { count: e.undoSteps })} · ~{formatEstBytes(e.estBytes)}
                         </p>
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
                         className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
-                        aria-label={`Clear cached history for ${titleOf(e.docId)}`}
+                        aria-label={t("dialogs.clearCachedHistoryFor", { title: titleOf(e.docId) })}
                         onClick={() => historyCache.drop(e.docId)}
                       >
                         <Trash2 className="size-3.5" />

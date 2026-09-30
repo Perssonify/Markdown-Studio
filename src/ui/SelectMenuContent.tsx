@@ -9,6 +9,15 @@
 
 import type { ComponentType, ReactNode } from "react";
 import { SCOPE_GROUPS, SCOPE_TYPES } from "../formatting/select-scope";
+import { t, type MessageKey } from "../i18n";
+
+// The group names are ids (compared in code); this is what each is CALLED.
+const GROUP_LABELS: Record<(typeof SCOPE_GROUPS)[number], MessageKey> = {
+  Headings: "menu.selectGroupHeadings",
+  "Paragraphs & lists": "menu.selectGroupParagraphsLists",
+  Blocks: "menu.selectGroupBlocks",
+  Inline: "menu.selectGroupInline",
+};
 
 export interface MenuPrimitives {
   Sub: ComponentType<{ children: ReactNode }>;
@@ -29,17 +38,17 @@ export function selectMenuBody(p: MenuPrimitives, dispatch: (cmd: string, val?: 
   const { Item, Group, Label, Separator } = p;
   return (
     <>
-      <Item onClick={() => dispatch("selectBlock")}>Current block</Item>
+      <Item onClick={() => dispatch("selectBlock")}>{t("menu.currentBlock")}</Item>
       {SCOPE_GROUPS.map((group) => {
-        const types = SCOPE_TYPES.filter((t) => t.group === group);
+        const types = SCOPE_TYPES.filter((s) => s.group === group);
         if (!types.length) return null;
         return (
           <Group key={group}>
             <Separator />
-            <Label className="text-[11px] font-normal text-muted-foreground">{group}</Label>
-            {types.map((t) => (
-              <Item key={t.id} onClick={() => dispatch("selectScope", { scope: t.id })}>
-                {t.label}
+            <Label className="text-[11px] font-normal text-muted-foreground">{t(GROUP_LABELS[group])}</Label>
+            {types.map((s) => (
+              <Item key={s.id} onClick={() => dispatch("selectScope", { scope: s.id })}>
+                {s.label}
               </Item>
             ))}
           </Group>

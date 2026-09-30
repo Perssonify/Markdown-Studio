@@ -55,6 +55,7 @@ import { TableGridPicker } from './TableGridPicker';
 import { Icons } from "./Icons";
 import { useRovingFocus } from "./use-roving-focus";
 import { promptImage } from "../formatting/image-insert";
+import { t, useT } from "../i18n";
 
 /**
  * Arrow-key order is VISUAL order. Save floats right, so it comes FIRST in the
@@ -133,21 +134,21 @@ interface TbColorProps {
 
 
 const blockOptions = [
-  { value: "p", label: "Paragraph" },
-  { value: "h1", label: "Heading 1" },
-  { value: "h2", label: "Heading 2" },
-  { value: "h3", label: "Heading 3" },
-  { value: "h4", label: "Heading 4" },
-  { value: "h5", label: "Heading 5" },
-  { value: "h6", label: "Heading 6" },
-  { value: "blockquote", label: "Quote" },
+  { value: "p", get label() { return t("toolbar.paragraph"); } },
+  { value: "h1", get label() { return t("toolbar.heading", { level: 1 }); } },
+  { value: "h2", get label() { return t("toolbar.heading", { level: 2 }); } },
+  { value: "h3", get label() { return t("toolbar.heading", { level: 3 }); } },
+  { value: "h4", get label() { return t("toolbar.heading", { level: 4 }); } },
+  { value: "h5", get label() { return t("toolbar.heading", { level: 5 }); } },
+  { value: "h6", get label() { return t("toolbar.heading", { level: 6 }); } },
+  { value: "blockquote", get label() { return t("toolbar.quote"); } },
 ];
 
 const fontOptions = [
   { value: "Arial", label: "Arial" },
   { value: "Inter", label: "Inter" },
   { value: "Georgia", label: "Georgia" },
-  { value: "Courier New", label: "Mono" },
+  { value: "Courier New", get label() { return t("toolbar.fontMono"); } },
 ];
 
 /**
@@ -161,6 +162,7 @@ const fontOptions = [
 const SOFT_ACTIVE_INK = "text-primary-strong dark:text-primary-strong hover:dark:text-primary-strong";
 
 function TbBtn({ icon: Icon, title, hint, active, onClick, className = "size-8" }: TbBtnProps) {
+  const t = useT();
   return (
     <Button
       variant={active ? "default_soft" : "outline"}
@@ -179,7 +181,7 @@ function TbBtn({ icon: Icon, title, hint, active, onClick, className = "size-8" 
       }}
       aria-label={title}
       aria-pressed={active}
-      title={hint ? `${title} — ${hint}` : title}
+      title={hint ? t("toolbar.titleWithHint", { title, hint }) : title}
       className={cn(className, active && SOFT_ACTIVE_INK)}
     >
       <Icon />
@@ -247,6 +249,7 @@ function readableInk(hex: string): string {
  * active format, so the checked swatch is genuine confirmation, not local state.
  */
 function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbColorProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const swatches = isHighlight ? HIGHLIGHT_SWATCHES : TEXT_SWATCHES;
   const activeHex = value ? resolveToHex(value) : "";
@@ -285,7 +288,7 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
                   type="button"
                   onClick={() => apply(c)}
                   title={c}
-                  aria-label={`${isHighlight ? "Highlight" : "Text"} color ${c}`}
+                  aria-label={isHighlight ? t("toolbar.highlightColorSwatch", { color: c }) : t("toolbar.textColorSwatch", { color: c })}
                   aria-pressed={!!active}
                   className={cn(
                     "relative flex h-8 items-center justify-center rounded-md border transition-transform hover:scale-105",
@@ -305,17 +308,17 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
           <div className="mt-2 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm">
             {isHighlight ? (
               <span style={{ backgroundColor: hasColor ? value : "transparent", color: hasColor ? "#1c1917" : "inherit", padding: "0.05em 0.2em", borderRadius: 3 }}>
-                Highlighted text
+                {t("toolbar.highlightedText")}
               </span>
             ) : (
-              <span style={{ color: hasColor ? value : "inherit" }}>Sample text</span>
+              <span style={{ color: hasColor ? value : "inherit" }}>{t("toolbar.sampleText")}</span>
             )}
           </div>
 
           <div className="mt-2 flex items-center gap-1.5">
             <label className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs hover:bg-accent">
               <Plus className="h-3.5 w-3.5" />
-              Custom
+              {t("toolbar.custom")}
               <input
                 type="color"
                 value={activeHex || "#000000"}
@@ -329,10 +332,10 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
                 onClick={() => { onClear(); setOpen(false); }}
                 disabled={!hasColor}
                 className="flex items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:bg-destructive hover:text-destructive-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                title={`Clear ${isHighlight ? "highlight" : "text color"}`}
+                title={isHighlight ? t("toolbar.clearHighlight") : t("toolbar.clearTextColor")}
               >
                 <X className="h-3.5 w-3.5" />
-                Clear
+                {t("common.clear")}
               </button>
             )}
           </div>
@@ -348,6 +351,7 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
 // --- Main Component ---
 
 function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplace, toggleFindReplace, saveStatus, onSave, mode }: EditorToolbarProps) {
+  const t = useT();
   const st = useEditorStore((s) => s.activeFormats);
   const syncMode = useUIStore((s) => s.syncMode);
   // "full" (storage quota reached, A086) is terminal for AUTOSAVE, but a manual
@@ -408,9 +412,9 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
     execTickRef.current = setTimeout(() => { execTickRef.current = null; updateFormats(true); }, 0);
     const DECORATIVE_CMDS = new Set(["foreColor", "unsetColor", "hiliteColor", "unsetHighlight", "fontFamily"]);
     if (syncMode === "clean" && DECORATIVE_CMDS.has(cmd)) {
-      toast.show("Applied locally — switch to 'Styled' to save in Markdown", "warning");
+      toast.show(t("toolbar.appliedLocallySwitchToStyled"), "warning");
     }
-  }, [dispatch, updateFormats, syncMode, toast]);
+  }, [dispatch, updateFormats, syncMode, toast, t]);
 
   const blockFmt = st.heading ? "h" + st.heading : st.blockquote ? "blockquote" : "p";
   const fontName = st.fontFamily || "Arial";
@@ -421,19 +425,19 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
       {toggleFindReplace && (
         <TbBtn
           icon={Search}
-          title={`Search & Replace (${displayKeys("⌘F")})`}
+          title={t("toolbar.searchAndReplaceKeys", { keys: displayKeys("⌘F") })}
           active={showFindReplace}
           onClick={toggleFindReplace}
         />
       )}
-      <TbBtn icon={Undo2} title={`Undo (${displayKeys("⌘Z")})`} onClick={() => exec("undo")} />
-      <TbBtn icon={Redo2} title={`Redo (${displayKeys("⌘⇧Z")})`} onClick={() => exec("redo")} />
+      <TbBtn icon={Undo2} title={t("toolbar.undoKeys", { keys: displayKeys("⌘Z") })} onClick={() => exec("undo")} />
+      <TbBtn icon={Redo2} title={t("toolbar.redoKeys", { keys: displayKeys("⌘⇧Z") })} onClick={() => exec("redo")} />
     </ButtonGroup>
     <ButtonGroup>
-      <TbBtn icon={Bold} title={`Bold (${displayKeys("⌘B")})`} active={st.bold} onClick={() => exec("bold")} />
-      <TbBtn icon={Italic} title={`Italic (${displayKeys("⌘I")})`} active={st.italic} onClick={() => exec("italic")} />
-      <TbBtn icon={Underline} title={`Underline (${displayKeys("⌘U")})`} active={st.underline} onClick={() => exec("underline")} />
-      <TbBtn icon={Strikethrough} title="Strike" active={st.strike} onClick={() => exec("strikethrough")} />
+      <TbBtn icon={Bold} title={t("toolbar.boldKeys", { keys: displayKeys("⌘B") })} active={st.bold} onClick={() => exec("bold")} />
+      <TbBtn icon={Italic} title={t("toolbar.italicKeys", { keys: displayKeys("⌘I") })} active={st.italic} onClick={() => exec("italic")} />
+      <TbBtn icon={Underline} title={t("toolbar.underlineKeys", { keys: displayKeys("⌘U") })} active={st.underline} onClick={() => exec("underline")} />
+      <TbBtn icon={Strikethrough} title={t("toolbar.strike")} active={st.strike} onClick={() => exec("strikethrough")} />
     </ButtonGroup>
     {isCompact && (
       <ButtonGroup>
@@ -442,7 +446,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           disabled={pinned} // Disables the button when pinned
           size="icon"
           variant={showExpanded ? "default_soft" : "outline"}
-          title={pinned ? "Unpin to collapse" : (showExpanded ? "Collapse Toolbar" : "Expand Toolbar")}
+          title={pinned ? t("toolbar.unpinToCollapse") : (showExpanded ? t("toolbar.collapseToolbar") : t("toolbar.expandToolbar"))}
           className={cn("h-8 w-8", showExpanded && SOFT_ACTIVE_INK)}
         >
           {showExpanded ? <ChevronUp className={pinned ? "opacity-50" : ""} /> : <ChevronDown />}
@@ -453,7 +457,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
             // Optional: Automatically clean up the 'expanded' state when pinning
             if (!pinned) setExpanded(false); 
           }}
-          title={pinned ? "Unpin Toolbar" : "Pin Toolbar"}
+          title={pinned ? t("toolbar.unpinToolbar") : t("toolbar.pinToolbar")}
           size="icon"
           variant={pinned ? "default_soft" : "outline"}
           className={cn("size-8", pinned && SOFT_ACTIVE_INK)}
@@ -471,8 +475,8 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
       <DropdownMenuTrigger render={
         // The visible text is the CURRENT block type; the name keeps it (label
         // in name) and says what the control is.
-        <Button variant="outline" size="sm" aria-label={`Block type: ${blockOptions.find((o) => o.value === blockFmt)?.label ?? "Paragraph"}`} className="h-8 min-w-[108px] justify-between gap-1 px-2 font-normal">
-          {blockOptions.find((o) => o.value === blockFmt)?.label ?? "Paragraph"}
+        <Button variant="outline" size="sm" aria-label={t("toolbar.blockType", { type: blockOptions.find((o) => o.value === blockFmt)?.label ?? t("toolbar.paragraph") })} className="h-8 min-w-[108px] justify-between gap-1 px-2 font-normal">
+          {blockOptions.find((o) => o.value === blockFmt)?.label ?? t("toolbar.paragraph")}
           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </Button>
       } />
@@ -496,7 +500,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const fontDropdown = (
     <DropdownMenu>
       <DropdownMenuTrigger render={
-        <Button variant="outline" size="sm" aria-label={`Font: ${fontOptions.find((o) => o.value === fontName)?.label ?? fontName}`} className="h-8 min-w-[84px] justify-between gap-1 px-2 font-normal">
+        <Button variant="outline" size="sm" aria-label={t("toolbar.fontLabel", { font: fontOptions.find((o) => o.value === fontName)?.label ?? fontName })} className="h-8 min-w-[84px] justify-between gap-1 px-2 font-normal">
           {fontOptions.find((o) => o.value === fontName)?.label ?? fontName}
           <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -536,18 +540,18 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
         {isCompact && blockFontControls}
 
         <ButtonGroup>
-          <TbBtn icon={Superscript} title="Superscript" active={st.superscript} onClick={() => exec("superscript")} />
-          <TbBtn icon={Subscript} title="Subscript" active={st.subscript} onClick={() => exec("subscript")} />
+          <TbBtn icon={Superscript} title={t("toolbar.superscript")} active={st.superscript} onClick={() => exec("superscript")} />
+          <TbBtn icon={Subscript} title={t("toolbar.subscript")} active={st.subscript} onClick={() => exec("subscript")} />
         </ButtonGroup>
 
         <div className="w-px h-4 bg-border mx-0.5" />
 
         <ButtonGroup>
-          <TbBtn icon={List} title="Bullet List" active={st.bulletList} onClick={() => exec("bulletList")} />
-          <TbBtn icon={ListOrdered} title="Numbered List" active={st.orderedList} onClick={() => exec("orderedList")} />
-          <TbBtn icon={ListTodo} title="Task List" active={st.taskList} onClick={() => exec("taskList")} />
-          <TbBtn icon={Outdent} title="Outdent" hint="lift a list item out one level" onClick={() => exec("outdent")} />
-          <TbBtn icon={Indent} title="Indent" hint="nest a list item (Markdown has no paragraph indent)" onClick={() => exec("indent")} />
+          <TbBtn icon={List} title={t("toolbar.bulletList")} active={st.bulletList} onClick={() => exec("bulletList")} />
+          <TbBtn icon={ListOrdered} title={t("toolbar.numberedList")} active={st.orderedList} onClick={() => exec("orderedList")} />
+          <TbBtn icon={ListTodo} title={t("toolbar.taskList")} active={st.taskList} onClick={() => exec("taskList")} />
+          <TbBtn icon={Outdent} title={t("toolbar.outdent")} hint={t("toolbar.liftAListItemOut")} onClick={() => exec("outdent")} />
+          <TbBtn icon={Indent} title={t("toolbar.indent")} hint={t("toolbar.nestAListItemMarkdown")} onClick={() => exec("indent")} />
         </ButtonGroup>
 
         <div className="w-px h-4 bg-border mx-0.5" />
@@ -556,9 +560,9 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           {/* Alignment is the one formatting feature plain Markdown cannot record
               at all, so the tooltip says so rather than leaving the fidelity
               badge to break the news after the fact. */}
-          <TbBtn icon={AlignLeft} title="Align Left" hint="not carried by plain Markdown" active={st["textAlign"] === "left" || !st["textAlign"]} onClick={() => exec("alignLeft")} />
-          <TbBtn icon={AlignCenter} title="Center" hint="not carried by plain Markdown" active={st["textAlign"] === "center"} onClick={() => exec("alignCenter")} />
-          <TbBtn icon={AlignRight} title="Align Right" hint="not carried by plain Markdown" active={st["textAlign"] === "right"} onClick={() => exec("alignRight")} />
+          <TbBtn icon={AlignLeft} title={t("toolbar.alignLeft")} hint={t("toolbar.notCarriedByPlainMarkdown")} active={st["textAlign"] === "left" || !st["textAlign"]} onClick={() => exec("alignLeft")} />
+          <TbBtn icon={AlignCenter} title={t("toolbar.center")} hint={t("toolbar.notCarriedByPlainMarkdown")} active={st["textAlign"] === "center"} onClick={() => exec("alignCenter")} />
+          <TbBtn icon={AlignRight} title={t("toolbar.alignRight")} hint={t("toolbar.notCarriedByPlainMarkdown")} active={st["textAlign"] === "right"} onClick={() => exec("alignRight")} />
         </ButtonGroup>
 
         <div className="w-px h-4 bg-border mx-0.5" />
@@ -568,13 +572,13 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
             value={st.color || ""}
             onChange={(v) => exec("foreColor", v)}
             onClear={() => exec("unsetColor")}
-            title="Text Color"
+            title={t("toolbar.textColor")}
           />
           <TbColor
             value={st.highlight || ""}
             onChange={(v) => exec("hiliteColor", v)}
             onClear={() => exec("unsetHighlight")}
-            title="Highlight Color"
+            title={t("toolbar.highlightColor")}
             isHighlight
           />
         </ButtonGroup>
@@ -582,14 +586,14 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
         <div className="w-px h-4 bg-border mx-0.5" />
 
         <ButtonGroup>
-          <TbBtn icon={Link} title={`Link (${displayKeys("⌘K")})`} onClick={async () => { const u = await prompt("Insert Link", { placeholder: "https://example.com", description: "Enter the URL for the link." }); if (u) exec("createLink", u); }} />
-          <TbBtn icon={Image} title="Image" onClick={async () => { const img = await promptImage(prompt); if (img) exec("insertImage", img); }} />
+          <TbBtn icon={Link} title={t("toolbar.linkKeys", { keys: displayKeys("⌘K") })} onClick={async () => { const u = await prompt(t("toolbar.insertLink"), { placeholder: t("toolbar.linkUrlPlaceholder"), description: t("toolbar.enterTheUrlForTheLink") }); if (u) exec("createLink", u); }} />
+          <TbBtn icon={Image} title={t("toolbar.image")} onClick={async () => { const img = await promptImage(prompt); if (img) exec("insertImage", img); }} />
         </ButtonGroup>
 
         <div className="w-px h-4 bg-border mx-0.5" />
 
         <div className="relative">
-          <TbBtn icon={TableIcon} title="Insert Table" onClick={() => setShowTablePicker(!showTablePicker)} />
+          <TbBtn icon={TableIcon} title={t("toolbar.insertTable")} onClick={() => setShowTablePicker(!showTablePicker)} />
           {showTablePicker && (
             <TableGridPicker
               onSelect={(opts) => { exec("insertTable", opts); setShowTablePicker(false); }}
@@ -601,39 +605,39 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
         {/* Insert menu — formula / diagram / score / code, works in both panes */}
         <DropdownMenu>
           <DropdownMenuTrigger render={
-            <Button variant="outline" size="sm" className="h-8 gap-1 px-2 font-normal" title="Insert">
-              <Plus className="h-3.5 w-3.5" /> Insert
+            <Button variant="outline" size="sm" className="h-8 gap-1 px-2 font-normal" title={t("toolbar.insert")}>
+              <Plus className="h-3.5 w-3.5" /> {t("toolbar.insert")}
               <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
             </Button>
           } />
           <DropdownMenuContent align="start" className="min-w-[190px]">
             <DropdownMenuItem onClick={async () => {
-              const v = await equation("Insert Formula (block)", { display: "block", description: "LaTeX rendered with KaTeX ($$…$$)." });
+              const v = await equation(t("toolbar.insertFormulaBlock"), { display: "block", description: t("toolbar.latexRenderedWithKatex") });
               if (v && v.trim()) exec("insertMathBlock", v);
             }}>
-              <Sigma className="mr-2 size-3.5" /> Formula (block)
+              <Sigma className="mr-2 size-3.5" /> {t("toolbar.formulaBlock")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={async () => {
-              const v = await equation("Insert inline formula", { display: "inline", description: "Inline LaTeX ($…$)." });
+              const v = await equation(t("toolbar.insertInlineFormula"), { display: "inline", description: t("toolbar.inlineLatex") });
               if (v && v.trim()) exec("insertMathInline", v);
             }}>
-              <Sigma className="mr-2 size-3.5" /> Inline formula
+              <Sigma className="mr-2 size-3.5" /> {t("toolbar.inlineFormula")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => exec("insertMermaid")}>
-              <Workflow className="mr-2 size-3.5" /> Diagram (Mermaid)
+              <Workflow className="mr-2 size-3.5" /> {t("toolbar.diagramMermaid")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => exec("insertAbc")}>
-              <Music className="mr-2 size-3.5" /> Music score (ABC)
+              <Music className="mr-2 size-3.5" /> {t("toolbar.musicScoreAbc")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => exec("codeBlock")}>
-              <Code className="mr-2 size-3.5" /> Code block
+              <Code className="mr-2 size-3.5" /> {t("toolbar.codeBlock")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
         <ButtonGroup>
-          <TbBtn icon={Icons.HorizontalRule} title="Horizontal Rule" onClick={() => exec("horizontalRule")} />
-          <TbBtn icon={RemoveFormatting} title="Clear Format" onClick={() => exec("removeFormat")} />
+          <TbBtn icon={Icons.HorizontalRule} title={t("toolbar.horizontalRule")} onClick={() => exec("horizontalRule")} />
+          <TbBtn icon={RemoveFormatting} title={t("toolbar.clearFormat")} onClick={() => exec("removeFormat")} />
         </ButtonGroup>
 
         {/* Contextual Table Controls */}
@@ -641,17 +645,17 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           <>
             <div className="w-px h-4 bg-border mx-0.5" />
             <ButtonGroup className="animate-in fade-in zoom-in-95">
-              <TbBtn icon={PlusSquare} title="Add Row" onClick={() => exec("tableAddRow")} />
-              <TbBtn icon={MinusSquare} title="Del Row" onClick={() => exec("tableDeleteRow")} />
+              <TbBtn icon={PlusSquare} title={t("toolbar.addRow")} onClick={() => exec("tableAddRow")} />
+              <TbBtn icon={MinusSquare} title={t("toolbar.delRow")} onClick={() => exec("tableDeleteRow")} />
               {/* A GFM table is DEFINED by its delimiter row, so there is no
                   markdown meaning to "toggle the header" — the command is a
                   deliberate no-op on that side. Gating on `mode` left the button
                   visible and inert in split view whenever the markdown pane had
                   focus; gate on the pane a command would actually reach. */}
               {(st["pane"] ?? (mode === "md" ? "md" : "html")) !== "md" && (
-                <TbBtn icon={Layout} title="Toggle Header" onClick={() => exec("toggleHeaderRow")} />
+                <TbBtn icon={Layout} title={t("toolbar.toggleHeader")} onClick={() => exec("toggleHeaderRow")} />
               )}
-              <TbBtn icon={Trash2} title="Delete Table" onClick={() => exec("deleteTable")} className="w-8 h-8 text-destructive hover:bg-destructive/10" />
+              <TbBtn icon={Trash2} title={t("toolbar.deleteTable")} onClick={() => exec("deleteTable")} className="w-8 h-8 text-destructive hover:bg-destructive/10" />
             </ButtonGroup>
           </>
         )}
@@ -667,7 +671,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
         data-tour="toolbar"
         data-print-hide
         role="toolbar"
-        aria-label="Formatting"
+        aria-label={t("toolbar.formatting")}
         className="bg-card/80 border-b border-border transition-all duration-300 px-4 pt-1.5 pb-0"
       >
 
@@ -683,13 +687,13 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           <ButtonGroup>
             <Tooltip>
               <TooltipTrigger render={
-                <Button variant="ghost" onClick={onSave} disabled={!isDirty} aria-label="Save" className="h-8 hover:bg-card">
+                <Button variant="ghost" onClick={onSave} disabled={!isDirty} aria-label={t("common.save")} className="h-8 hover:bg-card">
                   <Save className="text-success" />
-                  <span className="hidden sm:inline-block">Save</span>
+                  <span className="hidden sm:inline-block">{t("common.save")}</span>
                 </Button>
               } />
               <TooltipContent side="bottom" className="text-[10px] font-bold">
-                Save <kbd className="ml-2 font-sans opacity-60">{displayKeys("⌘S")}</kbd>
+                {t.rich("toolbar.saveWithKeys", { keys: displayKeys("⌘S"), kbd: (s) => <kbd className="ml-2 font-sans opacity-60">{s}</kbd> })}
               </TooltipContent>
             </Tooltip>
           </ButtonGroup>

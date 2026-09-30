@@ -26,6 +26,7 @@ import {
   storagePersists,
   subscribeDurability,
 } from "../store/storage-durability";
+import { useT } from "../i18n";
 
 export interface DurabilityNoticesProps {
   /**
@@ -65,6 +66,7 @@ function Strip({
   icon: Icon,
   role,
   label,
+  hook,
   children,
   actions,
 }: {
@@ -72,6 +74,8 @@ function Strip({
   icon: React.ElementType;
   role: "alert" | "status";
   label: string;
+  /** The notice's e2e hook — data, so it stays English whatever the interface language. */
+  hook: string;
   children: ReactNode;
   actions?: ReactNode;
 }) {
@@ -79,7 +83,7 @@ function Strip({
     <div
       role={role}
       aria-label={label}
-      data-durability-notice={label}
+      data-durability-notice={hook}
       className={cn(
         "flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-1.5 text-xs text-foreground",
         TONE[tone],
@@ -123,6 +127,7 @@ function DurabilityNoticesInner({
   onImportFiles,
   onOpenVersionHistory,
 }: DurabilityNoticesProps) {
+  const t = useT();
   const docCount = useDocumentStore((s) => s.documents.length);
   const durability = useSyncExternalStore(subscribeDurability, getDurabilitySnapshot, getDurabilitySnapshot);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -193,11 +198,10 @@ function DurabilityNoticesInner({
     // Persistent and not dismissable: it stays true for as long as this tab
     // lives, and closing the tab is exactly when it matters.
     return (
-      <Strip tone="critical" icon={AlertTriangle} role="alert" label="Not saving">
-        <strong className="font-semibold">Not saving — browser storage is unavailable in this window.</strong>{" "}
+      <Strip tone="critical" icon={AlertTriangle} role="alert" label={t("notices.notSaving")} hook="Not saving">
+        <strong className="font-semibold">{t("notices.notSavingBrowserStorageIs")}</strong>{" "}
         <span className="text-muted-foreground">
-          This happens in some private windows and when a browser blocks site data. Your writing stays on
-          screen until you close the tab — use File ▸ Export to keep a copy.
+          {t("notices.thisHappensInSomePrivate")}
         </span>
       </Strip>
     );
@@ -210,7 +214,8 @@ function DurabilityNoticesInner({
         tone="warning"
         icon={AlertTriangle}
         role="status"
-        label="Library cleared"
+        label={t("notices.libraryCleared")}
+        hook="Library cleared"
         actions={
           <>
             <input
@@ -225,26 +230,25 @@ function DurabilityNoticesInner({
               }}
             />
             <Button size="sm" variant="outline" className={btn} onClick={() => fileRef.current?.click()}>
-              <ArchiveRestore className="size-3.5" /> Import a backup…
+              <ArchiveRestore className="size-3.5" /> {t("notices.importABackup")}
             </Button>
             {hasSnapshots && (
               <Button size="sm" variant="outline" className={btn} onClick={onOpenVersionHistory}>
-                <History className="size-3.5" /> Version history
+                <History className="size-3.5" /> {t("notices.versionHistory")}
               </Button>
             )}
             <Button size="sm" variant="ghost" className={btn} onClick={() => acknowledgeWipe()}>
-              Start fresh
+              {t("notices.startFresh")}
             </Button>
           </>
         }
       >
-        <strong className="font-semibold">Your library here is empty.</strong>{" "}
+        <strong className="font-semibold">{t("notices.yourLibraryHereIsEmpty")}</strong>{" "}
         <span className="text-muted-foreground">
-          This browser held {expectedCount} document{expectedCount === 1 ? "" : "s"} on this site
-          {lastSeenAt ? ` (${daysAgoLabel(lastSeenAt, now)})` : ""}, so its storage appears to have been
-          cleared — browsers do this after a long gap between visits, when disk space runs low, or when site
-          data is deleted. Restore a full backup (.zip) if you have one
-          {hasSnapshots ? ", or look in Version history" : ""}.
+          {lastSeenAt
+            ? t("notices.wipedHeldDocumentsAgo", { count: expectedCount, ago: daysAgoLabel(lastSeenAt, now) })
+            : t("notices.wipedHeldDocuments", { count: expectedCount })}{" "}
+          {hasSnapshots ? t("notices.wipedRestoreBackupOrHistory") : t("notices.wipedRestoreBackup")}
         </span>
       </Strip>
     );
@@ -256,11 +260,12 @@ function DurabilityNoticesInner({
         tone="warning"
         icon={DownloadCloud}
         role="status"
-        label={`${APP_NAME} has moved`}
+        label={t("notices.appHasMoved", { app: APP_NAME })}
+        hook={`${APP_NAME} has moved`}
         actions={
           <>
             <Button size="sm" variant={lastBackup ? "outline" : "default"} className={btn} onClick={onBackup}>
-              <DownloadCloud className="size-3.5" /> {lastBackup ? "Download again" : "Download backup"}
+              <DownloadCloud className="size-3.5" /> {lastBackup ? t("notices.downloadAgain") : t("notices.downloadBackup")}
             </Button>
             <a
               href={APP_URL}
@@ -268,17 +273,17 @@ function DurabilityNoticesInner({
               rel="noreferrer"
               className={cn(buttonVariants({ size: "sm", variant: lastBackup ? "default" : "outline" }), btn)}
             >
-              Open {APP_DOMAIN} <ExternalLink className="size-3" />
+              {t("notices.openDomain", { domain: APP_DOMAIN })} <ExternalLink className="size-3" />
             </a>
-            <Dismiss onClick={() => setMovedDismissed(true)} label="Hide for now" />
+            <Dismiss onClick={() => setMovedDismissed(true)} label={t("notices.hideForNow")} />
           </>
         }
       >
-        <strong className="font-semibold">{APP_NAME} has moved to {APP_DOMAIN}.</strong>{" "}
+        <strong className="font-semibold">{t("notices.appHasMovedTo", { app: APP_NAME, domain: APP_DOMAIN })}</strong>{" "}
         <span className="text-muted-foreground">
           {lastBackup
-            ? `You downloaded a full backup ${daysAgoLabel(lastBackup, now)}. Now open ${APP_DOMAIN} and import it there (File ▸ Open file…).`
-            : `Your documents are stored in this browser for this address only — download a full backup, then import it at ${APP_DOMAIN} (File ▸ Open file…).`}
+            ? t("notices.movedBackedUp", { ago: daysAgoLabel(lastBackup, now), domain: APP_DOMAIN })
+            : t("notices.movedNotBackedUp", { domain: APP_DOMAIN })}
         </span>
       </Strip>
     );
@@ -290,24 +295,24 @@ function DurabilityNoticesInner({
         tone="info"
         icon={DownloadCloud}
         role="status"
-        label="Backup reminder"
+        label={t("notices.backupReminder")}
+        hook="Backup reminder"
         actions={
           <>
             <Button size="sm" variant="outline" className={btn} onClick={onBackup}>
-              <DownloadCloud className="size-3.5" /> Download backup
+              <DownloadCloud className="size-3.5" /> {t("notices.downloadBackup")}
             </Button>
             <Button size="sm" variant="ghost" className={btn} onClick={() => snoozeBackupNudge()}>
-              Not now
+              {t("notices.notNow")}
             </Button>
           </>
         }
       >
         <strong className="font-semibold">
-          {lastBackup ? `Last full backup: ${daysAgoLabel(lastBackup, now)}.` : "No full backup yet."}
+          {lastBackup ? t("notices.lastFullBackup", { ago: daysAgoLabel(lastBackup, now) }) : t("notices.noFullBackupYet")}
         </strong>{" "}
         <span className="text-muted-foreground">
-          Your documents live only in this browser. A backup (.zip) restores your whole library, folders
-          included, in any browser.
+          {t("notices.yourDocumentsLiveOnlyIn")}
         </span>
       </Strip>
     );
@@ -320,18 +325,19 @@ function DurabilityNoticesInner({
       tone="info"
       icon={Smartphone}
       role="status"
-      label="Keep your library"
+      label={t("notices.keepYourLibrary")}
+      hook="Keep your library"
       actions={
         <Button size="sm" variant="ghost" className={btn} onClick={() => snoozeInstallTip()}>
-          Got it
+          {t("notices.gotIt")}
         </Button>
       }
     >
-      <strong className="font-semibold">Safari may delete this site's data after 7 days without a visit.</strong>{" "}
+      <strong className="font-semibold">{t("notices.safariMayDeleteThisSite")}</strong>{" "}
       <span className="text-muted-foreground">
         {mobile
-          ? `To keep your library, add ${APP_NAME} to your Home Screen (Share ▸ Add to Home Screen) and keep a backup.`
-          : `To keep your library, add ${APP_NAME} to your Dock (File ▸ Add to Dock) and keep a backup.`}
+          ? t("notices.installTipMobile", { app: APP_NAME })
+          : t("notices.installTipDesktop", { app: APP_NAME })}
       </span>
     </Strip>
   );

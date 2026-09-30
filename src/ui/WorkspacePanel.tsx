@@ -48,6 +48,7 @@ import { TocList } from "./DocNavPanel";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
 import { useFocusRowAfterRender, useWindowedList } from "./use-windowed-list";
 import { DOCNAV_WIDTH_MIN, docNavWidthMax } from "@/store/uiStore";
+import { t, useT } from "../i18n";
 
 /** Keyboard resize step for the panel separator. */
 const WIDTH_STEP = 16;
@@ -110,9 +111,13 @@ function useDrawerMode(): boolean {
 }
 
 const TABS: { id: WorkspaceTab; label: string; icon: typeof FolderTreeIcon }[] = [
-  { id: "files", label: "Files", icon: FolderTreeIcon },
-  { id: "outline", label: "Outline", icon: ListTreeIcon },
+  { id: "files", get label() { return t("library.tabFiles"); }, icon: FolderTreeIcon },
+  { id: "outline", get label() { return t("library.tabOutline"); }, icon: ListTreeIcon },
 ];
+
+/** The editor's reopen button, found by its accessible name — which is
+ *  translated where it is rendered, so the selector must be too. */
+const reopenButtonSelector = () => `[aria-label="${t("app.openWorkspacePanel").replace(/["\\]/g, "\\$&")}"]`;
 
 /**
  * WorkspacePanel — the unified LEFT-docked navigator that consolidates the
@@ -150,6 +155,7 @@ function WorkspacePanelInner({
   activeIndex,
   onNavigateHeading,
 }: WorkspacePanelProps) {
+  const t = useT();
   const asideRef = useRef<HTMLElement>(null);
 
   // Right-edge resize — identity-stable drag callbacks (see DocNavPanel for the
@@ -210,7 +216,7 @@ function WorkspacePanelInner({
       // opened. Its replacement mounts in the same commit that unmounts the
       // drawer, which this passive cleanup runs after: land there instead of
       // on <body>.
-      else document.querySelector<HTMLElement>('[aria-label="Open workspace panel"]')?.focus();
+      else document.querySelector<HTMLElement>(reopenButtonSelector())?.focus();
     };
   }, [isDrawer]);
   const onAsideKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -237,7 +243,7 @@ function WorkspacePanelInner({
         "md:relative md:z-auto md:w-[var(--ws-w)] md:max-w-none md:shadow-none md:shrink-0"
       )}
       style={{ ["--ws-w" as string]: `${width}px` }}
-      aria-label="Workspace"
+      aria-label={t("library.workspace")}
     >
       {/* Right-edge resize handle (desktop only; the mobile drawer is full-width). */}
       <div
@@ -245,12 +251,12 @@ function WorkspacePanelInner({
         onKeyDown={onDividerKeyDown}
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize workspace panel"
+        aria-label={t("library.resizeWorkspacePanel")}
         tabIndex={0}
         aria-valuenow={Math.round(width)}
         aria-valuemin={DOCNAV_WIDTH_MIN}
         aria-valuemax={docNavWidthMax()}
-        aria-valuetext={`${Math.round(width)} pixels wide`}
+        aria-valuetext={t("library.widthValueText", { count: Math.round(width) })}
         className={cn(
           "absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize md:block hover:bg-primary/20",
           DIVIDER_BASE_CLASS,
@@ -262,22 +268,22 @@ function WorkspacePanelInner({
           Split ModeSwitcher — ButtonGroup + default/outline Buttons) + close. */}
       <div className="flex shrink-0 items-center gap-1 border-b border-border p-1.5">
         <ButtonGroup className="w-full">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
+          {TABS.map((tabDef) => {
+            const Icon = tabDef.icon;
+            const active = tab === tabDef.id;
             return (
               <Button
-                key={t.id}
+                key={tabDef.id}
                 data-slot="workspace-tab-button"
                 variant={active ? "default" : "outline"}
                 size="sm"
-                onClick={() => onTabChange(t.id)}
+                onClick={() => onTabChange(tabDef.id)}
                 aria-pressed={active}
-                title={t.label}
+                title={tabDef.label}
                 className="flex-1 gap-1.5 pointer-coarse:min-h-9"
               >
                 <Icon className="size-3.5" />
-                <span className="text-xs">{t.label}</span>
+                <span className="text-xs">{tabDef.label}</span>
               </Button>
             );
           })}
@@ -287,8 +293,8 @@ function WorkspacePanelInner({
             variant="ghost"
             size="icon-sm"
             onClick={onOpenCards}
-            title="Cards board (⌘⇧K)"
-            aria-label="Open the Cards board"
+            title={t("library.cardsBoardTitle", { keys: "⌘⇧K" })}
+            aria-label={t("library.openTheCardsBoard")}
             className="shrink-0 text-muted-foreground pointer-coarse:size-9"
           >
             <StickyNoteIcon className="size-3.5" />
@@ -298,8 +304,8 @@ function WorkspacePanelInner({
           variant="ghost"
           size="icon-sm"
           onClick={onClose}
-          title="Close panel"
-          aria-label="Close workspace panel"
+          title={t("library.closePanel")}
+          aria-label={t("library.closeWorkspacePanel")}
           className="shrink-0 text-muted-foreground pointer-coarse:size-9"
         >
           <PanelLeftClose className="size-3.5" />
@@ -357,6 +363,7 @@ function FilesTab({
   | "onExportDoc"
   | "onSearchBody"
 >) {
+  const t = useT();
   const documents = useDocumentStore((s) => s.documents);
   const activeDocId = useDocumentStore((s) => s.activeDocId);
   const createFolder = useFolderStore((s) => s.createFolder);
@@ -399,7 +406,7 @@ function FilesTab({
       return documents.filter(
         (d) =>
           d.title.toLowerCase().includes(q) ||
-          (d.tags || []).some((t: string) => t.toLowerCase().includes(q)) ||
+          (d.tags || []).some((tag: string) => tag.toLowerCase().includes(q)) ||
           (onSearchBody ? onSearchBody(d.id, q) : false)
       );
     }
@@ -439,13 +446,11 @@ function FilesTab({
     if (selected.size === 0) return;
     const count = selected.size;
     const ok = await confirm({
-      title: `Delete ${count} document${count > 1 ? "s" : ""}?`,
+      title: t("library.bulkDeleteTitle", { count }),
       // Each delete records a pre-delete snapshot (see deleteDoc), so this is
       // recoverable; the old "no undo" warning was wrong in the other direction.
-      description: count > 1
-        ? "They will be removed from your library. The last saved version of each stays in Tools ▸ Version history, where it can be restored as a new document."
-        : "It will be removed from your library. Its last saved version stays in Tools ▸ Version history, where you can restore it as a new document.",
-      confirmLabel: "Delete",
+      description: t("library.bulkDeleteDescription", { count }),
+      confirmLabel: t("common.delete"),
       destructive: true,
     });
     if (!ok) return;
@@ -464,14 +469,11 @@ function FilesTab({
   const deleteOne = useCallback((id: string) => { void onDelete(id); }, [onDelete]);
   const confirmDeleteFolder = useCallback((name: string, itemCount: number) =>
     confirm({
-      title: `Delete folder "${name}"?`,
-      description:
-        itemCount > 0
-          ? `Its ${itemCount} item${itemCount === 1 ? "" : "s"} will move up to the parent level. This cannot be undone.`
-          : "This cannot be undone.",
-      confirmLabel: "Delete folder",
+      title: t("library.deleteFolderTitle", { name }),
+      description: t("library.deleteFolderDescription", { count: itemCount }),
+      confirmLabel: t("library.deleteFolder"),
       destructive: true,
-    }), [confirm]);
+    }), [confirm, t]);
   const activateFlat = useCallback((id: string) => {
     if (selectMode) toggleItem(id);
     else onSelect(id);
@@ -504,49 +506,49 @@ function FilesTab({
     },
   };
 
-  const selectAllLabel = allFilteredSelected ? "Deselect all" : "Select all";
+  const selectAllLabel = allFilteredSelected ? t("library.deselectAll") : t("library.selectAll");
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" {...dragEvents}>
       {isDragging && (
         <div className="absolute inset-2 z-50 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/40 bg-primary/10 backdrop-blur-md animate-in fade-in zoom-in duration-200">
           <UploadCloudIcon className="size-8 animate-bounce text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-primary-strong">Drop to Import</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-primary-strong">{t("library.dropToImport")}</span>
         </div>
       )}
 
       {/* Controls row */}
       <div className="flex items-center justify-between gap-1 px-2 pt-2">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Library</span>
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t("library.heading")}</span>
         <div className="flex items-center gap-0.5">
           {selectMode ? (
             <>
               {selected.size > 0 && onExportDocs && (
                 <Tooltip>
                   <TooltipTrigger render={
-                    <Button variant="ghost" size="icon-sm" aria-label={`Export ${selected.size} selected as ZIP`}
+                    <Button variant="ghost" size="icon-sm" aria-label={t("library.exportSelectedAsZip", { count: selected.size })}
                       onClick={() => onExportDocs([...selected], selected.size === 1 ? "document" : "documents")}>
                       <DownloadIcon data-icon />
                     </Button>
                   } />
-                  <TooltipContent side="bottom" className="text-[10px] font-bold">Export {selected.size} selected</TooltipContent>
+                  <TooltipContent side="bottom" className="text-[10px] font-bold">{t("library.exportSelected", { count: selected.size })}</TooltipContent>
                 </Tooltip>
               )}
               {selected.size > 0 && (
                 <Tooltip>
                   <TooltipTrigger render={
-                    <Button variant="destructive" size="icon-sm" aria-label={`Delete ${selected.size} selected`} onClick={handleBulkDelete}>
+                    <Button variant="destructive" size="icon-sm" aria-label={t("library.deleteSelected", { count: selected.size })} onClick={handleBulkDelete}>
                       <Trash2Icon data-icon />
                     </Button>
                   } />
-                  <TooltipContent side="bottom" className="text-[10px] font-bold">Delete {selected.size} selected</TooltipContent>
+                  <TooltipContent side="bottom" className="text-[10px] font-bold">{t("library.deleteSelected", { count: selected.size })}</TooltipContent>
                 </Tooltip>
               )}
               <Tooltip>
                 <TooltipTrigger render={
                   // A096 (label in name): the button SHOWS the selected count,
                   // so its name carries it too.
-                  <Button variant="ghost" size="sm" aria-label={selected.size > 0 ? `${selectAllLabel} (${selected.size} selected)` : selectAllLabel} onClick={toggleSelectAll}>
+                  <Button variant="ghost" size="sm" aria-label={selected.size > 0 ? t(allFilteredSelected ? "library.deselectAllCount" : "library.selectAllCount", { count: selected.size }) : selectAllLabel} onClick={toggleSelectAll}>
                     {allFilteredSelected ? <CheckSquareIcon data-icon /> : <SquareIcon data-icon />}
                     {selected.size > 0 && selected.size}
                   </Button>
@@ -557,30 +559,30 @@ function FilesTab({
           ) : (
             <Tooltip>
               <TooltipTrigger render={
-                <Button variant="ghost" size="icon-sm" aria-label="Select documents" onClick={toggleSelectMode}>
+                <Button variant="ghost" size="icon-sm" aria-label={t("library.selectDocumentsButton")} onClick={toggleSelectMode}>
                   <CheckSquareIcon data-icon />
                 </Button>
               } />
-              <TooltipContent side="bottom" className="text-[10px] font-bold">Select for bulk actions</TooltipContent>
+              <TooltipContent side="bottom" className="text-[10px] font-bold">{t("library.selectForBulkActions")}</TooltipContent>
             </Tooltip>
           )}
           {!selectMode && (
             <Tooltip>
               <TooltipTrigger render={
-                <Button variant="ghost" size="icon-sm" aria-label="New folder" onClick={() => createFolder("New Folder", null, { startNaming: true })}>
+                <Button variant="ghost" size="icon-sm" aria-label={t("library.newFolder")} onClick={() => createFolder("New Folder", null, { startNaming: true })}>
                   <FolderPlusIcon data-icon />
                 </Button>
               } />
-              <TooltipContent side="bottom" className="text-[10px] font-bold">New folder</TooltipContent>
+              <TooltipContent side="bottom" className="text-[10px] font-bold">{t("library.newFolder")}</TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
             <TooltipTrigger render={
-              <Button variant="ghost" size="icon-sm" aria-label={selectMode ? "Cancel selection" : "New document"} onClick={selectMode ? toggleSelectMode : onNew}>
+              <Button variant="ghost" size="icon-sm" aria-label={selectMode ? t("library.cancelSelection") : t("library.newDocument")} onClick={selectMode ? toggleSelectMode : onNew}>
                 {selectMode ? <XIcon data-icon /> : <PlusIcon data-icon />}
               </Button>
             } />
-            <TooltipContent side="bottom" className="text-[10px] font-bold">{selectMode ? "Cancel selection" : "New document"}</TooltipContent>
+            <TooltipContent side="bottom" className="text-[10px] font-bold">{selectMode ? t("library.cancelSelection") : t("library.newDocument")}</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -591,8 +593,8 @@ function FilesTab({
         <Input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Search titles & content…"
-          aria-label="Search documents"
+          placeholder={t("library.searchPlaceholder")}
+          aria-label={t("library.searchDocuments")}
           className="h-7 pl-7 text-base md:text-xs"
         />
       </div>
@@ -601,7 +603,7 @@ function FilesTab({
       <div ref={listScrollRef} className="mt-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 pb-2">
         {filtered.length === 0 && (
           <span className="block px-2 py-4 text-center text-xs text-muted-foreground">
-            {query ? "No results" : "No documents"}
+            {query ? t("library.noResults") : t("library.noDocuments")}
           </span>
         )}
 
@@ -650,8 +652,8 @@ function FilesTab({
       <div className="flex shrink-0 items-center border-t border-border px-2 py-1.5">
         <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
           {selectMode && selected.size > 0
-            ? `${selected.size} selected`
-            : `${documents.length} document${documents.length !== 1 ? "s" : ""}`}
+            ? t("library.selectedCount", { count: selected.size })
+            : t("library.documentCount", { count: documents.length })}
         </span>
       </div>
     </div>
@@ -706,6 +708,7 @@ function FlatDocList({
   onExportDoc,
   scrollRef,
 }: FlatDocListProps) {
+  const t = useT();
   const listRef = useRef<HTMLDivElement>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -780,7 +783,7 @@ function FlatDocList({
       <div
         ref={listRef}
         role="listbox"
-        aria-label={selectMode ? "Select documents" : "Search results"}
+        aria-label={selectMode ? t("library.selectDocuments") : t("library.searchResults")}
         aria-multiselectable={selectMode || undefined}
         onKeyDown={onKeyDown}
         onFocus={onFocus}
@@ -802,10 +805,10 @@ function FlatDocList({
             >
               {isEditing ? (
                 <div className="flex flex-col gap-1 p-2 pl-3">
-                  <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Rename Document</span>
+                  <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">{t("library.renameDocument")}</span>
                   <Input
                     ref={editInputRef}
-                    aria-label="Document title"
+                    aria-label={t("library.documentTitle")}
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                     onBlur={() => { onRenameSubmit(); focusRow(doc.id); }}
@@ -821,7 +824,7 @@ function FlatDocList({
                   role="option"
                   data-key={doc.id}
                   tabIndex={doc.id === tabbableId ? 0 : -1}
-                  title={doc.title || "Untitled"}
+                  title={doc.title || t("common.untitled")}
                   // Selecting (select mode) or the open document (search).
                   aria-selected={selectMode ? isSelected : isActive}
                   aria-current={isActive ? "true" : undefined}
@@ -845,7 +848,7 @@ function FlatDocList({
                     <FileTextIcon className={cn("mt-0.5 size-3.5 shrink-0", isActive ? "text-primary-strong" : "text-muted-foreground/50")} />
                   )}
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span title={doc.title || "Untitled"} className={cn("truncate text-xs leading-tight text-foreground", isActive ? "font-semibold" : "font-medium")}>{doc.title || "Untitled"}</span>
+                    <span title={doc.title || t("common.untitled")} className={cn("truncate text-xs leading-tight text-foreground", isActive ? "font-semibold" : "font-medium")}>{doc.title || t("common.untitled")}</span>
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <span className="flex items-center gap-1 text-[10px]"><ClockIcon className="size-2.5!" />{timeAgo(doc.updated)}</span>
                       {doc.wordCount && doc.wordCount > 0 && (
@@ -864,8 +867,8 @@ function FlatDocList({
                   tabIndex={-1}
                   onPointerDown={() => setMenuId(doc.id)}
                   onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  title="More options"
-                  aria-label={`Options for ${doc.title || "Untitled"}`}
+                  title={t("library.moreOptions")}
+                  aria-label={t("library.optionsFor", { name: doc.title || t("common.untitled") })}
                   className="absolute right-1 top-1.5 flex size-5 items-center justify-center rounded p-0 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100 aria-expanded:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
                 >
                   <MoreVerticalIcon className="size-3.5" />
@@ -884,23 +887,23 @@ function FlatDocList({
           return (
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem onClick={() => onStartRename(doc)}>
-                <Edit2Icon />Rename
+                <Edit2Icon />{t("common.rename")}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDuplicate(doc.id)}><CopyIcon />Duplicate</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDuplicate(doc.id)}><CopyIcon />{t("library.duplicate")}</DropdownMenuItem>
               {onExportDoc && (
                 <DropdownMenuSub>
-                  <DropdownMenuSubTrigger><DownloadIcon />Export</DropdownMenuSubTrigger>
+                  <DropdownMenuSubTrigger><DownloadIcon />{t("common.export")}</DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
-                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "md")}>Markdown (.md)</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "html")}>HTML (.html)</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "docx")}>Word (.docx)</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "json")}>Backup (.json)</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "md")}>{t("library.exportMarkdown")}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "html")}>{t("library.exportHtml")}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "docx")}>{t("library.exportWord")}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onExportDoc(doc.id, "json")}>{t("library.exportBackupJson")}</DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(doc.id)}>
-                <Trash2Icon />Delete
+                <Trash2Icon />{t("common.delete")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           );

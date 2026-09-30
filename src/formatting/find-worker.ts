@@ -23,6 +23,7 @@
  */
 
 import { execAllCore, hasNestedQuantifier, type CompiledQuery, type ExecResult } from "./find-engine";
+import { t } from "../i18n/core";
 
 export const FIND_WORKER_TIMEOUT_MS = 1500;
 /** Main-thread fallback: stop collecting after this long (checked between execs). */
@@ -198,7 +199,7 @@ export function runFind(
       workerProven = true;
       settle();
       if (msg.ok && msg.value) resolve(msg.value);
-      else reject(new SyntaxError(msg.error ?? "Invalid pattern"));
+      else reject(new SyntaxError(msg.error ?? t("find.invalidPattern")));
     };
     w.onerror = () => {
       if (inflight?.id !== id) return;
@@ -209,7 +210,7 @@ export function runFind(
       // one thing the Worker exists to prevent. Report it; the next job gets a
       // fresh Worker.
       if (workerProven) {
-        reject(new Error("This pattern could not be run on this document."));
+        reject(new Error(t("find.patternCouldNotRun")));
         return;
       }
       // Otherwise it never started — a CSP that blocks blob: workers reports

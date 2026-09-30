@@ -2,6 +2,7 @@ import { ChevronDown } from "lucide-react";
 import React, { type ReactNode, useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useRovingFocus } from "./use-roving-focus";
+import { useT } from "../i18n";
 
 export interface TrayTab {
   id: string;
@@ -39,6 +40,7 @@ export interface BottomTrayProps {
  * imperatively — the same pattern PerssonifyEditor uses for the overlays.
  */
 function RawBottomTray({ open, activeTab, onTabChange, onClose, tabs }: BottomTrayProps) {
+  const t = useT();
   const trayRef = useRef<HTMLDivElement>(null);
   const tablistRef = useRef<HTMLDivElement>(null);
   /** Where focus was when the tray opened — the status-bar toggle or links
@@ -74,7 +76,7 @@ function RawBottomTray({ open, activeTab, onTabChange, onClose, tabs }: BottomTr
   });
 
   if (tabs.length === 0) return null;
-  const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]!;
+  const active = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]!;
   const panelId = "pf-tray-panel";
   return (
     <div
@@ -87,26 +89,26 @@ function RawBottomTray({ open, activeTab, onTabChange, onClose, tabs }: BottomTr
       <div className="min-h-0 overflow-hidden">
     <div className="flex h-64 min-h-0 max-h-[min(35dvh,16rem)] flex-col border-t border-border bg-card/95 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
       <div className="flex h-8 shrink-0 items-center gap-1 border-b border-border px-2">
-        <div ref={tablistRef} role="tablist" aria-label="Panel tray" className="flex items-center gap-1">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const selected = active.id === t.id;
+        <div ref={tablistRef} role="tablist" aria-label={t("status.panelTray")} className="flex items-center gap-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const selected = active.id === tab.id;
             return (
               <button
-                key={t.id}
+                key={tab.id}
                 type="button"
                 role="tab"
-                id={`pf-tray-tab-${t.id}`}
+                id={`pf-tray-tab-${tab.id}`}
                 aria-selected={selected}
                 aria-controls={panelId}
-                onClick={() => onTabChange(t.id)}
+                onClick={() => onTabChange(tab.id)}
                 className={cn(
                   "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
                   selected ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 )}
               >
                 {Icon && <Icon className="size-3.5" aria-hidden />}
-                {t.label}
+                {tab.label}
               </button>
             );
           })}
@@ -115,8 +117,8 @@ function RawBottomTray({ open, activeTab, onTabChange, onClose, tabs }: BottomTr
           type="button"
           onClick={onClose}
           className="ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Collapse tray"
-          title="Collapse"
+          aria-label={t("status.collapseTray")}
+          title={t("status.collapse")}
         >
           <ChevronDown className="size-4" />
         </button>

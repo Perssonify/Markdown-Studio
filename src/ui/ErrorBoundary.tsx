@@ -5,6 +5,7 @@ import { recordDiagnostic, type DiagnosticEntry } from "../utils/diagnostics";
 import { exportEmergencyBackup } from "../utils/emergency-backup";
 import { isChunkLoadError } from "../utils/lazy-import";
 import { copyDiagnosticsReport } from "./DiagnosticsActions";
+import { useT } from "../i18n";
 
 export interface ErrorBoundaryProps {
   children: ReactNode;
@@ -81,22 +82,23 @@ const buttonBase =
  * storage adapter.
  */
 export function CrashActions() {
+  const t = useT();
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const copy = async () => {
     const ok = await copyDiagnosticsReport();
-    setStatus(ok ? "Diagnostics copied — paste them into your report. They contain no document content." : "Couldn't reach the clipboard.");
+    setStatus(ok ? t("notices.diagnosticsCopiedPasteThem") : t("notices.couldNotReachClipboard"));
   };
 
   const exportDocs = async () => {
     setBusy(true);
     try {
       const n = await exportEmergencyBackup();
-      setStatus(n ? `Exported ${n} document${n === 1 ? "" : "s"} as a backup ZIP. Import it to restore.` : "There were no stored documents to export.");
+      setStatus(n ? t("notices.exportedDocumentsAsBackup", { count: n }) : t("notices.noStoredDocumentsToExport"));
     } catch (e) {
       recordDiagnostic({ kind: "render", error: e });
-      setStatus("The export failed too. Your documents are still in this browser's storage — don't clear site data.");
+      setStatus(t("notices.exportFailedToo"));
     } finally {
       setBusy(false);
     }
@@ -107,11 +109,11 @@ export function CrashActions() {
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={exportDocs} disabled={busy} className={`${buttonBase} border border-border bg-background hover:bg-muted`}>
           <Download className="h-4 w-4" />
-          Export my documents
+          {t("notices.exportMyDocuments")}
         </button>
         <button type="button" onClick={copy} className={`${buttonBase} border border-border bg-background hover:bg-muted`}>
           <ClipboardCopy className="h-4 w-4" />
-          Copy diagnostics
+          {t("notices.copyDiagnostics")}
         </button>
       </div>
       {status && (
@@ -129,10 +131,11 @@ export function CrashActions() {
  * reloading; it is read at click time, not frozen at render time.
  */
 export function ReloadWhenOnline({ className }: { className?: string }) {
+  const t = useT();
   const [offlineNote, setOfflineNote] = useState(false);
   return (
     <div className="flex items-center gap-3">
-      {offlineNote && <span className="text-xs text-muted-foreground">You're offline — try again when you're connected.</span>}
+      {offlineNote && <span className="text-xs text-muted-foreground">{t("notices.youReOfflineTryAgain")}</span>}
       <button
         type="button"
         onClick={() => {
@@ -145,13 +148,14 @@ export function ReloadWhenOnline({ className }: { className?: string }) {
         className={className}
       >
         <RotateCcw className="h-4 w-4" />
-        Reload
+        {t("common.reload")}
       </button>
     </div>
   );
 }
 
 export function ErrorBoundary({ children, isDark, onError }: ErrorBoundaryProps) {
+  const t = useT();
   return (
     <ErrorBoundaryClass
       onError={onError}
@@ -165,14 +169,14 @@ export function ErrorBoundary({ children, isDark, onError }: ErrorBoundaryProps)
                 </div>
                 <div className="space-y-1">
                   <h3 className="font-semibold leading-none tracking-tight">
-                    {chunk ? "Part of the app couldn't load" : "Editor Crashed"}
+                    {chunk ? t("notices.partOfTheAppCouldNotLoad") : t("notices.editorCrashed")}
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     {chunk
                       ? isOnline()
-                        ? "A file the app needs could not be downloaded. Reloading usually fixes this."
-                        : "You're offline and a file the app needs isn't saved on this device yet. Reload once you're back online."
-                      : "An unexpected error occurred while rendering the editor."}
+                        ? t("notices.appFileCouldNotBeDownloaded")
+                        : t("notices.appOfflineFileNotSaved")
+                      : t("notices.unexpectedRenderError")}
                   </p>
                 </div>
               </div>
@@ -200,7 +204,7 @@ export function ErrorBoundary({ children, isDark, onError }: ErrorBoundaryProps)
                   className={`${buttonBase} bg-primary text-primary-foreground shadow hover:bg-primary/90`}
                 >
                   <RotateCcw className="h-4 w-4" />
-                  Recover Editor
+                  {t("notices.recoverEditor")}
                 </button>
               )}
             </div>

@@ -22,6 +22,7 @@ import {
 } from "../store/snapshot-store";
 import { useUIStore } from "../store/uiStore";
 import { useDialog, type ConfirmOptions } from "./DialogProvider";
+import { t, useT } from "../i18n";
 
 interface VersionHistorySheetProps {
   open: boolean;
@@ -35,11 +36,11 @@ interface VersionHistorySheetProps {
 }
 
 const REASON_LABEL: Record<SnapshotReason, string> = {
-  autosave: "Auto-saved version",
-  "pre-clear": "Before content was cleared/shrunk",
-  "pre-delete": "Before the document was deleted",
-  "pre-restore": "Before a restore",
-  manual: "Manual snapshot",
+  get autosave() { return t("dialogs.reasonAutosave"); },
+  get "pre-clear"() { return t("dialogs.reasonPreClear"); },
+  get "pre-delete"() { return t("dialogs.reasonPreDelete"); },
+  get "pre-restore"() { return t("dialogs.reasonPreRestore"); },
+  get manual() { return t("dialogs.reasonManual"); },
 };
 
 /**
@@ -52,27 +53,27 @@ export function snapshotDeleteConfirm(
   meta: Pick<SnapshotMeta, "title">,
   opts: { docInLibrary: boolean; remainingForDoc: number },
 ): ConfirmOptions {
-  const title = meta.title || "Untitled";
+  const title = meta.title || t("common.untitled");
   let description: string;
   if (opts.docInLibrary) {
     description =
-      "This saved version is removed from Version history for good. The document itself is not changed.";
+      t("dialogs.deleteVersionInLibrary");
   } else if (opts.remainingForDoc <= 1) {
-    description = `This is the last remaining copy of “${title}”, which is no longer in your library. Once it is deleted, the document cannot be recovered.`;
+    description = t("dialogs.deleteVersionLastCopy", { title });
   } else {
-    description = `“${title}” is no longer in your library, so its saved versions are the only copies left. This one cannot be recovered once it is deleted.`;
+    description = t("dialogs.deleteVersionNotInLibrary", { title });
   }
-  return { title: "Delete this version?", description, confirmLabel: "Delete version", destructive: true };
+  return { title: t("dialogs.deleteThisVersionQuestion"), description, confirmLabel: t("dialogs.deleteVersion"), destructive: true };
 }
 
 function formatWhen(ts: number): string {
   const d = new Date(ts);
   const diff = Date.now() - ts;
   const mins = Math.round(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1) return t("dialogs.justNow");
+  if (mins < 60) return t("dialogs.minutesAgo", { count: mins });
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} hr${hrs === 1 ? "" : "s"} ago`;
+  if (hrs < 24) return t("dialogs.hoursAgo", { count: hrs });
   return d.toLocaleString();
 }
 
@@ -90,6 +91,7 @@ function VersionHistorySheetInner({
   onRestoreInPlace,
   onRestoreAsNew,
 }: VersionHistorySheetProps) {
+  const t = useT();
   const [byDoc, setByDoc] = useState<Map<string, SnapshotMeta[]>>(new Map());
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +148,7 @@ function VersionHistorySheetInner({
     try {
       await snapshotStore.deleteOne(m.id);
     } catch {
-      setError("That version could not be deleted. It is still listed below.");
+      setError(t("dialogs.versionCouldNotBeDeleted"));
     } finally {
       setBusy(null);
     }
@@ -160,7 +162,7 @@ function VersionHistorySheetInner({
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium">{REASON_LABEL[m.reason]}</p>
         <p className="text-[11px] text-muted-foreground">
-          {formatWhen(m.ts)} · {m.words} word{m.words === 1 ? "" : "s"} · {formatSnapshotBytes(m.bytes)}
+          {formatWhen(m.ts)} · {t("dialogs.wordCount", { count: m.words })} · {formatSnapshotBytes(m.bytes)}
         </p>
       </div>
       {opts.inPlace && (
@@ -171,7 +173,7 @@ function VersionHistorySheetInner({
           disabled={busy != null || readOnly}
           onClick={() => doRestoreInPlace(m)}
         >
-          <RotateCcw className="size-3.5" /> Restore
+          <RotateCcw className="size-3.5" /> {t("dialogs.restore")}
         </Button>
       )}
       <Button
@@ -180,15 +182,15 @@ function VersionHistorySheetInner({
         className="h-7 shrink-0 gap-1 text-xs pointer-coarse:h-9"
         disabled={busy != null || readOnly}
         onClick={() => doRestoreAsNew(m)}
-        title="Restore this version as a new document"
+        title={t("dialogs.restoreThisVersionAsA")}
       >
-        <FilePlus2 className="size-3.5" /> As new
+        <FilePlus2 className="size-3.5" /> {t("dialogs.asNew")}
       </Button>
       <Button
         size="icon"
         variant="ghost"
         className="size-6 shrink-0 text-muted-foreground hover:text-destructive pointer-coarse:size-9"
-        aria-label="Delete this version"
+        aria-label={t("dialogs.deleteThisVersion")}
         disabled={busy != null || readOnly}
         onClick={() => void doDelete(m)}
       >
@@ -202,12 +204,10 @@ function VersionHistorySheetInner({
       <SheetContent side="right" className="w-[380px] p-0 sm:w-[460px]">
         <SheetHeader className="px-5 py-4">
           <SheetTitle className="flex items-center gap-2">
-            <History className="size-4" /> Version history
+            <History className="size-4" /> {t("dialogs.versionHistory")}
           </SheetTitle>
           <SheetDescription>
-            Recoverable snapshots kept automatically before content is overwritten,
-            cleared, or deleted. These survive reloads. Restore in place (your
-            current content is snapshotted first) or as a new document.
+            {t("dialogs.recoverableSnapshotsKeptAutomaticallyBefore")}
           </SheetDescription>
         </SheetHeader>
         <Separator />
@@ -215,7 +215,7 @@ function VersionHistorySheetInner({
           <div className="space-y-6 px-5 py-4">
             {readOnly && (
               <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                Read-only mode is on. Turn it off (View menu or Settings) to restore or delete versions.
+                {t("dialogs.readOnlyModeIsOn")}
               </p>
             )}
             {error && (
@@ -226,12 +226,11 @@ function VersionHistorySheetInner({
             )}
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                This document
+                {t("dialogs.thisDocument")}
               </p>
               {current.length === 0 ? (
                 <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-                  No snapshots yet. As you edit, prior versions are captured here
-                  automatically so nothing gets lost.
+                  {t("dialogs.noSnapshotsYetAsYou")}
                 </p>
               ) : (
                 <ul className="overflow-hidden rounded-md border border-border">
@@ -243,15 +242,15 @@ function VersionHistorySheetInner({
             {others.length > 0 && (
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Other &amp; deleted documents
+                  {t("dialogs.otherAndDeletedDocuments")}
                 </p>
                 <div className="space-y-3">
                   {others.map(([docId, snaps]) => (
                     <div key={docId}>
                       <p className="mb-1 truncate text-[11px] font-medium text-muted-foreground">
-                        {snaps[0]?.title || "Untitled"}
+                        {snaps[0]?.title || t("common.untitled")}
                         {!libraryIds.has(docId) && (
-                          <span className="ml-1.5 rounded bg-muted px-1 py-px text-[10px] uppercase tracking-wide">deleted</span>
+                          <span className="ml-1.5 rounded bg-muted px-1 py-px text-[10px] uppercase tracking-wide">{t("dialogs.deleted")}</span>
                         )}
                       </p>
                       <ul className="overflow-hidden rounded-md border border-border">

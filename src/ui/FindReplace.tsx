@@ -24,10 +24,11 @@ import {
   type HighlightRange,
   type HighlightSpec,
 } from "../formatting/find-engine";
-import { FindSupersededError, runFind } from "../formatting/find-worker";
+import { FindSupersededError, FindTimeoutError, FindUnsafePatternError, runFind } from "../formatting/find-worker";
 import { useUIStore } from "../store/uiStore";
 import { isAltGraphInput } from "../utils/alt-graph";
 import { MAX_PREVIEW_WIDGETS } from "./search-colors";
+import { t, useT } from "../i18n";
 export interface MatchPosition {
   pos: number;
   len: number;
@@ -89,13 +90,13 @@ export type ScopeState = "off" | "include" | "exclude";
 export type ScopeRegion = "headings" | "code" | "links" | "bold" | "italic" | "strike" | "highlight";
 // Structure regions + format regions, both usable as include/exclude filters.
 export const SCOPE_REGIONS: { id: ScopeRegion; label: string; group: "Structure" | "Formatting" }[] = [
-  { id: "headings", label: "Headings", group: "Structure" },
-  { id: "code", label: "Code", group: "Structure" },
-  { id: "links", label: "Links / URLs", group: "Structure" },
-  { id: "bold", label: "Bold", group: "Formatting" },
-  { id: "italic", label: "Italic", group: "Formatting" },
-  { id: "strike", label: "Strikethrough", group: "Formatting" },
-  { id: "highlight", label: "Highlight", group: "Formatting" },
+  { id: "headings", get label() { return t("find.regionHeadings"); }, group: "Structure" },
+  { id: "code", get label() { return t("find.regionCode"); }, group: "Structure" },
+  { id: "links", get label() { return t("find.regionLinks"); }, group: "Structure" },
+  { id: "bold", get label() { return t("find.regionBold"); }, group: "Formatting" },
+  { id: "italic", get label() { return t("find.regionItalic"); }, group: "Formatting" },
+  { id: "strike", get label() { return t("find.regionStrike"); }, group: "Formatting" },
+  { id: "highlight", get label() { return t("find.regionHighlight"); }, group: "Formatting" },
 ];
 const defaultScope = (): Record<ScopeRegion, ScopeState> => ({ headings: "off", code: "off", links: "off", bold: "off", italic: "off", strike: "off", highlight: "off" });
 const readScope = (): Record<ScopeRegion, ScopeState> => {
@@ -213,6 +214,7 @@ export function FindReplaceBar({
   initialMode,
   initialTarget,
 }: FindReplaceBarProps) {
+  const t = useT();
   // Read-only mode: Find/Next/Prev stay available (read-only navigation), but
   // Replace / Replace All / Format matches mutate the document, so they're hidden.
   const readOnly = useUIStore((s) => s.readOnly);
@@ -429,10 +431,10 @@ export function FindReplaceBar({
     } catch (e) {
       if (e instanceof FindSupersededError) return null;
       cacheRef.current = null;
-      setRegexError(e instanceof Error ? e.message : String(e));
+      setRegexError(e instanceof FindTimeoutError ? t("find.patternTooSlow") : e instanceof FindUnsafePatternError ? t("find.patternUnsafe") : e instanceof Error ? e.message : String(e));
       return null;
     }
-  }, [computeMatches]);
+  }, [computeMatches, t]);
 
   const currentSelection = useCallback((): { from: number; to: number } | null => {
     if (live.current.isMd) {
@@ -630,8 +632,8 @@ export function FindReplaceBar({
     };
     apply();
     // Re-apply once a pane that has just been switched in has mounted.
-    const t = setTimeout(apply, 120);
-    return () => clearTimeout(t);
+    const timer = setTimeout(apply, 120);
+    return () => clearTimeout(timer);
   }, [matchSet, showReplace, replaceText, useRegex, isMd, mode, sourceRef, previewRef, currentDoc]);
 
   useEffect(() => {
@@ -918,7 +920,7 @@ export function FindReplaceBar({
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="Find and replace"
+      aria-label={t("find.findAndReplace")}
       onKeyDown={(e) => {
         // Esc closes from anywhere in the panel (e.g. after dragging, when focus
         // isn't in one of the inputs that already handle Esc).
@@ -951,15 +953,15 @@ export function FindReplaceBar({
         className="flex cursor-grab items-center gap-2 rounded-t-lg border-b border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground select-none active:cursor-grabbing"
       >
         <GripHorizontal className="size-3.5 opacity-70" />
-        <span>Find &amp; Replace</span>
+        <span>{t("find.panelTitle")}</span>
         <Button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={handleClose}
           variant="ghost"
           size="icon"
           className="ml-auto size-6"
-          aria-label="Close find and replace"
-          title="Close (Esc)"
+          aria-label={t("find.closeFindAndReplace")}
+          title={t("find.closeEsc")}
         >
           <X className="size-4" />
         </Button>
@@ -974,17 +976,17 @@ export function FindReplaceBar({
             className={cn("flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
               panelMode === "find" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
           >
-            Find
+            {t("find.find")}
           </button>
           <button
             type="button"
             disabled={readOnly}
             onClick={() => { if (!readOnly) setPanelMode("replace"); }}
-            title={readOnly ? "Replace is unavailable in read-only mode" : undefined}
+            title={readOnly ? t("find.replaceUnavailableReadOnly") : undefined}
             className={cn("flex-1 rounded px-2 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
               showReplace ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
           >
-            Replace
+            {t("common.replace")}
           </button>
         </div>
 
@@ -996,17 +998,17 @@ export function FindReplaceBar({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { if (mdAvailable) setSearchTarget("md"); }}
               variant={!mdAvailable ? "ghost" : isMd ? "secondary" : "ghost"}
-              title={mdAvailable ? "Search Markdown pane" : "Markdown pane not visible"}
+              title={mdAvailable ? t("find.searchMarkdownPane") : t("find.markdownPaneNotVisible")}
             >
-              MD
+              {t("find.paneMd")}
             </Button>
             <Button
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { if (textAvailable) setSearchTarget("richtext"); }}
               variant={!textAvailable ? "ghost" : !isMd ? "secondary" : "ghost"}
-              title={textAvailable ? "Search Rich Text pane" : "Rich Text pane not visible"}
+              title={textAvailable ? t("find.searchRichTextPane") : t("find.richTextPaneNotVisible")}
             >
-              Rich Text
+              {t("find.paneRichText")}
             </Button>
           </ButtonGroup>
 
@@ -1020,10 +1022,10 @@ export function FindReplaceBar({
                 if (e.key === "Enter") { e.preventDefault(); doFindNext(e.shiftKey ? -1 : 1); }
                 if (e.key === "Escape") { e.preventDefault(); handleClose(); }
               }}
-              placeholder={isMd ? "Find in Markdown..." : "Find in Rich Text..."}
+              placeholder={isMd ? t("find.findInMarkdownPlaceholder") : t("find.findInRichTextPlaceholder")}
               // A placeholder is not a label: it vanishes once text is typed
               // and is not reliably announced. The count is its description.
-              aria-label={isMd ? "Find in Markdown" : "Find in Rich Text"}
+              aria-label={isMd ? t("find.findInMarkdown") : t("find.findInRichText")}
               aria-describedby={countId}
               aria-invalid={regexError ? true : undefined}
               className="h-7 w-full pr-12"
@@ -1032,10 +1034,10 @@ export function FindReplaceBar({
               <span
                 id={countId}
                 className={`text-[10px] tabular-nums font-medium ${regexError ? "text-destructive" : "text-muted-foreground"}`}
-                title={regexError || (truncated ? `Showing the first ${matchCount} matches` : "")}
-                aria-label={regexError ? `Error: ${regexError}` : undefined}
+                title={regexError || (truncated ? t("find.showingFirstMatches", { count: matchCount }) : "")}
+                aria-label={regexError ? t("find.errorLabel", { error: regexError }) : undefined}
               >
-                {regexError ? "ERR" : pending ? "…" : matchCount > 0 ? `${currentMatch}/${matchCount}${truncated ? "+" : ""}` : findText ? "0" : ""}
+                {regexError ? t("find.errorBadge") : pending ? "…" : matchCount > 0 ? t(truncated ? "find.matchPositionTruncated" : "find.matchPosition", { current: currentMatch, count: matchCount }) : findText ? "0" : ""}
               </span>
             </div>
           </div>
@@ -1046,7 +1048,7 @@ export function FindReplaceBar({
               onClick={toggleCaseSensitive}
               aria-pressed={caseSensitive}
               variant={caseSensitive ? "secondary" : "ghost"}
-              title="Match case"
+              title={t("find.matchCase")}
             >
               <CaseSensitive />
             </Button>
@@ -1055,7 +1057,7 @@ export function FindReplaceBar({
               onClick={toggleWholeWord}
               aria-pressed={wholeWord}
               variant={wholeWord ? "secondary" : "ghost"}
-              title="Whole word"
+              title={t("find.wholeWord")}
             >
               <WholeWord />
             </Button>
@@ -1064,7 +1066,7 @@ export function FindReplaceBar({
               onClick={() => { toggleRegex(); setRegexError(null); }}
               aria-pressed={useRegex}
               variant={useRegex ? "secondary" : "ghost"}
-              title="Toggle Regular Expression Search"
+              title={t("find.toggleRegularExpressionSearch")}
             >
               <Regex />
             </Button>
@@ -1073,7 +1075,7 @@ export function FindReplaceBar({
               onClick={() => setShowScope((v) => !v)}
               aria-pressed={showScope || Object.values(mdScope).some((v) => v !== "off")}
               variant={Object.values(mdScope).some((v) => v !== "off") ? "secondary" : "ghost"}
-              title="Scope filter — search only in, or exclude, headings / code / links / emphasis"
+              title={t("find.scopeFilterTitle")}
             >
               <Funnel />
             </Button>
@@ -1083,8 +1085,8 @@ export function FindReplaceBar({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => doFindNext(-1)}
                 variant="ghost"
-                aria-label="Previous match"
-                title="Previous (Shift+Enter)"
+                aria-label={t("find.previousMatch")}
+                title={t("find.previousShiftEnter")}
               >
                 <ChevronUp />
               </Button>
@@ -1092,8 +1094,8 @@ export function FindReplaceBar({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => doFindNext(1)}
                 variant="ghost"
-                aria-label="Next match"
-                title="Next (Enter)"
+                aria-label={t("find.nextMatch")}
+                title={t("find.nextEnter")}
               >
                 <ChevronDown />
               </Button>
@@ -1107,18 +1109,18 @@ export function FindReplaceBar({
         {showScope && (
           <div className="flex flex-col gap-1.5 rounded-md border border-border/60 bg-muted/30 p-2">
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground">Filter (Markdown pane)</span>
+              <span className="text-[11px] font-medium text-muted-foreground">{t("find.filterTitle")}</span>
               <span
                 className="cursor-help text-muted-foreground/70"
-                aria-label="How the filter works"
-                title="Click a chip to cycle it: off → only (search only inside that region) → exclude (skip it). Combine structure + formatting to target exactly what you mean."
+                aria-label={t("find.howTheFilterWorks")}
+                title={t("find.filterHelp")}
               >
                 <Info className="size-3.5" />
               </span>
             </div>
             {(["Structure", "Formatting"] as const).map((grp) => (
               <div key={grp} className="flex flex-wrap items-center gap-1.5">
-                <span className="w-16 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/70">{grp}</span>
+                <span className="w-16 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/70">{t(grp === "Structure" ? "find.groupStructure" : "find.groupFormatting")}</span>
                 {SCOPE_REGIONS.filter((r) => r.group === grp).map((r) => {
                   const st = mdScope[r.id];
                   return (
@@ -1134,7 +1136,7 @@ export function FindReplaceBar({
                         : st === "exclude" ? "border-destructive/50 bg-destructive/10 text-destructive"
                         : "border-border bg-background text-muted-foreground hover:bg-muted",
                       )}
-                      title={st === "off" ? `Search only inside ${r.label}` : st === "include" ? `Only ${r.label} — click to exclude ${r.label}` : `Excluding ${r.label} — click to turn off`}
+                      title={st === "off" ? t("find.chipSearchOnlyInside", { region: r.label }) : st === "include" ? t("find.chipOnly", { region: r.label }) : t("find.chipExcluding", { region: r.label })}
                     >
                       {st === "include" && <Check className="size-3" />}
                       {st === "exclude" && <Ban className="size-3" />}
@@ -1145,9 +1147,9 @@ export function FindReplaceBar({
               </div>
             ))}
             <div className="flex items-center gap-3 pt-0.5 text-[10px] text-muted-foreground/80">
-              <span className="inline-flex items-center gap-1"><span className="inline-block size-2.5 rounded border border-border bg-background" /> off</span>
-              <span className="inline-flex items-center gap-1"><Check className="size-3 text-primary" /> only</span>
-              <span className="inline-flex items-center gap-1"><Ban className="size-3 text-destructive" /> exclude</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block size-2.5 rounded border border-border bg-background" /> {t("find.legendOff")}</span>
+              <span className="inline-flex items-center gap-1"><Check className="size-3 text-primary" /> {t("find.legendOnly")}</span>
+              <span className="inline-flex items-center gap-1"><Ban className="size-3 text-destructive" /> {t("find.legendExclude")}</span>
             </div>
           </div>
         )}
@@ -1156,11 +1158,11 @@ export function FindReplaceBar({
         {panelMode === "find" && (
           <div className="flex items-center justify-end gap-2">
             <ButtonGroup>
-              <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFindNext(1)} variant="secondary" title="Find next (Enter)">
-                <Search /> <span>Find</span>
+              <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFindNext(1)} variant="secondary" title={t("find.findNextEnter")}>
+                <Search /> <span>{t("find.find")}</span>
               </Button>
-              <Button onMouseDown={(e) => e.preventDefault()} onClick={doFindAll} variant="secondary" title="Find all — select every match">
-                <span>Find all</span>
+              <Button onMouseDown={(e) => e.preventDefault()} onClick={doFindAll} variant="secondary" title={t("find.findAllSelectEveryMatch")}>
+                <span>{t("find.findAll")}</span>
               </Button>
             </ButtonGroup>
           </div>
@@ -1172,18 +1174,18 @@ export function FindReplaceBar({
         {!readOnly && panelMode === "replace" && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground">
-            {formatAllHeadings ? `Format all headings (${headingCount}):` : "Format matches:"}
+            {formatAllHeadings ? t("find.formatAllHeadings", { count: headingCount }) : t("find.formatMatches")}
           </span>
           <ButtonGroup>
-            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("bold")} disabled={!canFormat} variant="ghost" title="Bold"><Bold /></Button>
-            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("italic")} disabled={!canFormat} variant="ghost" title="Italicize"><Italic /></Button>
-            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("underline")} disabled={!canFormat} variant="ghost" title="Underline"><UnderlineIcon /></Button>
-            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("highlight")} disabled={!canFormat} variant="ghost" title="Highlight"><Highlighter /></Button>
+            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("bold")} disabled={!canFormat} variant="ghost" title={t("find.formatBold")}><Bold /></Button>
+            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("italic")} disabled={!canFormat} variant="ghost" title={t("find.formatItalicize")}><Italic /></Button>
+            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("underline")} disabled={!canFormat} variant="ghost" title={t("find.formatUnderline")}><UnderlineIcon /></Button>
+            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("highlight")} disabled={!canFormat} variant="ghost" title={t("find.formatHighlight")}><Highlighter /></Button>
           </ButtonGroup>
           <ButtonGroup>
-            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("upper")} disabled={!canFormat} variant="ghost" title="UPPERCASE" className="text-[11px] font-semibold">AA</Button>
-            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("lower")} disabled={!canFormat} variant="ghost" title="lowercase" className="text-[11px] font-semibold">aa</Button>
-            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("title")} disabled={!canFormat} variant="ghost" title="Title Case" className="text-[11px] font-semibold">Aa</Button>
+            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("upper")} disabled={!canFormat} variant="ghost" title={t("find.caseUpper")} className="text-[11px] font-semibold">{t("find.caseUpperFace")}</Button>
+            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("lower")} disabled={!canFormat} variant="ghost" title={t("find.caseLower")} className="text-[11px] font-semibold">{t("find.caseLowerFace")}</Button>
+            <Button onMouseDown={(e) => e.preventDefault()} onClick={() => doFormatAll("title")} disabled={!canFormat} variant="ghost" title={t("find.caseTitle")} className="text-[11px] font-semibold">{t("find.caseTitleFace")}</Button>
           </ButtonGroup>
         </div>
         )}
@@ -1199,8 +1201,8 @@ export function FindReplaceBar({
                 if (e.key === "Enter") doReplace();
                 if (e.key === "Escape") { e.preventDefault(); handleClose(); }
               }}
-              placeholder="Replace with..."
-              aria-label="Replace with"
+              placeholder={t("find.replaceWithPlaceholder")}
+              aria-label={t("find.replaceWith")}
               className="h-8"
             />
           </div>
@@ -1210,19 +1212,19 @@ export function FindReplaceBar({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => doReplace()}
               variant="secondary"
-              title="Replace"
+              title={t("common.replace")}
             >
               <Replace />
-              <span>Replace</span>
+              <span>{t("common.replace")}</span>
             </Button>
             <Button
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => doReplaceAll()}
               variant="secondary"
-              title="Replace All"
+              title={t("find.replaceAll")}
             >
               <ReplaceAll />
-              <span>Replace All</span>
+              <span>{t("find.replaceAll")}</span>
             </Button>
           </ButtonGroup>
         </CollapsibleContent>

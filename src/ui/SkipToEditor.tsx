@@ -1,4 +1,5 @@
 import type React from "react";
+import { useT } from "../i18n";
 
 /**
  * "Skip to editor" (A094, WCAG 2.4.1 Bypass Blocks).
@@ -30,6 +31,7 @@ export function findEditorFocusTarget(root: ParentNode = document): HTMLElement 
 }
 
 export function SkipToEditor() {
+  const t = useT();
   const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     findEditorFocusTarget()?.focus();
@@ -41,7 +43,7 @@ export function SkipToEditor() {
       data-print-hide
       className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[200] focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg"
     >
-      Skip to editor
+      {t("app.skipToEditor")}
     </a>
   );
 }
