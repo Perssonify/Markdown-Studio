@@ -545,10 +545,12 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const nodeKey = useMemo(() => graph.nodes.map((n) => n.id).sort().join("|"), [graph.nodes]);
   // A large folder map's regions come from its folders, so a note moved to
   // another folder re-plans it. (Every other map keys on its notes alone, as
-  // it always has.)
+  // it always has.) Sorted, like `nodeKey`: the graph is rebuilt whenever the
+  // link index is, not always in the same order, and a re-plan starts every
+  // note of the map again.
   const planKey = useMemo(
     () => (twoLevel(graph.nodes.length, folders.length > 0)
-      ? folders.map((f) => `${f.id}:${f.docIds.join(",")}`).join("|")
+      ? folders.map((f) => `${f.id}:${[...f.docIds].sort().join(",")}`).sort().join("|")
       : ""),
     [graph.nodes.length, folders]
   );
