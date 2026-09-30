@@ -253,8 +253,8 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
 - **Graph performance:** measured at 2,000 notes (A088): above 300 notes the layout is
   Barnes–Hut, above 250 the drawing is batched and each frame either steps or paints.
   First frame 1.0 s, settle 17–23 s under a 4× CPU slowdown. Folder maps up to 500 notes
-  get a folder-aware layout (no note drawn under another); a larger folder map keeps the
-  old layout, which stacks notes — a two-level layout is the next thing to build there.
+  get a folder-aware layout and larger ones a two-level layout (folders placed as regions,
+  notes inside them): no note is drawn under another at any size.
 - **`PerssonifyEditor.tsx`** was split into fifteen hooks under `src/editor/` (A110);
   about 970 lines of orchestration remain. Hook call order is effect order — read
   CLAUDE.md's parts map before moving anything. Sixteen behavioural suites now mount the
