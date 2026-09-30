@@ -299,6 +299,45 @@ describe("the cut rules", () => {
     } finally { r.destroy(); }
   });
 
+  it("a window followed only by runs that make no node is at the end: TrailingNode's paragraph is decided again", () => {
+    // The comment is never closed, so it runs to the end and makes nothing;
+    // the heading before it is the last node, and gets TrailingNode's
+    // paragraph — which must go when the heading becomes a paragraph.
+    const r = rig(`${paras(4)}\n\n## Last\n\n<!-- open to the end\n\n${paras(2, "Q")}`);
+    try {
+      r.same();
+      expect(r.project(r.md.replace("## Last", "Last")).path).toBe("incremental");
+      r.same();
+      r.project(r.md.replace("\n\nLast\n", "\n\n## Last\n"));
+      r.same();
+    } finally { r.destroy(); }
+  });
+
+  it("a run that ends in top-level text ending in a space is open, however the positions add up", () => {
+    // The implicit paragraph around the span's text ends in a space, which
+    // closing it strips — making the parser's position inside it equal the
+    // size of the closed result. In the document the <pre> after it closes it
+    // and keeps the space.
+    const r = rig(`${paras(2)}\n\n<span>\ninline block\n</span>\n\n~~~\ntilde\n~~~\n\n${paras(2, "Q")}`);
+    try {
+      r.same();
+      r.project(r.md.replace("Q1 ", "Q1 x "));
+      r.same();
+    } finally { r.destroy(); }
+  });
+
+  it("drops the model when fixTables deletes a table and TrailingNode adds a paragraph (same count)", () => {
+    // A raw <table> left empty: fixTables deletes it after the plan, and the
+    // heading at the end gets TrailingNode's paragraph — the count still adds
+    // up, but every node after the table is one place off.
+    const r = rig(`${paras(3)}\n\n<table>\n\n${paras(3, "Q")}\n\n## End`);
+    try {
+      r.same();
+      expect(r.project(r.md.replace("Q1 ", "Q1 x "))).toEqual({ path: "build", reason: "no model" });
+      r.same();
+    } finally { r.destroy(); }
+  });
+
   it("text foster-parented out of an unclosed table lands where the whole parse puts it", () => {
     // `<table>` opening a paragraph line makes an HTML block the parser never
     // closes; its text goes before the table. jsdom puts it at the END of the
