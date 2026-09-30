@@ -578,6 +578,13 @@ export function ingest(
           doc.userTitle = envelopeTitle;
           doc.titlePinnedByUser = true;
         }
+        // A JSON export carries the images it refers to (A086). Handed on,
+        // untouched, for the import pipeline to put back into the asset store
+        // (prepareImportedDocAssets); never persisted — serializeForStorage
+        // writes a fixed list of fields.
+        if (isEnvelope && parsed.assets && typeof parsed.assets === "object") {
+          (doc as DocumentRecord & { _importAssets?: unknown })._importAssets = parsed.assets;
+        }
         return { doc, html: null, needsTiptap: false };
       } catch {
         // Fall through: treat as plain text if JSON is invalid or unrecognised

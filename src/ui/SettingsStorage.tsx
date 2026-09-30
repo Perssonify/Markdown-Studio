@@ -1,7 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { DownloadCloud, ShieldCheck } from "lucide-react";
+import { DownloadCloud, ImageMinus, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
+import { cleanUpUnusedAssets, findUnusedAssets } from "../store/asset-gc";
+import { assetStore } from "../store/asset-store";
 import { useDocumentStore } from "../store/documentStore";
+import { useDialog } from "./DialogProvider";
 import {
   daysAgoLabel,
   getDurabilitySnapshot,
@@ -19,6 +23,77 @@ export function formatStorageBytes(n: number): string {
   if (n < 1024 * 1024) return t("settings.sizeKb", { count: Math.round(n / 1024) });
   if (n < 1024 * 1024 * 1024) return t("settings.sizeMb", { count: (n / (1024 * 1024)).toFixed(1) });
   return t("settings.sizeGb", { count: (n / (1024 * 1024 * 1024)).toFixed(1) });
+}
+
+
+/**
+ * Images stored as assets (A086): how many and how big, and the ONE way they
+ * are ever deleted while documents exist — an explicit clean-up that scans
+ * every place a reference can live first (asset-gc.ts). Nothing is collected
+ * automatically during editing. Rendered by the Settings sheet right after
+ * the storage section (it needs the app's dialog provider for its confirm).
+ */
+export function StoredImagesSection({ open }: { open: boolean }) {
+  const { confirm } = useDialog();
+  const [stats, setStats] = useState<{ count: number; bytes: number } | null>(null);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const ok = await assetStore.available();
+    setAvailable(ok);
+    setStats(ok ? await assetStore.stats() : null);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void refresh();
+    return assetStore.subscribe(() => { void refresh(); });
+  }, [open, refresh]);
+
+  const cleanUp = async () => {
+    setBusy(true);
+    try {
+      const report = await findUnusedAssets();
+      if (!report.unused.length) {
+        toast.info(report.recent ? t("settings.imagesNoneRecent", { count: report.recent }) : t("settings.imagesNone"));
+        return;
+      }
+      const ok = await confirm({
+        title: t("settings.imagesConfirmTitle", { count: report.unused.length }),
+        description: t("settings.imagesConfirmDesc", { size: formatStorageBytes(report.unusedBytes) }),
+        confirmLabel: t("settings.imagesConfirmLabel"),
+        destructive: true,
+      });
+      if (!ok) return;
+      const done = await cleanUpUnusedAssets();
+      toast.success(t("settings.imagesDeleted", { count: done.deleted, size: formatStorageBytes(done.freedBytes) }));
+      useDocumentStore.getState().storageFreed();
+    } catch {
+      toast.error(t("settings.imagesFailed"));
+    } finally {
+      setBusy(false);
+      void refresh();
+    }
+  };
+
+  return (
+    <div className="space-y-1.5" aria-label={t("settings.storedImages")} role="group">
+      <p className="text-sm">{t("settings.imagesHeading")}</p>
+      <p className="text-xs text-muted-foreground" data-testid="stored-images">
+        {available === false
+          ? t("settings.imagesInline")
+          : stats
+            ? t("settings.imagesSummary", { count: stats.count, size: formatStorageBytes(stats.bytes) })
+            : t("settings.imagesChecking")}
+      </p>
+      {available && (
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs pointer-coarse:h-9" disabled={busy} onClick={() => void cleanUp()}>
+          <ImageMinus className="size-3.5" /> {t("settings.imagesCleanUp")}
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /**

@@ -205,7 +205,9 @@ describe("archives", () => {
     expect(paths(await extractArchive(new File([gzipSync(t)], "x.tgz")))).toEqual(["notes/a.md", "notes/b.txt"]);
     expect(paths(await extractArchive(new File([gzipSync(t)], "x.tar.gz")))).toEqual(["notes/a.md", "notes/b.txt"]);
     const one = await extractArchive(new File([gzipSync(strToU8("# Solo"))], "solo.md.gz"));
-    expect(one).toEqual([{ path: "solo.md", text: "# Solo", format: "markdown" }]);
+    // The entries, plus the image assets the archive carried (A086) — none here.
+    expect([...one]).toEqual([{ path: "solo.md", text: "# Solo", format: "markdown" }]);
+    expect(one.assets).toEqual([]);
   });
 
   it("skips archiver junk and directory markers", async () => {
@@ -233,7 +235,8 @@ describe("archives", () => {
     await expect(extractArchive(file())).rejects.toBeInstanceOf(ArchiveEncryptedError);
     await expect(extractArchive(file(), { password: "wrong" })).rejects.toBeInstanceOf(ArchiveWrongPasswordError);
     const entries = await extractArchive(file(), { password: "hunter2" });
-    expect(entries).toEqual([{ path: "secret/plan.md", text: "# Plan\n\nhidden", format: "markdown" }]);
+    expect([...entries]).toEqual([{ path: "secret/plan.md", text: "# Plan\n\nhidden", format: "markdown" }]);
+    expect(entries.assets).toEqual([]);
     await expect(extractArchive(file(), { password: "hunter2", maxEntryBytes: 3 })).rejects.toThrow("entry too large");
   });
 });

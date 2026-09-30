@@ -21,6 +21,7 @@ import {
 } from "@/store/cards";
 import { safeStorage } from "../utils/safe-storage";
 import { overlayShouldHandleEscape } from "./overlay-escape";
+import { neutralizeAssetSrcs, useResolvedAssetImages } from "./asset-dom";
 import {
   ArrowLeft,
   Check,
@@ -991,10 +992,15 @@ function CardEditor({
   // Rendered HTML for the current draft (live — reflects unsaved edits, and is
   // what makes split useful). Memoised on the text so typing doesn't re-render
   // the whole document tree every keystroke beyond the one changed value.
+  // Images stored as assets (A086) are moved off `src` before the HTML reaches
+  // the page — a `pf-asset:` source is unloadable, and a CSP violation — and
+  // resolved to object URLs once it is there.
   const html = useMemo(
-    () => (renderMarkdown ? renderMarkdown(text) : ""),
+    () => (renderMarkdown ? neutralizeAssetSrcs(renderMarkdown(text)) : ""),
     [renderMarkdown, text]
   );
+  const renderedRef = useRef<HTMLDivElement | null>(null);
+  useResolvedAssetImages(renderedRef, html);
 
   const showWrite = effectiveView !== "preview";
   const showRender = canRender && effectiveView !== "write";
@@ -1038,7 +1044,7 @@ function CardEditor({
       className="pf-card-render min-h-[40dvh] flex-1 overflow-y-auto p-3 text-sm leading-relaxed"
     >
       {text.trim()
-        ? <div dangerouslySetInnerHTML={{ __html: html }} />
+        ? <div ref={renderedRef} dangerouslySetInnerHTML={{ __html: html }} />
         : <p className="text-sm italic opacity-85">{t("cards.emptyNote")}</p>}
     </div>
   );

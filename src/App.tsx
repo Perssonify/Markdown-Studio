@@ -12,6 +12,7 @@ import { SkipToEditor } from "./ui/SkipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
+import { assetStore } from "./store/asset-store";
 
 // Settings ▸ Privacy ▸ "Block remote images" is enforced as an img-src policy
 // for THIS page, and must be in force before any document renders — hence
@@ -29,6 +30,13 @@ try {
     const lang = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("lang");
     if (lang) setLocale(lang, { persist: false });
 } catch { /* no URL: nothing to apply */ }
+
+// Pasted and imported images are stored ONCE, as binary assets, instead of as
+// base64 inside every document, snapshot, stash and projection (A086). The app
+// shell turns this on for itself; a library host or the iframe embed opts in
+// through `storageConfig.assets`, because the content a host reads back out
+// would otherwise refer to images it cannot resolve (see configureLocalStores).
+assetStore.configure({ enabled: true });
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
 const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));

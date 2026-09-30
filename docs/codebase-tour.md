@@ -181,4 +181,4 @@ markdown-studio/
 
 - [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts) — the empty-deps invariant on `forceSyncMdToHtml` ([:190](../src/engine/useSyncEngine.ts#L190)) and its twin is load-bearing; a careless dependency reintroduces infinite sync loops. Read [gotchas.md](gotchas.md) before editing.
 - [src/components/ui/](../src/components/ui/) — generated shadcn primitives; regenerate via shadcn rather than hand-editing.
-- [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts) `idbTransaction` internals — the await rules are subtle ([:188](../src/store/idb-storage-adapter.ts#L188)).
+- [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts) `idbTransaction` internals — the await rules are subtle ([:200](../src/store/idb-storage-adapter.ts#L200)).

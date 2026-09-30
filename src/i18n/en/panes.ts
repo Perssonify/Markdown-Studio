@@ -41,4 +41,11 @@ export const panes = {
   "panes.markdownSourceDescription": "Tab indents. Press Escape, then Tab, to move focus out of the editor.",
   "panes.startTypingRichText": "Start typing rich text...",
   "panes.richText": "Rich text",
+  /** A stored image this browser does not have (A086): placeholder text and alt. */
+  "panes.imageUnavailable": "Image unavailable",
+  "panes.imageUnavailableWithAlt": "Image unavailable: {alt}",
+  "panes.imageUnavailableTitle": "Image unavailable — it is not stored in this browser (restore the backup it came from to bring it back)",
+  /** Tooltip on a folded image reference in the markdown pane. `{hash}` is the image's id: keep it as written. */
+  "panes.imageStored": "Image stored in this browser",
+  "panes.imageStoredWithRef": "Image stored in this browser (pf-asset:{hash})",
 } satisfies Record<`panes.${string}`, Message>;

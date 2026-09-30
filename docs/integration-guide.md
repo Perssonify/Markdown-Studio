@@ -70,10 +70,11 @@ Inject an adapter so the editor persists *through you* instead of IndexedDB:
 | `namespace` | your `dbName`, if you set one | keeps the version-history database and the unload stash apart per user or app, instead of shared by the whole origin |
 | `snapshots` | `true` | `false` turns version history off |
 | `crashRecovery` | `true` | `false` turns the unload stash off |
+| `assets` | `false` | `true` stores pasted and imported images ONCE, as binary assets in a browser database (`perssonify-assets`, namespaced like version history), instead of as base64 inside every document. The markdown, HTML and canonical you read back (`onContentChange`, `onSave`, `getMarkdown`/`getHTML`, the bridge) then refer to those images as `pf-asset:<sha256>`, which resolves only in that browser — leave it off if you mirror content anywhere else. Exports and backups are self-contained either way. |
 | `maxBytes` | none | an optional hard cap on document bytes; without it the browser's quota is the limit |
 
 With a custom `storageAdapter`, `storageConfig` still decides where (or whether)
-version history and the unload stash are kept. An adapter's `get()` must return
+version history, the unload stash and image assets are kept. An adapter's `get()` must return
 `null` only for a document that genuinely does not exist and throw for a read
 that failed — the save path fails closed on a thrown read, and a failure
 reported as `null` walks straight past its data-loss guards.

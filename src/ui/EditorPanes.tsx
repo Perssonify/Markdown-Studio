@@ -8,6 +8,7 @@ import React, { forwardRef, RefObject, useCallback, useEffect, useRef, useState 
 import { MODES } from "../constants";
 import { useUIStore } from "../store/uiStore";
 import { CodeMirrorPane } from "./CodeMirrorPane";
+import { isHandledImageDrop } from "../extensions/AssetImages";
 import { Icons } from "./Icons";
 import { TiptapPane } from "./TiptapPane";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
@@ -596,6 +597,9 @@ function EditorLayoutInner({
   const handleDrop = useCallback((e: React.DragEvent) => {
     if (!hasFiles(e)) return;
     e.preventDefault();          // never navigate, even with no importer wired
+    // Image files dropped INTO a pane were inserted there as pictures (A086);
+    // importing them as documents as well would be a second action.
+    if (isHandledImageDrop(e.nativeEvent)) return;
     const files = e.dataTransfer?.files;
     if (files?.length && onFileDrop) onFileDrop(files);
   }, [onFileDrop]);

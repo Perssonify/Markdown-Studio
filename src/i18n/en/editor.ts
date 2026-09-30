@@ -140,4 +140,13 @@ export const editor = {
   "editor.changesSaved": "Changes saved",
   "editor.deleteDocumentTitle": "Delete document?",
   "editor.deleteDocumentDescription": "It will be removed from your library. Its last saved version stays in Tools ▸ Version history, where you can restore it as a new document.",
+  /** After an export that could not include every stored image (A086). */
+  "editor.missingImages": {
+    one: "{count} image is not stored in this browser and could not be included",
+    other: "{count} images are not stored in this browser and could not be included",
+  },
+  "editor.missingImagesInExport": {
+    one: "{count} image is not stored in this browser and could not be included in this export",
+    other: "{count} images are not stored in this browser and could not be included in this export",
+  },
 } satisfies Record<`editor.${string}`, Message>;

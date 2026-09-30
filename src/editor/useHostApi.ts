@@ -1,6 +1,7 @@
 import { useCallback, useImperativeHandle } from "react";
 import { canonicalToMarkdown } from "../engine/serialize-doc";
-import { appendHtmlToCanonical, htmlToCanonical } from "../store/canonical-ops";
+import { asCanonicalDoc, htmlToCanonical } from "../store/canonical-ops";
+import { externalizeCanonical } from "../store/assets";
 import type { DocumentRecord } from "../store/document";
 import { clearLocalData, useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
@@ -269,6 +270,8 @@ export function useHostApi({
         }
       }
 
+      // A host's `data:` images become assets like any other import's (A086).
+      canonical = (await externalizeCanonical(canonical)).canonical;
       const patched = await patchDocById(id, {
         canonical,
         ...(patch.title != null ? { title: patch.title, userTitle: patch.title } : {}),
@@ -307,6 +310,10 @@ export function useHostApi({
         await emitGraphUpdate();
         return res;
       }
+      // The appended part's `data:` images become assets (A086) FIRST: that
+      // await must come before the live content is read below, not between
+      // the read and the write.
+      const added = (await externalizeCanonical(htmlToCanonical(html, editor.schema))).canonical;
       // Append base: when the target is the ACTIVE, hydrated document, merge
       // against the LIVE editor content — the stored canonical can be up to an
       // autosave interval stale, and merging against it would wipe those
@@ -314,7 +321,7 @@ export function useHostApi({
       const { activeDocId: curId, hydratedDocId: hydId } = useDocumentStore.getState();
       const isActive = curId === id;
       const base = isActive && hydId === id ? editor.getJSON() : existing.canonical;
-      const merged = appendHtmlToCanonical(base, html, editor.schema);
+      const merged = { type: "doc" as const, content: [...asCanonicalDoc(base).content, ...added.content] };
       const patched = await patchDocById(id, { canonical: merged });
       // Post-await check, for the same reason as updateDocument above.
       if (patched?.canonical && isEditorTargeting(id)) {
