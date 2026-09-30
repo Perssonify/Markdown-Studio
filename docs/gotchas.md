@@ -213,30 +213,36 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   to win here and alignment to lose.
 - **Related:** [src/ui/EditorPanes.tsx](../src/ui/EditorPanes.tsx).
 
-## Don't "optimise" the rich pane's projection into an incremental write
+## An incremental WRITE of a whole-document parse buys nothing — parse less instead
 
-- **Symptom:** `TiptapPane.setHTML` calls `editor.commands.setContent(html)`,
-  which replaces the ENTIRE ProseMirror document on every cross-pane projection.
-  It looks like an obvious win to diff the parsed document against the live one
-  and dispatch only the changed range — preserving the node views (KaTeX,
-  Mermaid/ABC, code blocks, theme images) that a wholesale replace appears to
-  destroy.
+- **Symptom:** The markdown→rich projection used to be `setContent(mdToHtml(md))`,
+  replacing the ENTIRE ProseMirror document every time. It looks like an obvious
+  win to parse the whole document as before, diff the result against the live
+  one and dispatch only the changed range — preserving the node views (KaTeX,
+  Mermaid/ABC, code blocks, theme images) a wholesale replace appears to destroy.
 - **Cause:** That premise is wrong. `EditorView.updateState` already diffs the
   new document against the existing view tree and REUSES the DOM and node-view
-  instances wherever the markup matches, so a whole-document replace does not,
-  in fact, rebuild them. Measured directly: a code block's rendered element is
-  the same DOM node before and after a projection on the unmodified build.
-- **Fix/Workaround:** It was built and measured — `findDiffStart`/`findDiffEnd`
-  to find the range, a verification against the target document before
-  dispatching, the lot. Over five runs per size under 4x CPU throttling it moved
-  no metric outside the run-to-run spread (10KB blocking 191±60 → 177±124; 50KB
-  499±119 → 506±153) while adding a second structural walk of the document to
-  every projection. It was reverted. A string-level "already holding exactly
-  this HTML" memo was tried too, and is equally pointless: the sync engine's own
-  hash and doc-identity gates already stop a redundant projection before it
-  reaches the pane.
-- **Related:** [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx),
-  [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts).
+  instances wherever the markup matches, so a whole-document replace does not
+  rebuild them. It was built and measured — `findDiffStart`/`findDiffEnd`, a
+  verification before dispatching — and over five runs per size under 4x CPU
+  it moved no metric outside the run-to-run spread (10KB blocking 191±60 →
+  177±124; 50KB 499±119 → 506±153). A string-level "already holding exactly
+  this HTML" memo was equally pointless: the hash and doc-identity gates already
+  stop a redundant projection.
+- **What did work (A083):** not parsing the whole document. At 1.6 MB the cost
+  was the PARSE, not the write — marked over every block, TipTap's quadratic
+  `elementFromString` whitespace pass, a per-cell `querySelectorAll` whose cost
+  grows with the whole document, ProseMirror's parse — ~23 s a keystroke at 4x.
+  [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts) keeps a
+  model of where the markdown can be cut into runs that lex, render and parse
+  exactly as they do in place, re-parses only the runs an edit touched, and
+  replaces their nodes; the result is `Node.eq` to the whole-document parse
+  (`incremental-rich.test.js` checks it after every step of random walks). The
+  write it dispatches is small because the parse was — the node views were
+  never the problem.
+- **Related:** [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts),
+  [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts),
+  [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
 
 ## Folder chips are painted LAST on purpose — don't "fix" the draw order
 

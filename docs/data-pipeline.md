@@ -75,8 +75,23 @@ flowchart TD
   **MD → canonical** (`syncMdToHtml`, [:108](../src/engine/useSyncEngine.ts#L108)):
   ```
   CM6 text → quickHash gate → preprocessMarkdown → marked.parse → HTML
-           → tiptap.setHTML → Tiptap normalizes → editor.getJSON() = canonical
+           → DOM → ProseMirror parse → Tiptap normalizes → editor.getJSON() = canonical
   ```
+  …as the result is DEFINED. The projection itself is incremental (A083,
+  [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts)): a model
+  of the markdown — runs of top-level blocks cut only where lexing, rendering and
+  parsing are context-free, and how many top-level nodes each run produced —
+  lets an edit re-lex, render and parse only the runs it touched (and the runs
+  whose nodes the rich pane changed since, found by identity) and replace just
+  those nodes, in one transaction that, like setContent's, fires no update and
+  is one step in the rich pane's history. The document is `Node.eq` to the
+  whole-document parse (`incremental-rich.test.js` checks it after every step of
+  seeded random walks). Link definitions, footnotes, the curly syntax, alias
+  wiki links, marked hooks and edits at the front matter take the whole path,
+  which also rebuilds the model; the first markdown keystroke after a load is
+  such a build. The projection sets `preventAutolink`: TipTap's autolink plugin
+  otherwise linked a bare domain ending the document's first paragraph on every
+  markdown keystroke.
   The preprocessor only rewrites what must change before marked tokenizes the source: the front-matter block, the `|` of a wiki-link alias (written `\|`, so a GFM table does not split the link across cells), and the opt-in `{key=val}` syntax — off by default, and when on, a group renders only if every key is known and every value validates; anything else stays exactly as written (A039). Code is masked first, with the one fence scanner (`findFencedCodeRanges`) that `normalizeMarkdown` also uses (A046). Wiki links and heading anchors, maths, footnotes, task lists and callouts are marked extensions or renderer overrides in `build-marked.ts`; wiki links are an inline extension ([src/engine/wiki-link-marked.ts](../src/engine/wiki-link-marked.ts)), so they never fire inside code of any kind (A045, A048).
 
   **canonical → MD** (`syncHtmlToMd`, [:189](../src/engine/useSyncEngine.ts#L189)):
@@ -144,7 +159,7 @@ flowchart LR
 ```
 
 - **The boundary is sanitization in Stage 1/2**, plus attribute validation of any canonical that is imported or loaded from storage (`sanitizeCanonicalNode`). Once content is canonical PM JSON, it's considered trusted and is rendered without further sanitization.
-- **The canonical schema is the Tiptap schema** — anything not expressible as a known node/mark gets dropped during `tiptap.setHTML`, which is itself a (secondary) sanitization step.
+- **The canonical schema is the Tiptap schema** — anything not expressible as a known node/mark gets dropped by the ProseMirror parse (whole or incremental), which is itself a (secondary) sanitization step.
 - **`pmjson` import is the soft spot:** its structure is checked and its style-bearing attributes are validated, and content this build's schema cannot load opens read-only instead of blank ([src/store/schema-version.ts](../src/store/schema-version.ts)), but its node structure is otherwise taken as given. Treat imported JSON like trusted input only if you trust its source.
 
 ## Idempotency
