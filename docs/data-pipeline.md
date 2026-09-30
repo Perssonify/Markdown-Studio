@@ -79,7 +79,7 @@ flowchart TD
   ```
   The preprocessor only rewrites what must change before marked tokenizes the source: the front-matter block, the `|` of a wiki-link alias (written `\|`, so a GFM table does not split the link across cells), and the opt-in `{key=val}` syntax — off by default, and when on, a group renders only if every key is known and every value validates; anything else stays exactly as written (A039). Code is masked first, with the one fence scanner (`findFencedCodeRanges`) that `normalizeMarkdown` also uses (A046). Wiki links and heading anchors, maths, footnotes, task lists and callouts are marked extensions or renderer overrides in `build-marked.ts`; wiki links are an inline extension ([src/engine/wiki-link-marked.ts](../src/engine/wiki-link-marked.ts)), so they never fire inside code of any kind (A045, A048).
 
-  **canonical → MD** (`syncHtmlToMd`, [:175](../src/engine/useSyncEngine.ts#L175)):
+  **canonical → MD** (`syncHtmlToMd`, [:189](../src/engine/useSyncEngine.ts#L189)):
   ```
   PM doc node unchanged? → skip           (reference check, nothing serialized)
   per top-level block (cached on its immutable PM node; only changed blocks do this):
@@ -158,7 +158,7 @@ flowchart LR
 1. User pastes Google-Docs HTML into the rich-text pane → Tiptap's `handlePaste` ([src/ui/TiptapPane.tsx:262](../src/ui/TiptapPane.tsx#L262)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:314](../src/hooks/useDocumentLifecycle.ts#L314)).
 2. With Paste Styled on (the default), `sanitizePastedHtml()` ([src/engine/html-cleaner.ts:165](../src/engine/html-cleaner.ts#L165)) strips Office junk and keeps only allow-listed CSS; with it off (or ⇧ held), `cleanPasteHtml()` ([:244](../src/engine/html-cleaner.ts#L244)) also converts `font-weight:700` → `<strong>`.
 3. Cleaned HTML is inserted into Tiptap; the editor normalizes it to canonical PM JSON.
-4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:175](../src/engine/useSyncEngine.ts#L175)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
+4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:189](../src/engine/useSyncEngine.ts#L189)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
 5. `onCanonicalChange` fires → `updateDerived` ([src/store/documentStore.ts:1627](../src/store/documentStore.ts#L1627)) computes the fidelity report and the word/character counts in one walk (`computeCanonicalStats`, [src/store/fidelity.ts:258](../src/store/fidelity.ts#L258)) and publishes them only when they change; if styling can't be represented in the chosen markdown mode, the report records the loss and the StatusBar shows a fidelity badge.
 6. Autosave (≤5s later) → `saveActiveDoc` (after its pre-save checks) → `serializeForStorage` → IndexedDB `documents` store; `__manifest` updated in the same transaction.
 
