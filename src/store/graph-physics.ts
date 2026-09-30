@@ -20,8 +20,21 @@
  *    quadtree and finds the short-range label-room pairs through a uniform
  *    grid. The all-pairs loop is O(n²) and at 2,000 notes it WAS the map: see
  *    `BARNES_HUT_MIN`.
+ * A folder map above `FOLDER_LAYOUT_MAX` notes is laid out differently again,
+ * on two levels — the folders' regions first, then each note inside its own
+ * (`planFolderLayout`, `stepTwoLevel`).
  */
-import { folderBounds, labelWidth, LABEL_GAP, LABEL_H, type FolderBounds, type FolderInput } from "./graph-metrics";
+import {
+  folderBounds,
+  folderChipWidth,
+  labelWidth,
+  FOLDER_CHIP_INSET,
+  FOLDER_PAD,
+  LABEL_GAP,
+  LABEL_H,
+  type FolderBounds,
+  type FolderInput,
+} from "./graph-metrics";
 
 export interface SimPoint {
   id: string;
@@ -110,8 +123,10 @@ export function worldFor(n: number, withFolders = false) {
  * notes in 40 folders (every note on its own spot, across several libraries).
  * Beyond this it is not: at 600 notes in 60 folders the settle is chaotic, and
  * at 2,000 it measured WORSE than the old layout in the browser (340 distinct
- * positions against 751). Such maps keep the previous layout exactly until
- * folders are laid out as units (a two-level layout); see CLAUDE.md.
+ * positions against 751). Such maps are laid out on two levels instead — the
+ * folders as units, then each folder's notes inside its own region
+ * (`planFolderLayout`); `worldFor` and `seedPositions` without a plan give
+ * them the pre-folder-aware world and ring, as before.
  */
 export const FOLDER_LAYOUT_MAX = 500;
 
@@ -153,7 +168,9 @@ export function seedPositions(
   ids: readonly string[],
   folders: readonly FolderInput[],
   world: { w: number; h: number },
+  plan?: FolderPlan | null,
 ): Map<string, SimPoint> {
+  if (plan) return seedInRegions(ids, plan);
   const { w, h } = world;
   const n = ids.length || 1;
   const folderOf = new Map<string, number>();
@@ -260,6 +277,10 @@ export interface StepInput {
   pinned?: string | null;
   /** Force-path override (tests). Default: exact at or below BARNES_HUT_MIN. */
   exact?: boolean;
+  /** The folder regions of a TWO-LEVEL layout (`planFolderLayout`): each note
+   *  is laid out inside its own region, by forces local to it. Absent for
+   *  every other map, which lays out exactly as it did. */
+  plan?: FolderPlan | null;
 }
 
 /**
@@ -267,6 +288,7 @@ export interface StepInput {
  * largest per-node speed, for the settle test.
  */
 export function stepLayout(input: StepInput): number {
+  if (input.plan) return stepTwoLevel(input, input.plan);
   const { positions, edges, folders, world, alpha, pinned = null } = input;
   const radiusOf = input.radius;
   const labelOf = input.label;
@@ -321,8 +343,9 @@ export function stepLayout(input: StepInput): number {
   }
 
   // Folderless maps keep their exact, familiar dynamics (the speed limit below
-  // is for the container constraint's close pairs), and so do maps too large for
-  // the folder-aware layout (FOLDER_LAYOUT_MAX).
+  // is for the container constraint's close pairs), and so does a step without
+  // a plan on a map too large for the folder-aware layout (FOLDER_LAYOUT_MAX;
+  // the map gives those a plan, above).
   const hasFolders = folderAware(ps.length, folders.length > 0);
   let maxV = 0;
   for (const p of ps) {
@@ -475,6 +498,520 @@ function inForeign(rects: FolderBounds[], ownIds: string[], x: number, y: number
     if (x + hw > r.x0 && x - hw < r.x1 && y + vh > r.y0 && y - vh < r.y1 && !ownIds.includes(r.id)) return true;
   }
   return false;
+}
+
+// ── Two-level layout (folder maps above FOLDER_LAYOUT_MAX) ─────────────────────
+//
+// Past a few hundred notes the folder-aware layout above does not converge:
+// dozens of containers, each of which must hold its members' NAMES, kept apart
+// by a pairwise positional constraint, pinned in by the walls and shoved by an
+// uncapped 1/d² repulsion from the whole library. Measured at 2,000 notes in 60
+// folders, it came to rest with 340 distinct positions — worse than the old
+// single-level layout's ~750–800, which piled up to 89 notes on one spot — and
+// a stacked dot has no room for a name.
+//
+// So a large folder map is laid out on two levels. First the FOLDERS, as units:
+// each is a rectangle sized for its members and their names, and the rectangles
+// are packed — never overlapping, by construction — with linked folders pulled
+// towards each other (`planFolderLayout`, whenever the map is seeded: when it
+// opens, and when its notes or their folders change). Then each note is laid
+// out INSIDE its own folder's rectangle by forces local to it, and held there
+// as a hard constraint (`stepTwoLevel`). The notes in no folder get a region
+// of their own. A container is drawn around its members' dots and names
+// (`folderRects`), so a region that holds them holds their container too: two
+// containers cannot overlap and no note sits in someone else's.
+
+/** Whether a map of `n` notes gets the two-level layout. */
+export function twoLevel(n: number, hasFolders: boolean): boolean {
+  return hasFolders && n > FOLDER_LAYOUT_MAX;
+}
+
+/** One region of a two-level layout: a folder's, or the notes in no folder
+ *  (`folderId` null). World coordinates. */
+export interface LayoutRegion {
+  folderId: string | null;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** Its notes, in id order. */
+  ids: string[];
+}
+
+export interface FolderPlan {
+  /** Layout space: the regions and a margin around them. */
+  world: { w: number; h: number };
+  regions: LayoutRegion[];
+  /** The region each note is laid out in. */
+  regionOf: Map<string, number>;
+  /** Each note's home: a cell of a grid that fills its region, best-connected
+   *  notes in the middle. It starts there and is held near it. */
+  home: Map<string, { x: number; y: number }>;
+}
+
+/** Row pitch of the notes in a region: a dot, and room for its name above or
+ *  below it (`folderRects` keeps r + LABEL_GAP + LABEL_H on each side, 26 for
+ *  an ordinary note). */
+const CELL_H = 56;
+/** Room between two names side by side. */
+const CELL_GAP_X = 24;
+/** A region is this much larger, per axis, than a tight grid of its notes: the
+ *  local forces need room to move notes towards the ones they link to. */
+const REGION_SLACK = 1.15;
+/** Space between two regions. It is also what keeps a big dot clear of the
+ *  NEXT container when zoomed out, where a dot's screen-constant size covers
+ *  a lot of world. */
+export const REGION_GAP = 64;
+/** Between a member's footprint (dot and name) and its region's edge: the
+ *  container's own padding (`FOLDER_PAD` at 1×, less when zoomed in), and a
+ *  little more. */
+const REGION_INSET = FOLDER_PAD + 4;
+/** Regions are packed into a block about as wide, relative to its height, as
+ *  the world the map has always had (w : h = 1 : 0.72) — the shape of a canvas. */
+const REGION_ASPECT = 1 / 0.72;
+/** How much the packing weighs keeping the whole block small against putting
+ *  a region next to the regions it links to. Measured on 600- and 2,000-note
+ *  libraries: at 4 the block fills 58–70% of its bounding box (47–59% when
+ *  placed by links alone — mostly empty corners) for links between regions
+ *  about 7% longer. */
+const PACK_COMPACT = 4;
+/** Inside a region: the rest length of a link, and the pull of each note
+ *  towards its home cell. */
+const LOCAL_SPRING_LEN = 120;
+const LOCAL_ANCHOR = 0.03;
+
+export interface PlanInput {
+  ids: readonly string[];
+  folders: readonly FolderInput[];
+  edges: readonly { source: string; target: string }[];
+  /** Drawn size of each note and its label, as `stepLayout` takes them. */
+  radius: (id: string) => number;
+  label: (id: string) => string;
+}
+
+/**
+ * The first level of a two-level layout: where each folder's region goes.
+ * Null for a map that does not get one (`twoLevel`) — every other map lays out
+ * exactly as it did. Deterministic: a function of the notes, the folders, the
+ * links and the drawn sizes alone — not of the order any of them come in.
+ */
+export function planFolderLayout(input: PlanInput): FolderPlan | null {
+  const { edges, radius, label } = input;
+  // The same library plans the same way whatever order its notes and folders
+  // arrive in: the map's graph is rebuilt with the link index, not always in
+  // the same order. (Code-unit order, not localeCompare, which varies.)
+  const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const ids = [...input.ids].sort(byId);
+  const folders = [...input.folders].sort((a, b) => byId(a.id, b.id));
+  const folderOf = new Map<string, number>();
+  folders.forEach((f, fi) => {
+    for (const id of f.docIds) if (!folderOf.has(id)) folderOf.set(id, fi);
+  });
+  const groups: string[][] = folders.map(() => []);
+  const loose: string[] = [];
+  for (const id of ids) {
+    const f = folderOf.get(id);
+    if (f == null) loose.push(id);
+    else groups[f]!.push(id);
+  }
+  if (!twoLevel(ids.length, loose.length < ids.length)) return null;
+
+  // One unit per folder with a note on the map, then the notes in no folder.
+  const units: { folderId: string | null; name: string | null; ids: string[] }[] = [];
+  folders.forEach((f, fi) => {
+    if (groups[fi]!.length) units.push({ folderId: f.id, name: f.name, ids: groups[fi]! });
+  });
+  if (loose.length) units.push({ folderId: null, name: null, ids: loose });
+  const sizes = units.map((u) => regionSize(u.ids, u.name, radius, label));
+
+  // How many links run between each pair of units.
+  const unitOf = new Map<string, number>();
+  units.forEach((u, i) => { for (const id of u.ids) unitOf.set(id, i); });
+  const links = units.map(() => new Map<number, number>());
+  for (const e of edges) {
+    const a = unitOf.get(e.source), b = unitOf.get(e.target);
+    if (a == null || b == null || a === b) continue;
+    links[a]!.set(b, (links[a]!.get(b) ?? 0) + 1);
+    links[b]!.set(a, (links[b]!.get(a) ?? 0) + 1);
+  }
+  const at = packRegions(sizes, links);
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  at.forEach((p, i) => {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x + sizes[i]!.w);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y + sizes[i]!.h);
+  });
+  const margin = PAD + REGION_GAP / 2;
+  const regions: LayoutRegion[] = units.map((u, i) => {
+    const x0 = at[i]!.x - minX + margin, y0 = at[i]!.y - minY + margin;
+    return { folderId: u.folderId, ids: u.ids, x0, y0, x1: x0 + sizes[i]!.w, y1: y0 + sizes[i]!.h };
+  });
+  const regionOf = new Map<string, number>();
+  regions.forEach((r, i) => { for (const id of r.ids) regionOf.set(id, i); });
+  // Links inside each region, for where its notes start.
+  const near = new Map<string, string[]>();
+  for (const e of edges) {
+    const g = regionOf.get(e.source);
+    if (g == null || e.source === e.target || g !== regionOf.get(e.target)) continue;
+    (near.get(e.source) ?? near.set(e.source, []).get(e.source)!).push(e.target);
+    (near.get(e.target) ?? near.set(e.target, []).get(e.target)!).push(e.source);
+  }
+  const home = new Map<string, { x: number; y: number }>();
+  for (const r of regions) regionHomes(r, near, radius, label, home);
+  return {
+    world: { w: Math.ceil(maxX - minX + 2 * margin), h: Math.ceil(maxY - minY + 2 * margin) },
+    regions,
+    regionOf,
+    home,
+  };
+}
+
+/**
+ * Each note of a region gets a cell of a grid that fills the region. Notes are
+ * taken breadth-first along the region's own links, starting from its
+ * best-connected note, and cells nearest the middle first — so a folder's hub
+ * sits in the middle with what it links to around it. A grid is what gives
+ * every note room for its NAME: forces alone pack the middle of a cluster
+ * densest, and there the names ran through each other.
+ */
+function regionHomes(
+  reg: LayoutRegion,
+  near: Map<string, string[]>,
+  radius: (id: string) => number,
+  label: (id: string) => string,
+  out: Map<string, { x: number; y: number }>,
+) {
+  const m = reg.ids.length;
+  const iw = Math.max(1, reg.x1 - reg.x0 - 2 * REGION_INSET), ih = Math.max(1, reg.y1 - reg.y0 - 2 * REGION_INSET);
+  const cols = Math.max(1, Math.min(m, Math.round(Math.sqrt((m * iw) / ih))));
+  const rows = Math.ceil(m / cols);
+  const mx = (cols - 1) / 2, my = (rows - 1) / 2;
+  const cells: { c: number; r: number; d: number; a: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      // Distance from the middle, the grid's aspect taken out; round the cells
+      // of a ring clockwise. (Plain arithmetic, no transcendental functions:
+      // the order must come out the same on every engine.)
+      const dx = (c - mx) / cols, dy = (r - my) / rows;
+      cells.push({ c, r, d: dx * dx + dy * dy, a: pseudoAngle(dx, dy) });
+    }
+  }
+  cells.sort((p, q) => p.d - q.d || p.a - q.a || p.r - q.r || p.c - q.c);
+
+  // Breadth-first, best-connected first (ties in id order).
+  const index = new Map(reg.ids.map((id, i) => [id, i]));
+  const degree = (id: string) => near.get(id)?.length ?? 0;
+  const byDegree = [...reg.ids].sort((a, b) => degree(b) - degree(a) || index.get(a)! - index.get(b)!);
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const start of byDegree) {
+    if (seen.has(start)) continue;
+    seen.add(start);
+    const queue = [start];
+    for (let q = 0; q < queue.length; q++) {
+      const id = queue[q]!;
+      order.push(id);
+      const next = (near.get(id) ?? []).filter((n) => !seen.has(n) && index.has(n))
+        .sort((a, b) => degree(b) - degree(a) || index.get(a)! - index.get(b)!);
+      for (const n of next) { if (!seen.has(n)) { seen.add(n); queue.push(n); } }
+    }
+  }
+  order.forEach((id, i) => {
+    const cell = cells[i]!;
+    // Off the cell's middle by a fixed, hashed amount: notes with nothing to
+    // pull them otherwise rest exactly on the grid, in rows that read as a
+    // table rather than a map. (Measured: no fewer names.)
+    const x = reg.x0 + REGION_INSET + ((cell.c + 0.5 + HOME_WOBBLE_X * wobble(cell.r, cell.c)) * iw) / cols;
+    const y = reg.y0 + REGION_INSET + ((cell.r + 0.5 + HOME_WOBBLE_Y * wobble(cell.c + 7919, cell.r)) * ih) / rows;
+    const r = radius(id);
+    out.set(id, clampInto(reg, x, y, footHalfW(r, label(id)) + REGION_INSET, footHalfH(r) + REGION_INSET));
+  });
+}
+
+/** Horizontal half-footprint of a note: its dot, or half its name. The same
+ *  measure `folderRects` encloses (at 1×). */
+const footHalfW = (r: number, text: string) => Math.max(r, labelWidth(text) / 2);
+/** Vertical half-footprint: room for the name above OR below the dot. */
+const footHalfH = (r: number) => r + LABEL_GAP + LABEL_H;
+
+/** A region's size: a grid of its notes' footprints, a canvas-shaped block of
+ *  them, with slack, and wide enough for the folder's name tab. */
+function regionSize(ids: string[], name: string | null, radius: (id: string) => number, label: (id: string) => string) {
+  const m = ids.length;
+  let widths = 0;
+  for (const id of ids) widths += 2 * footHalfW(radius(id), label(id));
+  const cw = widths / m + CELL_GAP_X;
+  const cols = Math.max(1, Math.min(m, Math.round(Math.sqrt((m * REGION_ASPECT * CELL_H) / cw))));
+  const rows = Math.ceil(m / cols);
+  let w = cols * cw * REGION_SLACK + 2 * REGION_INSET;
+  const h = rows * CELL_H * REGION_SLACK + 2 * REGION_INSET;
+  // The container widens to fit its name tab (at most this wide, at 1×).
+  if (name != null) w = Math.max(w, folderChipWidth(name) + 2 * FOLDER_CHIP_INSET + 2 * REGION_INSET);
+  return { w, h };
+}
+
+/**
+ * Pack rectangles, largest first, each at the free spot that best balances
+ * being next to the rectangles it links to (their link-weighted middle; with
+ * none placed yet, the middle of everything placed) against how much it grows
+ * the block (its bounding box, canvas-shaped). Candidate spots are flush
+ * against a side of a rectangle already placed, so a spot is always found (the
+ * right of the rightmost rectangle is free), and a rectangle is only ever put
+ * where nothing is: NO two overlap, by construction, with REGION_GAP between
+ * them. Returns top-left corners.
+ */
+function packRegions(sizes: { w: number; h: number }[], links: Map<number, number>[]): { x: number; y: number }[] {
+  const order = sizes.map((_, i) => i)
+    .sort((a, b) => sizes[b]!.w * sizes[b]!.h - sizes[a]!.w * sizes[a]!.h || a - b);
+  const at: ({ x: number; y: number } | null)[] = sizes.map(() => null);
+  const placed: number[] = [];
+  const G = REGION_GAP;
+  let area = 0, sx = 0, sy = 0; // area-weighted middle of what is placed
+  let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity; // …and its bounds
+  // The placed rectangles by grid cell, so a spot is tested only against the
+  // rectangles near it. Tested against every placed rectangle, planning was
+  // cubic in the number of folders: 2.5 s for 1,000 of them. Each rectangle is
+  // filed under every cell its gap-widened extent (plus a unit, for rounding)
+  // touches, so any rectangle the exact test below would hit is found.
+  let side = 0;
+  for (const s of sizes) side += Math.sqrt(s.w * s.h);
+  const cell = Math.max(G, side / (sizes.length || 1));
+  const grid = new Map<number, number[]>();
+  const stamp = new Int32Array(sizes.length);
+  let query = 0;
+  const key = (gx: number, gy: number) => (gx + 1048576) * 2097152 + (gy + 1048576);
+  const file = (j: number) => {
+    const p = at[j]!, s = sizes[j]!;
+    for (let gx = Math.floor((p.x - G - 1) / cell), gx1 = Math.floor((p.x + s.w + G + 1) / cell); gx <= gx1; gx++) {
+      for (let gy = Math.floor((p.y - G - 1) / cell), gy1 = Math.floor((p.y + s.h + G + 1) / cell); gy <= gy1; gy++) {
+        const list = grid.get(key(gx, gy));
+        if (list) list.push(j); else grid.set(key(gx, gy), [j]);
+      }
+    }
+  };
+  const free = (x: number, y: number, w: number, h: number) => {
+    query++;
+    for (let gx = Math.floor(x / cell), gx1 = Math.floor((x + w) / cell); gx <= gx1; gx++) {
+      for (let gy = Math.floor(y / cell), gy1 = Math.floor((y + h) / cell); gy <= gy1; gy++) {
+        for (const j of grid.get(key(gx, gy)) ?? []) {
+          if (stamp[j] === query) continue;
+          stamp[j] = query;
+          const p = at[j]!, s = sizes[j]!;
+          if (x < p.x + s.w + G && x + w + G > p.x && y < p.y + s.h + G && y + h + G > p.y) return false;
+        }
+      }
+    }
+    return true;
+  };
+  for (const i of order) {
+    const { w, h } = sizes[i]!;
+    if (placed.length) {
+      const gx = sx / area, gy = sy / area;
+      let tx = 0, ty = 0, tw = 0;
+      for (const [j, c] of links[i]!) {
+        const p = at[j];
+        if (!p) continue;
+        tx += c * (p.x + sizes[j]!.w / 2); ty += c * (p.y + sizes[j]!.h / 2); tw += c;
+      }
+      const dx = tw ? tx / tw : gx, dy = tw ? ty / tw : gy;
+      let best: { x: number; y: number } | null = null, bestScore = Infinity;
+      const consider = (x: number, y: number) => {
+        const cx = x + w / 2, cy = y + h / 2;
+        // Distances are measured with y stretched by the aspect, so the block
+        // grows canvas-shaped rather than square.
+        const span = Math.max(Math.max(bx1, x + w) - Math.min(bx0, x), (Math.max(by1, y + h) - Math.min(by0, y)) * REGION_ASPECT);
+        const score = (cx - dx) ** 2 + ((cy - dy) * REGION_ASPECT) ** 2 + PACK_COMPACT * span ** 2;
+        if (score < bestScore && free(x, y, w, h)) { bestScore = score; best = { x, y }; }
+      };
+      for (const j of placed) {
+        const p = at[j]!, s = sizes[j]!;
+        for (const y of [dy - h / 2, p.y, p.y + s.h - h]) {
+          consider(p.x - G - w, y);
+          consider(p.x + s.w + G, y);
+        }
+        for (const x of [dx - w / 2, p.x, p.x + s.w - w]) {
+          consider(x, p.y - G - h);
+          consider(x, p.y + s.h + G);
+        }
+      }
+      at[i] = best!;
+    } else {
+      at[i] = { x: -w / 2, y: -h / 2 };
+    }
+    placed.push(i);
+    file(i);
+    bx0 = Math.min(bx0, at[i]!.x); by0 = Math.min(by0, at[i]!.y);
+    bx1 = Math.max(bx1, at[i]!.x + w); by1 = Math.max(by1, at[i]!.y + h);
+    const a = w * h;
+    area += a; sx += a * (at[i]!.x + w / 2); sy += a * (at[i]!.y + h / 2);
+  }
+  return at as { x: number; y: number }[];
+}
+
+/** How far a home may sit from its cell's middle, in cells. */
+const HOME_WOBBLE_X = 0.3;
+const HOME_WOBBLE_Y = 0.2;
+/** A deterministic value in [-1, 1) for a pair of integers. */
+const wobble = (a: number, b: number) => pairJitter(a, b) * 20;
+
+/** An angle's ORDER without trigonometry: 0 ≤ result < 4, increasing with the
+ *  angle of (dx, dy) (the "diamond angle"). */
+function pseudoAngle(dx: number, dy: number): number {
+  if (!dx && !dy) return 0;
+  if (dy >= 0) return dx >= 0 ? dy / (dx + dy) : 1 - dx / (dy - dx);
+  return dx < 0 ? 2 - dy / (-dx - dy) : 3 + dx / (dx - dy);
+}
+
+/** Where a two-level layout's notes start: at home (`FolderPlan.home`), in
+ *  `ids` order (the insertion order `stepLayout` iterates). */
+function seedInRegions(ids: readonly string[], plan: FolderPlan): Map<string, SimPoint> {
+  const out = new Map<string, SimPoint>();
+  for (const id of ids) {
+    const p = plan.home.get(id) ?? { x: plan.world.w / 2, y: plan.world.h / 2 };
+    out.set(id, { id, x: p.x, y: p.y, vx: 0, vy: 0 });
+  }
+  return out;
+}
+
+/** The nearest point to (x, y) where a note of this footprint lies wholly in
+ *  its region, container padding included — for a note being dragged. (Null
+ *  when the note has no region.) */
+export function clampToRegion(plan: FolderPlan, id: string, x: number, y: number, r: number, text: string) {
+  const g = plan.regionOf.get(id);
+  if (g == null) return null;
+  return clampInto(plan.regions[g]!, x, y, footHalfW(r, text) + REGION_INSET, footHalfH(r) + REGION_INSET);
+}
+
+function clampInto(reg: LayoutRegion, x: number, y: number, hw: number, vh: number) {
+  const lo = reg.x0 + hw, hi = reg.x1 - hw, top = reg.y0 + vh, bottom = reg.y1 - vh;
+  return {
+    x: lo <= hi ? Math.max(lo, Math.min(hi, x)) : (reg.x0 + reg.x1) / 2,
+    y: top <= bottom ? Math.max(top, Math.min(bottom, y)) : (reg.y0 + reg.y1) / 2,
+  };
+}
+
+/**
+ * One step of the second level: every note moved by forces LOCAL to its
+ * region, then held inside it.
+ *  - Repulsion and links act only between notes of the SAME region. The
+ *    folders' placement already answered where the regions go. A link pulling
+ *    across thousands of units only drove notes into their region's wall
+ *    (measured at 2,000 notes: three times as many notes on a wall, notes
+ *    stacked again, a fifth fewer named at 1×), and the rest of the
+ *    library's repulsion changed nothing but the cost of a step, which it
+ *    doubled.
+ *  - Each note is pulled towards its home cell (`FolderPlan.home`) rather than
+ *    towards the middle: pulled to the middle, a cluster packs densest THERE,
+ *    and measured at 2,000 notes the names in the middle of the notes in no
+ *    folder ran through each other (91% of notes could be named at 1×, 70% in
+ *    full; anchored, 99% and 91%).
+ *  - A note is held where its dot and name, and its container's padding, lie
+ *    wholly inside its region; a container whose name tab widens it past its
+ *    region is moved back in as a unit.
+ */
+function stepTwoLevel(input: StepInput, plan: FolderPlan): number {
+  const { positions, edges, folders, world, alpha, pinned = null } = input;
+  const radiusOf = input.radius;
+  const labelOf = input.label;
+  const { regions, regionOf } = plan;
+  const ps = Array.from(positions.values());
+  const halfW = ps.map((p) => footHalfW(radiusOf(p.id), labelOf(p.id)));
+  const members: SimPoint[][] = regions.map(() => []);
+  for (const p of ps) {
+    const g = regionOf.get(p.id);
+    if (g != null) members[g]!.push(p);
+  }
+
+  for (const group of members) {
+    if (group.length < 2) continue;
+    const repulsion = REPULSION * Math.max(1, Math.min(5, group.length / 6)) * alpha;
+    if (group.length > BARNES_HUT_MIN) repulseBarnesHut(group, repulsion, BARNES_HUT_THETA);
+    else repulseExact(group, repulsion);
+  }
+  // Names never overlap across a region boundary (each is held inside its own
+  // region, with a gap between regions), so the whole map can be one pass.
+  separateLabelsGrid(ps, halfW, alpha);
+  for (const e of edges) {
+    const g = regionOf.get(e.source);
+    if (g == null || g !== regionOf.get(e.target)) continue;
+    const a = positions.get(e.source), b = positions.get(e.target);
+    if (!a || !b) continue;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const f = (d - LOCAL_SPRING_LEN) * SPRING_K * alpha;
+    const fx = (dx / d) * f, fy = (dy / d) * f;
+    a.vx += fx; a.vy += fy;
+    b.vx -= fx; b.vy -= fy;
+  }
+
+  let maxV = 0;
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i]!;
+    const g = regionOf.get(p.id);
+    const reg = g == null ? null : regions[g]!;
+    const at = plan.home.get(p.id) ?? { x: world.w / 2, y: world.h / 2 };
+    p.vx += (at.x - p.x) * LOCAL_ANCHOR * alpha;
+    p.vy += (at.y - p.y) * LOCAL_ANCHOR * alpha;
+    if (pinned === p.id) { p.vx = 0; p.vy = 0; continue; }
+    p.vx *= DAMPING; p.vy *= DAMPING;
+    const sp = Math.hypot(p.vx, p.vy);
+    if (sp > FOLDER_MAX_SPEED) { p.vx *= FOLDER_MAX_SPEED / sp; p.vy *= FOLDER_MAX_SPEED / sp; }
+    const x = p.x + p.vx, y = p.y + p.vy;
+    const r = radiusOf(p.id);
+    const to = reg
+      ? clampInto(reg, x, y, halfW[i]! + REGION_INSET, footHalfH(r) + REGION_INSET)
+      : { x: Math.max(PAD, Math.min(world.w - PAD, x)), y: Math.max(PAD, Math.min(world.h - PAD, y)) };
+    // A wall stops the note: velocity into it is spent, not stored.
+    if (to.x !== x) p.vx = 0;
+    if (to.y !== y) p.vy = 0;
+    p.x = to.x; p.y = to.y;
+    const v = Math.abs(p.vx) + Math.abs(p.vy);
+    if (v > maxV) maxV = v;
+  }
+
+  // The container is drawn around its members (`folderRects`); where its name
+  // tab makes it wider than they are, it widens about their middle — which can
+  // reach past the region when they sit to one side of it. Move them back in.
+  const regionOfFolder = new Map<string, LayoutRegion>();
+  for (const reg of regions) if (reg.folderId != null) regionOfFolder.set(reg.folderId, reg);
+  const boxes = folderBounds({ folders: folders as FolderInput[], positions, radius: radiusOf, label: labelOf, k: 1 });
+  for (const b of boxes) {
+    const reg = regionOfFolder.get(b.id);
+    if (!reg) continue;
+    const dx = shiftInto(b.x0, b.x1, reg.x0, reg.x1), dy = shiftInto(b.y0, b.y1, reg.y0, reg.y1);
+    if (!dx && !dy) continue;
+    for (const id of b.docIds) {
+      const p = positions.get(id);
+      if (p) { p.x += dx; p.y += dy; }
+    }
+  }
+  return maxV;
+}
+
+/** The shift that brings the span [lo, hi] inside [rlo, rhi] — or centres it,
+ *  if it is the wider (a region is sized for its name tab, so only a name
+ *  lengthened since the map opened can make it so). */
+function shiftInto(lo: number, hi: number, rlo: number, rhi: number) {
+  if (hi - lo > rhi - rlo) return (rlo + rhi - lo - hi) / 2;
+  return lo < rlo ? rlo - lo : hi > rhi ? rhi - hi : 0;
+}
+
+/** Exact all-pairs repulsion alone (the small-map loop's force law and
+ *  tie-break, without its label term) — for one region's notes. */
+function repulseExact(ps: SimPoint[], repulsion: number) {
+  for (let i = 0; i < ps.length; i++) {
+    for (let j = i + 1; j < ps.length; j++) {
+      const a = ps[i]!, b = ps[j]!;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < 1) { d2 = 1; dx = pairJitter(i, j); dy = pairJitter(j, i); }
+      const d = Math.sqrt(d2);
+      const f = repulsion / d2;
+      const fx = (dx / d) * f, fy = (dy / d) * f;
+      a.vx -= fx; a.vy -= fy;
+      b.vx += fx; b.vy += fy;
+    }
+  }
 }
 
 /** The exact all-pairs loop — repulsion plus the label-room term, the map's

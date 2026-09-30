@@ -231,10 +231,12 @@ describe("a map with folders", () => {
     expect(stackedPairs(settleNew(ws).pos)).toBe(0);
   });
 
-  it("above FOLDER_LAYOUT_MAX a map with folders keeps the previous layout exactly", () => {
+  it("above FOLDER_LAYOUT_MAX the folder-aware layout stops: a step without a plan is the old loop", () => {
     // Measured worse than the old layout at 2,000 notes, so the folder-aware
-    // layout stops at FOLDER_LAYOUT_MAX. The first steps of a larger map (exact
-    // forces, the same path the reference loop takes) match it bit for bit.
+    // layout stops at FOLDER_LAYOUT_MAX. The map lays a larger folder map out
+    // on two levels instead (a plan: graph-two-level.test.js); without one,
+    // the first steps (exact forces, the same path the reference loop takes)
+    // match the old loop bit for bit.
     const n = FOLDER_LAYOUT_MAX + 100;
     const ws = workspace(n, 4);
     expect(ws.folders.length).toBeGreaterThan(0);
@@ -295,7 +297,8 @@ describe("worldFor", () => {
     expect(worldFor(12, true)).toEqual(worldFor(12));
     expect(worldFor(400, true).w).toBeGreaterThan(worldFor(400).w);
     expect(worldFor(400, true).w).toBeGreaterThan(worldFor(200, true).w);
-    // Larger folder maps keep the previous layout, world included.
+    // A larger folder map's world comes from its plan (planFolderLayout); this
+    // is the old one.
     expect(worldFor(2000, true)).toEqual(worldFor(2000));
   });
 });
