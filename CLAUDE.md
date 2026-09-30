@@ -4,10 +4,12 @@
 > npm package (`@perssonify/editor`) and every DATA identifier keep their old
 > names ON PURPOSE — `pf:` preference keys, the `perssonify-document` export
 > envelope, `perssonify-backup` archives, the `perssonify-snapshots` IndexedDB
-> database and the embed's `perssonify-embed-docs` database are on-disk contracts
-> with existing installs. Renaming them orphans users' documents. The display
-> name lives in `APP_NAME` (`src/constants.ts`) with `APP_DOMAIN`/`APP_URL` beside it; surfaces that can't import TypeScript
-> (index.html, embed.html, site.webmanifest, the PWA manifest in
+> database, the embed's `perssonify-embed-docs` database and the image store
+> (`perssonify-assets`, the `pf-asset:` scheme, `assets/<hash>.<ext>` in ZIPs and the
+> envelope's `assets` member) are on-disk contracts with existing installs.
+> Renaming them orphans users' documents. The display name lives in `APP_NAME`
+> (`src/constants.ts`) with `APP_DOMAIN`/`APP_URL` beside it; surfaces that can't
+> import TypeScript (index.html, embed.html, site.webmanifest, the PWA manifest in
 > vite.app.config.ts) are pinned to it by `src/__tests__/app-identity.test.js`.
 
 `@perssonify/editor` is a **dual-pane, bidirectionally-synced Markdown editor**:
@@ -841,7 +843,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (NOT just id/canonical/title — omitting them silently drops the state and resets
   timestamps); (2) `archiveEntriesToItems` detects an all-envelope archive
   (`isBackup`) and keeps entry paths VERBATIM — it must NOT apply the loose-file
-  `<zip-name>/` wrap, or the whole library nests under a synthetic folder.
+  `<zip-name>/` wrap, or the whole library nests under a synthetic folder. The
+  backup also carries every referenced image as `assets/<sha256>.<ext>`: those
+  entries are recognised by path AND image extension, `isBackup` looks at documents
+  only, and they come back separately as `extractArchive(...).assets` (the returned
+  entries array carries an `assets` property).
   **Every export ZIP filename carries an `exportTimestamp()` `YYYYMMDD-HHMMSSmmm` suffix**
   (`store/import-export.ts`) for implicit version control. JSON and backup exports
   share **`toExportEnvelope`**, which stamps `schemaVersion` and LEAVES OUT
@@ -914,6 +920,42 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     (LF-normalised) and names the new one. Moving CSP to enforcing is an owner
     decision; `e2e:csp` runs the build under the ENFORCED policy and must stay at
     zero violations.
+- **Images are binary assets** (A086, `store/asset-store.ts`, `asset-refs.ts`,
+  `assets.ts`, `asset-gc.ts`; `extensions/AssetImages.ts` and `cm-asset-refs.ts`).
+  Pasted, dropped and imported images live ONCE in a sidecar IndexedDB,
+  `perssonify-assets` (`perssonify-assets:<ns>` under a host namespace; stores
+  `meta` and `bytes`, keyed by SHA-256), and a document refers to one as
+  `pf-asset:<sha256>` (an optional `#fragment` is kept). On in the app shell
+  (`App.tsx`); OPT-IN for library hosts and the embed (`storageConfig.assets`),
+  because a host reading content back out would get references that resolve only
+  in this browser. **A reference is written only after the bytes commit, and there
+  is no memory fallback**: an unavailable or disabled store, or a failed write,
+  leaves the image inline as a `data:` URL exactly as before (`data:` URLs under
+  2,048 characters always stay inline). Only USER transactions are converted —
+  loads and syncs (`preventUpdate`) never, conversions are not undo steps, and a
+  conversion never lands in a different document, a read-only one or mid-composition.
+  Existing documents are not migrated.
+  - **A `pf-asset:` src must never reach a live `<img>`**: the browser cannot load
+    it, and under the CSP it is a violation even on a detached element. ProseMirror's
+    `getHTML`/`generateHTML` build in an inert document and are safe; every surface
+    that SHOWS document HTML resolves through the node view, `useAssetSrc`, or
+    `neutralizeAssetSrcs` + `useResolvedAssetImages` (`ui/asset-dom.ts`). `e2e:csp`
+    pins it.
+  - **Exports are self-contained.** HTML, markdown, PDF/print, Word and Copy as
+    MD/HTML inline the bytes (`inlineAssetRefsInText`); the JSON export's envelope
+    carries an `assets` member `{hash: {mime, data}}`; the full backup and the crash
+    screen's emergency backup write `assets/<hash>.<ext>`; the markdown ZIP links
+    images by relative path. Images that cannot be found are reported
+    (`missingImagesNote`), never silently dropped. Restores check each asset
+    against its hash.
+  - **Nothing deletes assets automatically.** Settings ▸ Storage ▸ Clean up unused
+    images checks every place a reference can live (`defaultReferenceSources`:
+    documents, every snapshot including deleted documents', the live editor, unsaved
+    drafts, localStorage), deletes NOTHING if any of them cannot be read, keeps
+    anything stored or shown in the last 24 hours and re-checks each image just
+    before deleting it. **Any new place that can hold a document's content must be
+    added to `defaultReferenceSources`**, or the clean-up deletes images it still
+    uses. Erase all local data clears the store too.
 - **Mermaid/ABC blocks render by default in ONE cohesive framed card** (`CodeBlockWithCopy.tsx`
   `.diagram-frame`: header label + Edit/Copy · source · live preview), mirroring the math
   nodes. The `<pre><NodeViewContent/></pre>` stays MOUNTED (hidden via `.diagram-source.is-hidden`)
@@ -956,8 +998,10 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   convert; Word equations (OMML), text boxes, and complex layout do not. `convertToHtml` is
   called with **BOTH** `{ arrayBuffer, buffer: arrayBuffer }` — mammoth's browser build reads
   `arrayBuffer`, its node build (tests) reads `buffer` — so one call works in both without a
-  throw-and-retry. Images inline as base64, so a small `.docx` can expand past the 5MB import
-  skip once images are embedded.
+  throw-and-retry. mammoth emits images as base64 `data:` URLs; the import then
+  stores each one as an asset where the asset store is on (see the image-asset bullet),
+  so the document holds references, not the bytes. The 5 MB skip is on the `.docx`
+  file's own size.
 - The standalone app shell (`src/App.tsx`) is a `h-dvh` viewport-locked column;
   PerssonifyEditor receives `fitParent` there and sizes to its parent. Embed/
   library mounts omit it and keep viewport (`h-dvh`) sizing. Never let the shell
@@ -2119,7 +2163,11 @@ The product ships three ways from one codebase: the standalone app
   name, ids, `data-*` hooks, URL parameters, file names, or anything written into a
   document. English is the source of truth (`en/<area>.ts`, keys prefixed with the
   area); `i18n-scanner` fails on a new hard-coded interface literal, and
-  `i18n-catalog` / `i18n-render` hold the rest. The Help and About prose is CONTENT
+  `i18n-catalog` / `i18n-render` hold the rest. **The scanner cannot see a string
+  parked in a module-level object, a helper's return value or markup built in a
+  template** (the stored-image strings arrived that way and passed it) — route those
+  through `t()` yourself, and build anything that holds text when it is USED, never
+  as a load-time constant, or it stays in the language the page loaded in. The Help and About prose is CONTENT
   in per-locale maps (`HELP_CONTENT`, `ABOUT_CONTENT`), not catalog keys. The app
   shell and the embed set `<html lang dir>`; the library never does. `?lang=` is
   session-only; the `en-XA` pseudo-locale is development-only. See `docs/i18n.md`.
