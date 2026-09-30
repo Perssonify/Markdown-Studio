@@ -9,6 +9,8 @@
 import { common } from "./en/common";
 import { menu } from "./en/menu";
 import { context } from "./en/context";
+import { toolbar } from "./en/toolbar";
+import { panes } from "./en/panes";
 import { pages } from "./en/pages";
 import { shortcuts } from "./en/shortcuts";
 
@@ -16,6 +18,8 @@ export const en = {
   ...common,
   ...menu,
   ...context,
+  ...toolbar,
+  ...panes,
   ...pages,
   ...shortcuts,
 };

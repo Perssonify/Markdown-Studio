@@ -22,6 +22,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { COMPOSITION_STALL_MS } from "../constants";
 import type { HighlightSpec } from "../formatting/find-engine";
 import { useUIStore } from "../store/uiStore";
+import { useT } from "../i18n";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";
 import { BidiAuto } from "../extensions/BidiAuto";
@@ -209,6 +210,7 @@ export interface TiptapPaneHandle {
 
 const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
   ({ isDark, defaultValue, onChange, onPaste, onEditLink, className, style }, ref) => {
+    const t = useT();
     const onChangeRef = useRef(onChange);
     // When this pane last produced input while composing (COMPOSITION_STALL_MS).
     const composeStampRef = useRef(0);
@@ -234,7 +236,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         Link.configure({ openOnClick: false, HTMLAttributes: { class: "perssonify-link" } }),
         ThemeImage,
         SizedImage,
-        Placeholder.configure({ placeholder: "Start typing rich text..." }),
+        Placeholder.configure({ placeholder: t("panes.startTypingRichText") }),
         TextAlign.configure({ types: ["heading", "paragraph"], alignments: ["left", "center", "right", "justify"] }),
         Table.configure({ resizable: false }),
         TableRow, TableCell, TableHeader, TableCellAlign,
@@ -251,7 +253,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
           spellcheck: String(spellcheck),
           // A089: a bare contenteditable has no role or name. Repeated in the
           // theme effect below, which REPLACES this object.
-          role: "textbox", "aria-multiline": "true", "aria-label": "Rich text",
+          role: "textbox", "aria-multiline": "true", "aria-label": t("panes.richText"),
         },
         // See CodeMirrorPane: the composition's own begin/end events own the
         // liveness stamp, so it can never be stale when the next one starts.
@@ -291,11 +293,11 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
             "data-md-preview": "",
             "data-theme": isDark ? "dark" : "light",
             spellcheck: String(spellcheck),
-            role: "textbox", "aria-multiline": "true", "aria-label": "Rich text",
+            role: "textbox", "aria-multiline": "true", "aria-label": t("panes.richText"),
           },
         },
       });
-    }, [isDark, editor, spellcheck]);
+    }, [isDark, editor, spellcheck, t]);
 
     // Read-only mode disables editing (node views already honor editor.isEditable).
     useEffect(() => {

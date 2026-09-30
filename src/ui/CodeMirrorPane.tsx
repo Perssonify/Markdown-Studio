@@ -16,6 +16,7 @@ import { perLineTextDirection } from "../extensions/cm-bidi";
 import type { HighlightSpec } from "../formatting/find-engine";
 import { useUIStore } from "../store/uiStore";
 import { dropAltGraphChords } from "../utils/alt-graph";
+import { t } from "../i18n";
 
 /** Read-only extension pair for the editability compartment. */
 const roExt = (ro: boolean): Extension[] => [EditorState.readOnly.of(ro), EditorView.editable.of(!ro)];
@@ -311,7 +312,7 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         // "Find all" / "Select all headings" appeared to select just the first
         // match. drawSelection paints every range CodeMirror holds.
         drawSelection(),
-        cmPlaceholder("Start typing markdown..."),
+        cmPlaceholder(t("panes.startTypingMarkdown")),
         highlightSelectionMatches(),
         searchHighlightField,
         compositionEvents,
@@ -324,8 +325,8 @@ export const CodeMirrorPane = forwardRef<CodeMirrorPaneHandle, CodeMirrorPanePro
         // screen reader could not tell the two panes apart. The description
         // documents the Tab capture that `indentWithTab` imposes.
         EditorView.contentAttributes.of({
-          "aria-label": "Markdown source",
-          "aria-description": "Tab indents. Press Escape, then Tab, to move focus out of the editor.",
+          "aria-label": t("panes.markdownSource"),
+          "aria-description": t("panes.markdownSourceDescription"),
         }),
         updateListener,
       ];

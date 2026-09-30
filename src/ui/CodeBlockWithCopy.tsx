@@ -6,6 +6,7 @@ import { useUIStore } from "../store/uiStore";
 import { CodeBlockCopyButton } from "./CodeBlockCopyButton";
 import { DiagramPreview } from "./DiagramPreview";
 import { common, createLowlight } from "lowlight";
+import { useT } from "../i18n";
 
 interface CodeBlockComponentProps {
   node: {
@@ -24,6 +25,7 @@ interface CodeBlockComponentProps {
 }
 
 function CodeBlockComponent({ node, editor }: CodeBlockComponentProps) {
+  const t = useT();
   const features = useUIStore((s) => s.markdownFeatures);
   const language = node.attrs.language;
   const showDiagram =
@@ -50,7 +52,7 @@ function CodeBlockComponent({ node, editor }: CodeBlockComponentProps) {
   // <pre> (ProseMirror-managed content) always stays MOUNTED, only hidden via a
   // class, so the fenced-code round-trip to Markdown is untouched; the preview
   // reads the live node text and re-renders as you type.
-  const label = language === "abc" ? "Music score" : "Diagram";
+  const label = language === "abc" ? t("panes.musicScore") : t("panes.diagram");
   return (
     <NodeViewWrapper
       className={`code-block-wrapper diagram-block${editing ? " is-editing" : ""}`}
@@ -68,10 +70,10 @@ function CodeBlockComponent({ node, editor }: CodeBlockComponentProps) {
                 className={`diagram-edit-toggle ${editing ? "active" : ""}`}
                 onClick={() => setEditing((v) => !v)}
                 aria-pressed={editing}
-                title={editing ? "Finish editing" : "Edit source"}
+                title={editing ? t("panes.finishEditing") : t("panes.editSource")}
               >
                 {editing ? <Check size={13} /> : <Pencil size={13} />}
-                <span>{editing ? "Done" : "Edit"}</span>
+                <span>{editing ? t("common.done") : t("common.edit")}</span>
               </button>
             )}
             <CodeBlockCopyButton code={node.textContent} />
@@ -83,9 +85,9 @@ function CodeBlockComponent({ node, editor }: CodeBlockComponentProps) {
         <div
           className="diagram-render"
           onDoubleClick={editable && !editing ? () => setEditing(true) : undefined}
-          title={editable && !editing ? "Double-click to edit source" : undefined}
+          title={editable && !editing ? t("panes.doubleClickToEditSource") : undefined}
         >
-          {editing && <div className="diagram-preview-label" contentEditable={false}>Live preview</div>}
+          {editing && <div className="diagram-preview-label" contentEditable={false}>{t("panes.livePreview")}</div>}
           <DiagramPreview code={node.textContent} language={language!} />
         </div>
       </div>

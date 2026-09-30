@@ -1,5 +1,6 @@
 import { Grid3X3 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "../i18n";
 
 /**
  * TableGridPicker — Interactive grid for selecting table dimensions.
@@ -18,6 +19,7 @@ export interface TableGridPickerProps {
 }
 
 export function TableGridPicker({ onSelect, onClose, inline = false }: TableGridPickerProps) {
+  const t = useT();
   const [hoverRow, setHoverRow] = useState<number>(0);
   const [hoverCol, setHoverCol] = useState<number>(0);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +71,7 @@ export function TableGridPicker({ onSelect, onClose, inline = false }: TableGrid
       ref={pickerRef}
       tabIndex={0}
       role="grid"
-      aria-label="Table size — use arrow keys and Enter"
+      aria-label={t("toolbar.tableSizeUseArrowKeys")}
       onKeyDown={onKeyDown}
       onMouseLeave={handleMouseLeave}
       className={
@@ -86,7 +88,7 @@ export function TableGridPicker({ onSelect, onClose, inline = false }: TableGrid
       <div className="flex items-center gap-2 mb-3 px-1">
         <Grid3X3 className="w-3.5 h-3.5 text-primary" />
         <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-          Table Size
+          {t("toolbar.tableSize")}
         </span>
       </div>
 
@@ -135,10 +137,10 @@ export function TableGridPicker({ onSelect, onClose, inline = false }: TableGrid
             <span>{hoverCol}</span>
             <span className="text-[9px] font-normal opacity-40">×</span>
             <span>{hoverRow}</span>
-            <span className="ml-1 font-medium opacity-60">Columns/Rows</span>
+            <span className="ml-1 font-medium opacity-60">{t("toolbar.columnsRows")}</span>
           </div>
         ) : (
-          "Select dimensions"
+          t("toolbar.selectDimensions")
         )}
       </div>
     </div>
