@@ -29,7 +29,10 @@ const WORDS = /\p{L}{2,}/u;
 const CODE_TAGS = new Set(["code", "kbd", "samp", "pre", "style", "script"]);
 export const SCANNED_ATTRIBUTES = new Set(["aria-label", "aria-description", "title", "placeholder", "alt"]);
 const TOAST_METHODS = /(^|\.)(show|success|error|warning|info|loading|message)$/;
-const DIALOG_CALLS = /(^|\.)(confirm|prompt|equation)$/;
+// The dialog API and the wrappers around it (and the browser's own prompt).
+const DIALOG_CALLS = /(^|\.)(confirm|prompt|promptText|insertWithPrompt|equation|equationPrompt)$/;
+// Which argument is the title: the first, except where a command id comes first.
+const titleArg = (callee) => (/(^|\.)insertWithPrompt$/.test(callee) ? 1 : 0);
 const DIALOG_PROPS = new Set(["title", "description", "confirmLabel", "cancelLabel", "placeholder", "message"]);
 
 /** Collapse JSX text the way the JSX transform does, for readable reports. */
@@ -106,10 +109,10 @@ export function scanSource(source, file = "x.tsx") {
     } else if (ts.isCallExpression(node)) {
       const callee = node.expression.getText(sf);
       const isToast = /toast/i.test(callee) && (TOAST_METHODS.test(callee) || /^toast(Sonner)?$/.test(callee));
-      const isDialog = DIALOG_CALLS.test(callee) && !/^window\./.test(callee);
+      const isDialog = DIALOG_CALLS.test(callee);
       if (isToast || isDialog) {
         node.arguments.forEach((arg, i) => {
-          if (i === 0) report(arg, isToast ? "toast" : "dialog");
+          if (i === (isToast ? 0 : titleArg(callee))) report(arg, isToast ? "toast" : "dialog");
           if (ts.isObjectLiteralExpression(arg)) {
             for (const p of arg.properties) {
               if (!ts.isPropertyAssignment(p)) continue;
