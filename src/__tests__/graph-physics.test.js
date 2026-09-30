@@ -3,16 +3,18 @@ import {
   ALPHA_DECAY,
   BARNES_HUT_MIN,
   BARNES_HUT_THETA,
+  FOLDER_LAYOUT_MAX,
   PAD,
   buildQuadTree,
   pairJitter,
   repulseBarnesHut,
+  seedPositions,
   separateLabelsGrid,
   shouldFreeze,
   stepLayout,
   worldFor,
 } from "../store/graph-physics";
-import { labelWidth, truncateLabel } from "../store/graph-metrics";
+import { folderBounds, labelWidth, truncateLabel } from "../store/graph-metrics";
 import { legacyStep, LEGACY_ALPHA_DECAY } from "./graph-legacy";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -55,8 +57,9 @@ function workspace(n, seed = 1) {
   return { nodes, edges, folders: folders.filter((f) => f.docIds.length) };
 }
 
-/** The component's own seeding: a ring in the node-count world. */
-function seed(nodes) {
+/** The seeding the map used before folders got their own clusters: one ring
+ *  in the fixed node-count world. The reference loop always starts here. */
+function ringSeed(nodes) {
   const n = nodes.length || 1;
   const world = worldFor(n);
   const { w, h } = world;
@@ -79,7 +82,8 @@ function meta(nodes) {
 
 /** Run the NEW physics to rest (or `maxSteps`); returns positions, steps and every maxV. */
 function settleNew(ws, { maxSteps = Infinity, exact, pinned } = {}) {
-  const { pos, world } = seed(ws.nodes);
+  const world = worldFor(ws.nodes.length || 1, ws.folders.length > 0);
+  const pos = seedPositions(ws.nodes.map((d) => d.id), ws.folders, world);
   const m = meta(ws.nodes);
   let alpha = 1, steps = 0;
   const speeds = [];
@@ -102,7 +106,7 @@ function settleNew(ws, { maxSteps = Infinity, exact, pinned } = {}) {
  *  same spot (its Math.random() made it unrepeatable); `coincident` counts how
  *  often that case came up. */
 function settleLegacy(ws, { maxSteps = Infinity, pinned } = {}) {
-  const { pos, world } = seed(ws.nodes);
+  const { pos, world } = ringSeed(ws.nodes);
   const coincident = { n: 0 };
   const sim = { pos, edges: ws.edges, folders: ws.folders, world, alpha: 1, meta: meta(ws.nodes),
     dragId: pinned ?? null, jitter: pairJitter, coincident };
@@ -121,16 +125,18 @@ const flat = (pos) => [...pos.values()].flatMap((p) => [p.id, p.x, p.y, p.vx, p.
 
 // ── The small-map contract ────────────────────────────────────────────────────
 
-describe("a small map lays out exactly as it always has", () => {
-  // CLAUDE.md: small graphs (3–150 notes) must look and behave exactly as today.
+/** The same workspace with no folders. */
+const folderless = (ws) => ({ ...ws, folders: [] });
+
+describe("a folderless map lays out exactly as it always has", () => {
   // The physics moved out of the component and its O(n²) bookkeeping was
   // rewritten; this holds the result to the old loop's, bit for bit, across a
   // whole settle — every coordinate and velocity, every step's speed, and the
-  // step on which it freezes.
+  // step on which it freezes. Maps WITH folders deliberately changed (they
+  // stacked notes on top of each other): see "a map with folders".
   for (const n of [3, 12, 25, 40, 150]) {
     it(`${n} notes: every step matches the pre-change loop exactly`, () => {
-      const ws = workspace(n);
-      expect(ws.folders.length).toBeGreaterThan(0);
+      const ws = folderless(workspace(n));
       const now = settleNew(ws);
       const before = settleLegacy(ws);
       expect(now.steps).toBe(before.steps);
@@ -140,7 +146,7 @@ describe("a small map lays out exactly as it always has", () => {
   }
 
   it("holds a dragged note exactly where the old loop held it", () => {
-    const ws = workspace(40, 3);
+    const ws = folderless(workspace(40, 3));
     const now = settleNew(ws, { maxSteps: 30, pinned: "d7" });
     const before = settleLegacy(ws, { maxSteps: 30, pinned: "d7" });
     expect(flat(now.pos)).toEqual(flat(before.pos));
@@ -164,6 +170,133 @@ describe("a small map lays out exactly as it always has", () => {
     expect(flat(settleNew(at, { maxSteps: 4 }).pos)).toEqual(flat(settleNew(at, { maxSteps: 4, exact: true }).pos));
     const over = workspace(BARNES_HUT_MIN + 1, 5);
     expect(flat(settleNew(over, { maxSteps: 4 }).pos)).not.toEqual(flat(settleNew(over, { maxSteps: 4, exact: true }).pos));
+  });
+});
+
+// ── Folders ───────────────────────────────────────────────────────────────────
+
+/** Pairs of notes within one unit of each other: drawn as one dot. */
+function stackedPairs(pos) {
+  const pts = [...pos.values()];
+  let n = 0;
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+    if (Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) < 1) n++;
+  }
+  return n;
+}
+/** Overlapping container pairs, and notes whose dot is inside a container they
+ *  do not belong to — the containers the renderer draws, at 1×. */
+function containerFaults(ws, pos) {
+  const m = meta(ws.nodes);
+  const rects = folderBounds({ folders: ws.folders, positions: pos, radius: (id) => m.radius.get(id) ?? 7, label: (id) => m.label.get(id) ?? "", k: 1 });
+  let boxBox = 0, strangers = 0;
+  for (let i = 0; i < rects.length; i++) {
+    const A = rects[i];
+    for (let j = i + 1; j < rects.length; j++) {
+      const B = rects[j];
+      if (A.x0 < B.x1 && B.x0 < A.x1 && A.y0 < B.y1 && B.y0 < A.y1) boxBox++;
+    }
+    const own = new Set(A.docIds);
+    for (const p of pos.values()) if (!own.has(p.id) && p.x > A.x0 && p.x < A.x1 && p.y > A.y0 && p.y < A.y1) strangers++;
+  }
+  return { boxBox, strangers };
+}
+
+describe("a map with folders", () => {
+  // Seeded on one ring, a folder's members started scattered around it, every
+  // container started as a box spanning most of the world, and the container
+  // constraint threw folders into the walls, where their notes piled up on one
+  // coordinate — a 150-note map lost about a quarter of its notes under others.
+  // Folder clusters, a world sized to the folders, a speed limit and moving a
+  // folder as a unit fixed it. The bounds are what the fix measures on these
+  // workspaces (one folder per 8 notes — denser than a real library).
+  for (const n of [12, 40, 150]) {
+    for (const seedValue of [1, 2, 3]) {
+      it(`${n} notes (workspace ${seedValue}): no note under another, none in a stranger's folder`, () => {
+        const ws = workspace(n, seedValue);
+        expect(ws.folders.length).toBeGreaterThan(0);
+        const { pos } = settleNew(ws);
+        expect(stackedPairs(pos)).toBe(0);
+        const { boxBox, strangers } = containerFaults(ws, pos);
+        expect(strangers).toBeLessThanOrEqual(1);
+        expect(boxBox).toBeLessThanOrEqual(4);
+      });
+    }
+  }
+
+  it("the old seeding really did stack notes (the regression this guards)", () => {
+    const ws = workspace(150, 1);
+    const before = settleLegacy(ws);
+    expect(stackedPairs(before.pos)).toBeGreaterThan(0);
+    expect(stackedPairs(settleNew(ws).pos)).toBe(0);
+  });
+
+  it("above FOLDER_LAYOUT_MAX a map with folders keeps the previous layout exactly", () => {
+    // Measured worse than the old layout at 2,000 notes, so the folder-aware
+    // layout stops at FOLDER_LAYOUT_MAX. The first steps of a larger map (exact
+    // forces, the same path the reference loop takes) match it bit for bit.
+    const n = FOLDER_LAYOUT_MAX + 100;
+    const ws = workspace(n, 4);
+    expect(ws.folders.length).toBeGreaterThan(0);
+    expect(worldFor(n, true)).toEqual(worldFor(n));
+    const now = settleNew(ws, { maxSteps: 4, exact: true });
+    const before = settleLegacy(ws, { maxSteps: 4 });
+    expect(flat(now.pos)).toEqual(flat(before.pos));
+  });
+
+  it("settles to the same layout every time", () => {
+    const ws = workspace(150, 2);
+    expect(flat(settleNew(ws).pos)).toEqual(flat(settleNew(ws).pos));
+  });
+});
+
+describe("seedPositions", () => {
+  it("without folders is exactly the ring the map always started from", () => {
+    const ws = workspace(40, 1);
+    const world = worldFor(40);
+    const now = seedPositions(ws.nodes.map((d) => d.id), [], world);
+    expect(flat(now)).toEqual(flat(ringSeed(ws.nodes).pos));
+  });
+
+  it("with folders starts each folder as its own cluster, inside the world, in id order", () => {
+    const ws = workspace(150, 3);
+    const world = worldFor(150, true);
+    const ids = ws.nodes.map((d) => d.id);
+    const pos = seedPositions(ids, ws.folders, world);
+    expect([...pos.keys()]).toEqual(ids);
+    for (const p of pos.values()) {
+      expect(p.x).toBeGreaterThanOrEqual(PAD);
+      expect(p.x).toBeLessThanOrEqual(world.w - PAD);
+      expect(p.y).toBeGreaterThanOrEqual(PAD);
+      expect(p.y).toBeLessThanOrEqual(world.h - PAD);
+    }
+    // No two folders' starting clusters overlap (the ring made every one span
+    // most of the world).
+    const boxes = ws.folders.map((f) => {
+      const ps = f.docIds.map((id) => pos.get(id));
+      return { x0: Math.min(...ps.map((p) => p.x)), x1: Math.max(...ps.map((p) => p.x)), y0: Math.min(...ps.map((p) => p.y)), y1: Math.max(...ps.map((p) => p.y)) };
+    });
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const A = boxes[i], B = boxes[j];
+      expect(A.x0 < B.x1 && B.x0 < A.x1 && A.y0 < B.y1 && B.y0 < A.y1).toBe(false);
+    }
+  });
+});
+
+describe("worldFor", () => {
+  it("is unchanged for a folderless map, at every size", () => {
+    for (const n of [1, 5, 23, 150, 2000]) {
+      const w = Math.max(720, Math.min(2600, 520 + n * 90));
+      expect(worldFor(n)).toEqual({ w, h: Math.round(w * 0.72) });
+    }
+  });
+
+  it("grows with the library when it has folders — up to FOLDER_LAYOUT_MAX", () => {
+    expect(worldFor(12, true)).toEqual(worldFor(12));
+    expect(worldFor(400, true).w).toBeGreaterThan(worldFor(400).w);
+    expect(worldFor(400, true).w).toBeGreaterThan(worldFor(200, true).w);
+    // Larger folder maps keep the previous layout, world included.
+    expect(worldFor(2000, true)).toEqual(worldFor(2000));
   });
 });
 
@@ -288,7 +421,7 @@ describe("pairJitter", () => {
     // Math.random() made two opens of the same library differ here.
     const ws = workspace(12, 8);
     const run = () => {
-      const { pos, world } = seed(ws.nodes);
+      const { pos, world } = ringSeed(ws.nodes);
       pos.get("d1").x = pos.get("d0").x; pos.get("d1").y = pos.get("d0").y;
       const m = meta(ws.nodes);
       stepLayout({ positions: pos, edges: ws.edges, folders: ws.folders, world, alpha: 1,
@@ -384,7 +517,7 @@ describe("a large map", () => {
   it("keeps every note inside the world", () => {
     const ws = workspace(700, 4);
     const { pos } = settleNew(ws);
-    const { w, h } = worldFor(700);
+    const { w, h } = worldFor(700, ws.folders.length > 0);
     for (const p of pos.values()) {
       expect(p.x).toBeGreaterThanOrEqual(PAD);
       expect(p.x).toBeLessThanOrEqual(w - PAD);

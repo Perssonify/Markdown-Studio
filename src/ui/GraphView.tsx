@@ -27,7 +27,7 @@ import {
   truncateLabel,
   type LabelBox,
 } from "../store/graph-metrics";
-import { ALPHA_DECAY, MAX_FRAMES, PAD, shouldFreeze, stepLayout, worldFor, type SimPoint } from "../store/graph-physics";
+import { ALPHA_DECAY, MAX_FRAMES, PAD, seedPositions, shouldFreeze, stepLayout, worldFor, type SimPoint } from "../store/graph-physics";
 import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry } from "../store/graph-draw";
 import { useT } from "../i18n";
 
@@ -102,7 +102,10 @@ type Pt = SimPoint;
 // or steps (`planFrame` — never a step and a paint together). A small map is
 // untouched: one element per note and per link, every step painted.
 
-const CAM_MIN = 0.3;
+/** Zoom floor. A folder map's world grows with its library (worldFor), so the
+ *  floor must let Fit show all of it: 0.3 framed a 400-note folder map at a
+ *  quarter of its size. */
+const CAM_MIN = 0.06;
 const CAM_MAX = 3;
 // Auto-fit ceiling. 1.5 left a small workspace as a cluster of specks in a
 // mostly-empty canvas; labels are counter-scaled, so zooming in further costs
@@ -189,7 +192,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const dimsRef = useRef(dims);
   dimsRef.current = dims;
   /** Layout space — physics only. */
-  const worldRef = useRef(worldFor(graph.nodes.length));
+  const worldRef = useRef(worldFor(graph.nodes.length, folders.length > 0));
   /** Force temperature; decays to nothing so the loop always converges. */
   const alphaRef = useRef(1);
   /** Drawn size of each node and its label, for the forces that reserve room for
@@ -524,15 +527,11 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     const cur = posRef.current;
     const next = new Map<string, Pt>();
     const n = graph.nodes.length || 1;
-    worldRef.current = worldFor(n);
-    const { w, h } = worldRef.current;
-    const r = Math.min(Math.min(w, h) / 2 - PAD - 10, 60 + n * 22);
-    graph.nodes.forEach((node, i) => {
-      const existing = cur.get(node.id);
-      if (existing) { next.set(node.id, existing); return; }
-      const angle = (2 * Math.PI * i) / n;
-      next.set(node.id, { id: node.id, x: w / 2 + r * Math.cos(angle), y: h / 2 + r * Math.sin(angle), vx: 0, vy: 0 });
-    });
+    worldRef.current = worldFor(n, foldersRef.current.length > 0);
+    // Folderless: the ring the map has always started from. With folders, each
+    // folder starts as its own cluster (seedPositions explains why).
+    const seeded = seedPositions(graph.nodes.map((node) => node.id), foldersRef.current, worldRef.current);
+    for (const node of graph.nodes) next.set(node.id, cur.get(node.id) ?? seeded.get(node.id)!);
     posRef.current = next;
     layoutVersionRef.current += 1;
     // A large map settling under reduced motion draws NOTHING until it rests
