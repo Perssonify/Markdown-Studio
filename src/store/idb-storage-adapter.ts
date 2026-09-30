@@ -63,6 +63,15 @@ export interface IDBStorageConfig {
   /** Keep the crash-recovery stash (localStorage, written on unload). Default true. */
   crashRecovery?: boolean;
   /**
+   * Store images as binary assets in a browser database (`perssonify-assets`,
+   * namespaced like version history) instead of base64 inside each document.
+   * Default true with the built-in IndexedDB storage; with a host's OWN
+   * `storageAdapter` it defaults to FALSE — that host's documents live
+   * somewhere this browser-local database does not follow them — and is
+   * turned on only by `assets: true`. Off, images stay inline as `data:` URLs.
+   */
+  assets?: boolean;
+  /**
    * An optional HARD cap on document bytes, for a host that wants one. Unset
    * (the default), the browser's own quota is the limit. There used to be a
    * self-imposed 50 MB default measured as characters × 2, which stopped a
