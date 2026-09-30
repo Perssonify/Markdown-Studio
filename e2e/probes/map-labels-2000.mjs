@@ -1,7 +1,7 @@
 // Probe (not a suite): how many notes the relationship map names at 2,000
 // notes in 60 folders, at the overview and zoomed in, and whether any name is
 // drawn over anything (A088 follow-up). Measurement only.
-//   DIR=<dist-app> node e2e/probes/map-labels-2000.mjs [label]
+//   DIR=<dist-app> [N=2000] [SEED=7] node e2e/probes/map-labels-2000.mjs [label]
 import { serve, open, boot, closeRig, APP_DIR } from "../lib.mjs";
 import { mapLibrary, seedFresh } from "../map-library.mjs";
 import { measureMap } from "../map-measure.mjs";
@@ -12,7 +12,7 @@ const N = Number(process.env.N || 2000);
 const srv = await serve(DIR);
 const rig = await open(srv.port, { label: `map-labels ${LABEL}` });
 const pg = rig.page;
-const { docs, folderTree } = mapLibrary(N);
+const { docs, folderTree } = mapLibrary(N, { seed: Number(process.env.SEED || 7) });
 await seedFresh(pg, srv.port, docs, folderTree);
 await boot(pg, srv.port, { mode: "Split", settle: 14000 });
 await pg.keyboard.press("Control+Shift+G");
@@ -65,6 +65,14 @@ for (let i = 1; i <= 5; i++) {
 await pg.locator('button[aria-label="Fit map to view"]').first().click();
 await pg.waitForTimeout(1200);
 await row("fit");
+// …and in from the whole map, about the canvas centre: every zoom between the
+// overview and the notes' own scale. (Before the two-level folder layout the
+// middle of a folder map was mostly empty space; it is not any more.)
+for (let i = 1; i <= 8; i++) {
+  await pg.locator('button[aria-label="Zoom in"]').first().click();
+  await pg.waitForTimeout(900);
+  await row(`fit+in x${i}`);
+}
 if (rig.errors.length) console.log("errors:", rig.errors.slice(0, 3));
 await closeRig(rig);
 srv.close();
