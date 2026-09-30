@@ -23,7 +23,7 @@ describe("headingLinkHtml", () => {
     expect(para.content).toHaveLength(1);
     const [node] = para.content;
     expect(node.type).toBe("text");
-    expect(node.text).toBe(heading);
+    expect(node.text).toBe("#" + heading);
     const link = node.marks.find((m) => m.type === "link");
     expect(link).toBeTruthy();
     // The anchor attribute carries the exact heading text too.
