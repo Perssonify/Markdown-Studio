@@ -611,7 +611,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   breakpoint (480px) is defined in `styles.css` `@theme` (`--breakpoint-xs: 30rem`).
   Every unsaved state has its own label: "Save failed — retrying" (`error`), "Empty
   editor — not saving" (`blocked`), "Changed in another tab — not saving"
-  (`conflict`), "Storage full — not saving" (`full`) and "Newer version — read-only"
+  (`conflict`), "Deleted in another tab — not saving" (`conflict` too, told apart by
+  the tab-sync notice), "Storage full — not saving" (`full`) and "Newer version — read-only"
   (the schema lock). **The save indicator is not a live region**: it walks editing →
   saving → saved on every autosave (nine announcements in twelve seconds of typing).
   One visually hidden region speaks only when saving starts failing, fails in a new
@@ -1449,8 +1450,36 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   every few seconds — a toast/status loop); a later real edit (`setDirty` →
   `"editing"`) resumes saving. Surfaced in the StatusBar ("Changed in another tab
   — not saving") and counted as unsaved by the `beforeunload` guard (warns, but
-  never re-attempts the conflicting write). This is the SAFE slice of the
-  deferred multi-tab work — NOT a `BroadcastChannel`/FSM rewrite (still backlog).
+  never re-attempts the conflicting write). Live sync between tabs sits on top of
+  it (next bullet); the save-status machine itself was not rewritten and the
+  terminal statuses are unchanged.
+- **Live sync between tabs** (`store/tab-sync.ts`, `editor/useTabSync.ts`,
+  `ui/TabSyncNotice.tsx`). Every COMMITTED write announces `{type, id, updated}` —
+  never content — from `documentStore`, right after the adapter resolves and never
+  for a refused write: **any new commit path must add its own `announce`**. The
+  channel is named after the database or namespace (`pf-tab-sync:idb:<dbName>`,
+  `:host[:<namespace>]`, …), so the app, its embed and two host namespaces never
+  cross-talk; without `BroadcastChannel` it falls back to a `storage` event through
+  `safeStorage`. A message is a HINT: the receiver re-reads its own storage and acts
+  only on a revision ANOTHER tab announced (`isForeignRevision` — this tab's own
+  settling write also looks newer). Announced revisions are noted on arrival and
+  `isOvertaken` gives them no 2 s tolerance, closing the gap where a write inside
+  the tolerance was overwritten silently. On receipt: the library listing (and the
+  folder tree, when it changed) refreshes — Cards, the map and the link index follow;
+  a changed document open here with NO unsaved work reloads ONLY through the
+  hydration ritual, after `markHydrated(null)` (so the heading-rename baseline
+  restarts), deferring while unhydrated, saving, composing or a projection is
+  pending, and re-deciding after its read; WITH unsaved work (editing, error,
+  blocked, full, conflict, or a parked draft) it `markConflict`s now and offers Keep
+  mine / Use theirs / Save mine as a copy — every choice keeps the side set aside in
+  Version history (`tab-conflict`), and nothing is written on receipt. A document
+  deleted elsewhere while open is refused by `saveActiveDoc` while its record is
+  still missing (`isDeletedElsewhere`), its unsaved text goes to Version history, and
+  the notice offers Keep as a new document or Close. The folder tree is never
+  written back from a remote apply (`withRemoteApply`) nor rewritten when unchanged
+  (it is one last-writer-wins preference). Known gaps: read-check-write is still not
+  atomic across tabs; a tab restored from the back/forward cache missed messages sent
+  while frozen (its save's own read still protects).
   **The non-editor writes respect it too** (A028): `renameDoc` and `patchDocById`
   used to merge this tab's live content and save with no drift check. A content
   patch against a stored revision newer than this tab's base (the open document's,

@@ -19,6 +19,11 @@ person — is listed in [`docs/audit-2026-09.md`](docs/audit-2026-09.md). The
 finding IDs (A001–A114) are cited below.
 
 ### Changed — what you will notice
+- **Tabs on the same library stay in step.** A save in one tab appears live in the
+  others — the library, Cards, the map, and an open document with no unsaved
+  changes. A tab with unsaved changes is told at once and can keep its version,
+  take the other tab's, or save its own as a copy; the version set aside is kept
+  in Version history. A document deleted in another tab is no longer saved back.
 - **Exported markdown keeps its line breaks in other apps.** A line break inside a
   paragraph is written as a backslash at the end of the line in exported markdown
   (File ▸ Export, the per-document export and ZIP exports), which every markdown
