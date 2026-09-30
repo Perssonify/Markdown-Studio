@@ -3,7 +3,7 @@
 // Rich pane: sinkListItem/liftListItem are LIST-ONLY ProseMirror commands.
 // Markdown pane: CodeMirror's indentMore/indentLess act on any line.
 // This reports, per context, whether the document changed at all.
-import { serve, open, boot, until, APP_DIR } from "../lib.mjs";
+import { serve, open, boot, APP_DIR } from "../lib.mjs";
 
 const srv = await serve(APP_DIR);
 const { browser, page: pg, errors } = await open(srv.port);

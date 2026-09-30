@@ -14,6 +14,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/__tests__/setup.js'],
     include: ['src/__tests__/**/*.test.{js,jsx}'],
+    // Vitest 5 clears every mock's recorded calls before each test by default.
+    // This suite was written against the old behaviour, and a behave-* journey
+    // runs one mount across many cases with spies created once: clearing would
+    // quietly narrow what a later `not.toHaveBeenCalled()` covers. Keep calls
+    // until a test clears them itself.
+    clearMocks: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],

@@ -59,7 +59,7 @@ runCase("csp", async (rep, onClose) => {
   rep.check("the app boots under the enforced policy", (await pg.locator(".ProseMirror").count()) > 0);
 
   await pasteMarkdown(pg, PROBE_MD);
-  rep.check("KaTeX, Mermaid, abcjs and a data: image all render",
+  rep.check("KaTeX, Mermaid (dagre and ELK layouts), abcjs and a data: image all render",
     await until(async () => allRendered(await renderers(pg)), { timeout: 30000 }),
     JSON.stringify(await renderers(pg)));
 

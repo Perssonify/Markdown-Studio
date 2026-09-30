@@ -118,14 +118,14 @@ export const FieldBlock = Node.create({
             return [];
           }
         },
-        renderHTML: (attrs: Record<string, any>) => ({
+        renderHTML: (attrs: Record<string, unknown>) => ({
           "data-fields": JSON.stringify(attrs["fields"] || []),
         }),
       },
       schemaId: {
         default: null,
         parseHTML: (el: HTMLElement) => el.getAttribute("data-schema-id") || null,
-        renderHTML: (attrs: Record<string, any>) => 
+        renderHTML: (attrs: Record<string, unknown>) =>
           attrs["schemaId"] ? { "data-schema-id": attrs["schemaId"] } : {},
       },
     };

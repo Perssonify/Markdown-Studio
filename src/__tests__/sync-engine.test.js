@@ -261,9 +261,9 @@ describe('useSyncEngine', () => {
         },
       };
       const engine = {
-        mdToHtml: vi.fn((md) => '<h1>Hello</h1>'),
-        htmlToCleanMd: vi.fn((html) => '# Hello'),
-        htmlToMd: vi.fn((html) => '# Hello'),
+        mdToHtml: vi.fn(() => '<h1>Hello</h1>'),
+        htmlToCleanMd: vi.fn(() => '# Hello'),
+        htmlToMd: vi.fn(() => '# Hello'),
       };
 
       const { result } = renderHook(() => useSyncEngine({

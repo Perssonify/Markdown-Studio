@@ -36,7 +36,11 @@ beforeAll(async () => {
   ]);
   await mountEditor({ storageAdapter: adapter });
   await until(() => store().hydratedDocId, "a document to open");
-  if (store().activeDocId !== "guide") await click(document.querySelector('[role="tree"] [data-key="d:guide"] button'));
+  // Boot opens the newest document (Guide, by the fixture dates). Should it
+  // ever open another, open Guide the way a user would — once its row exists.
+  if (store().activeDocId !== "guide") {
+    await click(await until(() => document.querySelector('[role="tree"] [data-key="d:guide"] button'), "Guide in the library"));
+  }
   await untilHydrated("guide");
 }, 30000);
 

@@ -1,5 +1,5 @@
 import { mergeAttributes, Node } from "@tiptap/core";
-import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import { type NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { useIsDarkTheme } from "../theme/useThemeMode";
 import { useAssetSrc } from "../ui/asset-dom";
 import { missingImageAlt, missingImageTitle } from "./AssetImages";
@@ -30,7 +30,7 @@ function pickSource(el: HTMLElement, wanted: "dark" | "light"): string | null {
   return null;
 }
 
-function ThemeImageView(props: any) {
+function ThemeImageView(props: NodeViewProps) {
   const isDark = useIsDarkTheme();
   const { lightSrc, darkSrc, alt, title } = props.node.attrs as {
     lightSrc: string;

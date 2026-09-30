@@ -14,7 +14,7 @@
 - [ ] Vercel ▸ Settings ▸ **Deployment Checks**: add `verify` and `e2e`, so a deploy is promoted only after both pass. If the plan lacks it, turn off automatic production deploys and promote green deployments by hand (A005).
 - [ ] Vercel: confirm the dashboard does not override `vercel.json` — the install command must be `bun install --frozen-lockfile` and the build command `bun run build:app && node scripts/strip-sourcemaps.mjs`.
 - [ ] Vercel: check a build log shows **Bun 1.4.0** (the `packageManager` version); set it in the project settings if not (A014).
-- [ ] Vercel: set the project's Node.js version to **22.x (22.13 or later) or 24.x** — the import relay function runs on it.
+- [ ] Vercel: set the project's Node.js version to **24.x** (what CI runs, `.node-version`; 22.x also lies inside `engines.node` as long as Vercel's 22 is 22.22.2 or later) — the import relay function runs on it, and its undici 8 needs Node 22.19 or later.
 
 ## 2. The domain (A001, A002)
 

@@ -257,7 +257,7 @@ async function relayPermitted(target: URL, confirmRelay?: ConfirmRelay): Promise
   const stored = getRelayConsent();
   if (stored) return stored === "allow";
   if (!confirmRelay) return false;
-  let allowed = false;
+  let allowed: boolean;
   try {
     allowed = await confirmRelay(target);
   } catch {

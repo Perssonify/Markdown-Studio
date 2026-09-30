@@ -58,7 +58,7 @@ runCase("journeys", async (rep, onClose) => {
   // never blurs, so the composition stays live), and the dictated text was gone
   // from both panes AND from disk when you came back.
   {
-    const { page: pg, cdp, errors } = await session(onClose);
+    const { page: pg, cdp } = await session(onClose);
     await caretAtEnd(pg, "md");
     await dictate(cdp, pg, MARK);
     await pg.keyboard.press("Control+n");          // new document — no blur
@@ -201,7 +201,7 @@ runCase("journeys", async (rep, onClose) => {
   // handleHtmlPaste arms an uncancelled 100ms forceSyncHtmlToMd; a document
   // switch inside that window used to be able to land it on the wrong document.
   {
-    const { page: pg, errors } = await session(onClose);
+    const { page: pg } = await session(onClose);
     await caretAtEnd(pg, "rich");
     await pg.evaluate(() => {
       const dt = new DataTransfer();

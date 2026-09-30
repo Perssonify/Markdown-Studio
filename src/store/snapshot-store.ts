@@ -72,10 +72,11 @@ const SHRINK_TRIGGER_RATIO = 0.5;   // new ≤ 50% of old chars ⇒ always snaps
 
 // ─── Blank detection (mirrors documentStore.isBlankCanonical) ─────────────────
 
-function isBlank(c: any): boolean {
+function isBlank(canonical: unknown): boolean {
+  const c = canonical as { content?: unknown } | null | undefined;
   if (!c || !Array.isArray(c.content) || c.content.length === 0) return true;
   if (c.content.length === 1) {
-    const n = c.content[0];
+    const n = c.content[0] as { type?: unknown; content?: unknown[] } | null | undefined;
     return !!n && n.type === "paragraph" && (!n.content || n.content.length === 0);
   }
   return false;

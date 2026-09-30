@@ -129,8 +129,8 @@ async function unzipEncrypted(
       if (total > limits.maxTotalBytes) throw new Error("Archive too large after decompression");
       map[e.filename] = await e.getData!(new Uint8ArrayWriter());
     }
-  } catch (err: any) {
-    const msg = String(err?.message || err);
+  } catch (err) {
+    const msg = String((err as { message?: unknown } | null)?.message || err);
     if (/password|invalid pass|ERR_INVALID_PASSWORD/i.test(msg)) throw new ArchiveWrongPasswordError();
     throw err;
   } finally {

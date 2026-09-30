@@ -7,7 +7,7 @@
 | Tool | Version | Why |
 |------|---------|-----|
 | [Bun](https://bun.sh) | 1.4.0 | Canonical package manager + runner, pinned by `packageManager` in [`package.json`](../package.json) and `BUN_VERSION` in CI. [`bun.lock`](../bun.lock) is the committed lockfile; CI and [`vercel.json`](../vercel.json) install with `bun install --frozen-lockfile`, so a dependency change that does not update `bun.lock` fails the build. |
-| Node.js | `^20.19.0` or `>=22.12.0` | The `engines` range in `package.json` — what Vite 8 and Vitest 4 need; the build scripts (`scripts/*.mjs`, `e2e/`) run on it. |
+| Node.js | `^22.22.2`, `^24.15.0` or `>=26` — 24 is what CI runs ([`.node-version`](../.node-version)) | The `engines` range in `package.json`: the Nodes EVERY direct dependency accepts (the narrowest are jsdom 30's `^22.22.2 \|\| ^24.15.0 \|\| >=26` and Vitest 5's, which skips 23 and 25; `ops-node-range.test.js` recomputes it from `node_modules`). The build scripts (`scripts/*.mjs`, `build/*.mjs`, `e2e/`) and the import relay run on it. |
 | A browser at or above the floor | Safari/iOS 16.4, Chrome/Edge 111, Firefox 128 (A097) | The app relies on IndexedDB + DOMParser + (optionally) the RegExp `d`/`hasIndices` flag for find-and-replace capture coloring. The e2e campaign drives Chromium from `playwright-core` (`bunx playwright-core install chromium`), and the cross-engine suites Firefox and WebKit too (`install firefox webkit`, then `E2E_BROWSER=firefox` or `webkit`). |
 
 > `npm install` also works (peer/dev deps are standard), but only Bun reads `bun.lock`, which is what CI and the deploy install from.

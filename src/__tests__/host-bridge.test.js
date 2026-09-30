@@ -67,6 +67,42 @@ describe("host bridge actions", () => {
     expect(handle.setChrome).toHaveBeenCalledWith("minimal");
   });
 
+  it("refuses a view mode or chrome level the handle's type does not accept, with an error reply", async () => {
+    // The handle's `setMode`/`setChrome` take literal unions (A113); a message
+    // is untyped, so the bridge is where an unknown value is turned away. It
+    // used to be stored as the view mode, which no pane renders.
+    const handle = makeHandle();
+    bridge = createHostBridge({ current: handle }, { allowedOrigins: [ORIGIN] });
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    const post = vi.spyOn(frame.contentWindow, "postMessage").mockImplementation(() => {});
+    const send = (action, payload, requestId) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { type: "perssonify", action, payload, requestId },
+          origin: ORIGIN,
+          source: frame.contentWindow,
+        }),
+      );
+      return new Promise((r) => setTimeout(r, 0));
+    };
+    const reply = (requestId) => post.mock.calls.map(([msg]) => msg.payload).find((p) => p?.requestId === requestId);
+    try {
+      await send("setMode", { mode: "rich" }, "m1");
+      await send("setChrome", { chrome: "compact" }, "c1");
+      expect(handle.setMode).not.toHaveBeenCalled();
+      expect(handle.setChrome).not.toHaveBeenCalled();
+      expect(reply("m1")).toMatchObject({ error: "Unknown view mode: rich" });
+      expect(reply("c1")).toMatchObject({ error: "Unknown chrome level: compact" });
+
+      await send("setMode", { mode: "split" }, "m2");
+      expect(handle.setMode).toHaveBeenCalledWith("split");
+      expect(reply("m2")).toMatchObject({ result: { ok: true } });
+    } finally {
+      frame.remove();
+    }
+  });
+
   it("routes updateDocument with id + patch fields to the handle", async () => {
     const handle = makeHandle();
     bridge = createHostBridge({ current: handle }, { allowedOrigins: [ORIGIN] });
