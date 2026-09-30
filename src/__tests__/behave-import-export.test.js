@@ -72,13 +72,20 @@ describe("reading files", () => {
     expect(untitled.doc.title).toBe("meeting-2026");
     const blank = await importFile(new File([""], "empty-note.md"));
     expect(blank.doc.title).toBe("empty-note");
-    // Markdown too: a document is named from its heading only once its content
-    // is captured (the editor's import path does that); until then — and so for
-    // this store-level helper — the file name stands in.
+    // Markdown with a heading is named by it — the title the app derives once
+    // the content is converted. This used to be "file" until the host completed
+    // the import.
     const md = await importFile(new File(["# Real title\n\nbody"], "file.md"), { mdToHtml: (m) => `<h1>${m.split("\n")[0].slice(2)}</h1>` });
-    expect(md.doc.title).toBe("file");
+    expect(md.doc.title).toBe("Real title");
     expect(md.html).toContain("<h1>Real title</h1>");
     expect(md.needsTiptap).toBe(true); // the caller captures it next
+    // The FIRST top-level heading, whatever its level; a heading nested in a
+    // quote is not the document's title.
+    const html = await importFile(new File(["<blockquote><h1>Quoted</h1></blockquote><p>intro</p><h2>Section</h2>"], "page.html"));
+    expect(html.doc.title).toBe("Section");
+    // Without a converter the markdown is not parsed: the file name stands in.
+    const raw = await importFile(new File(["# Heading\n\nbody"], "raw-notes.md"));
+    expect(raw.doc.title).toBe("raw-notes");
   });
 
   it("importFiles skips pictures and oversized files and survives an unreadable one", async () => {
