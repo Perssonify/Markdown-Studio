@@ -5,6 +5,7 @@ import {
   type ConsoleContext,
   type ConsoleResult,
 } from "../store/console-commands";
+import { useT } from "../i18n";
 
 interface ConsoleEntry {
   input: string;
@@ -23,6 +24,7 @@ interface ConsolePanelProps {
  * scrollback; `help` lists the commands.
  */
 export function ConsolePanel({ ctx }: ConsolePanelProps) {
+  const t = useT();
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<ConsoleEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -46,9 +48,9 @@ export function ConsolePanel({ ctx }: ConsolePanelProps) {
         {history.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <TerminalSquare className="size-7 opacity-20" />
-            <p className="text-sm font-medium">Diagnostics console</p>
+            <p className="text-sm font-medium">{t("status.consoleTitle")}</p>
             <p className="text-xs opacity-70">
-              Read-only. Type <span className="rounded bg-muted px-1">help</span> and press Enter.
+              {t.rich("status.consoleEmptyHint", { command: <span className="rounded bg-muted px-1">help</span> })}
             </p>
           </div>
         ) : (
@@ -87,13 +89,13 @@ export function ConsolePanel({ ctx }: ConsolePanelProps) {
           autoComplete="off"
           autoCapitalize="off"
           className="min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/50"
-          aria-label="Console command input"
+          aria-label={t("status.consoleCommandInput")}
         />
         <button
           type="button"
           onClick={submit}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary"
-          title="Run command"
+          title={t("status.runCommand")}
         >
           <CornerDownLeft className="size-3" />
         </button>

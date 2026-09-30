@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, ChevronRight } from "lucide-react";
 import React, { useState } from "react";
+import { useT } from "../i18n";
 
 export interface Backlink {
   docId: string;
@@ -34,13 +35,14 @@ function BacklinksPanelComponent({
   onNavigate,
   hideHeader = false,
 }: BacklinksPanelProps) {
+  const t = useT();
   const [expanded, setExpanded] = useState(true);
   const [tab, setTab] = useState<"back" | "forward" | "unresolved">("back");
 
   const total = backlinks.length + forwardLinks.length;
   if (total === 0 && unresolved.length === 0) {
     return hideHeader ? (
-      <p className="px-4 py-6 text-center text-[12px] text-muted-foreground italic">No links in this document yet.</p>
+      <p className="px-4 py-6 text-center text-[12px] text-muted-foreground italic">{t("status.noLinksYet")}</p>
     ) : null;
   }
 
@@ -48,21 +50,21 @@ function BacklinksPanelComponent({
     <div className="px-2 pb-3">
       <div className="flex gap-1 px-2 mb-2 border-b border-border">
         {[
-          { key: "back" as const, label: `Backlinks (${backlinks.length})`, icon: ArrowDownLeft, color: "text-primary-strong" },
-          { key: "forward" as const, label: `Outgoing (${forwardLinks.length})`, icon: ArrowUpRight, color: "text-blue-500" },
-          ...(unresolved.length > 0 ? [{ key: "unresolved" as const, label: `Broken (${unresolved.length})`, icon: AlertTriangle, color: "text-destructive" }] : []),
-        ].map(t => (
+          { key: "back" as const, label: t("status.backlinksTab", { count: backlinks.length }), icon: ArrowDownLeft, color: "text-primary-strong" },
+          { key: "forward" as const, label: t("status.outgoingTab", { count: forwardLinks.length }), icon: ArrowUpRight, color: "text-blue-500" },
+          ...(unresolved.length > 0 ? [{ key: "unresolved" as const, label: t("status.brokenTab", { count: unresolved.length }), icon: AlertTriangle, color: "text-destructive" }] : []),
+        ].map(linkTab => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
+            key={linkTab.key}
+            onClick={() => setTab(linkTab.key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium transition-all relative
-              ${tab === t.key
-                ? `${t.color} bg-background border border-border border-b-background -mb-px rounded-t-md`
+              ${tab === linkTab.key
+                ? `${linkTab.color} bg-background border border-border border-b-background -mb-px rounded-t-md`
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-t-md"
               }`}
           >
-            <t.icon className="w-3 h-3" />
-            {t.label}
+            <linkTab.icon className="w-3 h-3" />
+            {linkTab.label}
           </button>
         ))}
       </div>
@@ -71,7 +73,7 @@ function BacklinksPanelComponent({
         <div className="max-h-[250px] overflow-y-auto pr-1 scrollbar-thin">
           {backlinks.length === 0 && (
             <p className="px-4 py-3 text-[11px] text-muted-foreground italic text-center border border-dashed border-border/50 rounded-md mx-2">
-              No documents link to this one.
+              {t("status.noBacklinks")}
             </p>
           )}
           <div className="space-y-1 px-1">
@@ -87,7 +89,7 @@ function BacklinksPanelComponent({
                 </div>
                 {bl.context && (
                   <div className="text-[11px] text-muted-foreground truncate mt-1 pl-5 font-serif italic border-l-2 border-primary/20 ml-1.5">
-                    "{bl.context}"
+                    {t("status.backlinkContext", { context: bl.context })}
                   </div>
                 )}
               </button>
@@ -100,7 +102,7 @@ function BacklinksPanelComponent({
         <div className="max-h-[250px] overflow-y-auto pr-1 scrollbar-thin">
           {forwardLinks.length === 0 && (
             <p className="px-4 py-3 text-[11px] text-muted-foreground italic text-center border border-dashed border-border/50 rounded-md mx-2">
-              This document has no outgoing links.
+              {t("status.noOutgoingLinks")}
             </p>
           )}
           <div className="space-y-1 px-1">
@@ -150,7 +152,7 @@ function BacklinksPanelComponent({
           <ChevronRight 
             className={`w-4 h-4 transition-transform duration-200 ${expanded ? "rotate-90 text-foreground" : ""}`}
           />
-          <span className="uppercase tracking-wider">Document Links</span>
+          <span className="uppercase tracking-wider">{t("status.documentLinks")}</span>
           <div className="flex items-center gap-2 ml-2 font-medium">
             <span className="flex items-center gap-0.5 text-primary-strong bg-primary/10 px-1.5 py-0.5 rounded-sm">
               <ArrowDownLeft className="w-3 h-3" /> {backlinks.length}
