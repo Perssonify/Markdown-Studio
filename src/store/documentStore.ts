@@ -28,6 +28,7 @@ import {
 } from "./storage-adapter";
 import type { StorageMetrics } from "./idb-storage-adapter";
 import { snapshotStore } from "./snapshot-store";
+import { assetStore } from "./asset-store";
 import { clearStash, configureRecovery, takeStashed, type RecoveryEntry } from "./crash-recovery";
 import { historyCache } from "./history-cache";
 import { useFolderStore } from "./folders";
@@ -462,6 +463,21 @@ function liveCanonicalFor(docId: string): DocumentRecord["canonical"] | null {
 }
 
 /**
+ * The live editor's content for the open document, blank or not, or null. For
+ * the image garbage collector (asset-gc.ts), which must count an image the
+ * user has just pasted and not yet saved as IN USE.
+ */
+export function peekLiveCanonical(): unknown | null {
+  const id = useDocumentStore.getState().activeDocId;
+  if (!id) return null;
+  try {
+    return liveCanonicalProvider?.(id) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The revision THIS tab's copy of `docId` is based on — what a write must not
  * overwrite a newer version of. For the open document that is
  * `activeDoc.updated` (the same base saveActiveDoc checks); for a background
@@ -528,7 +544,7 @@ async function applyTitleOnly(
  * change afterwards is ignored, like an adapter swap.
  */
 export function configureLocalStores(
-  config?: Pick<IDBStorageConfig, "dbName" | "namespace" | "snapshots" | "crashRecovery">
+  config?: Pick<IDBStorageConfig, "dbName" | "namespace" | "snapshots" | "crashRecovery" | "assets">
 ): void {
   if (initialized) return;
   const ns = config?.namespace || (config?.dbName && config.dbName !== "perssonify-docs" ? config.dbName : "");
@@ -539,6 +555,16 @@ export function configureLocalStores(
   configureRecovery({
     key: ns ? `pf:recovery:${ns}` : undefined,
     enabled: config?.crashRecovery !== false,
+  });
+  // Images as binary assets (A086), namespaced exactly like version history,
+  // and OPT-IN for every host: what a host reads back out of the editor
+  // (onContentChange, onSave, getMarkdown/getHTML, the iframe bridge) would
+  // otherwise carry `pf-asset:` references it cannot resolve anywhere else,
+  // and a host's own adapter keeps documents where this browser database does
+  // not follow them. The standalone app turns it on for itself (App.tsx).
+  assetStore.configure({
+    dbName: ns ? `perssonify-assets:${ns}` : undefined,
+    enabled: config?.assets === true,
   });
 }
 
@@ -588,6 +614,8 @@ export async function clearLocalData(opts: { preferences?: boolean } = {}): Prom
     await adapter.setPrefs({ lastActiveDocId: null, folderTree: null }).catch(() => {});
   }
   await snapshotStore.clearAll?.();
+  // Every image the library stored as an asset (A086) goes with it.
+  await assetStore.clearAll();
 
   if (opts.preferences) {
     const keys: string[] = [];
@@ -766,6 +794,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       typeof (adapterOrConfig as StorageAdapter).get === "function"
     ) {
       storage = adapterOrConfig as StorageAdapter;
+      // A host's own adapter: images stay inline unless its storageConfig
+      // opts in (useEditorBoot re-configures with that config right after).
+      assetStore.configure({ enabled: false });
     } else {
       storage = new IndexedDBStorageAdapter(adapterOrConfig as IDBStorageConfig);
       configureLocalStores(adapterOrConfig as IDBStorageConfig);

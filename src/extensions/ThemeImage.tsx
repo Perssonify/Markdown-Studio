@@ -1,6 +1,8 @@
 import { mergeAttributes, Node } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { useIsDarkTheme } from "../theme/useThemeMode";
+import { useAssetSrc } from "../ui/asset-dom";
+import { missingImageAlt, missingImageTitle } from "./AssetImages";
 
 /**
  * `<picture>` support that is aware of the IN-APP theme, not just the OS.
@@ -36,10 +38,18 @@ function ThemeImageView(props: any) {
     alt: string;
     title: string | null;
   };
-  const src = (isDark ? darkSrc : lightSrc) || lightSrc || darkSrc || "";
+  const chosen = (isDark ? darkSrc : lightSrc) || lightSrc || darkSrc || "";
+  // A source stored as an asset (A086) is shown through an object URL — a
+  // `pf-asset:` reference must never reach a live <img>.
+  const { src, missing } = useAssetSrc(chosen);
   return (
     <NodeViewWrapper as="span" className="theme-image" contentEditable={false}>
-      <img src={src} alt={alt} title={title || undefined} />
+      <img
+        src={src || undefined}
+        alt={missing ? missingImageAlt(alt) : alt}
+        title={missing ? missingImageTitle() : title || undefined}
+        {...(missing ? { "data-pf-asset-missing": "" } : {})}
+      />
     </NodeViewWrapper>
   );
 }

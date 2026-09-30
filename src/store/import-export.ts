@@ -287,7 +287,14 @@ function withoutIngestPayload(report: unknown): unknown {
   return { ...(report as Record<string, unknown>), preIngestHtml: null };
 }
 
-export function toExportEnvelope(doc: DocumentRecord, title: string = doc.title) {
+export function toExportEnvelope(
+  doc: DocumentRecord,
+  title: string = doc.title,
+  /** The images the document refers to, for a file that must stand on its own
+   *  (the single-document JSON export, A086). A backup ZIP carries them as
+   *  files instead and leaves this out. */
+  assets?: Record<string, { mime: string; data: string }>
+) {
   return {
     _format: "perssonify-document",
     _version: "1.1.0",
@@ -304,14 +311,20 @@ export function toExportEnvelope(doc: DocumentRecord, title: string = doc.title)
     tags: doc.tags,
     created: doc.created,
     updated: doc.updated,
+    ...(assets && Object.keys(assets).length ? { assets } : {}),
   };
 }
 
 /**
  * Export document as canonical JSON (ProseMirror JSON + origin + residuals).
+ * `opts.assets` embeds the images its `pf-asset:` references point at, so
+ * importing the file anywhere restores them (A086).
  */
-export function exportAsJson(doc: DocumentRecord): { filename: string } {
-  const exported = toExportEnvelope(doc);
+export function exportAsJson(
+  doc: DocumentRecord,
+  opts: { assets?: Record<string, { mime: string; data: string }> } = {}
+): { filename: string } {
+  const exported = toExportEnvelope(doc, doc.title, opts.assets);
 
   const filename = sanitizeFilename(doc.title) + ".json";
   const json = JSON.stringify(exported, null, 2);

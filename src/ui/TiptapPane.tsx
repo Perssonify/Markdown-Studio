@@ -37,6 +37,7 @@ import { ThemeImage } from "../extensions/ThemeImage";
 import { UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
 import { ListKeymapNoTab } from "../extensions/ListKeymapNoTab";
 import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
+import { AssetImages } from "../extensions/AssetImages";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
 import { TableBubbleMenu } from "./TableBubbleMenu";
@@ -244,6 +245,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         BidiAuto, // dir="auto" per text block — view-only, not in the schema
         UnresolvedWikiLinks, // broken-link marking (a plugin: no schema change)
         AltGraphPassthrough, // AltGr types; it never triggers a Mod-Alt keymap
+        AssetImages, // images as binary assets: paste/drop/copy (A086) — a plugin, no schema
       ],
       content: defaultValue || "",
       editorProps: {

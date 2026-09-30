@@ -63,6 +63,18 @@ export interface IDBStorageConfig {
   /** Keep the crash-recovery stash (localStorage, written on unload). Default true. */
   crashRecovery?: boolean;
   /**
+   * Store images as binary assets in a browser database (`perssonify-assets`,
+   * namespaced like version history) instead of base64 inside each document.
+   * Default FALSE for a host (the standalone app turns it on for itself):
+   * turned on, the markdown, HTML and canonical a host reads back out —
+   * `onContentChange`, `onSave`, `getMarkdown`/`getHTML`, the iframe bridge —
+   * refer to images as `pf-asset:<sha256>`, which resolves only in THIS
+   * browser's database; and a host's own `storageAdapter` keeps documents
+   * somewhere that database does not follow. Off, images stay inline as
+   * `data:` URLs. Exports and backups are self-contained either way.
+   */
+  assets?: boolean;
+  /**
    * An optional HARD cap on document bytes, for a host that wants one. Unset
    * (the default), the browser's own quota is the limit. There used to be a
    * self-imposed 50 MB default measured as characters × 2, which stopped a
