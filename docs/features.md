@@ -5,7 +5,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 > **Roles:** This is a single-user app that runs in the browser — no accounts, and no server copy of your documents (the only server code is the opt-in URL-import relay). There is **no permission model** — every capability is available to whoever has the browser tab open. "Who can use it" is therefore "any user" throughout, except where a feature is gated by *mode* or *screen size*. See [auth.md](auth.md).
 
 **Where state lives** (referenced constantly below):
-- `useDocumentStore` — [src/store/documentStore.ts:748](../src/store/documentStore.ts#L748) — documents, active doc, tabs, save status, counts, storage handle.
+- `useDocumentStore` — [src/store/documentStore.ts:760](../src/store/documentStore.ts#L760) — documents, active doc, tabs, save status, counts, storage handle.
 - `useUIStore` — [src/store/uiStore.ts:153](../src/store/uiStore.ts#L153) — view mode, sidebar/graph/find toggles, sync mode.
 - `useEditorStore` — [src/store/editorStore.ts:92](../src/store/editorStore.ts#L92) — active formatting state, link index, backlinks, graph data.
 
@@ -139,7 +139,7 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 
 - **What:** Keep many documents open in the library; switch, rename, duplicate, close.
 - **Entry point:** the Workspace panel's Files tab ([src/ui/WorkspacePanel.tsx](../src/ui/WorkspacePanel.tsx)); the tab strip was removed in v1.9 — document switching happens in the Files tab and the active title shows in the menu bar.
-- **Flow:** `onSwitch(id)` → `handleSwitchDoc` ([src/hooks/useDocumentLifecycle.ts:518](../src/hooks/useDocumentLifecycle.ts#L518)) flushes pending edits of the current doc, then `useDocumentStore.switchToDoc` ([src/store/documentStore.ts:1246](../src/store/documentStore.ts#L1246)) loads the target, checking the in-memory unsaved-edits cache first.
+- **Flow:** `onSwitch(id)` → `handleSwitchDoc` ([src/hooks/useDocumentLifecycle.ts:518](../src/hooks/useDocumentLifecycle.ts#L518)) flushes pending edits of the current doc, then `useDocumentStore.switchToDoc` ([src/store/documentStore.ts:1258](../src/store/documentStore.ts#L1258)) loads the target, checking the in-memory unsaved-edits cache first.
 - **Edge cases:** Closing the active document prompts whenever it holds unsaved state — `editing`, `saving` and `error`, and the terminal `conflict`, `blocked` and `full` (`handleCloseTab`, [src/hooks/useDocumentLifecycle.ts:573](../src/hooks/useDocumentLifecycle.ts#L573)). A document whose stored copy cannot be read is not opened: the switch says so instead of treating it as missing (`StorageReadError`).
 
 ### 10. Files (library) — the Workspace panel's Files tab
@@ -157,9 +157,9 @@ The single most-read doc after the [README](README.md). Each feature is self-con
 - **What:** Standard document lifecycle ops.
 - **Entry points & flow:**
   - New: `Cmd+N` → `handleNewDoc` ([src/hooks/useDocumentLifecycle.ts:748](../src/hooks/useDocumentLifecycle.ts#L748)) → `useDocumentStore.createDoc` ([src/store/documentStore.ts:300](../src/store/documentStore.ts#L300)).
-  - Rename: `renameDoc` ([src/store/documentStore.ts:1381](../src/store/documentStore.ts#L1381)) stores the name as a pinned `userTitle`, so it survives re-derivation on save, and merges it onto the live editor content so unsaved edits are not rewound. A document another tab has overtaken is renamed without merging this tab's content, so the conflict stays visible.
-  - Duplicate: `duplicateDoc` ([src/store/documentStore.ts:1550](../src/store/documentStore.ts#L1550)) copies the live content, unsaved edits included.
-  - Delete: confirm → `useDocumentStore.deleteDoc` ([src/store/documentStore.ts:1340](../src/store/documentStore.ts#L1340)) records a `pre-delete` snapshot, removes the record and closes the tab. The confirmation says the document can be restored from Version history; the toast that follows offers **Erase history** (`purgeDocHistory`) to remove that copy too — otherwise it expires with the 30-day snapshot window.
+  - Rename: `renameDoc` ([src/store/documentStore.ts:1394](../src/store/documentStore.ts#L1394)) stores the name as a pinned `userTitle`, so it survives re-derivation on save, and merges it onto the live editor content so unsaved edits are not rewound. A document another tab has overtaken is renamed without merging this tab's content, so the conflict stays visible.
+  - Duplicate: `duplicateDoc` ([src/store/documentStore.ts:1567](../src/store/documentStore.ts#L1567)) copies the live content, unsaved edits included.
+  - Delete: confirm → `useDocumentStore.deleteDoc` ([src/store/documentStore.ts:1352](../src/store/documentStore.ts#L1352)) records a `pre-delete` snapshot, removes the record and closes the tab. The confirmation says the document can be restored from Version history; the toast that follows offers **Erase history** (`purgeDocHistory`) to remove that copy too — otherwise it expires with the 30-day snapshot window.
 
 ### 12. Auto-save & session restore
 
