@@ -102,6 +102,20 @@ describe("npm publishing happens from CI, with provenance (A006)", () => {
   });
 });
 
+describe("the built CommonJS entries are required before they ship (A113)", () => {
+  const CHECK = "bunx vitest run src/__tests__/pkg-cjs-require.test.js";
+  // The unit run skips the built half of that file (no dist/ yet), so it only
+  // guards the build when it is re-run AFTER `bun run build`.
+  it.each([
+    ["ci.yml", read(`${GH}/workflows/ci.yml`), null],
+    ["publish.yml", read(`${GH}/workflows/publish.yml`), "npm publish"],
+  ])("%s re-runs the CJS require check after the library build", (_f, text, before) => {
+    expect(text.indexOf(CHECK), CHECK).toBeGreaterThan(-1);
+    expect(text.indexOf(CHECK)).toBeGreaterThan(text.indexOf("run: bun run build\n"));
+    if (before) expect(text.indexOf(CHECK)).toBeLessThan(text.indexOf(before));
+  });
+});
+
 describe("the domain is watched (A001)", () => {
   it("every 30 minutes and on demand, for the app shell — not just any 200", () => {
     const up = read(`${GH}/workflows/uptime.yml`);
