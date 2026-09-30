@@ -1,5 +1,6 @@
-import { generateHTML, getSchema } from "@tiptap/core";
-import type { Schema } from "@tiptap/pm/model";
+import { getSchema } from "@tiptap/core";
+import { Node as PMNode, type Schema } from "@tiptap/pm/model";
+import { fragmentToHtml } from "./inert-html";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
@@ -67,7 +68,10 @@ export const SERIALIZE_EXTENSIONS = [
 ];
 
 export function canonicalToHtml(canonical: unknown): string {
-  return generateHTML(canonical as any, SERIALIZE_EXTENSIONS as any);
+  // generateHTML's output, built in an inert document (engine/inert-html.ts):
+  // generateHTML itself creates every <img> in the live page, which fetches it.
+  const schema = headlessSchema();
+  return fragmentToHtml(PMNode.fromJSON(schema, canonical as any).content, schema);
 }
 
 let _headlessSchema: Schema | null = null;
