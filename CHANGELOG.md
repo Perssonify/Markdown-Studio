@@ -275,6 +275,12 @@ finding IDs (A001–A114) are cited below.
   and the mixed large-document fixture in 3.2 s instead of 13.1 s. The word
   count, the export-fidelity check and broken-link marking now look only at the
   blocks an edit touched. (A083)
+- **Notes in folders are no longer drawn on top of each other on the map.** A
+  map with folders piled notes onto the same spot — a 150-note map in 15 folders
+  hid about a quarter of its notes under others. Each folder now starts as its
+  own cluster in a space sized to the library, and folders move as units; every
+  note gets its own spot up to 500 notes. Maps without folders look exactly as
+  before, and folder maps over 500 notes keep the previous layout for now. (A088)
 - **The relationship map at 2,000 notes** (measured with the CPU slowed 4×): the
   first frame appears in 1.0 s instead of 8.9 s, the page is blocked for 6 s
   instead of 64 s, the layout settles in 17–23 s instead of 65 s, and zooming

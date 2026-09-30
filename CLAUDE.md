@@ -198,22 +198,26 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     zero** — that claim used to be here too and was wrong: with `e2e/map-library.mjs`
     at 153 notes in 15 skewed folders they measure 20 and 158 at fit (25 / 339 before
     A088), while every TEXT overlap stays zero.
-  - **With folders, the layout STACKS notes on the same spot — an open layout
-    defect, not a label one.** Measured (`e2e/probes/map-labels-2000.mjs`, and a
-    headless run of `stepLayout` on the same library): 2,000 notes in 60 folders
-    rest at 751 distinct positions in the browser, with stacks of up to 89 notes;
-    without folders, 1,995. It is not only a scale problem — 150 notes in 15
-    folders lose about a quarter. Cause: notes are seeded on ONE ring, so each
-    folder's members start scattered around it and every container starts huge and
-    overlapping; the container↔container constraint then shoves whole folders
-    into the world walls, and `shift` clamps each member to the wall on its own,
-    collapsing them onto one coordinate. `worldFor` also caps the world at
-    2,600 × 1,872 from 23 notes up. Moving a folder as a unit (clamp the SHIFT, not
-    each member) was tried and only helps (252 → 753 distinct, headless); the fix is
-    folder-aware seeding plus a world sized to the library — a visible change to
-    every map with folders, and it retires the "small maps lay out exactly as
-    before" pin in `graph-physics.test.js`, so it is a product decision. A stacked
-    dot has no room for a name, which is why a 2,000-note map names only a handful.
+  - **Folder maps get a FOLDER-AWARE layout (up to `FOLDER_LAYOUT_MAX`, 500
+    notes).** With folders the old layout STACKED notes on the same spot — 150
+    notes in 15 folders rested at 117 distinct positions — for four reasons, each
+    fixed and each mutation-tested: notes were seeded on ONE ring, so a folder's
+    members started scattered and every container started spanning the world (now
+    `seedPositions`: each folder its own shelf-packed cluster); `worldFor` stopped
+    growing at 23 notes (now `worldFor(n, withFolders)` grows with a folder map's
+    notes — `FOLDER_NOTE_AREA`); the 1/d² repulsion is uncapped and the container
+    constraint and walls keep making close pairs, so a pair two units apart was
+    thrown ~1,700 units in a step (now `FOLDER_MAX_SPEED`); and folders pushed
+    apart were clamped to the wall member by member (now `shiftGroup` moves a
+    folder as a unit). Measured (`e2e/probes/map-stacks.mjs`): every note on its
+    own spot at 150 and 400 notes. **A folderless map is untouched** — its seed,
+    world and dynamics are the old ones, pinned bit-for-bit. **Above 500 notes a
+    folder map keeps the OLD layout** (pinned too): there the settle is chaotic and
+    at 2,000 notes in 60 folders it measured WORSE (340 distinct against 751). The
+    fix there is a two-level layout (place folder boxes as units, then each
+    folder's notes inside its box); until then a 2,000-note folder map still stacks
+    and names only a handful of notes. The zoom floor is 6% so Fit can show a folder
+    map's larger world.
     **`chip↔dot` is NOT zero and cannot be** — that claim used to be here and was
     wrong. Below ~40% zoom the dots converge into a band by design (density, not a
     defect) and a screen-constant chip covers a lot of world, so no slot along a
@@ -258,8 +262,9 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     `e2e/map-measure.mjs`) — keep them measurable. Measured at 2,000 notes under 4×
     CPU: first frame 8.9 → 1.0 s, blocking 64 → 6 s, a frame 3.7 s → 83 ms.
   - **The layout is `stepLayout` in `store/graph-physics.ts`.** At or below
-    `BARNES_HUT_MIN` (300) it is the exact loop, pinned bit-for-bit against
-    `graph-legacy.js` (a frozen copy of the old loop — never "fix" it); above it,
+    `BARNES_HUT_MIN` (300) it is the exact loop — a FOLDERLESS map pinned
+    bit-for-bit against `graph-legacy.js` (a frozen copy of the old loop — never
+    "fix" it; folder maps changed on purpose, above); above it,
     Barnes–Hut (θ 0.9) plus a grid for the label-room pairs. Coincident notes are
     separated by `pairJitter`, never `Math.random`. Container membership is a
     lookup; `folderBounds` is `folderRects` without the chip, and both come from
