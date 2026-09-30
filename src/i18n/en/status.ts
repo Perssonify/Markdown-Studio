@@ -52,6 +52,7 @@ export const status = {
   "status.announceSaveFailed": "Save failed. Retrying; your work is still on screen.",
   "status.announceBlocked": "Not saving: the editor is empty but the stored document is not.",
   "status.announceConflict": "Not saving: this document was changed in another tab.",
+  "status.announceDeleted": "Not saving: this document was deleted in another tab.",
   "status.announceRecovered": "Changes saved.",
 
   // Status bar: counters and tools. `{used}`/`{max}` are megabytes, already formatted.
