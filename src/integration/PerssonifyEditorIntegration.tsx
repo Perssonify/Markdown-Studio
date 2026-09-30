@@ -5,7 +5,7 @@ import { ErrorBoundary } from "../ui/ErrorBoundary";
 import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter";
 import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
 import { createAssociationStore, mergeGraphWithAssociations } from "./associations";
-import { createHostBridge } from "./host-bridge";
+import { createHostBridge, type EditorChromeLevel, type EditorViewMode } from "./host-bridge";
 import { formatDocumentsForPrompt, linkedPromptItems, PromptFormat } from "./prompt-builder";
 import { sanitizeCssColor } from "../theme/palette";
 import { warnDeprecated } from "./deprecation";
@@ -128,7 +128,7 @@ export interface EditorHandle {
   setAssociations: (assocs: Association[]) => void;
   setTheme: (theme: string | boolean) => void;
   /** Switch the view mode at runtime ("md" | "html" | "split"). */
-  setMode: (mode: "md" | "html" | "split") => void;
+  setMode: (mode: EditorViewMode) => void;
   /** Switch the accent palette at runtime (preset id or "" to clear). */
   setAccent: (accent: string) => void;
   /** Open (activate) a document by id; resolves when the switch settles. */
@@ -151,7 +151,7 @@ export interface EditorHandle {
    *  churn-free — without switching the visible editor. */
   appendToDocument: (id: string, markdown: string) => Promise<{ id: string; updated: boolean }>;
   /** Set the chrome level at runtime: "full" | "minimal" | "none". */
-  setChrome: (level: "full" | "minimal" | "none") => void;
+  setChrome: (level: EditorChromeLevel) => void;
   getAssociations: (docId?: string) => any;
   copyAsPrompt: (opts?: CopyPromptOptions) => Promise<string>;
   exportAs: (format: string) => Promise<any>;
@@ -309,7 +309,7 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
           else if (theme === "light") setIsDark(false);
         },
 
-        setMode(mode: "md" | "html" | "split") {
+        setMode(mode: EditorViewMode) {
           internalRef.current?.setMode?.(mode);
         },
 
@@ -390,7 +390,8 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
       // Secure by default: deny all cross-origin host messages unless the
       // embedder explicitly passes an allowlist. (Previously defaulted to
       // ["*"], which let any framing page read/overwrite all documents.)
-      hostBridgeRef.current = createHostBridge(handleRef as any, {
+      // No cast: the integration's handle type must satisfy the bridge's.
+      hostBridgeRef.current = createHostBridge(handleRef, {
         allowedOrigins: allowedOrigins ?? [],
       });
 

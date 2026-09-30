@@ -3,14 +3,32 @@ import { RefObject } from "react";
 const PROTOCOL = "perssonify";
 const PROTOCOL_VERSION = "1.0";
 
+/** The editor's view modes: markdown only, rich only ("html") or both side by side. */
+export type EditorViewMode = "md" | "html" | "split";
+/** How much of the editor's chrome is shown. */
+export type EditorChromeLevel = "full" | "minimal" | "none";
+
+const VIEW_MODES: ReadonlySet<unknown> = new Set<EditorViewMode>(["md", "html", "split"]);
+const CHROME_LEVELS: ReadonlySet<unknown> = new Set<EditorChromeLevel>(["full", "minimal", "none"]);
+
+/**
+ * What the bridge drives. The integration's own `EditorHandle` must be
+ * assignable to it: `PerssonifyEditorIntegration` passes its handle ref here
+ * without a cast, so the type gate holds the two together. `setMode` and
+ * `setChrome` used to take `string` here and the literal unions there, so a
+ * consumer handing the integration's ref type to `createHostBridge` got TS2345
+ * (parameters are contravariant: a handle that accepts three modes is not one
+ * that accepts any string). A handle written against this interface with wider
+ * parameters still fits.
+ */
 export interface EditorHandle {
   setDocuments: (docs: any[]) => Promise<any> | any;
   setFieldSchemas: (schemas: any) => void;
   setTheme: (theme: string) => void;
-  setMode: (mode: string) => void;
+  setMode: (mode: EditorViewMode) => void;
   setAccent: (accent: string) => void;
   openDocument: (docId: string) => Promise<void> | void;
-  setChrome: (level: string) => void;
+  setChrome: (level: EditorChromeLevel) => void;
   addDocuments: (docs: any[]) => Promise<any> | any;
   updateDocument: (id: string, patch: any) => Promise<any> | any;
   appendToDocument: (id: string, markdown: string) => Promise<any> | any;
@@ -128,6 +146,9 @@ export function createHostBridge(
           result = { ok: true };
           break;
         case "setMode":
+          // A message is untyped: refuse what the handle's type does not
+          // accept, instead of storing a mode no pane renders.
+          if (!VIEW_MODES.has(payload?.mode)) throw new Error(`Unknown view mode: ${String(payload?.mode)}`);
           handle.setMode(payload.mode);
           result = { ok: true };
           break;
@@ -141,10 +162,13 @@ export function createHostBridge(
           await handle.openDocument(payload.docId ?? payload.id);
           result = { ok: true };
           break;
-        case "setChrome":
-          handle.setChrome(payload.chrome ?? payload.level);
+        case "setChrome": {
+          const level = payload?.chrome ?? payload?.level;
+          if (!CHROME_LEVELS.has(level)) throw new Error(`Unknown chrome level: ${String(level)}`);
+          handle.setChrome(level);
           result = { ok: true };
           break;
+        }
         case "addDocuments":
           result = await handle.addDocuments(payload.docs);
           break;
