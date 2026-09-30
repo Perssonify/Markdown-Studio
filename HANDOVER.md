@@ -249,15 +249,18 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   save-FSM work (§5).
 - **Large documents:** every edit still re-converts the whole document; the audit's cheap
   fixes made it linear, not incremental (A083).
-- **Graph performance:** the force sim is O(n²) per tick while running (it freezes on
-  settle). Fine for typical libraries; untested at ~2,000 notes (A088).
-- **`PerssonifyEditor.tsx`** is a very large orchestrator. It works and is carefully
-  memoized, but it's the hardest file to onboard to. Splitting it is worthwhile but delicate
-  (many refs/effects with ordering constraints — read the comments first); the audit
-  recommends doing it as its own pull request (A110), and it is still thinly covered by
-  behavioural tests (A108).
-- **Browsers:** the e2e campaign runs Chromium only; Firefox and WebKit are unverified
-  (A100), and Safari before 16.4 cannot run the app (Tailwind v4 needs 16.4; A097).
+- **Graph performance:** measured at 2,000 notes (A088): above 300 notes the layout is
+  Barnes–Hut, above 250 the drawing is batched and each frame either steps or paints.
+  First frame 1.0 s, settle 17–23 s under a 4× CPU slowdown. At 2,000 notes in 60 folders
+  the containers overlap and veto nearly every label — the next thing to fix there.
+- **`PerssonifyEditor.tsx`** was split into fifteen hooks under `src/editor/` (A110);
+  about 970 lines of orchestration remain. Hook call order is effect order — read
+  CLAUDE.md's parts map before moving anything. Sixteen behavioural suites now mount the
+  real editor (A108).
+- **Browsers:** Chromium runs every e2e suite; Firefox and WebKit run five of them (A100).
+  Desktop WebKit is not iOS Safari, so the iOS-only paths still lack on-device proof.
+  Below the declared floor (Safari/iOS 16.4, Chrome/Edge 111, Firefox 128) the app shows
+  a message instead of a blank page (A097).
 - **Bundle size:** the startup payload is ~680 KiB gzip; mermaid, abcjs and katex load
   lazily and are precached for offline use.
 
