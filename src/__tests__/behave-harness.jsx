@@ -124,8 +124,17 @@ export function storedDoc(id, title, blocks, extra = {}) {
   return createDocument({ id, title, canonical: docOf(...blocks), ...extra });
 }
 
-export async function seededAdapter(docs = []) {
-  const adapter = new MemoryStorageAdapter();
+/** The in-memory adapter, plus the preferences it drops on the floor — so the
+ *  suites can seed a preference and see the editor write them back. */
+export class PrefsMemoryAdapter extends MemoryStorageAdapter {
+  prefs = {};
+  async getPrefs() { return { ...this.prefs }; }
+  async setPrefs(p) { this.prefs = { ...this.prefs, ...p }; }
+}
+
+export async function seededAdapter(docs = [], { prefs } = {}) {
+  const adapter = new PrefsMemoryAdapter();
+  if (prefs) adapter.prefs = { ...prefs };
   for (const d of docs) await adapter.save(d);
   return adapter;
 }

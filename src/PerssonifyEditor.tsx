@@ -622,9 +622,9 @@ function PerssonifyEditorInstance({
   // the releaseEditor cleanup's layout effect, as it always was.
   useHostApi({
     _integrationRef, _onIntegrationGraphUpdate,
-    cmRef, tiptapRef, engine, getCanonical, setCanonical, setFromHtml,
-    fidelityReport, documents, activeDoc, createDoc, finalizeDoc, switchToDoc, patchDocById,
-    setMode, setChrome, linkIndex, fullDocsRef, rebuildLinks,
+    cmRef, tiptapRef, engine, getCanonical, setFromHtml,
+    fidelityReport, activeDoc, createDoc, switchToDoc, patchDocById,
+    setMode, setChrome, fullDocsRef, rebuildLinks,
     handleSwitchDoc, hydrateEditorWithDoc, prepareToLeaveActiveDoc,
     activateAndCapture, isEditorTargeting, waitForEditor, handleAction,
   });
