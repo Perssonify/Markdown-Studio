@@ -232,10 +232,12 @@ export function inlineRefsInCanonical<T>(canonical: T, assets: Map<string, Asset
   });
 }
 
-/** A short, human sentence for exports that could not include every image. */
-export function missingImagesNote(missing: number): string | null {
+/** A short, human sentence for exports that could not include every image.
+ *  (The only user-visible string in this module.) */
+export function missingImagesNote(missing: number, opts: { inArchive?: boolean } = {}): string | null {
   if (!missing) return null;
+  const where = opts.inArchive ? " in this export" : "";
   return missing === 1
-    ? "1 image is not stored in this browser and could not be included"
-    : `${missing} images are not stored in this browser and could not be included`;
+    ? `1 image is not stored in this browser and could not be included${where}`
+    : `${missing} images are not stored in this browser and could not be included${where}`;
 }
