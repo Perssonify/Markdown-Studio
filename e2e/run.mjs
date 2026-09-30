@@ -36,6 +36,7 @@ const SUITES = {
   csp: ["vercel.json's Content-Security-Policy ENFORCED while every renderer and lazy surface runs", CHROMIUM, "not yet run on other engines"],
   pwa: ["The service worker: offline after one online visit, and updates that never force-reload a tab", CHROMIUM, "not yet run on other engines"],
   perf: ["Measurement only — not run in CI (timing noise)", CHROMIUM, "CPU throttling is Chromium's DevTools protocol"],
+  "perf-map": ["Measurement only — the relationship map at library scale (A088); not run in CI", CHROMIUM, "CPU throttling is Chromium's DevTools protocol"],
 };
 
 const ENGINE = (process.env.E2E_BROWSER || "chromium").trim().toLowerCase();
@@ -45,7 +46,7 @@ if (!ALL.includes(ENGINE)) {
 }
 
 const requested = process.argv.slice(2).filter((a) => !a.startsWith("-"));
-const suites = requested.length ? requested : Object.keys(SUITES).filter((s) => s !== "perf");
+const suites = requested.length ? requested : Object.keys(SUITES).filter((s) => !s.startsWith("perf"));
 
 for (const s of suites) {
   if (!SUITES[s]) {
