@@ -24,9 +24,9 @@ import type { useToast } from "../ui/Toast";
 import type { TiptapPaneHandle } from "../ui/TiptapPane";
 
 /** The markdown pane (CodeMirror). */
-export type CmRef = RefObject<CodeMirrorPaneHandle>;
+export type CmRef = RefObject<CodeMirrorPaneHandle | null>;
 /** The rich pane (TipTap) — the canonical source of truth. */
-export type TiptapRef = RefObject<TiptapPaneHandle>;
+export type TiptapRef = RefObject<TiptapPaneHandle | null>;
 
 export type DocStore = ReturnType<typeof useDocumentStore.getState>;
 export type UIStore = ReturnType<typeof useUIStore.getState>;

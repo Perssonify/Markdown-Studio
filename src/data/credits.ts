@@ -31,8 +31,8 @@ export const CREDITS: CreditGroup[] = [
   {
     group: "Core framework",
     items: [
-      { name: "react", version: "18.3.1", license: "MIT", role: "UI runtime" },
-      { name: "react-dom", version: "18.3.1", license: "MIT", role: "DOM renderer" },
+      { name: "react", version: "19.3.0", license: "MIT", role: "UI runtime" },
+      { name: "react-dom", version: "19.3.0", license: "MIT", role: "DOM renderer" },
       { name: "zustand", version: "5.0.12", license: "MIT", role: "State stores" },
     ],
   },
