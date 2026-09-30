@@ -73,10 +73,13 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
     report counts it;
   - **a list or a second paragraph inside a table cell, and merged cells** — a GFM
     cell is one line, so these flatten; the fidelity report flags them;
-  - **two-space hard breaks in exported Markdown** — the app reads a single newline
-    as a line break (marked's `breaks: true`), so a hard break is written back as a
-    plain newline. It round-trips inside the app, but a strict CommonMark reader of
-    the exported file joins the lines (A051, deferred until that dialect is decided);
+  - **a hard break inside link text, in an exported file** — the app reads a single
+    newline as a line break (marked's `breaks: true`), so the markdown pane writes a
+    hard break as a plain newline. Exports (`.md` files, single or zipped) write
+    `\` + newline instead, which strict CommonMark readers draw too (A051,
+    [portable-breaks.ts](../src/engine/portable-breaks.ts)) — except inside a
+    link's brackets, where marked itself does not accept `\` + newline, so the
+    plain newline stays and a strict reader shows a space there;
   - **tabs inside a fenced code block** — see below.
 - **Fix/Workaround:** For a document that must stay byte-for-byte as typed, edit
   in the markdown pane (its text is preserved until you edit the rich pane), and

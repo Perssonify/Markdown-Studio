@@ -2,6 +2,7 @@
 import TurndownService from "turndown";
 import { matchBlockMath, matchInlineDisplay, matchInlineMath } from "./math-marked";
 import { isCurlyGroup } from "./preprocessor";
+import { BREAK_MARK, portableBreaksActive } from "./portable-breaks";
 
 // Minimal interface for TurndownService (package has no types)
 interface TurndownInstance {
@@ -410,7 +411,60 @@ export function installEscape(td: TurndownInstance, getOptions: () => EscapeOpti
   return td;
 }
 
+// ── Portable hard breaks (A051) ─────────────────────────────────────────────
+//
+// While an export converts (portable-breaks.ts), a <br> is written with a
+// marker in front, and the paragraph rule turns a marked break into `\` +
+// newline wherever the app would draw it: with text on its line and on the
+// next. Everywhere else — the edges of a paragraph, a heading (where the
+// newline ends the heading), a code span — the converter drops the marker
+// (stripBreakMarks), leaving exactly what the editor writes.
+
+/** A line of a paragraph the app would draw: anything but spaces and tabs. */
+const drawsLine = (line: string): boolean => /[^ \t]/.test(line.split(BREAK_MARK).join(""));
+
+/**
+ * A paragraph's marked breaks, written `\` + newline where the app draws the
+ * break — text on the break's line AND on the next. Elsewhere the break's
+ * newline merges into the blank line around the paragraph and the app draws
+ * nothing, and a `\` there would print as a literal backslash, so those keep
+ * their marker for stripBreakMarks.
+ */
+function portableBreaksIn(content: string): string {
+  let out = "";
+  let at = 0;
+  for (let p = content.indexOf(BREAK_MARK); p !== -1; p = content.indexOf(BREAK_MARK, p + 1)) {
+    if (!content.startsWith("  \n", p + 1)) continue;
+    const lineStart = content.lastIndexOf("\n", p - 1) + 1;
+    const next = p + 4;
+    const nextEnd = content.indexOf("\n", next);
+    if (!drawsLine(content.slice(lineStart, p)) || !drawsLine(content.slice(next, nextEnd === -1 ? content.length : nextEnd))) continue;
+    out += content.slice(at, p) + "\\";
+    at = p + 3; // past the marker and the two spaces; the newline stays
+  }
+  return out + content.slice(at);
+}
+
 export function addBaseRules(td: TurndownInstance): TurndownInstance {
+  // Hard break: turndown's own `lineBreak` output — `options.br` (two spaces;
+  // the engine never changes it) and a newline — marked during an export.
+  // Not inside a table cell, which writes its breaks as `<br>` (cellLine), and
+  // not inside link text: marked, the app's own reader, does not take `\` +
+  // newline inside a link's brackets and would drop the link. There the
+  // editor's newline stays (a known limit of the export: such a break reads as
+  // a space outside the app).
+  td.addRule("hardBreak", {
+    filter: "br",
+    replacement: (_content: string, node?: Node): string =>
+      (portableBreaksActive() && !(node as Element | undefined)?.closest?.("a, td, th") ? BREAK_MARK : "") + "  \n",
+  });
+  // Paragraph: turndown's own output, plus the export's portable breaks.
+  td.addRule("paragraph", {
+    filter: "p",
+    replacement: (content: string): string =>
+      "\n\n" + (portableBreaksActive() && content.indexOf(BREAK_MARK) !== -1 ? portableBreaksIn(content) : content) + "\n\n",
+  });
+
   // Math: <span data-math-inline="x"> → $x$ ; <div data-math-block="x"> → $$x$$.
   // What is written must parse back as maths under math-marked's rules:
   // inline maths may not open or close on a space, a block may not contain a

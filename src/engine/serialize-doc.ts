@@ -23,6 +23,7 @@ import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
 import { TableCellAlign } from "../extensions/TableCellAlign";
 import { ThemeImage } from "../extensions/ThemeImage";
+import { withPortableBreaks } from "./portable-breaks";
 
 /**
  * Headless serialization of canonical ProseMirror JSON → HTML, mirroring the
@@ -94,4 +95,18 @@ export function canonicalToMarkdown(
   } catch {
     return null;
   }
+}
+
+/**
+ * `canonicalToMarkdown` for a `.md` file that leaves the app — the ZIP export:
+ * hard breaks written `\` + newline, which renderers without the app's
+ * `breaks: true` dialect still draw (A051, portable-breaks.ts). Markdown that
+ * goes back INTO the app (a card's source, the append API) keeps the editor's
+ * own form and uses canonicalToMarkdown.
+ */
+export function canonicalToPortableMarkdown(
+  canonical: unknown,
+  htmlToMd: (html: string) => string
+): string | null {
+  return withPortableBreaks(() => canonicalToMarkdown(canonical, htmlToMd));
 }
