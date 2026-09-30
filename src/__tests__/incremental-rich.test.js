@@ -80,6 +80,8 @@ const SNIPPETS = [
   "<details>\n<summary>S</summary>\n\nx\n\n</details>\n", "<img src=\"a.png\" width=\"20\">",
   "{color=red}c{/color}", "---\ntitle: t\n---\n", "  \n", "<span>", "</span>", "<p>", "</p>",
   "> [!TIP]\n> tip\n", "[x]: y\n", "<table>", "<pre>", "</pre>", "\n    code\n",
+  "<kbd>K</kbd>", "<a href=\"y\">l</a>", "<code>c</code> ", "<x y ", "<!--pf-a083-cut-->", "<p></p>",
+  "<span>\ninline block\n</span>\n", "<div>x</div> tail", "\n\n\n\n", "-x", "1)",
 ];
 
 /** The snippets whose effect is local: for the long walks (see CUTTABLE). */
@@ -257,7 +259,8 @@ function walk(seed, { steps = 50, start = 3, richEvery = 0.12, toggleEvery = 0.0
         features = { ...features, [key]: !features[key] };
         what = `toggle ${key}`;
       } else if (r < richEvery + toggleEvery + 0.02) {
-        md = corpus[Math.floor(rand() * corpus.length)];
+        // Another document of the same size (a long walk stays long).
+        md = Array.from({ length: start }, () => corpus[Math.floor(rand() * corpus.length)]).join("\n\n");
         what = "replace document";
       } else {
         [md, what] = mdEdit(md, rand, corpus, snippets);
@@ -286,7 +289,9 @@ function walk(seed, { steps = 50, start = 3, richEvery = 0.12, toggleEvery = 0.0
 describe("A083 — the incremental markdown→rich projection is identical to the whole-document parse", () => {
   const totals = { incremental: 0, build: 0, whole: 0 };
 
-  it.each(Array.from({ length: 40 }, (_, i) => [2000 + i * 7919]))("random edit walk, seed %i", (seed) => {
+  // RICH_SEEDS=500 for a deeper run than CI's.
+  const seeds = Number(process.env.RICH_SEEDS) || 40;
+  it.each(Array.from({ length: seeds }, (_, i) => [2000 + i * 7919]))("random edit walk, seed %i", (seed) => {
     const paths = walk(seed);
     for (const k in paths) totals[k] += paths[k];
   }, 120000);
@@ -298,6 +303,14 @@ describe("A083 — the incremental markdown→rich projection is identical to th
 
   it.each([[91], [92], [93]])("a long document, seed %i (windows grow across many runs)", (seed) => {
     const paths = walk(seed, { steps: 30, start: 60, richEvery: 0.1, toggleEvery: 0, corpus: CUTTABLE, snippets: LOCAL_SNIPPETS });
+    expect(paths.incremental).toBeGreaterThan(paths.build + paths.whole);
+  }, 300000);
+
+  it.each([[71], [72]])("a long document at the app's run length, seed %i", (seed) => {
+    // The app cuts no closer than ~2 KB (RUN_LENGTH); the walks above cut as
+    // finely as they can, which is the harder test of the rules.
+    // ~50 KB: a couple of dozen runs at that length.
+    const paths = walk(seed, { steps: 30, start: 400, richEvery: 0.1, toggleEvery: 0, corpus: CUTTABLE, snippets: LOCAL_SNIPPETS, runLength: 2048 });
     expect(paths.incremental).toBeGreaterThan(paths.build + paths.whole);
   }, 300000);
 });

@@ -28,7 +28,9 @@ export function parseColwidth(element: HTMLElement): number[] | null {
     liveCols.set(table, cols);
   }
   if (!cols.length) return null;
-  // `colgroup > col` within the table, in document order.
+  // `colgroup > col` within the table, in document order. (The HTML parser
+  // never puts a <col> anywhere but in a <colgroup>, so the parent check can
+  // only matter for DOM built by hand; it keeps the selector's exact meaning.)
   const index = Array.prototype.indexOf.call(row.children, element);
   let seen = 0;
   for (let i = 0; i < cols.length; i++) {
