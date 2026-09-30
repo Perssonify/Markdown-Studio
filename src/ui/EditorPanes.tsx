@@ -13,6 +13,7 @@ import { TiptapPane } from "./TiptapPane";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
 import { markdownHeadings } from "./scroll-anchors";
 import { currentSplitShouldStack } from "./split-layout";
+import { useT } from "../i18n";
 
 interface PaneHeaderProps {
   /** Only the topmost header sits under the floating workspace trigger. */
@@ -86,6 +87,7 @@ function SwitchExplainer({ id, text }: { id: string; text: string }) {
 }
 
 function SyncModePills({ syncMode, onSyncModeChange }: SyncModePillsProps) {
+  const t = useT();
   const styled = syncMode !== "clean";
   const descId = React.useId();
   const explainer =
@@ -93,10 +95,10 @@ function SyncModePills({ syncMode, onSyncModeChange }: SyncModePillsProps) {
     // BOTH modes (addBaseRules) — only the <span style="…"> carrier is
     // mode-dependent, which is what this switch controls. Naming the wrong set
     // here is how fidelity.ts came to warn about formats Clean never touches.
-    "Styled: keep text colour, highlight and font family as inline <span style> in the Markdown. Off (Clean): those are stripped. Underline, sub/superscript and image sizes are kept either way; text alignment is kept by neither.";
+    t("panes.styledExplainer");
   return <div className="flex items-center space-x-1">
     <Label htmlFor="sync-mode" className="text-[10px] md:text-xs whitespace-nowrap" title={explainer}>
-      Styled
+      {t("panes.styled")}
     </Label>
     <Switch id="sync-mode" checked={styled} onCheckedChange={(checked) => onSyncModeChange(checked ? "styled" : "clean")} aria-label="Styled Markdown" aria-describedby={descId} />
     <SwitchExplainer id={descId} text={explainer} />
@@ -111,13 +113,14 @@ interface PasteStyledPillProps {
 function PasteStyledPill({ pasteStyled, setPasteStyled }: PasteStyledPillProps) {
   // On by default and remembered. Hold Shift while pasting to do the opposite
   // once, whichever way this is set.
+  const t = useT();
   const descId = React.useId();
   const explainer = pasteStyled
-    ? "Pasting keeps the formatting you copied. Shift+paste to strip it once."
-    : "Pasting strips formatting. Shift+paste to keep it once.";
+    ? t("panes.pastingKeepsFormatting")
+    : t("panes.pastingStripsFormatting");
   return <div className="flex items-center space-x-1">
     <Label htmlFor="paste-styled" className="text-[10px] md:text-xs whitespace-nowrap" title={explainer}>
-      Styled paste
+      {t("panes.styledPaste")}
     </Label>
     <Switch id="paste-styled" checked={pasteStyled} onCheckedChange={setPasteStyled} aria-label="Styled paste" aria-describedby={descId} />
     <SwitchExplainer id={descId} text={explainer} />
@@ -131,11 +134,12 @@ interface ImageModePillsProps {
 
 function ImageModePills({ showImages, setShowImages }: ImageModePillsProps) {
 
+  const t = useT();
   return <div className="flex items-center space-x-1">
-    <Label htmlFor="show-images" className="text-[10px] md:text-xs whitespace-nowrap" title="Show or hide images in the preview">
-      Images
+    <Label htmlFor="show-images" className="text-[10px] md:text-xs whitespace-nowrap" title={t("panes.showOrHideImagesIn")}>
+      {t("panes.images")}
     </Label>
-    <Switch id="show-images" checked={showImages} onCheckedChange={setShowImages} aria-label="Images in preview" />
+    <Switch id="show-images" checked={showImages} onCheckedChange={setShowImages} aria-label={t("panes.imagesInPreview")} />
   </div>;
 }
 
@@ -155,6 +159,7 @@ const MarkdownPane = React.memo(forwardRef<any, MarkdownPaneProps>(function Mark
   { onChange, onKeyDown, syncMode, onSyncModeChange, onFocus, headerRef, syncScroll, onSyncScrollChange, isSplit },
   ref
 ) {
+  const t = useT();
   const themeMode = useThemeMode();
   const isDark = themeMode === "dark" || themeMode === undefined;
   return (
@@ -186,7 +191,7 @@ const MarkdownPane = React.memo(forwardRef<any, MarkdownPaneProps>(function Mark
               </button>
               }/>
               <TooltipContent side="bottom" className="text-[10px]">
-                {syncScroll ? "Disable scroll sync" : "Enable scroll sync"}
+                {syncScroll ? t("panes.disableScrollSync") : t("panes.enableScrollSync")}
               </TooltipContent>
             </Tooltip>
           )}
@@ -230,13 +235,14 @@ const HtmlPane = React.memo(forwardRef<any, HtmlPaneProps>(function HtmlPane(
   { isDark, onChange, onPaste, onEditLink, pasteStyled, setPasteStyled, onFocus, headerRef, showImages, setShowImages },
   ref
 ) {
+  const t = useT();
   return (
     <div
       className="flex flex-col flex-1 min-h-0 min-w-0 bg-background"
       onFocus={onFocus}
       {...(!showImages ? { "data-hide-images": "" } : {})}
     >
-      <PaneHeader icon={Icons.HTML} label="HTML" headerRef={headerRef}>
+      <PaneHeader icon={Icons.HTML} label={t("panes.html")} headerRef={headerRef}>
         <div className="flex items-center gap-2">
           <ImageModePills showImages={showImages} setShowImages={setShowImages} />
           <PasteStyledPill pasteStyled={pasteStyled} setPasteStyled={setPasteStyled} />
@@ -298,6 +304,7 @@ function EditorLayoutInner({
   onFocusHtml,
   onFileDrop,
 }: EditorLayoutProps) {
+  const t = useT();
   const showMd = mode === MODES.MD || mode === MODES.SPLIT;
   const showHtml = mode === MODES.HTML || mode === MODES.SPLIT;
   const isSplit = mode === MODES.SPLIT;
@@ -410,8 +417,8 @@ function EditorLayoutInner({
 
     if (!cmView || !tiptapEditor) {
       if (bindTick < 25) {
-        const t = setTimeout(() => setBindTick((n) => n + 1), 200);
-        return () => clearTimeout(t);
+        const timer = setTimeout(() => setBindTick((n) => n + 1), 200);
+        return () => clearTimeout(timer);
       }
       return;
     }
@@ -449,8 +456,8 @@ function EditorLayoutInner({
     // silently mis-aligned the whole document after any fenced code block that
     // contained a `#` comment line — measured 216px of drift.
     type Anchor = { top: number; key: string };
-    const norm = (t: string) =>
-      t.toLowerCase().replace(/[`*_~\[\]()#]/g, "").replace(/\s+/g, " ").trim();
+    const norm = (text: string) =>
+      text.toLowerCase().replace(/[`*_~\[\]()#]/g, "").replace(/\s+/g, " ").trim();
 
     // Ask CodeMirror's parse tree rather than scanning lines with a regex. The
     // regex saw ATX headings only — unindented and unquoted — while the rich
@@ -639,14 +646,14 @@ function EditorLayoutInner({
           role="separator"
           data-print-hide
           aria-orientation={isNarrow ? "horizontal" : "vertical"}
-          aria-label="Resize panes"
+          aria-label={t("panes.resizePanes")}
           // A separator that reports no value is not operable by assistive tech
           // even once it is focusable, so the ratio is exposed as a percentage.
           tabIndex={0}
           aria-valuenow={Math.round(ratio * 100)}
           aria-valuemin={Math.round(RATIO_MIN * 100)}
           aria-valuemax={Math.round(RATIO_MAX * 100)}
-          aria-valuetext={`${Math.round(ratio * 100)}% to the ${isNarrow ? "top" : "left"} pane`}
+          aria-valuetext={isNarrow ? t("panes.resizeValueTop", { percent: Math.round(ratio * 100) }) : t("panes.resizeValueLeft", { percent: Math.round(ratio * 100) })}
           onPointerDown={startDrag}
           onKeyDown={onDividerKeyDown}
           className={cn(

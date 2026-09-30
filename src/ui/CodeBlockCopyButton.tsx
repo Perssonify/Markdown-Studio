@@ -1,11 +1,13 @@
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
+import { useT } from "../i18n";
 
 interface CodeBlockCopyButtonProps {
   code: string;
 }
 
 export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -24,8 +26,8 @@ export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
         type="button"
         className={`code-block-copy-button ${copied ? "copied" : ""}`}
         onClick={handleCopy}
-        aria-label="Copy code"
-        title="Copy code"
+        aria-label={t("panes.copyCode")}
+        title={t("panes.copyCode")}
       >
         <span className="code-block-copy-icon">
           {copied ? <Check size={14} /> : <Copy size={14} />}
