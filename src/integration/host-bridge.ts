@@ -51,7 +51,7 @@ export interface HostBridge {
 }
 
 export function createHostBridge(
-  editorRef: RefObject<EditorHandle>,
+  editorRef: RefObject<EditorHandle | null>,
   opts: HostBridgeOptions = {}
 ): HostBridge {
   // Secure by default: deny all cross-origin messages unless the embedder

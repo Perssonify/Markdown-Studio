@@ -668,7 +668,7 @@ interface FlatDocListProps {
   editingId: string | null;
   editTitle: string;
   setEditTitle: (v: string) => void;
-  editInputRef: React.RefObject<HTMLInputElement>;
+  editInputRef: React.Ref<HTMLInputElement>;
   onRenameSubmit: () => void;
   onRenameCancel: () => void;
   onStartRename: (doc: DocumentSummary) => void;

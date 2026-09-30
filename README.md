@@ -48,7 +48,7 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 
 | Layer | Technology |
 |-------|-----------|
-| UI Framework | React 18 |
+| UI Framework | React 19 (the library also supports 18.3) |
 | Markdown editor | CodeMirror 6 |
 | Rich Text Editor | Tiptap 3.31 (ProseMirror) — every `@tiptap/*` package at one version |
 | Markdown Parser | marked 18 |
@@ -439,7 +439,7 @@ npm install @perssonify/editor
 ```
 
 The package ships ES and CommonJS builds, TypeScript declarations and one
-stylesheet. React 18, Tiptap 3 (3.31 or later, as one matching set), CodeMirror 6,
+stylesheet. React 18.3 or 19, Tiptap 3 (3.31 or later, as one matching set), CodeMirror 6,
 lucide-react, next-themes and zustand are **peer dependencies**: npm 7+ installs
 them for you; with pnpm, Yarn or `--legacy-peer-deps`, add them yourself
 (`npm view @perssonify/editor peerDependencies` lists the exact ranges). The

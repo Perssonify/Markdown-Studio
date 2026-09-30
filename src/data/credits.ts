@@ -31,8 +31,8 @@ export const CREDITS: CreditGroup[] = [
   {
     group: "Core framework",
     items: [
-      { name: "react", version: "18.3.1", license: "MIT", role: "UI runtime" },
-      { name: "react-dom", version: "18.3.1", license: "MIT", role: "DOM renderer" },
+      { name: "react", version: "19.3.0", license: "MIT", role: "UI runtime" },
+      { name: "react-dom", version: "19.3.0", license: "MIT", role: "DOM renderer" },
       { name: "zustand", version: "5.0.12", license: "MIT", role: "State stores" },
     ],
   },
@@ -115,7 +115,7 @@ export const CREDITS: CreditGroup[] = [
     items: [
       { name: "vite", version: "8.1.5", license: "MIT", role: "Bundler / dev server" },
       { name: "@tailwindcss/vite", version: "4.3.3", license: "MIT", role: "Tailwind build" },
-      { name: "typescript", version: "5.9.3", license: "Apache-2.0", role: "Type system" },
+      { name: "typescript", version: "6.0.3", license: "Apache-2.0", role: "Type system" },
       { name: "vitest", version: "4.1.11", license: "MIT", role: "Tests" },
       { name: "vite-plugin-pwa", version: "1.3.0", license: "MIT", role: "Offline / service worker" },
       { name: "@vitejs/plugin-react", version: "6.0.4", license: "MIT", role: "React fast-refresh" },

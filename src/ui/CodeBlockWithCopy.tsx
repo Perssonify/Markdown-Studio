@@ -1,5 +1,5 @@
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { Check, Pencil } from "lucide-react";
 import { useState } from "react";
 import { useUIStore } from "../store/uiStore";

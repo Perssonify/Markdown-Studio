@@ -81,8 +81,42 @@ jobs:
       - name: Build (library)
         run: bun run build
 
+      # What `require("@perssonify/editor")` loads. Nothing else in CI touches
+      # the CommonJS build, and it once could not be required at all (A113).
+      - name: The built CommonJS entries load in Node
+        run: bunx vitest run src/__tests__/pkg-cjs-require.test.js
+
       - name: Build (embed)
         run: bun run build:embed
+
+  # React 18 is still inside the published peer range (^18.3.0 || ^19.0.0),
+  # but the repo develops on React 19, so nothing else in CI runs on 18. This
+  # job swaps React 18 and its types in — after the frozen install, in this job
+  # only; the changed manifest and lockfile are thrown away with the runner —
+  # and runs the type gate and the unit suite against them. It is how a
+  # library consumer still on 18 stays tested (A113).
+  react18:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Swap in React 18
+        run: bun add -d react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
+
+      - name: Type-check (React 18 types)
+        run: bunx tsc --noEmit
+
+      - name: Test (React 18 runtime)
+        run: bun run test
 
   # Browser campaign. Unit tests cannot reach real IME composition, real
   # IndexedDB, quota exhaustion, a second tab, a coarse pointer, a service

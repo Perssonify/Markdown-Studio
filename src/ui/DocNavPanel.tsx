@@ -94,7 +94,7 @@ function TocNode({
   activeIndex: number | null;
   ancestors: Set<number>;
   onNavigate: (index: number) => void;
-  activeRowRef: React.RefObject<HTMLButtonElement>;
+  activeRowRef: React.Ref<HTMLButtonElement>;
 }) {
   const t = useT();
   const isActive = node.index === activeIndex;
