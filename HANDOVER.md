@@ -281,8 +281,6 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   data-model change (and the right moment for the FSM extraction) if Overleaf-style projects.
 - **Backlog features** (`docs/backlog.md`): Markdown format detection + settings suggestion,
   multi-column / scientific writing (columns → cross-refs → citations).
-- **Auto-update heading-anchor wiki links on heading rename** (currently resolve by
-  normalized heading text — task backlog #122).
 
 ---
 

@@ -1085,6 +1085,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     File-menu export helpers `handleAction` calls (incl. the recorded full backup).
   - `useLibraryQueries.ts` — search, the Files body filter, the map rail's headings.
   - `useCardHandlers.ts` — the Cards board's load / save / create / metadata handlers.
+  - `useHeadingRenameLinks.ts` — the offer to retarget links to a renamed heading.
   - `useHostApi.ts` — the imperative handle the integration wrapper and the iframe
     bridge drive (`useImperativeHandle`, `addDocuments`, `updateDocument`, …). Its
     dependency list names EVERYTHING its methods close over — nothing holds the
@@ -1686,6 +1687,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `activeDocId`/`hydratedDocId` at the very end, so an in-flight autosave passed
   the hydration re-assert and re-created the record after `storage.delete`
   committed. Bulk delete is sequential and awaited for the same class of reason.
+  **`patchDocById` refuses a document deleted since its read began** — being
+  deleted (`deletingDocs`) OR already deleted (`deletedAtSeq`, numbered, because a
+  delete that finishes entirely during the read has cleared its claim). It used
+  to write the record straight back after the delete (card saves, host updates,
+  retargeted links). Keep the check with no await between it and the write.
 - **`touchUpdated: false` is honoured by the ADAPTERS** via `stampUpdated`
   (`document.ts`) and the `_preserveUpdated` marker. Every `save()` used to stamp
   `updated` regardless, so the flag never did anything and recolouring or pinning
@@ -1921,9 +1927,41 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   Devanagari/Thai headings); a heading with no letters or digits compares on its
   exact text. `extractHeadings` is UNBOUNDED by default — a 40-heading cap meant for
   the long-removed in-graph structure view truncated the Outline, "Link to heading"
-  and `doc.outline` (A063); the map rail keeps its own `HEADING_CAP`. Renaming a
-  heading does NOT update the `[[Doc#Heading]]` links that point at it (a candidate
-  in HANDOVER.md §8, not built).
+  and `doc.outline` (A063); the map rail keeps its own `HEADING_CAP`.
+- **Renaming a heading OFFERS to retarget the links to it** (#122): the pure half
+  is `store/heading-renames.ts`, timing and writes `editor/useHeadingRenameLinks.ts`.
+  - **Baseline:** the heading texts at hydration (a `hydratedDocId` subscription).
+  - **When it checks:** `HEADING_RENAME_CHECK_MS` after the caret LEAVES a heading
+    (document `selectionchange`/`keyup`/`pointerup`, deferred one task, read from the
+    last-focused pane — ProseMirror `$from`, CodeMirror `resolveInner`), and on
+    every leaving path via useDocumentLifecycle's `onLeavingDoc` (switch, new,
+    `prepareToLeaveActiveDoc`, close with the content kept) — never on Discard,
+    delete or unmount. The heading the caret is in is excluded; a live composition
+    reschedules.
+  - **Alignment:** unchanged anchors are fixed points (prefix/suffix, then LCS);
+    the gaps pair IN ORDER at the SAME level. Offered only when the old anchor is
+    gone, was the first of its key, the new one is the first of its key, and
+    `isLinkableAnchor` (no `|`, `[`, `]`, line break).
+  - **Consent:** nothing is written without the toast; any close of it is
+    Dismiss, and either answer re-baselines only the offered renames. Renames are
+    claimed at leave time (an import leaves twice).
+  - **Update, open note:** ONE transaction under `closeHistory` (so ⌘Z takes back
+    exactly it), after ending a composition and `flushPendingSync` (a pending
+    markdown projection otherwise landed afterwards and the typed markdown was
+    lost). Read-only: no offer, and Update refuses.
+  - **Update, other notes:** `snapshotStore.record(…, "pre-link-update")`, then
+    `patchDocById({ canonical, expectedUpdated })`; never a note that is active,
+    schema-locked or holds a parked draft (`writableThroughStorage`, checked
+    before the read AND after the awaits). Such notes are named in the result
+    toast, never forced.
+  - **Links** are found like `scanWikiLinks` (marks and literal text, never in code
+    or inside another link) but with the renderer's tokenizer and
+    `parseWikiInner` (so `\|` aliases work), resolved by the ONE resolver; an
+    alias-less link's text follows its target by the turndown `wikiLink` rule's
+    own test.
+  - Known narrow race: a note opened while its `patchDocById` read is in flight
+    can load the pre-rewrite copy and autosave the old links back (the snapshot
+    keeps the rewrite recoverable).
 - **Right-click context menu** (`src/ui/EditorContextMenu.tsx` + generated
   `components/ui/context-menu.tsx`) wraps the panes and reuses `dispatch`; its
   "Link to heading" submenu inserts `[[#Heading]]` via `insertHeadingLink`, and the

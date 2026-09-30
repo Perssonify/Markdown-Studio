@@ -90,7 +90,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         ],
       },
       {
-        p: "Link to a heading with a wiki-style anchor: [[Document#Heading]] jumps to a heading in another note, and [[#Heading]] to one in the current note. The right-click menu’s “Link to heading” builds these for you.",
+        p: "Link to a heading with a wiki-style anchor: [[Document#Heading]] jumps to a heading in another note, and [[#Heading]] to one in the current note. The right-click menu’s “Link to heading” builds these for you. Rename a heading and, once you move on, you’re offered to update the links that pointed at its old name.",
       },
       {
         p: "The “Styled” switch in the Markdown pane header controls whether decorative formatting is kept as inline HTML in your Markdown (Styled) or stripped back to plain Markdown (Clean).",

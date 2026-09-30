@@ -231,6 +231,13 @@ finding IDs (A001–A114) are cited below.
   the keyboard navigation keys.
 
 ### Editor, links and search
+- **Renaming a heading no longer silently breaks the links to it.** Once the caret
+  leaves the heading, or you leave the note, you are offered to update every
+  `[[Note#Heading]]` and `[[#Heading]]` that pointed at the old name. The open
+  note is updated as one undoable step; other notes are updated with their
+  previous version kept in Version history. Dismiss leaves everything as it was.
+- A note deleted while a card save or a host update was writing it no longer
+  comes back.
 - **The word count counts every paragraph, heading, list item and table cell
   separately.** It ran the last word of each block into the first word of the
   next, so a four-item list counted as one word and every heading lost one.
