@@ -922,8 +922,8 @@ export function FindReplaceBar({
       role="dialog"
       aria-label={t("find.findAndReplace")}
       onKeyDown={(e) => {
-        // Esc closes from anywhere in the panel (e.g. after dragging, when focus
-        // isn't in one of the inputs that already handle Esc).
+        // Esc closes from anywhere in the panel, the inputs included — ONE
+        // handler: the inputs used to close on it too, so one Escape closed twice.
         if (e.key === "Escape") { e.preventDefault(); handleClose(); return; }
         // ⌘F / ⌘H switch modes while focus is INSIDE the panel — the global
         // shortcut listener is scoped to the editor container, so it can't see
@@ -1020,7 +1020,6 @@ export function FindReplaceBar({
               onChange={(e) => setFindText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") { e.preventDefault(); doFindNext(e.shiftKey ? -1 : 1); }
-                if (e.key === "Escape") { e.preventDefault(); handleClose(); }
               }}
               placeholder={isMd ? t("find.findInMarkdownPlaceholder") : t("find.findInRichTextPlaceholder")}
               // A placeholder is not a label: it vanishes once text is typed
@@ -1199,7 +1198,6 @@ export function FindReplaceBar({
               onChange={(e) => setReplaceText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") doReplace();
-                if (e.key === "Escape") { e.preventDefault(); handleClose(); }
               }}
               placeholder={t("find.replaceWithPlaceholder")}
               aria-label={t("find.replaceWith")}

@@ -407,10 +407,18 @@ describe("the panel's own keys and controls", () => {
     await settle();
     expect(screen.queryByLabelText("Replace with")).toBeNull();
     await act(async () => { fireEvent.keyDown(find(), { key: "Escape" }); });
-    // (Called twice today — the input's handler and the panel's both close on
-    // the same Escape. Harmless for the editor, whose close is idempotent.)
-    expect(onClose).toHaveBeenCalled();
+    // Exactly once: the input and the panel both used to close on one Escape.
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(md.highlights.at(-1)).toBeNull();
+  });
+
+  it("Escape in the Replace box closes once too", async () => {
+    const md = mdPane("abc");
+    const { find, onClose } = await open({ md });
+    await act(async () => { fireEvent.keyDown(find(), { key: "h", ctrlKey: true }); });
+    await settle();
+    await act(async () => { fireEvent.keyDown(screen.getByLabelText("Replace with"), { key: "Escape" }); });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("the close button closes; AltGr (Ctrl+Alt) never switches modes", async () => {
