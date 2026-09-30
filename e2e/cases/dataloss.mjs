@@ -9,8 +9,11 @@
 // `faults.mjs` already stops exactly where two of them begin: it drives two
 // tabs into a conflict, asserts the second parks a terminal status, and ends.
 // Everything below is what happens NEXT.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
-  serve, open, boot, seed, storedDoc, canonicalText, richText, runCase, until, APP_DIR, BLANK_PATH,
+  serve, open, boot, seed, storedDoc, canonicalText, richText, runCase, until, closeRig, APP_DIR, BLANK_PATH,
 } from "../lib.mjs";
 import { proseDoc } from "../docs.mjs";
 
@@ -165,5 +168,111 @@ runCase("dataloss", async (rep, onClose) => {
       !disk.includes("TAB-B-EDIT"), disk.slice(-200));
     rep.check("A018: and the reloaded tab says it is not saving",
       /another tab|conflict|not sav/i.test(await footer(b)), (await footer(b)).slice(0, 160));
+  }
+
+  // ── A086: an image stored as an asset survives a reload, an export and a
+  // restore into a fresh browser ──────────────────────────────────────────
+  // Pasted images now live in their own database (perssonify-assets) and the
+  // document holds a `pf-asset:` reference. What only a real browser can say:
+  // the picture is SHOWN (object URL, decoded pixels), the reference is what
+  // reached disk, the HTML export stands on its own, and a full backup carries
+  // the picture into a profile that has never seen it.
+  {
+    const srv = await serve(APP_DIR);
+    const rig = await open(srv.port, { label: "assets" });
+    onClose(async () => { await rig.browser.close(); srv.close(); });
+    const pg = rig.page;
+    await pg.goto(`http://127.0.0.1:${srv.port}${BLANK_PATH}`);
+    await seed(pg, [proseDoc("img", "Picture doc", 1)]);
+    await boot(pg, srv.port, { mode: "Split", settle: 6000 });
+
+    // A real 64×48 PNG, pasted into the rich pane as a FILE (a screenshot).
+    await pg.locator(".ProseMirror").first().click();
+    await pg.keyboard.press("Control+End");
+    const hash = await pg.evaluate(async () => {
+      const c = document.createElement("canvas");
+      c.width = 64; c.height = 48;
+      const x = c.getContext("2d");
+      x.fillStyle = "#c33"; x.fillRect(0, 0, 64, 48);
+      x.fillStyle = "#36c"; x.fillRect(8, 8, 30, 20);
+      const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "diagram.png", { type: "image/png" }));
+      const ev = new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true });
+      if (!ev.clipboardData || !ev.clipboardData.files.length) Object.defineProperty(ev, "clipboardData", { value: dt });
+      document.querySelector(".ProseMirror").dispatchEvent(ev);
+      const d = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+      return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    });
+    const shown = () => pg.evaluate(() =>
+      [...document.querySelectorAll(".ProseMirror img:not(.ProseMirror-separator)")]
+        .some((i) => i.src.startsWith("blob:") && i.naturalWidth === 64 && !i.hasAttribute("data-pf-asset-missing")));
+    rep.check("A086: a pasted image is SHOWN from the asset store (object URL, decoded)",
+      await until(shown, { timeout: 15000 }));
+    rep.check("A086: no live <img> was ever handed the pf-asset: reference",
+      await pg.evaluate(() => ![...document.querySelectorAll("img")].some((i) => (i.getAttribute("src") || "").startsWith("pf-asset:"))));
+
+    const onDisk = await until(async () => {
+      const d = await storedDoc(pg, "img");
+      return d && JSON.stringify(d.canonical).includes(`pf-asset:${hash}`) ? d : null;
+    }, { timeout: 30000 });
+    rep.check("A086: the document on disk holds the reference, not base64",
+      !!onDisk && !JSON.stringify(onDisk).includes("base64,"), JSON.stringify(onDisk?.canonical ?? null).slice(0, 200));
+    const assetMeta = await pg.evaluate((h) => new Promise((res) => {
+      const r = indexedDB.open("perssonify-assets");
+      r.onsuccess = () => {
+        const q = r.result.transaction("meta").objectStore("meta").get(h);
+        q.onsuccess = () => { res(q.result ?? null); r.result.close(); };
+        q.onerror = () => res(null);
+      };
+      r.onerror = () => res(null);
+    }), hash);
+    rep.check("A086: the bytes are in the perssonify-assets database, once",
+      !!assetMeta && assetMeta.mime === "image/png", JSON.stringify(assetMeta));
+    rep.check("A086: the markdown pane shows a short reference, not a wall of base64",
+      await until(async () => {
+        const t = await pg.evaluate(() => document.querySelector(".cm-content")?.textContent ?? "");
+        return t.includes(`pf-asset:${hash.slice(0, 8)}…`) && !t.includes("base64");
+      }, { timeout: 10000 }));
+
+    await pg.reload({ waitUntil: "networkidle" });
+    rep.check("A086: after a reload the image is still there",
+      await until(shown, { timeout: 20000 }));
+
+    // File ▸ Export ▸ HTML is self-contained. Downloads are saved OUT of the
+    // browser's artifact folder, which is deleted when that browser closes.
+    const exportVia = async (item) => {
+      const dl = pg.waitForEvent("download", { timeout: 20000 });
+      await pg.locator('button:has-text("File")').first().click();
+      await pg.locator('[role="menuitem"]:has-text("Export")').first().click();
+      await pg.locator(`[role="menuitem"]:has-text("${item}")`).first().click();
+      const d = await dl;
+      const to = path.join(os.tmpdir(), `e2e-a086-${Date.now()}-${d.suggestedFilename()}`);
+      await d.saveAs(to);
+      onClose(async () => fs.rmSync(to, { force: true }));
+      return to;
+    };
+    const html = fs.readFileSync(await exportVia("HTML (.html)"), "utf8");
+    rep.check("A086: the HTML export embeds the image as data",
+      html.includes("data:image/png;base64,") && !html.includes("pf-asset:"), html.slice(0, 200));
+
+    // Full backup → a FRESH profile (a new browser) → import → the image is back.
+    const zipPath = await exportVia("Full backup (.zip)");
+    const zipBytes = fs.readFileSync(zipPath);
+    rep.check("A086: the backup carries the image as a file",
+      zipBytes.includes(Buffer.from(`assets/${hash}.png`)), `${zipBytes.length} bytes`);
+    await closeRig(rig);
+
+    const fresh = await open(srv.port, { label: "assets restore (fresh profile)" });
+    const p2 = fresh.page;
+    await boot(p2, srv.port, { mode: "Split", settle: 6000 });
+    await p2.locator('input[type="file"]').first().setInputFiles(zipPath);
+    const restored = () => p2.evaluate(() =>
+      [...document.querySelectorAll(".ProseMirror img:not(.ProseMirror-separator)")]
+        .some((i) => i.src.startsWith("blob:") && i.naturalWidth === 64));
+    rep.check("A086: restored on a fresh profile, the document shows its image",
+      await until(restored, { timeout: 30000 }),
+      await p2.evaluate(() => document.querySelector(".ProseMirror")?.innerHTML.slice(0, 300)));
+    await closeRig(fresh);
   }
 });
