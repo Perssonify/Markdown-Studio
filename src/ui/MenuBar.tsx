@@ -41,6 +41,7 @@ import { TableGridPicker } from "./TableGridPicker";
 import { THEME_OPTIONS, ThemeSwatch } from "./ThemeControls";
 import { selectMenuBody, type MenuPrimitives } from "./SelectMenuContent";
 import { promptImage } from "../formatting/image-insert";
+import { t, useT } from "../i18n";
 
 // Primitive family for the shared Select ▸ … renderer (dropdown variant).
 const DROPDOWN_SELECT_PRIMS = {
@@ -128,9 +129,9 @@ function Menu({ label, disabled, children }: { label: string; disabled?: boolean
  * and always for the active one, so the current surface is never unlabeled.
  */
 const SURFACES = [
-  { id: "editor", icon: PenLine, label: "Editor", hint: "" },
-  { id: "cards", icon: StickyNote, label: "Cards", hint: "⌘⇧K" },
-  { id: "map", icon: Network, label: "Map", hint: "⌘⇧G" },
+  { id: "editor", icon: PenLine, get label() { return t("menu.editor"); }, hint: "" },
+  { id: "cards", icon: StickyNote, get label() { return t("menu.cards"); }, hint: "⌘⇧K" },
+  { id: "map", icon: Network, get label() { return t("menu.map"); }, hint: "⌘⇧G" },
 ] as const;
 
 // Menu shortcut hint, converted for the current platform (⌘B → Ctrl+B).
@@ -149,6 +150,7 @@ const Sc = ({ children }: { children: ReactNode }) => (
  * editor handler.
  */
 export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
+  const t = useT();
   const { prompt, equation } = useDialog();
   // Raw `theme` (not resolvedTheme) so "System" is a genuine, selectable choice
   // rather than being folded into the light/dark it currently resolves to.
@@ -191,96 +193,96 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
   // grouped dropdown. `disabled` greys out sections that need an open document.
   const sections: { label: string; disabled?: boolean; content: ReactNode }[] = [
     {
-      label: "File",
+      label: t("menu.file"),
       content: (
         <>
-          <DropdownMenuItem onClick={props.onNew}>New document<Sc>⌘N</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={openFilePicker}>Open file…</DropdownMenuItem>
+          <DropdownMenuItem onClick={props.onNew}>{t("menu.newDocument")}<Sc>⌘N</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={openFilePicker}>{t("menu.openFile")}</DropdownMenuItem>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Import</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>{t("common.import")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={openFilePicker}>File(s) / archive…</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("import-url")}>From URL…</DropdownMenuItem>
+              <DropdownMenuItem onClick={openFilePicker}>{t("menu.filesArchive")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("import-url")}>{t("menu.fromUrl")}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={!hasDoc}>Export</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger disabled={!hasDoc}>{t("common.export")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => props.onAction("export-md")}>Markdown (.md)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("export-html")}>HTML (.html)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("export-json")}>ProseMirror JSON</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("export-docx")}>Word (.docx)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("export-pdf")}>PDF / Print…</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("export-md")}>{t("menu.markdownMd")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("export-html")}>{t("menu.htmlHtml")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("export-json")}>{t("menu.prosemirrorJson")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("export-docx")}>{t("menu.wordDocx")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("export-pdf")}>{t("menu.pdfPrint")}</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => props.onAction("export-all-zip")}>All documents (.zip)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("export-backup-zip")}>Full backup (.zip) — restorable</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("export-all-zip")}>{t("menu.allDocumentsZip")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("export-backup-zip")}>{t("menu.fullBackupZipRestorable")}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!hasDoc} onClick={props.onSave}>Save<Sc>⌘S</Sc></DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasDoc} onClick={props.onRevert}>Revert to saved</DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasDoc} onClick={props.onClose}>Close document</DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={props.onSave}>{t("common.save")}<Sc>⌘S</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={props.onRevert}>{t("menu.revertToSaved")}</DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={props.onClose}>{t("menu.closeDocument")}</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={props.onSettings}>Settings / Preferences…</DropdownMenuItem>
+          <DropdownMenuItem onClick={props.onSettings}>{t("menu.settingsPreferences")}</DropdownMenuItem>
         </>
       ),
     },
     {
-      label: "Edit",
+      label: t("menu.edit"),
       content: (
         <>
           {/* Undo / redo */}
-          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.dispatch("undo")}>Undo<Sc>⌘Z</Sc></DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.dispatch("redo")}>Redo<Sc>⌘⇧Z</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.dispatch("undo")}>{t("common.undo")}<Sc>⌘Z</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.dispatch("redo")}>{t("common.redo")}<Sc>⌘⇧Z</Sc></DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Clipboard */}
-          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.onClipboard?.("cut")}>Cut<Sc>⌘X</Sc></DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.onClipboard?.("copy")}>Copy<Sc>⌘C</Sc></DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.onClipboard?.("paste")}>Paste<Sc>⌘V</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.onClipboard?.("cut")}>{t("menu.cut")}<Sc>⌘X</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.onClipboard?.("copy")}>{t("common.copy")}<Sc>⌘C</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.onClipboard?.("paste")}>{t("menu.paste")}<Sc>⌘V</Sc></DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Selection — Select all sits with the structured Select… submenu */}
-          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.dispatch("selectAll")}>Select all<Sc>⌘A</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.dispatch("selectAll")}>{t("menu.selectAll")}<Sc>⌘A</Sc></DropdownMenuItem>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={!hasDoc}>Select by type…</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger disabled={!hasDoc}>{t("menu.selectByType")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="max-h-[70vh] overflow-y-auto">
               {selectMenuBody(DROPDOWN_SELECT_PRIMS, props.dispatch)}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
           {/* Formatting */}
-          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.dispatch("clearFormatting")}>Clear formatting</DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.dispatch("clearFormatting")}>{t("menu.clearFormatting")}</DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Find / search */}
-          <DropdownMenuItem disabled={!hasDoc} onClick={props.onFindReplace}>Find…<Sc>⌘F</Sc></DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={props.onFindReplace}>{t("menu.find")}<Sc>⌘F</Sc></DropdownMenuItem>
           {props.onReplace && (
-            <DropdownMenuItem disabled={!hasDoc} onClick={props.onReplace}>Replace…<Sc>⌘H</Sc></DropdownMenuItem>
+            <DropdownMenuItem disabled={!hasDoc} onClick={props.onReplace}>{t("menu.replace")}<Sc>⌘H</Sc></DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={props.onSearch}>Search all notes…<Sc>⌘⇧F</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={props.onSearch}>{t("menu.searchAllNotes")}<Sc>⌘⇧F</Sc></DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Copy the whole document to the clipboard in another format */}
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={!hasDoc}>Copy as…</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger disabled={!hasDoc}>{t("menu.copyAs")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => props.onAction("md")}>Markdown</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("html")}>HTML</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.onAction("json")}>ProseMirror JSON</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("md")}>{t("menu.markdown")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("html")}>{t("menu.html")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.onAction("json")}>{t("menu.prosemirrorJson")}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
           {/* Destructive — kept last, on its own */}
-          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.onAction("clear")}>Clear document…</DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc || readOnly} onClick={() => props.onAction("clear")}>{t("menu.clearDocument")}</DropdownMenuItem>
         </>
       ),
     },
     {
-      label: "Insert",
+      label: t("menu.insert"),
       disabled: !hasDoc || readOnly,
       content: (
         <>
-          <DropdownMenuItem onClick={() => insertWithPrompt("createLink", "Insert Link", { placeholder: "https://example.com", description: "Enter the URL for the link." })}>Link…<Sc>⌘K</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={async () => { const img = await promptImage(prompt); if (img) props.dispatch("insertImage", img); }}>Image…</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insertWithPrompt("createLink", t("menu.insertLinkTitle"), { placeholder: t("menu.insertLinkPlaceholder"), description: t("menu.insertLinkDescription") })}>{t("menu.link")}<Sc>⌘K</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={async () => { const img = await promptImage(prompt); if (img) props.dispatch("insertImage", img); }}>{t("menu.image")}</DropdownMenuItem>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Table</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>{t("menu.table")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="p-0">
               <TableGridPicker
                 inline
@@ -290,44 +292,44 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={async () => { const v = await equation("Insert Formula (block)", { display: "block", description: "LaTeX rendered with KaTeX ($$…$$)." }); if (v && v.trim()) props.dispatch("insertMathBlock", v); }}>Formula (block)…</DropdownMenuItem>
-          <DropdownMenuItem onClick={async () => { const v = await equation("Insert inline formula", { display: "inline", description: "Inline LaTeX ($…$)." }); if (v && v.trim()) props.dispatch("insertMathInline", v); }}>Inline formula…</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("insertMermaid")}>Diagram (Mermaid)</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("insertAbc")}>Music score (ABC)</DropdownMenuItem>
+          <DropdownMenuItem onClick={async () => { const v = await equation(t("menu.insertFormulaBlockTitle"), { display: "block", description: t("menu.insertFormulaBlockDescription") }); if (v && v.trim()) props.dispatch("insertMathBlock", v); }}>{t("menu.formulaBlock")}</DropdownMenuItem>
+          <DropdownMenuItem onClick={async () => { const v = await equation(t("menu.insertInlineFormulaTitle"), { display: "inline", description: t("menu.insertInlineFormulaDescription") }); if (v && v.trim()) props.dispatch("insertMathInline", v); }}>{t("menu.inlineFormula")}</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("insertMermaid")}>{t("menu.diagramMermaid")}</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("insertAbc")}>{t("menu.musicScoreAbc")}</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Callout</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>{t("menu.callout")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "note")}>Note</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "tip")}>Tip</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "important")}>Important</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "warning")}>Warning</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "caution")}>Caution</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "note")}>{t("menu.note")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "tip")}>{t("menu.tip")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "important")}>{t("menu.important")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "warning")}>{t("menu.warning")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("insertCallout", "caution")}>{t("menu.caution")}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem onClick={() => props.dispatch("insertDetails")}>Collapsible details</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("codeBlock")}>Code block</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("horizontalRule")}>Horizontal rule</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("insertDetails")}>{t("menu.collapsibleDetails")}</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("codeBlock")}>{t("menu.codeBlock")}</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("horizontalRule")}>{t("menu.horizontalRule")}</DropdownMenuItem>
         </>
       ),
     },
     {
-      label: "View",
+      label: t("menu.view"),
       content: (
         <>
           <DropdownMenuRadioGroup value={props.mode} onValueChange={(v) => { if (!readOnly) props.setMode(v); }}>
-            <DropdownMenuRadioItem value={MODES.MD} disabled={readOnly}>Markdown</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value={MODES.HTML} disabled={readOnly}>Rich text</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value={MODES.SPLIT} disabled={readOnly}>Split</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value={MODES.MD} disabled={readOnly}>{t("menu.markdown")}</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value={MODES.HTML} disabled={readOnly}>{t("menu.richText")}</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value={MODES.SPLIT} disabled={readOnly}>{t("menu.split")}</DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={props.onToggleSidebar}>Toggle workspace panel<Sc>⌘⇧D</Sc></DropdownMenuItem>
-          {props.onOutline && <DropdownMenuItem onClick={props.onOutline}>Outline</DropdownMenuItem>}
+          <DropdownMenuItem onClick={props.onToggleSidebar}>{t("menu.toggleWorkspacePanel")}<Sc>⌘⇧D</Sc></DropdownMenuItem>
+          {props.onOutline && <DropdownMenuItem onClick={props.onOutline}>{t("menu.outline")}</DropdownMenuItem>}
           <DropdownMenuSeparator />
           {/* The same three-way surface choice as the top-bar switcher, so the
               menu can't imply the views are independent toggles. */}
           <DropdownMenuGroup>
-            <DropdownMenuLabel>Show</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("menu.show")}</DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={surface}
               onValueChange={(v) => {
@@ -336,31 +338,31 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
                 else props.onEditor?.();
               }}
             >
-              <DropdownMenuRadioItem value="editor">Editor</DropdownMenuRadioItem>
-              {props.onCards && <DropdownMenuRadioItem value="cards">Cards<Sc>⌘⇧K</Sc></DropdownMenuRadioItem>}
-              <DropdownMenuRadioItem value="map">Relationship map<Sc>⌘⇧G</Sc></DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="editor">{t("menu.editor")}</DropdownMenuRadioItem>
+              {props.onCards && <DropdownMenuRadioItem value="cards">{t("menu.cards")}<Sc>⌘⇧K</Sc></DropdownMenuRadioItem>}
+              <DropdownMenuRadioItem value="map">{t("menu.relationshipMap")}<Sc>⌘⇧G</Sc></DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuCheckboxItem checked={readOnly} onCheckedChange={(v) => setReadOnly(!!v)}>
-            Read-only mode
+            {t("menu.readOnlyMode")}
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem checked={focusMode} onCheckedChange={(v) => setFocusMode(!!v)}>
-            Focus mode
+            {t("menu.focusMode")}
           </DropdownMenuCheckboxItem>
           {/* Placeholder ad slots are a development-only surface (A078). */}
           {adsAvailable() && (
             <DropdownMenuCheckboxItem checked={showAds} onCheckedChange={(v) => setShowAds(!!v)}>
-              Show ads
+              {t("menu.showAds")}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuSeparator />
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Appearance</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>{t("menu.appearance")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               {/* GroupLabel MUST live inside a Group (Base UI throws otherwise). */}
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Theme</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("menu.theme")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={theme ?? "system"} onValueChange={(v) => setTheme(v)}>
                   {THEME_OPTIONS.map((o) => (
                     <DropdownMenuRadioItem key={o.id} value={o.id}>
@@ -372,7 +374,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Accent / style</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("menu.accentStyle")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={palette} onValueChange={changePalette}>
                   {PALETTES.map((p) => (
                     <DropdownMenuRadioItem key={p.id} value={p.id}>
@@ -392,102 +394,102 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
       ),
     },
     {
-      label: "Format",
+      label: t("menu.format"),
       disabled: !hasDoc || readOnly,
       content: (
         <>
-          <DropdownMenuItem onClick={() => props.dispatch("bold")}>Bold<Sc>⌘B</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("italic")}>Italic<Sc>⌘I</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("underline")}>Underline<Sc>⌘U</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("strikethrough")}>Strikethrough<Sc>⌘⇧X</Sc></DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.dispatch("code")}>Inline code<Sc>⌘E</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("bold")}>{t("menu.bold")}<Sc>⌘B</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("italic")}>{t("menu.italic")}<Sc>⌘I</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("underline")}>{t("menu.underline")}<Sc>⌘U</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("strikethrough")}>{t("menu.strikethrough")}<Sc>⌘⇧X</Sc></DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("code")}>{t("menu.inlineCode")}<Sc>⌘E</Sc></DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Heading</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>{t("menu.heading")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => props.dispatch("heading", 0)}>Normal text</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("heading", 0)}>{t("menu.normalText")}</DropdownMenuItem>
               {[1, 2, 3, 4, 5, 6].map((lvl) => (
-                <DropdownMenuItem key={lvl} onClick={() => props.dispatch("heading", lvl)}>Heading {lvl}</DropdownMenuItem>
+                <DropdownMenuItem key={lvl} onClick={() => props.dispatch("heading", lvl)}>{t("menu.headingLevel", { level: lvl })}</DropdownMenuItem>
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Lists</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>{t("menu.lists")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => props.dispatch("bulletList")}>Bulleted list</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("orderedList")}>Numbered list</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("taskList")}>Task list</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("bulletList")}>{t("menu.bulletedList")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("orderedList")}>{t("menu.numberedList")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("taskList")}>{t("menu.taskList")}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem onClick={() => props.dispatch("blockquote")}>Blockquote</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("blockquote")}>{t("menu.blockquote")}</DropdownMenuItem>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Change case</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>{t("menu.changeCase")}</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => props.dispatch("changeCase", "upper")}>UPPERCASE</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("changeCase", "lower")}>lowercase</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("changeCase", "title")}>Title Case</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("changeCase", "upper")}>{t("menu.uppercase")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("changeCase", "lower")}>{t("menu.lowercase")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("changeCase", "title")}>{t("menu.titleCase")}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuLabel>All headings</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => props.dispatch("headingsCase", "upper")}>UPPERCASE</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => props.dispatch("headingsCase", "lower")}>lowercase</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => props.dispatch("headingsCase", "title")}>Title Case</DropdownMenuItem>
+                <DropdownMenuLabel>{t("menu.allHeadings")}</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => props.dispatch("headingsCase", "upper")}>{t("menu.uppercase")}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => props.dispatch("headingsCase", "lower")}>{t("menu.lowercase")}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => props.dispatch("headingsCase", "title")}>{t("menu.titleCase")}</DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuCheckboxItem
                 checked={caseContentOnly}
                 onCheckedChange={(v) => setCaseContentOnly(!!v)}
               >
-                Content only (skip code &amp; links)
+                {t("menu.caseContentOnly")}
               </DropdownMenuCheckboxItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSub>
             {/* Alignment has no plain-Markdown representation; say so here rather
                 than letting the fidelity badge be the first the user hears of it. */}
-            <DropdownMenuSubTrigger title="Plain Markdown cannot record alignment — the fidelity indicator flags it, and it is not carried by an export.">
-              Align
+            <DropdownMenuSubTrigger title={t("menu.alignNotInMarkdown")}>
+              {t("menu.align")}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              <DropdownMenuItem onClick={() => props.dispatch("alignLeft")}>Left</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("alignCenter")}>Center</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("alignRight")}>Right</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => props.dispatch("alignJustify")}>Justify</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("alignLeft")}>{t("menu.left")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("alignCenter")}>{t("menu.center")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("alignRight")}>{t("menu.right")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => props.dispatch("alignJustify")}>{t("menu.justify")}</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => props.dispatch("removeFormat")}>Clear formatting</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.dispatch("removeFormat")}>{t("menu.clearFormatting")}</DropdownMenuItem>
         </>
       ),
     },
     {
-      label: "Tools",
+      label: t("menu.tools"),
       content: (
         <>
-          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.onAction("prompt")}>Copy as AI prompt</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => props.onAction("export-graph")}>Copy graph JSON</DropdownMenuItem>
+          <DropdownMenuItem disabled={!hasDoc} onClick={() => props.onAction("prompt")}>{t("menu.copyAsAiPrompt")}</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => props.onAction("export-graph")}>{t("menu.copyGraphJson")}</DropdownMenuItem>
           {props.onLinkBuilder && (
-            <DropdownMenuItem onClick={props.onLinkBuilder}>Share / embed link…</DropdownMenuItem>
+            <DropdownMenuItem onClick={props.onLinkBuilder}>{t("menu.shareEmbedLink")}</DropdownMenuItem>
           )}
           {(props.onVersionHistory || props.onMemory) && <DropdownMenuSeparator />}
           {props.onVersionHistory && (
-            <DropdownMenuItem onClick={props.onVersionHistory}>Version history…</DropdownMenuItem>
+            <DropdownMenuItem onClick={props.onVersionHistory}>{t("menu.versionHistory")}</DropdownMenuItem>
           )}
           {props.onMemory && (
-            <DropdownMenuItem onClick={props.onMemory}>Memory &amp; undo history…</DropdownMenuItem>
+            <DropdownMenuItem onClick={props.onMemory}>{t("menu.memoryAndUndoHistory")}</DropdownMenuItem>
           )}
         </>
       ),
     },
     {
-      label: "Help",
+      label: t("menu.help"),
       content: (
         <>
-          {props.onHelp && <DropdownMenuItem onClick={props.onHelp}>Help &amp; documentation</DropdownMenuItem>}
-          {props.onStartTour && <DropdownMenuItem onClick={props.onStartTour}>Take a guided tour</DropdownMenuItem>}
-          <DropdownMenuItem onClick={() => (props.onHelp ? props.onHelp() : setDialog("shortcuts"))}>Keyboard shortcuts</DropdownMenuItem>
+          {props.onHelp && <DropdownMenuItem onClick={props.onHelp}>{t("menu.helpAndDocumentation")}</DropdownMenuItem>}
+          {props.onStartTour && <DropdownMenuItem onClick={props.onStartTour}>{t("menu.takeAGuidedTour")}</DropdownMenuItem>}
+          <DropdownMenuItem onClick={() => (props.onHelp ? props.onHelp() : setDialog("shortcuts"))}>{t("menu.keyboardShortcuts")}</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => (props.onAbout ? props.onAbout() : setDialog("about"))}>About {APP_NAME}</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => (props.onAbout ? props.onAbout() : setDialog("about"))}>{t("menu.aboutApp", { app: APP_NAME })}</DropdownMenuItem>
         </>
       ),
     },
@@ -519,7 +521,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
         <DropdownMenu onOpenChange={(open) => { if (!open) setMobileSection(null); }}>
           <DropdownMenuTrigger
             render={
-              <Button data-tour="menus" variant="ghost" size="icon" className="size-10 text-foreground/80" aria-label="Menu" title="Menu" />
+              <Button data-tour="menus" variant="ghost" size="icon" className="size-10 text-foreground/80" aria-label={t("menu.menu")} title={t("menu.menu")} />
             }
           >
             <MenuIcon className="size-6" />
@@ -550,7 +552,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
                     className="text-muted-foreground"
                   >
                     <ChevronLeft className="size-4" />
-                    All menus
+                    {t("menu.allMenus")}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {/* GroupLabel MUST live inside a Group (Base UI throws otherwise —
@@ -642,8 +644,8 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
           variant="ghost"
           size="icon"
           className="size-8 text-muted-foreground hover:text-foreground"
-          title="Settings"
-          aria-label="Settings"
+          title={t("common.settings")}
+          aria-label={t("common.settings")}
           onClick={props.onSettings}
         >
           <SettingsIcon className="size-4" />
@@ -658,19 +660,18 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
               <AlertDialogHeader>
                 <AlertDialogTitle>{APP_NAME}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  A dual-pane Markdown editor that runs in your browser. Version {VERSION}. Your documents
-                  are stored locally in this browser, not on a server.
+                  {t("menu.aboutDescription", { version: VERSION })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogAction onClick={() => setDialog(null)}>Close</AlertDialogAction>
+                <AlertDialogAction onClick={() => setDialog(null)}>{t("common.close")}</AlertDialogAction>
               </AlertDialogFooter>
             </>
           ) : (
             <>
               <AlertDialogHeader>
-                <AlertDialogTitle>Keyboard shortcuts</AlertDialogTitle>
-                <AlertDialogDescription>Common actions, shown for this device&apos;s keyboard.</AlertDialogDescription>
+                <AlertDialogTitle>{t("menu.keyboardShortcuts")}</AlertDialogTitle>
+                <AlertDialogDescription>{t("menu.shortcutsDescription")}</AlertDialogDescription>
               </AlertDialogHeader>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
 {COMMON_SHORTCUTS.map(({ action: label, keys }) => (
@@ -681,7 +682,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
                 ))}
               </div>
               <AlertDialogFooter>
-                <AlertDialogAction onClick={() => setDialog(null)}>Close</AlertDialogAction>
+                <AlertDialogAction onClick={() => setDialog(null)}>{t("common.close")}</AlertDialogAction>
               </AlertDialogFooter>
             </>
           )}
