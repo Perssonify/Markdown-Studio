@@ -27,7 +27,20 @@ import {
   truncateLabel,
   type LabelBox,
 } from "../store/graph-metrics";
-import { ALPHA_DECAY, MAX_FRAMES, PAD, seedPositions, shouldFreeze, stepLayout, worldFor, type SimPoint } from "../store/graph-physics";
+import {
+  ALPHA_DECAY,
+  clampToRegion,
+  MAX_FRAMES,
+  PAD,
+  planFolderLayout,
+  seedPositions,
+  shouldFreeze,
+  stepLayout,
+  twoLevel,
+  worldFor,
+  type FolderPlan,
+  type SimPoint,
+} from "../store/graph-physics";
 import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry } from "../store/graph-draw";
 import { useT } from "../i18n";
 
@@ -193,6 +206,10 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   dimsRef.current = dims;
   /** Layout space — physics only. */
   const worldRef = useRef(worldFor(graph.nodes.length, folders.length > 0));
+  /** A large folder map's first level — where each folder's region goes
+   *  (`planFolderLayout`); null for every other map. Made when the map is
+   *  (re)seeded, read by every step and by a drag. */
+  const planRef = useRef<FolderPlan | null>(null);
   /** Force temperature; decays to nothing so the loop always converges. */
   const alphaRef = useRef(1);
   /** Drawn size of each node and its label, for the forces that reserve room for
@@ -288,6 +305,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       radius: (id) => meta.radius.get(id) ?? 7,
       label: (id) => meta.label.get(id) ?? "",
       pinned: dragRef.current?.id ?? null,
+      plan: planRef.current,
     });
     alphaRef.current *= ALPHA_DECAY;
     layoutVersionRef.current += 1;
@@ -523,15 +541,35 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   // Memoized: sorting every id on every render cost more than the render at
   // library scale, and the answer only changes with the node list.
   const nodeKey = useMemo(() => graph.nodes.map((n) => n.id).sort().join("|"), [graph.nodes]);
+  // A large folder map's regions come from its folders, so a note moved to
+  // another folder re-plans it. (Every other map keys on its notes alone, as
+  // it always has.)
+  const planKey = useMemo(
+    () => (twoLevel(graph.nodes.length, folders.length > 0)
+      ? folders.map((f) => `${f.id}:${f.docIds.join(",")}`).join("|")
+      : ""),
+    [graph.nodes.length, folders]
+  );
   useEffect(() => {
     const cur = posRef.current;
     const next = new Map<string, Pt>();
     const n = graph.nodes.length || 1;
-    worldRef.current = worldFor(n, foldersRef.current.length > 0);
+    const ids = graph.nodes.map((node) => node.id);
+    const meta = metaRef.current;
+    // Above FOLDER_LAYOUT_MAX notes a folder map is laid out on two levels:
+    // the folders' regions first, then each note inside its own.
+    const plan = planFolderLayout({
+      ids, folders: foldersRef.current, edges: graph.edges,
+      radius: (id) => meta.radius.get(id) ?? 7, label: (id) => meta.label.get(id) ?? "",
+    });
+    planRef.current = plan;
+    worldRef.current = plan ? plan.world : worldFor(n, foldersRef.current.length > 0);
     // Folderless: the ring the map has always started from. With folders, each
-    // folder starts as its own cluster (seedPositions explains why).
-    const seeded = seedPositions(graph.nodes.map((node) => node.id), foldersRef.current, worldRef.current);
-    for (const node of graph.nodes) next.set(node.id, cur.get(node.id) ?? seeded.get(node.id)!);
+    // folder starts as its own cluster (seedPositions explains why); with a
+    // plan, EVERY note starts at its home in its region — one kept where it
+    // was would sit in whatever region used to be there.
+    const seeded = seedPositions(ids, foldersRef.current, worldRef.current, plan);
+    for (const node of graph.nodes) next.set(node.id, (plan ? null : cur.get(node.id)) ?? seeded.get(node.id)!);
     posRef.current = next;
     layoutVersionRef.current += 1;
     // A large map settling under reduced motion draws NOTHING until it rests
@@ -545,7 +583,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       runningRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeKey]);
+  }, [nodeKey, planKey]);
 
   // Track the canvas's real size. A resize NEVER reheats the simulation — the
   // layout lives in world-space, so all a new viewport changes is the camera.
@@ -720,7 +758,16 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       const { x, y } = toView(e.clientX, e.clientY);
       const { w, h } = worldRef.current;
       const p = posRef.current.get(drag.id);
-      if (p) { p.x = Math.max(PAD, Math.min(w - PAD, x)); p.y = Math.max(PAD, Math.min(h - PAD, y)); p.vx = 0; p.vy = 0; }
+      if (p) {
+        // In a two-level layout a note stays inside its folder's region: it
+        // follows the pointer to the nearest point in it.
+        const meta = metaRef.current;
+        const plan = planRef.current;
+        const held = plan && clampToRegion(plan, drag.id, x, y, meta.radius.get(drag.id) ?? 7, meta.label.get(drag.id) ?? "");
+        p.x = held ? held.x : Math.max(PAD, Math.min(w - PAD, x));
+        p.y = held ? held.y : Math.max(PAD, Math.min(h - PAD, y));
+        p.vx = 0; p.vy = 0;
+      }
       // The dragged note follows the pointer even while the rest of a large map
       // is held still for a reduced-motion settle.
       const shown = drawPosRef.current?.get(drag.id);

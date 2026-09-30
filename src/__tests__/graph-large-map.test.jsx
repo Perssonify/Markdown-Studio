@@ -160,6 +160,90 @@ describe("a large map", () => {
     expect(worst).toBeLessThan(0.02);
   }, 30000);
 
+  it("lays a large FOLDER map out on two levels: no note on another, containers apart — even mid-drag", async () => {
+    // Above FOLDER_LAYOUT_MAX (500) the map plans the folders' regions and
+    // holds each note inside its own (graph-two-level.test.js has the layout
+    // itself); this pins that the COMPONENT uses the plan — in every step, and
+    // for a note being dragged. 600 notes, 50 folders of 9, 150 in none.
+    const n = 600;
+    const nodes = Array.from({ length: n }, (_, i) => ({ id: `n${i}`, title: `Note number ${i}`, backlinks: i % 4, forwardLinks: 1 }));
+    const edges = nodes.slice(1).map((node, i) => ({ source: node.id, target: `n${Math.floor(i / 3)}` }));
+    const folders = Array.from({ length: 50 }, (_, f) => ({
+      id: `f${f}`, name: `Folder ${f}`, docIds: nodes.filter((_, i) => i < 450 && i % 50 === f).map((x) => x.id),
+    }));
+    const view = (fs) => <GraphView graph={{ nodes, edges }} folders={fs} activeDocId="n0" onNavigate={vi.fn()} onClose={vi.fn()} />;
+    const { container, rerender } = render(view(folders));
+    await atRest(container);
+    const boxes = () => [...container.querySelectorAll(".pf-folder-box")].map((r) => {
+      const x0 = Number(r.getAttribute("x")), y0 = Number(r.getAttribute("y"));
+      return { x0, y0, x1: x0 + Number(r.getAttribute("width")), y1: y0 + Number(r.getAttribute("height")),
+        docs: new Set(r.closest("[data-folder-docs]").getAttribute("data-folder-docs").split(" ")) };
+    });
+    const overlapping = (bs) => {
+      let hits = 0;
+      for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
+        const A = bs[i], B = bs[j];
+        if (A.x0 < B.x1 && B.x0 < A.x1 && A.y0 < B.y1 && B.y0 < A.y1) hits++;
+      }
+      return hits;
+    };
+    const dots = new Map();
+    for (const p of container.querySelectorAll(".pf-node-dots")) {
+      const ids = (p.getAttribute("data-doc-ids") || "").split(" ").filter(Boolean);
+      parseCircles(p.getAttribute("d") || "").forEach((dot, i) => dots.set(ids[i], dot));
+    }
+    expect(dots.size).toBe(n);
+    expect(new Set([...dots.values()].map((d) => `${Math.round(d.x)},${Math.round(d.y)}`)).size).toBe(n);
+    const rested = boxes();
+    expect(rested).toHaveLength(50);
+    expect(overlapping(rested)).toBe(0);
+    let strangers = 0;
+    for (const b of rested) for (const [id, d] of dots) if (!b.docs.has(id) && d.x > b.x0 && d.x < b.x1 && d.y > b.y0 && d.y < b.y1) strangers++;
+    expect(strangers).toBe(0);
+
+    // Drag a filed note far off the map: it stops at the edge of its folder's
+    // region, so its container cannot be stretched over its neighbours'.
+    const svg = container.querySelector("svg[role='group']");
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0 });
+    const id = "n7", dot = dots.get(id);
+    const cam = container.querySelector("svg[role='group'] > g").style.transform;
+    const [, tx, ty, k] = cam.match(/translate\((-?[\d.e+-]+)px, (-?[\d.e+-]+)px\) scale\((-?[\d.e+-]+)\)/).map(Number);
+    act(() => {
+      svg.dispatchEvent(new MouseEvent("pointerdown", { clientX: dot.x * k + tx, clientY: dot.y * k + ty, bubbles: true, cancelable: true }));
+      window.dispatchEvent(new MouseEvent("pointermove", { clientX: -4000, clientY: -4000, bubbles: true }));
+    });
+    const dragged = boxes();
+    expect(dragged.find((b) => b.docs.has(id))).toBeTruthy();
+    expect(overlapping(dragged)).toBe(0);
+    act(() => { window.dispatchEvent(new MouseEvent("pointerup", { clientX: -4000, clientY: -4000, bubbles: true })); });
+
+    // Moving a note to another folder re-plans the regions: without that, it
+    // would stay in its old folder's region and stretch its new folder's
+    // container across the map.
+    const moved = folders.map((f) => ({ ...f, docIds: f.id === "f7" ? f.docIds.filter((d) => d !== id) : f.id === "f30" ? [...f.docIds, id] : f.docIds }));
+    rerender(view(moved));
+    await atRest(container);
+    expect(boxes().filter((b) => b.docs.has(id))).toHaveLength(1);
+    expect(overlapping(boxes())).toBe(0);
+    // …from scratch: every note starts again at its home, so the map rests
+    // exactly where a map opened on this library does (not wherever the old
+    // regions had left it).
+    const centres = (c) => {
+      const out = new Map();
+      for (const p of c.querySelectorAll(".pf-node-dots")) {
+        const ids = (p.getAttribute("data-doc-ids") || "").split(" ").filter(Boolean);
+        parseCircles(p.getAttribute("d") || "").forEach((d, i) => out.set(ids[i], d));
+      }
+      return out;
+    };
+    const fresh = render(view(moved));
+    await atRest(fresh.container);
+    const want = centres(fresh.container), got = centres(container);
+    let worst = 0;
+    for (const [nid, d] of want) worst = Math.max(worst, Math.hypot(d.x - got.get(nid).x, d.y - got.get(nid).y));
+    expect(worst).toBeLessThan(0.02);
+  }, 60000);
+
   it("under reduced motion, draws nothing until the layout rests — then all of it, still", async () => {
     window.matchMedia = vi.fn((query) => ({ matches: query.includes("reduce"), media: query }));
     const { container } = mount(N);
