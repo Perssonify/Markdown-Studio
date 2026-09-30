@@ -65,9 +65,10 @@ export const CREDITS: CreditGroup[] = [
     group: "Rich content",
     items: [
       { name: "katex", version: "0.18.1", license: "MIT", role: "LaTeX math rendering (and its fonts)" },
-      { name: "mermaid", version: "11.17.2", license: "MIT", role: "Diagrams" },
+      { name: "mermaid", version: "12.0.0", license: "MIT", role: "Diagrams" },
       { name: "cytoscape", version: "3.34.0", license: "MIT", role: "Diagram layout (via Mermaid)" },
       { name: "dagre-d3-es", version: "7.0.14", license: "MIT", role: "Graph layout (via Mermaid)" },
+      { name: "elkjs", version: "0.9.3", license: "EPL-2.0", role: "ELK graph layout, when a diagram asks for it (via Mermaid)" },
       { name: "d3-selection", version: "3.0.0", license: "ISC", role: "Diagram rendering (via Mermaid)" },
       { name: "d3-shape", version: "3.2.0", license: "ISC", role: "Diagram shapes (via Mermaid)" },
       { name: "d3-scale", version: "4.0.2", license: "ISC", role: "Diagram scales (via Mermaid)" },
@@ -80,7 +81,7 @@ export const CREDITS: CreditGroup[] = [
   {
     group: "Export & files",
     items: [
-      { name: "docx", version: "9.7.1", license: "MIT", role: "Word (.docx) export" },
+      { name: "docx", version: "9.7.2", license: "MIT", role: "Word (.docx) export" },
       { name: "mammoth", version: "1.12.0", license: "BSD-2-Clause", role: "Word (.docx) import" },
       { name: "jszip", version: "3.10.1", license: "(MIT OR GPL-3.0-or-later)", role: "Reading .docx files (inside mammoth and docx)" },
       { name: "pako", version: "1.0.11", license: "(MIT AND Zlib)", role: "Compression (inside JSZip)" },
@@ -97,7 +98,7 @@ export const CREDITS: CreditGroup[] = [
       { name: "class-variance-authority", version: "0.7.1", license: "Apache-2.0", role: "Variant styling" },
       { name: "tailwind-merge", version: "3.6.0", license: "MIT", role: "Class merging" },
       { name: "clsx", version: "2.1.1", license: "MIT", role: "Class names" },
-      { name: "lucide-react", version: "0.577.0", license: "ISC", role: "Icons" },
+      { name: "lucide-react", version: "1.49.0", license: "ISC", role: "Icons" },
       { name: "sonner", version: "2.0.7", license: "MIT", role: "Toasts" },
       { name: "tw-animate-css", version: "1.4.0", license: "MIT", role: "Animations" },
       { name: "next-themes", version: "0.4.6", license: "MIT", role: "Light / dark theme" },
@@ -116,10 +117,10 @@ export const CREDITS: CreditGroup[] = [
       { name: "vite", version: "8.1.5", license: "MIT", role: "Bundler / dev server" },
       { name: "@tailwindcss/vite", version: "4.3.3", license: "MIT", role: "Tailwind build" },
       { name: "typescript", version: "6.0.3", license: "Apache-2.0", role: "Type system" },
-      { name: "vitest", version: "4.1.11", license: "MIT", role: "Tests" },
+      { name: "vitest", version: "5.0.3", license: "MIT", role: "Tests" },
       { name: "vite-plugin-pwa", version: "1.3.0", license: "MIT", role: "Offline / service worker" },
       { name: "@vitejs/plugin-react", version: "6.0.4", license: "MIT", role: "React fast-refresh" },
-      { name: "undici", version: "7.30.0", license: "MIT", role: "URL-import relay (SSRF-safe fetch)" },
+      { name: "undici", version: "8.11.2", license: "MIT", role: "URL-import relay (SSRF-safe fetch)" },
     ],
   },
 ];
