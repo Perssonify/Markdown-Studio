@@ -15,8 +15,9 @@
 //   DIR=<dist> REPS=1 THROTTLE=4 PANE=rich node e2e/cases/perf.mjs <label> [sizeKb...]
 // CODE_EVERY=12 puts a code block in every cycle of the mixed document (the
 // default, 48, one in four) — to measure OPENING a code-heavy document.
+// DOC=math opens a formula-heavy document instead (mathDoc).
 import { serve, open, boot, seed, APP_DIR } from "../lib.mjs";
-import { mixedDoc, proseDoc } from "../docs.mjs";
+import { mathDoc, mixedDoc, proseDoc } from "../docs.mjs";
 import fs from "node:fs"; import path from "node:path";
 const DIR = process.env.DIR || APP_DIR;
 const RICH = process.env.PANE === "rich";
@@ -92,7 +93,9 @@ async function richOnce(kb) {
   const { browser, page: pg, errors, cdp } = await open(srv.port, { cdp: true });
   await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "networkidle" });
   await pg.waitForTimeout(2500);
-  const doc = mixedDoc("perf-large", "Perf large", kb, Number(process.env.CODE_EVERY || 48));
+  const doc = process.env.DOC === "math"
+    ? mathDoc("perf-large", "Perf large", kb)
+    : mixedDoc("perf-large", "Perf large", kb, Number(process.env.CODE_EVERY || 48));
   // A small document opens at boot, and the large one is opened from the
   // library afterwards: boot() waits for the network to go quiet, which a
   // build that hydrates a large document slowly never gives it in time.
