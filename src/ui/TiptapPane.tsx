@@ -38,6 +38,7 @@ import { UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
 import { ListKeymapNoTab } from "../extensions/ListKeymapNoTab";
 import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
 import { AssetImages } from "../extensions/AssetImages";
+import { fragmentToHtml } from "../engine/inert-html";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
 import { TableBubbleMenu } from "./TableBubbleMenu";
@@ -325,7 +326,9 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         // interface for why this is required after cross-document hydration.
         editor.view.updateState(EditorState.create({ doc: st.doc, plugins: st.plugins }));
       },
-      getHTML: () => editor?.getHTML() || "",
+      // editor.getHTML() builds every <img> in the LIVE document, which starts
+      // loading it — a stored image's pf-asset: reference included (A086).
+      getHTML: () => (editor && !editor.isDestroyed ? fragmentToHtml(editor.state.doc.content, editor.schema) : ""),
       getText: () => editor?.getText() || "",
       getJSON: () => editor?.getJSON(),
       setHTML: (html) => {

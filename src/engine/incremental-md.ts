@@ -33,6 +33,7 @@
 import { DOMSerializer, type Node as PMNode } from "@tiptap/pm/model";
 import { quickHash } from "../utils/index";
 import { cleanHtmlForTurndown } from "./html-cleaner";
+import { inertDocument } from "./inert-html";
 import { findFencedCodeRanges } from "./preprocessor";
 import {
   BLOCK_ELEMENTS,
@@ -191,10 +192,11 @@ function normalizeBody(normalize: (md: string) => string, body: string): string 
  * or not — every serialized <img> started fetching its src, so a stored image's
  * `pf-asset:` reference was a CSP violation (and an unknown-scheme error), and
  * a remote image was requested behind the user's back. TipTap's own getHTML()
- * serializes into an inert document for the same reason.
+ * does NOT avoid this — it serializes into the page's document and only then
+ * moves the result — which is why the pane's getHTML handle and canonicalToHtml
+ * go through the same inert document (engine/inert-html.ts).
  */
-let inertDocument: Document | null = null;
-const inert = (): Document => (inertDocument ??= document.implementation.createHTMLDocument(""));
+const inert = inertDocument;
 
 function serialize(serializer: DOMSerializer, node: PMNode): string {
   const doc = inert();
