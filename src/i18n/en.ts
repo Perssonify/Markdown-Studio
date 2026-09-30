@@ -13,6 +13,8 @@ import { toolbar } from "./en/toolbar";
 import { panes } from "./en/panes";
 import { graph } from "./en/graph";
 import { cards } from "./en/cards";
+import { dialogs } from "./en/dialogs";
+import { notices } from "./en/notices";
 import { pages } from "./en/pages";
 import { shortcuts } from "./en/shortcuts";
 
@@ -24,6 +26,8 @@ export const en = {
   ...panes,
   ...graph,
   ...cards,
+  ...dialogs,
+  ...notices,
   ...pages,
   ...shortcuts,
 };

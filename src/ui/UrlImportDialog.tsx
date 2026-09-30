@@ -32,6 +32,7 @@ import {
 import { ArchiveEncryptedError, ArchiveWrongPasswordError } from "@/store/archive";
 import { APP_NAME } from "@/constants";
 import { useDialog } from "./DialogProvider";
+import { useT } from "../i18n";
 
 interface UrlImportDialogProps {
   open: boolean;
@@ -60,6 +61,7 @@ export function UrlImportDialog({
   onImport,
   onCancel,
 }: UrlImportDialogProps) {
+  const t = useT();
   const dialog = useDialog();
   const [url, setUrl] = useState("");
   const [paste, setPaste] = useState("");
@@ -103,8 +105,8 @@ export function UrlImportDialog({
       // Password-protected archive: prompt (masked) and retry with the password.
       if (e instanceof ArchiveEncryptedError || e instanceof ArchiveWrongPasswordError) {
         const pw = await dialog.prompt(
-          e instanceof ArchiveWrongPasswordError ? "Incorrect password — try again" : "Enter password",
-          { description: "This archive is password-protected.", placeholder: "Password", type: "password" },
+          e instanceof ArchiveWrongPasswordError ? t("dialogs.incorrectPasswordTryAgain") : t("dialogs.enterPassword"),
+          { description: t("dialogs.thisArchiveIsPasswordProtected"), placeholder: t("dialogs.password"), type: "password" },
         );
         if (pw) { void runFetch(target, pw); return; }
         setPhase("input");
@@ -113,11 +115,11 @@ export function UrlImportDialog({
       const msg =
         e instanceof UrlImportError
           ? e.message
-          : "Import failed. Try pasting the content instead.";
+          : t("dialogs.importFailedTryPasting");
       setError(msg);
       setPhase("input");
     }
-  }, [dialog, confirmRelay]);
+  }, [dialog, confirmRelay, t]);
 
   // ?import_url= deep links PRE-FILL the URL field (done in the open effect
   // above) but do NOT auto-fetch: a shared link must not force the visitor's
@@ -153,7 +155,7 @@ export function UrlImportDialog({
       await runFetch(url.trim());
       return;
     }
-    setError("Enter a URL, or paste content below.");
+    setError(t("dialogs.enterAUrlOrPaste"));
   };
 
   const confirmImport = async () => {
@@ -207,11 +209,11 @@ export function UrlImportDialog({
     <AlertDialog open={open} onOpenChange={(o) => !o && !busy && onCancel()}>
       <AlertDialogContent size="default">
         <AlertDialogHeader>
-          <AlertDialogTitle>Import from URL</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialogs.importFromUrl")}</AlertDialogTitle>
           <AlertDialogDescription>
             {phase === "preview"
-              ? "Review what will be imported, then confirm."
-              : "Paste a link to a Markdown/HTML/text file or a .zip. Google Drive, GitHub, and Dropbox share links work. If a site blocks browser access, paste its content instead."}
+              ? t("dialogs.reviewWhatWillBeImported")
+              : t("dialogs.pasteALinkToA")}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -224,7 +226,7 @@ export function UrlImportDialog({
               onKeyDown={(e) => {
                 if (e.key === "Enter") handlePrimary();
               }}
-              placeholder="https://example.com/notes.md  ·  Drive/GitHub/Dropbox link"
+              placeholder={t("dialogs.urlPlaceholder")}
               inputMode="url"
               autoComplete="off"
               spellCheck={false}
@@ -233,14 +235,14 @@ export function UrlImportDialog({
 
             <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
               <span className="h-px flex-1 bg-border" />
-              or paste content
+              {t("dialogs.orPasteContent")}
               <span className="h-px flex-1 bg-border" />
             </div>
 
             <Textarea
               value={paste}
               onChange={(e) => setPaste(e.target.value)}
-              placeholder="# Paste Markdown or HTML here…"
+              placeholder={t("dialogs.pasteMarkdownOrHtmlHere")}
               className="min-h-24 max-h-48 text-xs font-mono"
               spellCheck={false}
               disabled={busy}
@@ -254,9 +256,7 @@ export function UrlImportDialog({
             )}
 
             <p className="text-[11px] leading-relaxed text-muted-foreground/70">
-              Trouble with a link? Some hosts (e.g. Google Drive) block direct browser
-              access — with your permission, the app can fetch those through its own server.
-              Otherwise, download the file and drag it in (or use <span className="font-medium">Import file</span>).
+              {t.rich("dialogs.troubleWithALink", { b: (s) => <span className="font-medium">{s}</span> })}
             </p>
           </div>
         )}
@@ -277,7 +277,7 @@ export function UrlImportDialog({
                   <FolderArchiveIcon className="size-4 shrink-0" />
                   <span className="truncate font-medium text-foreground">{resource.name}</span>
                   <span className="ml-auto shrink-0">
-                    {selectedCount} of {resource.entries.length} selected
+                    {t("dialogs.selectedOfTotal", { count: selectedCount, total: resource.entries.length })}
                   </span>
                 </div>
                 <div className="flex gap-3 text-xs">
@@ -286,14 +286,14 @@ export function UrlImportDialog({
                     className="text-primary-strong hover:underline"
                     onClick={() => setSelected(new Set(resource.entries.map((e) => e.path)))}
                   >
-                    Select all
+                    {t("dialogs.selectAll")}
                   </button>
                   <button
                     type="button"
                     className="text-muted-foreground hover:underline"
                     onClick={() => setSelected(new Set())}
                   >
-                    Deselect all
+                    {t("dialogs.deselectAll")}
                   </button>
                 </div>
                 <ScrollArea className="max-h-56 rounded-md border border-border">
@@ -325,8 +325,7 @@ export function UrlImportDialog({
               <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
                 <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
                 <span>
-                  This host blocks direct browser access, so it was fetched through the
-                  {" "}{APP_NAME} server, as you allowed (first-party — not a third-party proxy).
+                  {t("dialogs.fetchedThroughServer", { app: APP_NAME })}
                 </span>
               </p>
             )}
@@ -334,7 +333,7 @@ export function UrlImportDialog({
             {shareLink && (
               <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/30 p-2">
                 <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-                  Shareable import link
+                  {t("dialogs.shareableImportLink")}
                 </span>
                 <div className="flex items-center gap-2">
                   <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1 text-[11px]" title={shareLink}>
@@ -342,11 +341,11 @@ export function UrlImportDialog({
                   </code>
                   <Button type="button" size="sm" variant="outline" onClick={copyShare} className="shrink-0 gap-1">
                     {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-                    {copied ? "Copied" : "Copy"}
+                    {copied ? t("common.copied") : t("common.copy")}
                   </Button>
                 </div>
                 <span className="text-[10px] text-muted-foreground">
-                  Anyone who opens this link will be prompted to import the same source.
+                  {t("dialogs.anyoneWhoOpensThisLink")}
                 </span>
               </div>
             )}
@@ -362,7 +361,7 @@ export function UrlImportDialog({
 
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </AlertDialogCancel>
           {showPreview && resource ? (
             <Button
@@ -372,13 +371,13 @@ export function UrlImportDialog({
             >
               {busy && <Loader2Icon className="size-3.5 animate-spin" />}
               {resource.kind === "archive"
-                ? `Import ${selectedCount} document${selectedCount === 1 ? "" : "s"}`
-                : "Import"}
+                ? t("dialogs.importNDocuments", { count: selectedCount })
+                : t("common.import")}
             </Button>
           ) : (
             <Button onClick={() => handlePrimary()} disabled={!canStart} className="gap-1.5">
               {busy && <Loader2Icon className="size-3.5 animate-spin" />}
-              {phase === "loading" ? "Fetching…" : phase === "importing" ? "Importing…" : "Continue"}
+              {phase === "loading" ? t("dialogs.fetching") : phase === "importing" ? t("dialogs.importing") : t("common.continue")}
             </Button>
           )}
         </AlertDialogFooter>
