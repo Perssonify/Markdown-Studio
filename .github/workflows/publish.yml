@@ -67,6 +67,11 @@ jobs:
       - name: Build (library)
         run: bun run build
 
+      # The unit run above skips this check (no dist/ yet); against the build
+      # about to be published it must pass (A113).
+      - name: The built CommonJS entries load in Node
+        run: bunx vitest run src/__tests__/pkg-cjs-require.test.js
+
       - name: What will be published
         run: npm pack --dry-run
 

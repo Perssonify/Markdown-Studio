@@ -81,6 +81,11 @@ jobs:
       - name: Build (library)
         run: bun run build
 
+      # What `require("@perssonify/editor")` loads. Nothing else in CI touches
+      # the CommonJS build, and it once could not be required at all (A113).
+      - name: The built CommonJS entries load in Node
+        run: bunx vitest run src/__tests__/pkg-cjs-require.test.js
+
       - name: Build (embed)
         run: bun run build:embed
 

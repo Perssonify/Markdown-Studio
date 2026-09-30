@@ -13,7 +13,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Underline } from "@tiptap/extension-underline";
-import StarterKit from "@tiptap/starter-kit";
+import { StarterKit } from "@tiptap/starter-kit";
 import { BackgroundColor } from "../extensions/BackgroundColor";
 import { EmojiNode } from "../extensions/EmojiNode";
 import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
