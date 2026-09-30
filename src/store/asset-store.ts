@@ -177,6 +177,14 @@ class AssetStore {
         };
         req.onsuccess = () => {
           const db = req.result;
+          // A database of this name that lacks the stores (created by an
+          // unversioned open somewhere else) cannot hold assets: say so, and
+          // every caller keeps its images inline, rather than failing later.
+          if (!db.objectStoreNames.contains(META) || !db.objectStoreNames.contains(BYTES)) {
+            db.close();
+            resolve(false);
+            return;
+          }
           // Never block a newer build's upgrade from another tab. Callers fall
           // back to inline images for the rest of this tab's life.
           db.onversionchange = () => {
