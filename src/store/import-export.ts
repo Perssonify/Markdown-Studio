@@ -128,11 +128,25 @@ export async function importFile(
   });
 
   if (result.doc.title === "Untitled" || !result.doc.title) {
-    const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
-    result.doc.title = nameWithoutExt;
+    // A heading the file already has names it — the title the app derives
+    // once the content is converted — and the file name stands in otherwise.
+    // It used to be the file name always, so `# Real title` in notes.md came
+    // back titled "notes" until the host completed the import.
+    result.doc.title = headingTitle(result.html) ?? file.name.replace(/\.[^.]+$/, "");
   }
 
   return result;
+}
+
+/** The text of converted HTML's first top-level heading, as
+ *  `deriveTitleFromCanonical` would take it; null without one. Parsed inert. */
+function headingTitle(html: string | null): string | null {
+  if (!html || typeof DOMParser === "undefined") return null;
+  const body = new DOMParser().parseFromString(html, "text/html").body;
+  for (const el of Array.from(body.children)) {
+    if (/^H[1-6]$/.test(el.tagName)) return el.textContent?.trim() || null;
+  }
+  return null;
 }
 
 /**
