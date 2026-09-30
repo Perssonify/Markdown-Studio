@@ -59,6 +59,34 @@ const CONTEXT_SELECT_PRIMS = {
   Separator: ContextMenuSeparator,
 } as unknown as MenuPrimitives;
 
+/**
+ * The "Link to heading" items. A component of its own so the document's
+ * headings are read only while the submenu is OPEN: as an inline expression in
+ * EditorContextMenu they were read on every render of the menu, which happens
+ * on every keystroke — a full `getJSON()` of the document and a walk of it,
+ * about 300 ms per keystroke at 1.6 MB and 4x CPU (A083).
+ */
+function HeadingLinkItems({ api }: { api: EditorContextMenuApi }) {
+  const t = useT();
+  const headings = api.getHeadings();
+  if (!headings.length) {
+    return <ContextMenuItem disabled>{t("context.noHeadingsInThisDocument")}</ContextMenuItem>;
+  }
+  return (
+    <>
+      {headings.map((h, i) => (
+        <ContextMenuItem
+          key={`${h.text}-${i}`}
+          onClick={() => api.insertHeadingLink(h.text)}
+          style={{ paddingLeft: `${0.5 + (h.level - 1) * 0.6}rem` }}
+        >
+          <span className="truncate">{h.text}</span>
+        </ContextMenuItem>
+      ))}
+    </>
+  );
+}
+
 export function EditorContextMenu({ api, children }: { api: EditorContextMenuApi; children: ReactNode }) {
   const t = useT();
   const d = api.dispatch;
@@ -132,21 +160,7 @@ export function EditorContextMenu({ api, children }: { api: EditorContextMenuApi
         <ContextMenuSub>
           <ContextMenuSubTrigger><Hash /> {t("context.linkToHeading")}</ContextMenuSubTrigger>
           <ContextMenuSubContent className="max-h-72 overflow-y-auto">
-            {(() => {
-              const headings = api.getHeadings();
-              if (!headings.length) {
-                return <ContextMenuItem disabled>{t("context.noHeadingsInThisDocument")}</ContextMenuItem>;
-              }
-              return headings.map((h, i) => (
-                <ContextMenuItem
-                  key={`${h.text}-${i}`}
-                  onClick={() => api.insertHeadingLink(h.text)}
-                  style={{ paddingLeft: `${0.5 + (h.level - 1) * 0.6}rem` }}
-                >
-                  <span className="truncate">{h.text}</span>
-                </ContextMenuItem>
-              ));
-            })()}
+            <HeadingLinkItems api={api} />
           </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSeparator />
