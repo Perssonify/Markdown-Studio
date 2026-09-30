@@ -1,7 +1,7 @@
 import { Extension } from "@tiptap/core";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import { DOMSerializer, type Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { Decoration, DecorationSet, type NodeView } from "@tiptap/pm/view";
 
 /**
  * Right-to-left text in the rich pane: every text block gets `dir="auto"`, so
@@ -10,33 +10,45 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
  * Latin left-to-right, in the same document. Without it everything rendered
  * left-to-right.
  *
- * VIEW-ONLY, by design: node decorations touch the rendered DOM, never the
- * document. TipTap's built-in `textDirection` option would instead add a `dir`
+ * VIEW-ONLY, by design: it touches the rendered DOM, never the document.
+ * TipTap's built-in `textDirection` option would instead add a `dir`
  * attribute to every node of the schema — into the canonical JSON of every
  * document, and every stored document rewritten on its next save — to say
  * something the text already says. getHTML()/getJSON() are unchanged.
  *
- * Maintained incrementally: an edit re-derives only the top-level blocks it
- * touched, so typing in a long document costs the size of the block, not the
- * document. Code blocks and maths are left alone (code is left-to-right).
+ * Through NODE VIEWS, not decorations (A083). A decoration on every block made
+ * each transaction quadratic in the number of blocks: ProseMirror maps a
+ * node decoration by searching its parent's children for it, and hands each
+ * child its decorations by scanning every decoration at that level — one
+ * keystroke in a 1.6 MB document took 714 ms (jsdom), four seconds at 4x CPU
+ * in Chromium, before anything else ran. A node view here is the node's own
+ * `toDOM` rendering with the attribute added; ProseMirror updates its content
+ * as it would its default rendering, and redraws it only when the node's
+ * attributes change. A task item already has a node view (TipTap's), so it
+ * keeps a decoration; task items sit inside their lists, where that costs
+ * little. Code blocks and maths are left alone (code is left-to-right).
  */
-const BIDI_BLOCKS = new Set([
-  "paragraph",
-  "heading",
-  "listItem",
-  "taskItem",
-  "blockquote",
-  "callout",
-  "tableCell",
-  "tableHeader",
-  "summary",
-]);
+const VIEWED_BLOCKS = ["paragraph", "heading", "listItem", "blockquote", "callout", "tableCell", "tableHeader", "summary"];
+const DECORATED_BLOCKS = new Set(["taskItem"]);
 const DIR_AUTO = { dir: "auto" };
+
+/** `DOMSerializer.renderSpec` as ProseMirror's own rendering calls it: the
+ *  node's attributes as the fourth argument, so an array among them is never
+ *  read as markup. (The published typings stop at three arguments.) */
+const renderSpec = DOMSerializer.renderSpec as unknown as (
+  doc: Document, structure: unknown, xmlNS: string | null, blockArraysIn: unknown
+) => { dom: Node; contentDOM?: HTMLElement };
+
+function autoDirView(node: PMNode): NodeView {
+  const { dom, contentDOM } = renderSpec(document, node.type.spec.toDOM!(node), null, node.attrs);
+  (dom as HTMLElement).setAttribute("dir", "auto");
+  return { dom: dom as HTMLElement, contentDOM: contentDOM ?? null };
+}
 
 function decorationsIn(doc: PMNode, from: number, to: number): Decoration[] {
   const out: Decoration[] = [];
   doc.nodesBetween(from, to, (node, pos) => {
-    if (BIDI_BLOCKS.has(node.type.name)) out.push(Decoration.node(pos, pos + node.nodeSize, DIR_AUTO));
+    if (DECORATED_BLOCKS.has(node.type.name)) out.push(Decoration.node(pos, pos + node.nodeSize, DIR_AUTO));
     return !node.isTextblock;
   });
   return out;
@@ -82,6 +94,7 @@ export const BidiAuto = Extension.create({
         },
         props: {
           decorations: (state) => bidiKey.getState(state) ?? null,
+          nodeViews: Object.fromEntries(VIEWED_BLOCKS.map((type) => [type, autoDirView])),
         },
       }),
     ];
