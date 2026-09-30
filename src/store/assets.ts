@@ -180,6 +180,10 @@ export async function prepareImportedDocAssets(
   if (report && typeof report.preIngestHtml === "string") {
     doc.ingestReport = { ...report, preIngestHtml: replaceDataUrlsInText(report.preIngestHtml, replaced) };
   }
+  // Never persisted, but anything that still reads it sees the same document.
+  if (typeof doc._ingestHtml === "string" && doc._ingestHtml) {
+    doc._ingestHtml = replaceDataUrlsInText(doc._ingestHtml, replaced);
+  }
 }
 
 // ─── Out of the store ────────────────────────────────────────────────────────

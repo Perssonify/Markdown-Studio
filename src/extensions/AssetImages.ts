@@ -348,6 +348,14 @@ export const AssetImages = Extension.create({
           let destroyed = false;
 
           const rewrite = (view: EditorView, map: Map<string, string>, token: object, attempt: number) => {
+            // Two guards against writing into a document other than the one
+            // the image came in with. Every hydration today builds a NEW
+            // EditorState (resetHistory / restoreEditorState), which makes
+            // ProseMirror destroy this plugin view — so `destroyed` alone
+            // catches it, and the token check below is not independently
+            // observable (mutation-tested: removing it alone stays green,
+            // removing both goes red). It stays because it states the rule
+            // itself rather than relying on how ProseMirror recycles views.
             if (destroyed || (view as unknown as { isDestroyed?: boolean }).isDestroyed) return;
             if (assetImagesKey.getState(view.state)?.token !== token) return; // another document
             if (!view.editable) return;
