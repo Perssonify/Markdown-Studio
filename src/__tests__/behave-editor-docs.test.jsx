@@ -159,18 +159,33 @@ describe("deleting and bringing it back", () => {
 });
 
 describe("read-only", () => {
+  const pm = () => document.querySelector(".ProseMirror");
+  const selectAllAndBold = async () => {
+    await act(async () => { pm().focus(); richEditor().commands.selectAll(); });
+    await key(pm(), "b", { ctrlKey: true });
+    await tick(100);
+  };
+
+  it("⌘B bolds a selection while the document is editable", async () => {
+    // The control for the read-only case below: the chord really reaches the
+    // dispatcher from the rich pane, so "nothing changed" there means refused.
+    await selectAllAndBold();
+    expect(textOf(richEditor().getJSON())).toContain('"bold"');
+    await selectAllAndBold(); // toggle it back off
+    expect(textOf(richEditor().getJSON())).not.toContain('"bold"');
+  });
+
   it("View ▸ Read-only mode locks both panes and hides the formatting toolbar", async () => {
     expect(document.querySelector('[role="toolbar"]')).not.toBeNull();
     await menuClick("View", "Read-only mode");
     await until(() => useUIStore.getState().readOnly === true, "read-only to switch on");
     await until(() => document.querySelector('[role="toolbar"]') === null, "the toolbar to go");
     expect(richEditor().isEditable).toBe(false);
-    expect(document.querySelector(".ProseMirror").getAttribute("contenteditable")).toBe("false");
+    expect(pm().getAttribute("contenteditable")).toBe("false");
+    expect(document.querySelector(".cm-content").getAttribute("contenteditable")).toBe("false");
     // Formatting through the dispatcher is refused as well — ⌘B does nothing.
     const before = textOf(richEditor().getJSON());
-    await act(async () => { richEditor().commands.selectAll(); });
-    await key(document.querySelector(".ProseMirror"), "b", { ctrlKey: true });
-    await tick(100);
+    await selectAllAndBold();
     expect(textOf(richEditor().getJSON())).toBe(before);
     await menuClick("View", "Read-only mode");
     await until(() => useUIStore.getState().readOnly === false, "read-only to switch off");
