@@ -243,10 +243,10 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   `useDocumentLifecycle.ts` + `useSyncEngine.ts`). Correct and well-tested, but intricate
   and timing-sensitive. Change it surgically, keep the four layers intact, re-run the
   hydration-guard tests.
-- **Multi-tab:** no live cross-tab refresh (tabs don't see each other's edits until reload);
-  after tab B saves, tab A parks a terminal `"conflict"` status by design, and a reload
-  keeps the other tab's work (A018). Live invalidation is the natural trigger for the
-  save-FSM work (§5).
+- **Multi-tab:** tabs sync live over a `BroadcastChannel` (a clean open document
+  reloads; one with unsaved work is told at once and chooses, with the other side kept
+  in Version history). The save-status machine was not rewritten (§5); read-check-write
+  is still not atomic across tabs.
 - **Large documents:** rich→markdown projects per block now (A083), so typing stays
   responsive at 1.6–4 MB. Still whole-document: markdown→rich, opening a large document
   (quadratic with many code blocks) and the fidelity/word-count and broken-link walks.
@@ -275,8 +275,6 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   origin's move banner — and the defects found while reconciling the docs, listed in
   the same file (the `/embed.html` framing gap and the broken first-run `[[Welcome]]`
   links first).
-- **Live multi-tab invalidation** (`BroadcastChannel`; the terminal `conflict` status
-  already exists) — closes the biggest deferred gap and is the FSM trigger.
 - **Full-document LaTeX / multi-file projects** — content/engine-layer if single-doc; a
   data-model change (and the right moment for the FSM extraction) if Overleaf-style projects.
 - **Backlog features** (`docs/backlog.md`): Markdown format detection + settings suggestion,
