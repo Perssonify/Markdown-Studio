@@ -150,11 +150,9 @@ runCase("stress", async (rep, onClose) => {
   // drawn over a label, and the pointer and the wheel still reaching the note
   // under them. Content, not timing — cases/perf-map.mjs measures the timing.
   //
-  // The library has NO folders, on purpose: with sixty folders in the world the
-  // map gives 2,000 notes, the containers overlap and the map vetoes nearly
-  // every name (measured: no labels at any zoom, in the build before the scale
-  // work too) — and a check that nothing is drawn over a label is vacuous on a
-  // map that draws no labels. Zoomed in, this one places dozens.
+  // This library has NO folders: a large folderless map keeps the single-level
+  // layout (Barnes–Hut). The next block opens the same size WITH folders, which
+  // is laid out on two levels.
   {
     const srv = await serve(APP_DIR);
     const { browser, page: pg } = await open(srv.port);
@@ -231,6 +229,65 @@ runCase("stress", async (rep, onClose) => {
     const zoomed = await pg.evaluate(measureMap);
     rep.check("2,000 notes, zoomed in: names are placed, and none is drawn over anything",
       (zoomed?.labels ?? 0) > 0 && noLabelCovered(zoomed?.count), JSON.stringify({ labels: zoomed?.labels, ...zoomed?.count }));
+    await browser.close(); srv.close();
+  }
+
+  // ── …and WITH folders: 2,000 notes in 60 (A088) ─────────────────────────
+  // Above FOLDER_LAYOUT_MAX (500) a folder map is laid out on two levels: the
+  // folders' regions are packed apart first, then each note is held inside its
+  // own. The single-level layout brought this library to rest with ~790
+  // distinct positions (stacks of up to 89 notes), ~400 overlapping containers
+  // and thousands of dots inside a stranger's container, and named almost
+  // nothing at any zoom. What must hold now: every note on its own spot,
+  // containers apart, no stranger in one, and names placed zoomed in with
+  // nothing drawn over them.
+  {
+    const srv = await serve(APP_DIR);
+    const { browser, page: pg } = await open(srv.port);
+    onClose(async () => { await browser.close(); srv.close(); });
+    const { docs, folderTree } = mapLibrary(2000);
+    await seedFresh(pg, srv.port, docs, folderTree);
+    await boot(pg, srv.port, { mode: "Split", settle: 14000 });
+    await pg.keyboard.press("Control+Shift+G");
+    let last = null, still = 0;
+    for (let i = 0; i < 180 && still < 3; i++) {
+      await pg.waitForTimeout(500);
+      const v = await pg.evaluate(() => document.querySelector('[data-map-layer="notes"]')?.getAttribute("data-layout-version") ?? null);
+      still = v != null && v === last ? still + 1 : 0;
+      last = v;
+    }
+    rep.check("2,000 notes in 60 folders: the map comes to rest", still >= 3, `layout version still moving at ${last}`);
+    // Nothing over a name, and no container over another or over a stranger.
+    const noFolderFault = (c) => !!c && ["labelLabel", "labelDot", "labelChip", "labelEdge", "strangerLabel",
+      "strangerLabelOwnDot", "boxBox", "strangerDot", "chipChip"].every((x) => c[x] === 0);
+
+    // Opened on the open note's folder: every note there is named.
+    const opened = await pg.evaluate(measureMap);
+    rep.check("2,000 notes in 60 folders: opened on a folder, its notes are named and nothing is drawn over a name",
+      (opened?.labels ?? 0) >= 5 && noFolderFault(opened?.count), JSON.stringify({ labels: opened?.labels, ...opened?.count }));
+
+    await pg.locator('button[aria-label="Fit map to view"]').first().click();
+    await pg.waitForTimeout(1500);
+    const fit = await pg.evaluate(measureMap);
+    const k = Number(((await pg.evaluate(() => document.querySelector('span.tabular-nums[aria-live="off"]')?.textContent)) ?? "").replace("%", "")) / 100;
+    // Distinct in WORLD terms (screen px over the zoom, to a unit), as
+    // probes/map-stacks.mjs counts them.
+    const spots = fit && k ? new Set(JSON.parse(fit.print).dots.map((d) => `${Math.round(d[1] / k)},${Math.round(d[2] / k)}`)).size : 0;
+    rep.check("2,000 notes in 60 folders: every note is drawn on its own spot",
+      fit?.drawn === 2000 && spots === 2000, JSON.stringify({ drawn: fit?.drawn, spots, zoom: k }));
+    rep.check("2,000 notes in 60 folders: no two containers overlap and no note sits in a stranger's",
+      fit?.boxes === 60 && fit.count.boxBox === 0 && fit.count.strangerDot === 0,
+      JSON.stringify({ boxes: fit?.boxes, boxBox: fit?.count.boxBox, strangerDot: fit?.count.strangerDot }));
+
+    // In from the whole map, about the canvas centre, to where names fit.
+    for (let i = 0; i < 6; i++) {
+      await pg.locator('button[aria-label="Zoom in"]').first().click();
+      await pg.waitForTimeout(150);
+    }
+    await pg.waitForTimeout(800);
+    const zoomed = await pg.evaluate(measureMap);
+    rep.check("2,000 notes in 60 folders, zoomed in: dozens of names, none drawn over anything",
+      (zoomed?.labels ?? 0) >= 20 && noFolderFault(zoomed?.count), JSON.stringify({ labels: zoomed?.labels, ...zoomed?.count }));
     await browser.close(); srv.close();
   }
 
