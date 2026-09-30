@@ -166,7 +166,17 @@ export function selfContainedHtml(html: string): boolean {
       continue;
     }
     if (!isAlpha(next)) {
-      if (next === 33 /* ! */ || next === 63 /* ? */) return false; // comment, doctype, CDATA, PI
+      if (html.startsWith("<!--", lt)) {
+        // A comment ends at the first `-->` (or at once, `<!-->` / `<!--->`),
+        // and leaves the parser as it found it. `--!>` also ends one; refused
+        // rather than modelled.
+        const body = lt + 4;
+        const end = html.startsWith(">", body) ? body + 1 : html.startsWith("->", body) ? body + 2 : html.indexOf("-->", body) + 3;
+        if (end < body || html.slice(body, end).includes("--!>")) return false;
+        i = end;
+        continue;
+      }
+      if (next === 33 /* ! */ || next === 63 /* ? */) return false; // doctype, CDATA, PI
       i = lt + 1; // a lone "<" is text
       continue;
     }
@@ -192,6 +202,25 @@ export function selfContainedHtml(html: string): boolean {
     i = START_TAG.lastIndex;
   }
   return stack.length === 0;
+}
+
+/**
+ * The slow, general answer for markup selfContainedHtml does not know (an
+ * element it has no rule for, say): parse it followed by a probe `<span>` and
+ * see where the probe lands. Parsed from a clean state, the probe is the last
+ * child of <body>, holding exactly its text, only if the markup left nothing
+ * open (it would be inside it — or before it, foster-parented out of a table),
+ * no formatting element pending (its text would be re-wrapped in one) and the
+ * tokenizer in its data state (it would be swallowed). Foreign content is the
+ * one state a <span> escapes by itself, so SVG and MathML are refused outright.
+ */
+export function leavesParserClean(html: string): boolean {
+  if (html.length > 65536 || /<(?:svg|math)[\s/>]/i.test(html)) return false;
+  let probe = "pf-probe";
+  while (html.includes(probe)) probe += "-";
+  const last = htmlBody(`${html}<span>${probe}</span>`).lastChild as Element | null;
+  return !!last && last.nodeType === 1 && last.localName === "span" && last.attributes.length === 0 &&
+    last.childNodes.length === 1 && last.firstChild!.nodeType === 3 && last.textContent === probe;
 }
 
 // ─── Markdown: tokens and the places they can be cut ────────────────────────
@@ -223,6 +252,11 @@ function endsAtBlankLine(t: Token): boolean {
  * it; nothing else changes the state except a link, which clears `inLink` when
  * its text is done (so a tag inside link text says nothing about the state
  * after the link: "unknown", which is not clear).
+ *
+ * Today selfContainedHtml refuses the same cuts — a tag left open is markup left
+ * open — so no case can tell this check is there (mutation-tested: none does).
+ * It states the markdown half of the rule on its own terms, so loosening the
+ * HTML check cannot quietly make a cut the lexer's state forbids.
  */
 type InlineState = "clear" | "set" | "unknown";
 
@@ -281,22 +315,28 @@ function lex(m: Marked, src: string): Lexed {
   if (Object.keys(tokens.links).length) return no("link definitions");
   const top: Token[] = [];
   let sum = 0;
+  let section = -1; // where marked-footnote's section token sits, in `top` terms
+  let sectionAt = 0; // …and in the source
   for (const t of tokens) {
     // marked-footnote's section token: its `raw` is the section's title, not
     // source text, and it renders nothing while there are no definitions.
     if (t.type === "footnotes") {
       const f = t as { rawItems?: unknown[]; items?: unknown[] };
       if (f.rawItems?.length || f.items?.length) return no("footnotes");
+      section = top.length;
+      sectionAt = sum;
       continue;
     }
     sum += t.raw.length;
     top.push(t);
   }
-  // The section token is the first one pushed, so a single newline starting
-  // the text is appended to ITS raw (marked hands a one-newline space to the
-  // token before it): put it back where it was, as the nothing it renders.
-  if (sum === src.length - 1 && src.charCodeAt(0) === 10 && tokens[0]?.type === "footnotes") {
-    top.unshift({ type: "space", raw: "\n" } as Token);
+  // The section token is pushed where the extension is first asked for a block
+  // — the very start, or after a block another extension claimed first (maths)
+  // — and a single newline right there is appended to ITS raw (marked hands a
+  // one-newline space to the token before it). Put it back where it was, as the
+  // nothing it renders.
+  if (section >= 0 && sum === src.length - 1 && src.charCodeAt(sectionAt) === 10) {
+    top.splice(section, 0, { type: "space", raw: "\n" } as Token);
     sum++;
   }
   // Any other merge that rewrote a token's raw (marked adds a newline in
@@ -338,8 +378,11 @@ function cut(lexed: Lexed, src: string, style: (html: string) => string, minLeng
   let start = 0;
   let pieceStart = 0;
   let offset = 0;
-  const neutral = (from: number, to: number, a: number, b: number): boolean =>
-    src.slice(a, b).indexOf("<") === -1 || selfContainedHtml(tokHtml.slice(from, to).join(""));
+  const neutral = (from: number, to: number, a: number, b: number): boolean => {
+    if (src.slice(a, b).indexOf("<") === -1) return true;
+    const html = tokHtml.slice(from, to).join("");
+    return selfContainedHtml(html) || leavesParserClean(html);
+  };
   // After a blank line that the block before it cannot run past, with marked's
   // inline state clear, and the HTML so far leaving the browser's parser clean.
   const cuttable = (k: number): boolean =>
@@ -362,8 +405,16 @@ function cut(lexed: Lexed, src: string, style: (html: string) => string, minLeng
 
 // ─── The pieces' HTML → ProseMirror nodes, and which cuts survive ───────────
 
-/** Separates the pieces in one parse. A comment changes nothing the tree builder does but split text. */
-const MARK = "pf-a083-cut";
+/**
+ * Separates the pieces in one parse. A comment changes nothing the tree
+ * builder does but split text. Its text is one the markup does not already
+ * hold, so a document that happens to spell it is not refused for that.
+ */
+function markerFor(html: string[]): string {
+  let mark = "pf-a083-cut";
+  while (html.some((h) => h.includes(mark))) mark += "-";
+  return mark;
+}
 
 interface Parsed {
   nodes: PMNode[];
@@ -398,19 +449,24 @@ type Placement = "start" | "after";
  * node open at joins its runs.
  */
 function parsePieces(html: string[], schema: Schema, placement: Placement): Parsed | null {
-  const body = htmlBody(html.join(`<!--${MARK}-->`));
+  const mark = markerFor(html);
+  const body = htmlBody(html.join(`<!--${mark}-->`));
   const markers: Comment[] = [];
   for (let c = body.firstChild; c; c = c.nextSibling) {
-    if (c.nodeType === 8 && (c as Comment).data === MARK) markers.push(c as Comment);
+    if (c.nodeType === 8 && (c as Comment).data === mark) markers.push(c as Comment);
   }
   // Every marker must be a child of <body>: one swallowed by a tag, a comment
   // or raw text, or nested in an element, means the markup is not what the
   // cuts assumed — and a marker that stayed nested would split text the real
-  // parse sees whole. (Raw HTML cannot forge one: a comment fails the check.)
+  // parse sees whole.
   if (markers.length !== html.length - 1) return null;
+  // Every marker in the tree, too. The markup does not spell the marker
+  // (markerFor), so this can only fire if a real one ended up nested — which
+  // selfContainedHtml exists to prevent: unreachable while it is right, here
+  // for the day it is not.
   const walker = body.ownerDocument.createTreeWalker(body, 128 /* SHOW_COMMENT */);
   let total = 0;
-  while (walker.nextNode()) if ((walker.currentNode as Comment).data === MARK) total++;
+  while (walker.nextNode()) if ((walker.currentNode as Comment).data === mark) total++;
   if (total !== markers.length) return null;
 
   // Out with the markers, rejoining any text they split — the DOM is then the
@@ -637,7 +693,10 @@ function replaceRange(state: EditorState, from: number, to: number, nodes: PMNod
   let start = 0;
   for (let k = 0; k < a; k++) start += doc.child(k).nodeSize;
   const tr = state.tr;
-  if (b - a === nb - na) {
+  // TrailingNode's paragraph at the end, with nothing to stand for in the new
+  // content: compared as absent, and deleted (the plugin decides afresh).
+  const tail = b === doc.childCount && b - a === nb - na + 1 && isTrailingNode(doc.child(b - 1), state.schema) ? 1 : 0;
+  if (b - a - tail === nb - na) {
     // As many nodes as before: replace only the ones that differ, one step per
     // stretch of them, from the end so the positions before stay put. After a
     // load most of a document parses back to itself, but not all of it (a
@@ -649,11 +708,18 @@ function replaceRange(state: EditorState, from: number, to: number, nodes: PMNod
       from.push(pos);
       if (k < b) pos += doc.child(k).nodeSize;
     }
-    for (let k = b - a - 1; k >= 0;) {
-      if (eqNode(doc.child(a + k), nodes[na + k]!)) { k--; continue; }
+    const n = b - a - tail;
+    const same = (k: number) => eqNode(doc.child(a + k), nodes[na + k]!);
+    // The tail goes with the last stretch when that stretch ends the range,
+    // else on its own — first, being last in the document.
+    const tailAlone = tail === 1 && (n === 0 || same(n - 1));
+    if (tailAlone) tr.delete(from[n]!, from[n + 1]!);
+    for (let k = n - 1; k >= 0;) {
+      if (same(k)) { k--; continue; }
       const last = k;
-      while (k >= 0 && !eqNode(doc.child(a + k), nodes[na + k]!)) k--;
-      tr.replaceWith(from[k + 1]!, from[last + 1]!, Fragment.fromArray(nodes.slice(na + k + 1, na + last + 1)));
+      while (k >= 0 && !same(k)) k--;
+      const end = last === n - 1 && tail && !tailAlone ? n + 1 : last + 1;
+      tr.replaceWith(from[k + 1]!, from[end]!, Fragment.fromArray(nodes.slice(na + k + 1, na + last + 1)));
     }
   } else {
     let end = start;
