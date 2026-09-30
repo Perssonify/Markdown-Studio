@@ -19,6 +19,15 @@ person — is listed in [`docs/audit-2026-09.md`](docs/audit-2026-09.md). The
 finding IDs (A001–A114) are cited below.
 
 ### Changed — what you will notice
+- **The interface can be translated.** Every label, message and menu now comes
+  from a translation catalog (English is the only language shipped so far), and
+  the Help and About pages are per-language content. Exported HTML and printouts
+  no longer declare the document English. (A099)
+- **Older browsers get a message instead of a blank page.** The supported floor
+  is Safari/iOS 16.4, Chrome/Edge 111 and Firefox 128; below it the app says so
+  and touches nothing stored. (A097)
+- **A heading link inserted from the rich pane is written `[[#Heading]]`**, the
+  way the markdown pane writes it, instead of `[[#Heading|Heading]]`.
 - **Updates are offered, never forced.** A new version shows "Update ready —
   Reload" and waits for you. Every deploy used to reload every open tab,
   mid-sentence, losing undo history, dictation in progress and open dialogs. A
@@ -81,6 +90,12 @@ finding IDs (A001–A114) are cited below.
   rather than one page of the app's chrome. (A100)
 
 ### Fixed — content that was lost or changed
+- Tabs inside code blocks survive a round trip, text such as `<snake_case>` no
+  longer vanishes, Word export no longer shows HTML entities, and bold or italic
+  after a code span that ends in a backslash renders correctly (the markdown
+  parser, marked, is updated from 12 to 18).
+- A formula whose maths renderer could not be downloaded shows its LaTeX instead
+  of staying blank.
 - Hard line breaks — addresses, poems, verse — are kept (A037); anything nested
   under a checklist item is kept (A038); blank lines inside list items and inside
   code in a list are kept (A041).
@@ -182,6 +197,9 @@ finding IDs (A001–A114) are cited below.
   names a security contact (A007).
 
 ### Accessibility
+- In Windows high-contrast (forced colours) mode the focus ring uses the system
+  highlight colour in every browser, on menu items, tabs, tree rows and options
+  too; before, only Chromium showed it correctly. (A095)
 - Both editors have accessible names (A089); a visible focus ring in every palette
   (A090); the editor stays usable at 400% zoom (A091); accent-coloured text meets
   contrast in every palette (A092).
@@ -223,6 +241,12 @@ finding IDs (A001–A114) are cited below.
 - Startup download 915 → 680 KiB gzip (A084); the Cards board reloads only what
   changed (A087); snapshot pruning, batched backup export and a single KaTeX copy
   (A088).
+- **The relationship map at 2,000 notes** (measured with the CPU slowed 4×): the
+  first frame appears in 1.0 s instead of 8.9 s, the page is blocked for 6 s
+  instead of 64 s, the layout settles in 17–23 s instead of 65 s, and zooming
+  answers in under 0.1 s while it settles. Maps of 250 notes or fewer are drawn
+  exactly as before. (A088)
+- React 19 adds about 22 KiB gzip to the startup download.
 
 ### Reliability
 - A local, redacted error log behind **Copy diagnostics** (the crash screen and
@@ -233,6 +257,9 @@ finding IDs (A001–A114) are cited below.
   formula whose renderer failed to download says so, instead of showing the fetch
   error as a diagram error, and the app no longer caches the failure (Chromium
   itself still needs a reload to fetch a failed module again) (A085).
+- Leaving the page is no longer cancelled by the app reloading itself: Firefox
+  aborts a page's pending downloads as it navigates away, which the app took for
+  a failed update.
 
 ### npm library
 - Every runtime import is declared (A101); the stylesheet no longer restyles the
@@ -241,17 +268,35 @@ finding IDs (A001–A114) are cited below.
   (A104).
 - Public API that did nothing — `setFieldSchemas`, the `fieldSchemas` and
   `linkResolver` props, the `BlockId`/`FieldBlock`/`TransclusionBlock` exports —
-  is deprecated and warns once in development (A105). One editor per page is
-  documented (A106).
+  is deprecated and warns once in development (A105). A second editor on the
+  same page now refuses to start, with a message, instead of silently sharing the
+  first one's state; it takes over when the first unmounts (A106).
 - New: `clearLocalData()` and `setErrorReporter()`; `storageConfig` accepts
   `namespace`, `snapshots` and `crashRecovery`. **Consumers must import KaTeX's
   stylesheet themselves** (`katex/dist/katex.min.css`). Tiptap is 3.31.3 across
   every `@tiptap/*` package and the peer ranges are bounded (A113).
+- **React 19 is supported; the React floor rises to 18.3.** The peer range is
+  `^18.3.0 || ^19.0.0`, and CI runs the type check and unit suite on both. The
+  CommonJS build can be `require`d in Node — it threw on the Tiptap starter kit —
+  and marked is 18 (ESM-only since 16: CommonJS consumers need Node 20.19+/22.12+
+  or a bundler, and Jest users must transform it) (A113).
+- On the app's own hosts the embed keeps its documents in a database of its own
+  (`perssonify-embed-docs`), so a page framing it can never reach the app's
+  library; a self-hosted embed keeps `perssonify-docs` (A072).
+- The integration's handle always calls the host's latest callbacks: after the
+  host re-rendered, document updates kept calling the old graph-update callback
+  (A108).
 
 ### Developer
-- ESLint with the React hook rules (`bun run lint`, 0 errors) (A109); coverage
-  measured over all of `src` (A108); the unit suite no longer fails intermittently
-  (A107) — 196 files, 2,126 tests.
+- ESLint with the React hook rules (`bun run lint`, 0 errors) and `noImplicitAny`
+  (A109); coverage measured over all of `src`, now 81.8% of lines after sixteen
+  behavioural suites that mount the real editor (A108); the unit suite no longer
+  fails intermittently (A107).
+- `PerssonifyEditor.tsx` is split from 2,992 lines into fifteen hooks under
+  `src/editor/` (A110). TypeScript 6.0 (7 waits for typescript-eslint, A113).
+- The browser campaign runs five suites on Firefox and WebKit as well as
+  Chromium (`E2E_BROWSER`, CI job `e2e-engines`, A100), plus `bun run e2e:floor`
+  for the unsupported-browser message (A097).
 - Bun pinned to 1.4.0 with `--frozen-lockfile`, actions pinned to commit SHAs,
   least-privilege CI and Dependabot (A014); npm publishing only from CI, with
   provenance (A006); an uptime check (A001); `bun audit` 34 → 0 (A114).
