@@ -8,6 +8,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { displayKeys, SHORTCUT_GROUPS } from "../data/shortcuts";
+import { useT } from "../i18n";
 
 /**
  * A discoverable cheat-sheet of the editor's keyboard shortcuts, shown with
@@ -16,7 +17,8 @@ import { displayKeys, SHORTCUT_GROUPS } from "../data/shortcuts";
 // Rendered from the single shortcuts source (src/data/shortcuts.ts) so this
 // dialog can never drift from the Help page or the real bindings again (it
 // used to advertise a removed "Focus mode" shortcut).
-const GROUPS: { title: string; note?: string; items: [string, string][] }[] = SHORTCUT_GROUPS.map((g) => ({
+// Read at render, not at module load: the names follow the interface language.
+const GROUPS = (): { title: string; note?: string; items: [string, string][] }[] => SHORTCUT_GROUPS.map((g) => ({
   title: g.group,
   note: g.note,
   items: g.rows.map((r) => [displayKeys(r.keys), r.action] as [string, string]),
@@ -30,17 +32,18 @@ export function KeyboardShortcutsDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
-          <AlertDialogTitle>Keyboard shortcuts</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialogs.keyboardShortcuts")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Everyday commands, shown for this device&apos;s keyboard.
+            {t("dialogs.everydayCommandsShownForThis")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {GROUPS.map((g) => (
+          {GROUPS().map((g) => (
             <div key={g.title}>
               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {g.title}
@@ -63,7 +66,7 @@ export function KeyboardShortcutsDialog({
           ))}
         </div>
         <AlertDialogFooter>
-          <AlertDialogAction onClick={onClose}>Close</AlertDialogAction>
+          <AlertDialogAction onClick={onClose}>{t("common.close")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

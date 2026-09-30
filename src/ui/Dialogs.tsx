@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import React, { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n";
 
 // Lazy KaTeX (matches MathNodes.tsx) so the equation dialog doesn't pull KaTeX
 // into the initial bundle. The CSS is imported globally in main/embed entries.
@@ -49,6 +50,7 @@ export function PromptDialog({
   onConfirm,
   onCancel,
 }: PromptDialogProps) {
+  const t = useT();
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -90,12 +92,12 @@ export function PromptDialog({
         />
 
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleConfirm}
             disabled={!value.trim()}
           >
-            Confirm
+            {t("dialogs.confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -119,11 +121,12 @@ export function ConfirmDialog({
   open,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const t = useT();
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && onCancel()}>
       <AlertDialogContent size="sm">
@@ -135,8 +138,8 @@ export function ConfirmDialog({
         </AlertDialogHeader>
 
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
+          <AlertDialogCancel onClick={onCancel}>{cancelLabel ?? t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>{confirmLabel ?? t("dialogs.confirm")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -162,10 +165,11 @@ export function EquationDialog({
   description,
   display,
   defaultValue = "",
-  confirmLabel = "Insert",
+  confirmLabel,
   onConfirm,
   onCancel,
 }: EquationDialogProps) {
+  const t = useT();
   const [value, setValue] = useState(defaultValue);
   const [error, setError] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -208,7 +212,7 @@ export function EquationDialog({
         setError(null);
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Invalid LaTeX");
+        setError(e instanceof Error ? e.message : t("dialogs.invalidLatex"));
         // Still show a best-effort render (KaTeX's own error markup) so the
         // preview area isn't blank while the author is mid-expression.
         try {
@@ -223,7 +227,7 @@ export function EquationDialog({
     return () => {
       cancelled = true;
     };
-  }, [value, display, open]);
+  }, [value, display, open, t]);
 
   const submit = () => {
     const v = value.trim();
@@ -256,28 +260,28 @@ export function EquationDialog({
             onKeyDown={handleKeyDown}
             spellCheck={false}
             rows={display === "block" ? 3 : 1}
-            placeholder={display === "block" ? "E = mc^2" : "x^2"}
+            placeholder={display === "block" ? t("dialogs.equationPlaceholder") : "x^2"}
             className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <div className="rounded-md border border-border bg-muted/30 px-3 py-3 min-h-14 flex items-center justify-center overflow-x-auto">
             {value.trim() ? (
               <div ref={previewRef} aria-live="polite" />
             ) : (
-              <span className="text-xs text-muted-foreground">Preview appears here</span>
+              <span className="text-xs text-muted-foreground">{t("dialogs.previewAppearsHere")}</span>
             )}
           </div>
           {error && (
             <p className="text-xs text-destructive break-words">{error}</p>
           )}
           <p className="text-[11px] text-muted-foreground">
-            Press {navigator?.platform?.toLowerCase().includes("mac") ? "⌘" : "Ctrl"}+Enter to insert.
+            {t("dialogs.pressKeyEnterToInsert", { key: navigator?.platform?.toLowerCase().includes("mac") ? "⌘" : "Ctrl" })}
           </p>
         </div>
 
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction onClick={submit} disabled={!value.trim()}>
-            {confirmLabel}
+            {confirmLabel ?? t("dialogs.insert")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

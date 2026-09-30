@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { APP_NAME } from "../constants";
 import { claimEditorInstance, onEditorInstanceReleased, releaseEditorInstance } from "../store/documentStore";
+import { useT } from "../i18n";
 
 /** What a refused editor logs, once per mount. */
 export const SECOND_EDITOR_ERROR =
@@ -61,13 +62,14 @@ export function OneEditorPerPage({ children }: { children: ReactNode }) {
 
 /** Plain and self-styled: it renders in a host page, with no editor around it. */
 function SecondEditorNotice() {
+  const t = useT();
   return (
     <div
       role="alert"
       data-pf-second-editor=""
       style={{ padding: "12px 16px", border: "1px dashed currentColor", borderRadius: 6, font: "14px/1.5 system-ui, sans-serif" }}
     >
-      Only one {APP_NAME} editor can be open on a page. Another one is already open here, so this one did not start.
+      {t("notices.onlyOneEditorPerPage", { app: APP_NAME })}
     </div>
   );
 }

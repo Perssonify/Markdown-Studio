@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LinkBuilder } from "./LinkBuilder";
+import { useT } from "../i18n";
 
 /**
  * Tools ▸ Share / embed link — a dialog wrapper around the shared
@@ -17,21 +18,21 @@ import { LinkBuilder } from "./LinkBuilder";
  * dialog chrome.
  */
 function LinkBuilderDialogInner({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const t = useT();
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent size="default">
         <AlertDialogHeader>
-          <AlertDialogTitle>Share / embed link</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialogs.shareEmbedLink")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Turn on the URL parameters you want, pick each value, and copy a link that opens the
-            editor with exactly those settings — or an iframe snippet to embed it.
+            {t("dialogs.turnOnTheUrlParameters")}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <LinkBuilder variant="dialog" />
 
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => onOpenChange(false)}>Done</AlertDialogCancel>
+          <AlertDialogCancel onClick={() => onOpenChange(false)}>{t("common.done")}</AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -4,6 +4,7 @@ import { recordDiagnostic } from "../utils/diagnostics";
 import { isChunkLoadError } from "../utils/lazy-import";
 import { CopyDiagnosticsButton } from "./DiagnosticsActions";
 import { ReloadWhenOnline } from "./ErrorBoundary";
+import { t } from "../i18n";
 
 interface Props {
   children: ReactNode;
@@ -56,7 +57,7 @@ export class LazyChunkBoundary extends Component<Props, State> {
     if (chunk && this.props.fallback) return this.props.fallback(this.retry);
     if (dismissed) return null;
 
-    const what = this.props.label ?? "This panel";
+    const what = this.props.label ?? t("notices.thisPanel");
     const message = error instanceof Error ? error.message : String(error);
     return (
       <div
@@ -64,14 +65,14 @@ export class LazyChunkBoundary extends Component<Props, State> {
         className="fixed left-1/2 top-16 z-50 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-border bg-card p-4 text-sm text-card-foreground shadow-lg"
       >
         <p className="font-medium">
-          {chunk ? `${what} couldn't be loaded` : `${what} ran into an error`}
+          {chunk ? t("notices.panelCouldNotBeLoaded", { what }) : t("notices.panelRanIntoAnError", { what })}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {chunk
             ? isOnline()
-              ? "A file it needs could not be downloaded. Reload to fix it — your documents are kept."
-              : "You're offline and it isn't saved on this device yet. Reload once you're back online."
-            : "It has been closed so the editor keeps working. Your documents are not affected."}
+              ? t("notices.panelFileCouldNotBeDownloaded")
+              : t("notices.panelOfflineNotSaved")
+            : t("notices.panelClosedDocumentsNotAffected")}
         </p>
         {!chunk && message && <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{message}</p>}
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
@@ -83,7 +84,7 @@ export class LazyChunkBoundary extends Component<Props, State> {
             onClick={() => this.setState({ dismissed: true })}
             className="h-8 rounded-md px-3 text-xs text-muted-foreground hover:bg-muted"
           >
-            Dismiss
+            {t("common.dismiss")}
           </button>
           {chunk ? (
             <ReloadWhenOnline className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90" />
@@ -93,7 +94,7 @@ export class LazyChunkBoundary extends Component<Props, State> {
               onClick={this.retry}
               className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
-              Try again
+              {t("notices.tryAgain")}
             </button>
           )}
         </div>
