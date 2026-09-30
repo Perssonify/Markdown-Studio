@@ -34,6 +34,7 @@
 import { LEGACY_APP_HOST } from "../constants";
 import { safeStorage } from "../utils/safe-storage";
 import { MemoryStorageAdapter, type StorageAdapter } from "./storage-adapter";
+import { t } from "../i18n/core";
 
 // ── Keys & timings ─────────────────────────────────────────────────────────
 
@@ -225,9 +226,9 @@ export function backupNudgeInput(docCount: number, now = Date.now()): BackupNudg
 /** "today", "yesterday", "12 days ago" — whole days, as a reminder needs. */
 export function daysAgoLabel(then: number, now = Date.now()): string {
   const days = Math.floor((now - then) / DAY_MS);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  return `${days} days ago`;
+  if (days <= 0) return t("notices.today");
+  if (days === 1) return t("notices.yesterday");
+  return t("notices.daysAgo", { count: days });
 }
 
 // ── Persistent storage ─────────────────────────────────────────────────────

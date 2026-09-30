@@ -2,6 +2,7 @@ import { Editor } from "@tiptap/core";
 import { BubbleMenu } from '@tiptap/react/menus';
 import { ExternalLink, Link2Off, Pencil } from "lucide-react";
 import { runBubbleCommand } from "./bubble-menu-command";
+import { useT } from "../i18n";
 
 export interface LinkBubbleMenuProps {
   editor: Editor | null;
@@ -15,6 +16,7 @@ export interface LinkBubbleMenuProps {
  * Redesigned with Tailwind CSS v4 and industry-standard UX.
  */
 export function LinkBubbleMenu({ editor, onEditLink }: LinkBubbleMenuProps) {
+  const t = useT();
   if (!editor) return null;
 
   const handleEdit = () => {
@@ -34,7 +36,7 @@ export function LinkBubbleMenu({ editor, onEditLink }: LinkBubbleMenuProps) {
       );
     };
     if (onEditLink) { void onEditLink(currentUrl).then(apply); return; }
-    apply(window.prompt("Edit link URL:", currentUrl));
+    apply(window.prompt(t("toolbar.editLinkUrlPrompt"), currentUrl));
   };
 
   const handleUnlink = () => {
@@ -57,7 +59,7 @@ export function LinkBubbleMenu({ editor, onEditLink }: LinkBubbleMenuProps) {
         <div className="flex items-center gap-2 px-2 py-1 max-w-[220px]">
           <ExternalLink className="h-3.5 w-3.5 text-primary shrink-0" />
           <span className="text-xs font-mono text-primary-strong truncate cursor-default">
-            {editor.getAttributes("link")["href"] || "No URL"}
+            {editor.getAttributes("link")["href"] || t("toolbar.noUrl")}
           </span>
         </div>
 
@@ -69,19 +71,19 @@ export function LinkBubbleMenu({ editor, onEditLink }: LinkBubbleMenuProps) {
           <button
             onClick={handleEdit}
             className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title="Edit link URL"
+            title={t("toolbar.editLinkUrl")}
           >
             <Pencil className="h-3 w-3" />
-            <span>Edit</span>
+            <span>{t("common.edit")}</span>
           </button>
 
           <button
             onClick={handleUnlink}
             className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium text-destructive hover:bg-destructive/10 transition-colors"
-            title="Remove link"
+            title={t("toolbar.removeLink")}
           >
             <Link2Off className="h-3 w-3" />
-            <span>Unlink</span>
+            <span>{t("toolbar.unlink")}</span>
           </button>
         </div>
       </div>

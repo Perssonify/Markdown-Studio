@@ -1,6 +1,7 @@
 import { RefObject, useEffect, useRef } from "react";
 import { useUIStore } from "../store/uiStore";
 import { isAltGraphInput } from "../utils/alt-graph";
+import { t } from "../i18n";
 
 /** The markdown pane's handle, as far as this hook needs it. */
 interface MarkdownPaneLike {
@@ -164,7 +165,7 @@ export function useKeyboardShortcuts(
         if (promptLink) {
           promptLink().then((url) => { if (url) dispatch("createLink", url); });
         } else {
-          const url = prompt("Enter URL:");
+          const url = prompt(t("editor.enterUrl"));
           if (url) dispatch("createLink", url);
         }
         return;

@@ -1,4 +1,6 @@
 import type { SaveStatus } from "../store/documentStore";
+import { t } from "../i18n";
+import { en } from "../i18n/en";
 
 /**
  * What the status bar's live region should SAY, as opposed to what it shows.
@@ -54,13 +56,16 @@ export function failureKind(s: SaveSnapshot, current: FailureKind | null = null)
   return null;
 }
 
+// Getters: read in the interface language at the moment they are announced.
 export const FAILURE_MESSAGES: Record<FailureKind, string> = {
-  error: "Save failed. Retrying; your work is still on screen.",
-  blocked: "Not saving: the editor is empty but the stored document is not.",
-  conflict: "Not saving: this document was changed in another tab.",
+  get error() { return t("status.announceSaveFailed"); },
+  get blocked() { return t("status.announceBlocked"); },
+  get conflict() { return t("status.announceConflict"); },
 };
 
-export const RECOVERED_MESSAGE = "Changes saved.";
+/** The recovery announcement's English text. `nextAnnouncement` speaks it
+ *  through `t()`, in the interface language, at the moment it is announced. */
+export const RECOVERED_MESSAGE: string = en["status.announceRecovered"];
 
 /** Advance the announcer by one observed snapshot. `message` is null for
  *  "say nothing" — which is the answer for the whole routine save cycle. */
@@ -76,7 +81,7 @@ export function nextAnnouncement(
   // Recovery is announced once a save has actually LANDED — not on the
   // retry's "saving", which is still a failure until it succeeds.
   if (state.awaitingRecovery && snap.status === "saved") {
-    return { state: INITIAL_ANNOUNCER, message: RECOVERED_MESSAGE };
+    return { state: INITIAL_ANNOUNCER, message: t("status.announceRecovered") };
   }
   return { state: state.kind ? { kind: null, awaitingRecovery: state.awaitingRecovery } : state, message: null };
 }

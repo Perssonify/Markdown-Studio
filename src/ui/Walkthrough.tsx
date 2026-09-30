@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { t, useT } from "../i18n";
 
 interface TourStep {
   selector: string;
@@ -24,42 +25,42 @@ const isPhoneViewport = () => typeof window !== "undefined" && window.innerWidth
 const STEPS: TourStep[] = [
   {
     selector: '[data-tour="menus"]',
-    title: "The menu bar",
+    get title() { return t("tour.menuBarTitle"); },
     get body() {
       return isPhoneViewport()
-        ? "Every command lives behind this menu button — File, Edit, Insert, View, Format, Tools and Help."
-        : "Every command lives here — File, Edit, Insert, View, Format, Tools and Help. When in doubt, start in a menu.";
+        ? t("tour.menuBarBodyPhone")
+        : t("tour.menuBarBody");
     },
   },
   {
     selector: '[data-tour="mode-switcher"]',
-    title: "Choose your layout",
-    body: "Switch between Markdown, Rich text, or a Split view of both. On a phone these collapse to icons.",
+    get title() { return t("tour.layoutTitle"); },
+    get body() { return t("tour.layoutBody"); },
   },
   {
     selector: '[data-tour="workspace-views"]',
-    title: "Two more ways to see your notes",
-    body: "Cards is a board of every note for quick capture and sorting. The map shows how your notes link to each other — pick any note in it to see its headings and every link in and out, and click through without leaving the map. Editor brings you back (Esc works too).",
+    get title() { return t("tour.workspaceViewsTitle"); },
+    get body() { return t("tour.workspaceViewsBody"); },
   },
   {
     selector: '[data-tour="settings"]',
-    title: "Make it yours",
-    body: "Open settings for Markdown options; theme and accent colors also live under View → Appearance.",
+    get title() { return t("tour.settingsTitle"); },
+    get body() { return t("tour.settingsBody"); },
   },
   {
     selector: '[data-tour="toolbar"]',
-    title: "Quick formatting",
-    body: "Bold, lists, links and more for the pane you’re in — plus Save and Undo/Redo, always one click away.",
+    get title() { return t("tour.toolbarTitle"); },
+    get body() { return t("tour.toolbarBody"); },
   },
   {
     selector: '[data-tour="editor"]',
-    title: "Two panes, always in sync",
-    body: "Type Markdown on the left or rich text on the right — each updates the other instantly. Drag the divider to resize.",
+    get title() { return t("tour.editorTitle"); },
+    get body() { return t("tour.editorBody"); },
   },
   {
     selector: '[data-tour="workspace"]',
-    title: "Your workspace",
-    body: "Your files and the document Outline live in this panel on the left. The document you are editing is marked with a coloured bar; pick another and the Outline follows it.",
+    get title() { return t("tour.workspaceTitle"); },
+    get body() { return t("tour.workspaceBody"); },
   },
 ];
 
@@ -71,6 +72,7 @@ interface WalkthroughProps {
 }
 
 export function Walkthrough({ run, onFinish }: WalkthroughProps) {
+  const t = useT();
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
@@ -232,7 +234,7 @@ export function Walkthrough({ run, onFinish }: WalkthroughProps) {
             type="button"
             onClick={finish}
             className="-mr-1 -mt-1 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Close tour"
+            aria-label={t("tour.closeTour")}
           >
             <X className="size-4" />
           </button>
@@ -249,12 +251,12 @@ export function Walkthrough({ run, onFinish }: WalkthroughProps) {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={finish}>Skip</Button>
+            <Button variant="ghost" size="sm" onClick={finish}>{t("common.skip")}</Button>
             {index > 0 && (
-              <Button variant="outline" size="sm" onClick={goBack}>Back</Button>
+              <Button variant="outline" size="sm" onClick={goBack}>{t("common.back")}</Button>
             )}
             <Button size="sm" onClick={next}>
-              {index + 1 >= STEPS.length ? "Done" : "Next"}
+              {index + 1 >= STEPS.length ? t("common.done") : t("common.next")}
             </Button>
           </div>
         </div>

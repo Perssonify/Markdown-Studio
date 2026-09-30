@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "../i18n";
 
 interface ConfirmOptions {
   title: string;
@@ -32,6 +33,7 @@ interface ConfirmState extends ConfirmOptions {
  *   const ok = await confirm({ title: "Delete?", destructive: true });
  */
 export function useConfirm() {
+  const t = useT();
   const resolveRef = useRef<(value: boolean) => void>(() => { });
   const [state, setState] = useState<ConfirmState>({
     open: false,
@@ -67,13 +69,13 @@ export function useConfirm() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={handleCancel}>
-            {state.cancelLabel ?? "Cancel"}
+            {state.cancelLabel ?? t("common.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
             variant={state.destructive ? "destructive" : "default"}
             onClick={handleConfirm}
           >
-            {state.confirmLabel ?? "Confirm"}
+            {state.confirmLabel ?? t("dialogs.confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -90,6 +92,7 @@ export type UnsavedChangesResult = "save" | "discard" | "cancel";
  * Returns "save", "discard", or "cancel".
  */
 export function useUnsavedChangesConfirm() {
+  const t = useT();
   const resolveRef = useRef<(value: UnsavedChangesResult) => void>(() => { });
   const [open, setOpen] = useState(false);
 
@@ -109,9 +112,9 @@ export function useUnsavedChangesConfirm() {
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) resolve("cancel"); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Document has unsaved changes</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialogs.documentHasUnsavedChanges")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Save before closing? It doesn't delete the document.
+            {t("dialogs.saveBeforeClosingItDoesn")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-row gap-2 justify-end items-center mt-1">
@@ -119,10 +122,10 @@ export function useUnsavedChangesConfirm() {
             <X />
           </AlertDialogCancel>
           <AlertDialogAction variant="destructive_soft" onClick={() => resolve("discard")}>
-            Discard
+            {t("dialogs.discard")}
           </AlertDialogAction>
           <AlertDialogAction onClick={() => resolve("save")}>
-            Save
+            {t("common.save")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -137,6 +140,7 @@ export function useUnsavedChangesConfirm() {
  * Returns the entered title string, or null if the user cancelled.
  */
 export function useNewDocPrompt() {
+  const t = useT();
   const resolveRef = useRef<(value: string | null) => void>(() => { });
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
@@ -173,16 +177,16 @@ export function useNewDocPrompt() {
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) handleCancel(); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>New document</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialogs.newDocument")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Enter a title for your new document.
+            {t("dialogs.enterATitleForYour")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <Input
           ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Document title"
+          placeholder={t("dialogs.documentTitle")}
           className="mt-1"
           onKeyDown={(e) => {
             if (e.key === "Enter") handleConfirm();
@@ -190,9 +194,9 @@ export function useNewDocPrompt() {
           }}
         />
         <AlertDialogFooter className="mt-4">
-          <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={handleCancel}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirm} disabled={!value.trim()}>
-            Create
+            {t("dialogs.create")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

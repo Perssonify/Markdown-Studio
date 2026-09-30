@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useUIStore } from "../store/uiStore";
 import { adsAvailable } from "../utils/build-gates";
+import { useT } from "../i18n";
 
 export type AdUnitVariant = "sidebar-inline" | "floating-bar" | "right-rail";
 
@@ -44,6 +45,7 @@ export function AdUnit({ variant, className, chromeFull = true }: AdUnitProps) {
 }
 
 function RightRailAd({ className }: { className?: string }) {
+  const t = useT();
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
   return (
@@ -51,17 +53,17 @@ function RightRailAd({ className }: { className?: string }) {
       <div className="relative h-full w-full bg-linear-to-b from-violet-500 via-fuchsia-500 to-orange-400">
         <div className="absolute -left-4 -top-4 h-16 w-16 rounded-full bg-yellow-300/40 blur-lg" />
         <div className="absolute bottom-6 -right-3 h-14 w-14 rounded-full bg-cyan-400/40 blur-lg" />
-        <div className="absolute left-1.5 top-1.5 rounded bg-black/30 px-1 py-px text-[8px] font-bold uppercase tracking-widest text-white/70">Ad</div>
+        <div className="absolute left-1.5 top-1.5 rounded bg-black/30 px-1 py-px text-[8px] font-bold uppercase tracking-widest text-white/70">{t("notices.ad")}</div>
         <button
           onClick={() => setDismissed(true)}
           className="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-black/25 text-white/80 transition-colors hover:bg-black/50 hover:text-white"
-          title="Close ad"
+          title={t("notices.closeAd")}
         >
           <X className="size-2.5" />
         </button>
         <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
-          <span className="text-xs font-bold leading-tight text-white drop-shadow">Your Ad Here</span>
-          <span className="text-[10px] text-white/80">Reach thousands of writers</span>
+          <span className="text-xs font-bold leading-tight text-white drop-shadow">{t("notices.yourAdHere")}</span>
+          <span className="text-[10px] text-white/80">{t("notices.reachThousandsOfWriters")}</span>
         </div>
       </div>
     </div>
@@ -69,6 +71,7 @@ function RightRailAd({ className }: { className?: string }) {
 }
 
 function SidebarInlineAd({ className }: { className?: string }) {
+  const t = useT();
   const [dismissed, setDismissed] = useState(() => sidebarAdDismissed);
 
   const handleClose = () => {
@@ -87,22 +90,22 @@ function SidebarInlineAd({ className }: { className?: string }) {
         <div className="absolute right-6 top-2 h-6 w-6 rounded-full bg-pink-300/60 blur-sm" />
         {/* Badge */}
         <div className="absolute left-1.5 top-1.5 rounded bg-black/30 px-1 py-px text-[8px] font-bold uppercase tracking-widest text-white/70">
-          Ad
+          {t("notices.ad")}
         </div>
         {/* Close */}
         <button
           onClick={handleClose}
           className="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-black/25 text-white/80 transition-colors hover:bg-black/50 hover:text-white"
-          title="Close ad"
+          title={t("notices.closeAd")}
         >
           <X className="size-2.5" />
         </button>
         {/* Copy */}
         <div className="flex h-full flex-col items-center justify-center gap-0.5 px-3 text-center">
           <span className="text-[11px] font-bold leading-tight text-white drop-shadow">
-            Your Ad Here
+            {t("notices.yourAdHere")}
           </span>
-          <span className="text-[9px] text-white/80">Reach thousands of writers</span>
+          <span className="text-[9px] text-white/80">{t("notices.reachThousandsOfWriters")}</span>
         </div>
       </div>
     </div>
@@ -110,6 +113,7 @@ function SidebarInlineAd({ className }: { className?: string }) {
 }
 
 function FloatingBarAd({ className }: { className?: string }) {
+  const t = useT();
   const [visible, setVisible] = useState(false);
   // Local render gate — initialised from the module-level flag so a remount
   // caused by a parent re-render doesn't reset the dismissed state.
@@ -118,8 +122,8 @@ function FloatingBarAd({ className }: { className?: string }) {
 
   useEffect(() => {
     if (floatingAdDismissed) return;
-    const t = setTimeout(() => setVisible(true), 800);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setVisible(true), 800);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleClose = () => {
@@ -158,13 +162,13 @@ function FloatingBarAd({ className }: { className?: string }) {
         <div className="absolute right-1/4 bottom-0 h-10 w-10 rounded-full bg-lime-300/50 blur-md" />
         {/* Badge */}
         <div className="absolute left-3 top-2 rounded bg-black/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-white/70">
-          Sponsored
+          {t("notices.sponsored")}
         </div>
         {/* Close */}
         <button
           onClick={handleClose}
           className="absolute right-2 top-2 z-5 flex size-5 items-center justify-center rounded-full bg-black/25 text-white/80 transition-colors hover:bg-black/50 hover:text-white"
-          title="Close ad"
+          title={t("notices.closeAd")}
         >
           <X className="size-3" />
         </button>
@@ -172,14 +176,14 @@ function FloatingBarAd({ className }: { className?: string }) {
         <div className="relative flex h-full items-center justify-between px-8 pt-3">
           <div className="flex flex-col gap-0.5">
             <span className="text-base font-bold leading-tight text-white drop-shadow-md">
-              Your Ad Here
+              {t("notices.yourAdHere")}
             </span>
             <span className="text-xs text-white/80">
-              Reach thousands of developers &amp; writers every day
+              {t("notices.reachThousandsOfDevelopersAnd")}
             </span>
           </div>
           <button className="shrink-0 rounded-full border border-white/30 bg-white/20 px-5 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/30">
-            Learn More →
+            {t("notices.learnMore")}
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { APP_NAME } from "../constants";
 import { PALETTES } from "../theme/palette";
 import { adsAvailable } from "../utils/build-gates";
+import { useT } from "../i18n";
 
 type ViewMode = "split" | "md" | "html";
 type ThemeOpt = "light" | "dark";
@@ -93,8 +94,9 @@ function ParamRow({ pk, label, hint, scope, checked, onToggle, children }: {
   );
 }
 
-function OutputRow({ label, value, multiline, copied, onCopy }: {
+function OutputRow({ label, copyLabel, value, multiline, copied, onCopy }: {
   label: string;
+  copyLabel: string;
   value: string;
   multiline?: boolean;
   copied: boolean;
@@ -113,7 +115,7 @@ function OutputRow({ label, value, multiline, copied, onCopy }: {
         >
           {value}
         </code>
-        <Button size="sm" variant="secondary" onClick={onCopy} aria-label={`Copy ${label.toLowerCase()}`} title={`Copy ${label.toLowerCase()}`}>
+        <Button size="sm" variant="secondary" onClick={onCopy} aria-label={copyLabel} title={copyLabel}>
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </Button>
       </div>
@@ -144,6 +146,7 @@ export interface LinkBuilderProps {
  * not construct most of what it documented.
  */
 export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps) {
+  const t = useT();
   // Which params are enabled (written into the links).
   const [on, setOn] = useState<Record<ParamKey, boolean>>({
     view_mode: false, readonly: false, ads: false, import_url: false,
@@ -228,34 +231,34 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
         )}
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Link &amp; embed</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("dialogs.linkAndEmbed")}</p>
           {anyOn && (
             <button
               type="button"
               onClick={() => setOn({ view_mode: false, readonly: false, ads: false, import_url: false, theme: false, accent: false, chrome: false, bg: false })}
               className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
-              Turn all off
+              {t("dialogs.turnAllOff")}
             </button>
           )}
         </div>
 
-        <ParamRow pk="view_mode" label="View mode" hint="view_mode=md | html | split" checked={on.view_mode} onToggle={toggle("view_mode")}>
-          <Segmented disabled={!on.view_mode} value={viewMode} onChange={setViewMode} options={[{ v: "split", label: "Split" }, { v: "md", label: "Markdown" }, { v: "html", label: "Rich" }]} />
+        <ParamRow pk="view_mode" label={t("dialogs.viewMode")} hint="view_mode=md | html | split" checked={on.view_mode} onToggle={toggle("view_mode")}>
+          <Segmented disabled={!on.view_mode} value={viewMode} onChange={setViewMode} options={[{ v: "split", label: t("dialogs.modeSplit") }, { v: "md", label: t("dialogs.modeMarkdown") }, { v: "html", label: t("dialogs.modeRich") }]} />
         </ParamRow>
-        <ParamRow pk="readonly" label="Read-only" hint="readonly=true — editing off, view mode locked" checked={on.readonly} onToggle={toggle("readonly")}>
-          <Segmented disabled={!on.readonly} value={readonly} onChange={setReadonly} options={[{ v: "true", label: "On" }, { v: "false", label: "Off" }]} />
+        <ParamRow pk="readonly" label={t("dialogs.readOnly")} hint={t("dialogs.readonlyTrueEditingOffView")} checked={on.readonly} onToggle={toggle("readonly")}>
+          <Segmented disabled={!on.readonly} value={readonly} onChange={setReadonly} options={[{ v: "true", label: t("dialogs.on") }, { v: "false", label: t("dialogs.off") }]} />
         </ParamRow>
         {showAdsParam && (
-          <ParamRow pk="ads" label="Ads" scope="dev only" hint="ads=true — show the placeholder ad slots (development builds)" checked={on.ads} onToggle={toggle("ads")}>
-            <Segmented disabled={!on.ads} value={ads} onChange={setAds} options={[{ v: "true", label: "On" }, { v: "false", label: "Off" }]} />
+          <ParamRow pk="ads" label={t("dialogs.ads")} scope={t("dialogs.scopeDevOnly")} hint={t("dialogs.adsTrueShowThePlaceholder")} checked={on.ads} onToggle={toggle("ads")}>
+            <Segmented disabled={!on.ads} value={ads} onChange={setAds} options={[{ v: "true", label: t("dialogs.on") }, { v: "false", label: t("dialogs.off") }]} />
           </ParamRow>
         )}
         <ParamRow
           pk="import_url"
-          label="Import URL"
-          scope="link only"
-          hint="import_url=… — pre-fills the importer; the recipient still clicks Fetch"
+          label={t("dialogs.importUrl")}
+          scope={t("dialogs.scopeLinkOnly")}
+          hint={t("dialogs.importUrlPreFillsThe")}
           checked={on.import_url}
           onToggle={toggle("import_url")}
         >
@@ -263,26 +266,26 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
             disabled={!on.import_url}
             value={importUrl}
             onChange={(e) => setImportUrl(e.target.value)}
-            placeholder="https://…/notes.md"
+            placeholder={t("dialogs.importUrlPlaceholder")}
             className="h-8 w-[min(220px,45vw)] text-xs"
             inputMode="url"
-            aria-label="Source URL to pre-fill the importer with"
+            aria-label={t("dialogs.sourceUrlToPreFill")}
           />
         </ParamRow>
 
-        <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Embed only</p>
-        <ParamRow pk="theme" label="Theme" scope="embed" hint="theme=light | dark" checked={on.theme} onToggle={toggle("theme")}>
-          <Segmented disabled={!on.theme} value={theme} onChange={setTheme} options={[{ v: "light", label: "Light" }, { v: "dark", label: "Dark" }]} />
+        <p className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("dialogs.embedOnly")}</p>
+        <ParamRow pk="theme" label={t("dialogs.theme")} scope={t("dialogs.scopeEmbed")} hint="theme=light | dark" checked={on.theme} onToggle={toggle("theme")}>
+          <Segmented disabled={!on.theme} value={theme} onChange={setTheme} options={[{ v: "light", label: t("dialogs.themeLight") }, { v: "dark", label: t("dialogs.themeDark") }]} />
         </ParamRow>
-        <ParamRow pk="accent" label="Accent" scope="embed" hint="accent=<palette> or accentColor=<css color>" checked={on.accent} onToggle={toggle("accent")}>
+        <ParamRow pk="accent" label={t("dialogs.accent")} scope={t("dialogs.scopeEmbed")} hint={t("dialogs.accentPaletteOrAccentcolorCss")} checked={on.accent} onToggle={toggle("accent")}>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Segmented disabled={!on.accent} value={accentMode} onChange={setAccentMode} options={[{ v: "palette", label: "Palette" }, { v: "custom", label: "Color" }]} />
+            <Segmented disabled={!on.accent} value={accentMode} onChange={setAccentMode} options={[{ v: "palette", label: t("dialogs.palette") }, { v: "custom", label: t("dialogs.color") }]} />
             {accentMode === "palette" ? (
               <select
                 disabled={!on.accent}
                 value={accent}
                 onChange={(e) => setAccent(e.target.value)}
-                aria-label="Accent palette"
+                aria-label={t("dialogs.accentPalette")}
                 className={cn("h-8 rounded-md border border-border bg-background px-2 text-xs", !on.accent && "opacity-40")}
               >
                 {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -294,17 +297,17 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
                 value={/^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : "#f59e0b"}
                 onChange={(e) => setAccentColor(e.target.value)}
                 className={cn("h-8 w-9 cursor-pointer rounded-md border border-border bg-background p-0.5", !on.accent && "opacity-40")}
-                aria-label="Accent color"
+                aria-label={t("dialogs.accentColor")}
               />
             )}
           </div>
         </ParamRow>
-        <ParamRow pk="chrome" label="Chrome" scope="embed" hint="chrome=full | minimal | none" checked={on.chrome} onToggle={toggle("chrome")}>
-          <Segmented disabled={!on.chrome} value={chrome} onChange={setChrome} options={[{ v: "full", label: "Full" }, { v: "minimal", label: "Minimal" }, { v: "none", label: "None" }]} />
+        <ParamRow pk="chrome" label={t("dialogs.chrome")} scope={t("dialogs.scopeEmbed")} hint="chrome=full | minimal | none" checked={on.chrome} onToggle={toggle("chrome")}>
+          <Segmented disabled={!on.chrome} value={chrome} onChange={setChrome} options={[{ v: "full", label: t("dialogs.chromeFull") }, { v: "minimal", label: t("dialogs.chromeMinimal") }, { v: "none", label: t("dialogs.chromeNone") }]} />
         </ParamRow>
-        <ParamRow pk="bg" label="Background" scope="embed" hint="bg=transparent | <css color>" checked={on.bg} onToggle={toggle("bg")}>
+        <ParamRow pk="bg" label={t("dialogs.background")} scope={t("dialogs.scopeEmbed")} hint={t("dialogs.bgTransparentCssColor")} checked={on.bg} onToggle={toggle("bg")}>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Segmented disabled={!on.bg} value={bgMode} onChange={setBgMode} options={[{ v: "transparent", label: "Transparent" }, { v: "custom", label: "Color" }]} />
+            <Segmented disabled={!on.bg} value={bgMode} onChange={setBgMode} options={[{ v: "transparent", label: t("dialogs.transparent") }, { v: "custom", label: t("dialogs.color") }]} />
             {bgMode === "custom" && (
               <input
                 type="color"
@@ -312,7 +315,7 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
                 value={/^#[0-9a-fA-F]{6}$/.test(bgColor) ? bgColor : "#ffffff"}
                 onChange={(e) => setBgColor(e.target.value)}
                 className={cn("h-8 w-9 cursor-pointer rounded-md border border-border bg-background p-0.5", !on.bg && "opacity-40")}
-                aria-label="Background color"
+                aria-label={t("dialogs.backgroundColor")}
               />
             )}
           </div>
@@ -320,8 +323,8 @@ export function LinkBuilder({ variant = "dialog", className }: LinkBuilderProps)
       </div>
 
       <div className="space-y-3 border-t border-border pt-3">
-        <OutputRow label="Standalone link" value={appUrl} copied={copied === "app"} onCopy={() => copy(appUrl, "app")} />
-        <OutputRow label="Embed snippet" value={embedSnippet} multiline copied={copied === "embed"} onCopy={() => copy(embedSnippet, "embed")} />
+        <OutputRow label={t("dialogs.standaloneLink")} copyLabel={t("dialogs.copyStandaloneLink")} value={appUrl} copied={copied === "app"} onCopy={() => copy(appUrl, "app")} />
+        <OutputRow label={t("dialogs.embedSnippet")} copyLabel={t("dialogs.copyEmbedSnippet")} value={embedSnippet} multiline copied={copied === "embed"} onCopy={() => copy(embedSnippet, "embed")} />
       </div>
     </div>
   );

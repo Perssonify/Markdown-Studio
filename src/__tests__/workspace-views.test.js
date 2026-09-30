@@ -61,7 +61,7 @@ describe("workspace views are mutually exclusive", () => {
     // overlay from a dialog to a labelled region while such a comment stood).
     const shells = (PE + VIEWS).match(/data-workspace-overlay=/g) || [];
     expect(shells).toHaveLength(1);
-    expect(PE).toMatch(/aria-label=\{workspaceView === "map" \? "Relationship map" : "Cards"\}/);
+    expect(PE).toMatch(/aria-label=\{workspaceView === "map" \? t\("app\.overlayMap"\) : t\("app\.overlayCards"\)\}/);
   });
 
   it("does not claim to be a modal — the surface switcher stays usable beside it", () => {

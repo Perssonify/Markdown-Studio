@@ -60,6 +60,6 @@ describe("library rows expose their full name", () => {
     const { container } = renderTree([doc("a", "A document with a long title"), doc("b", "")]);
     expect(container.querySelector('span[title="A document with a long title"]')).not.toBeNull();
     expect(container.querySelector('span[title="Untitled"]')).not.toBeNull();
-    expect(files["WorkspacePanel.tsx"]).toContain('title={doc.title || "Untitled"}');
+    expect(files["WorkspacePanel.tsx"]).toContain('title={doc.title || t("common.untitled")}');
   });
 });

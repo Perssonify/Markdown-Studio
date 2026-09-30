@@ -9,6 +9,7 @@
  */
 
 import { newCountAcc, countTextRun, type CountAcc, type PMNode } from "./document";
+import { t } from "../i18n/core";
 
 // --- Types ---
 
@@ -199,26 +200,27 @@ function summarizeLosses(losses: FidelityLoss[]): FidelityReport {
 
     if (colorLosses.length) {
       const total = colorLosses.reduce((n, l) => n + l.count, 0);
-      parts.push(`${total} color${total > 1 ? "s" : ""}`);
+      parts.push(t("status.fidelityColors", { count: total }));
     }
     if (fontLosses.length) {
       const total = fontLosses.reduce((n, l) => n + l.count, 0);
-      parts.push(`${total} font${total > 1 ? "s" : ""}`);
+      parts.push(t("status.fidelityFonts", { count: total }));
     }
     if (highlightLosses.length) {
       const total = highlightLosses.reduce((n, l) => n + l.count, 0);
-      parts.push(`${total} highlight${total > 1 ? "s" : ""}`);
+      parts.push(t("status.fidelityHighlights", { count: total }));
     }
     if (alignLosses.length) {
       const total = alignLosses.reduce((n, l) => n + l.count, 0);
-      parts.push(`${total} alignment${total > 1 ? "s" : ""}`);
+      parts.push(t("status.fidelityAlignments", { count: total }));
     }
     if (otherLosses.length) {
       const total = otherLosses.reduce((n, l) => n + l.count, 0);
-      parts.push(`${total} other`);
+      parts.push(t("status.fidelityOther", { count: total }));
     }
 
-    summary = parts.join(", ") + " not in MD";
+    // The status bar's amber badge: interface text, in the interface language.
+    summary = t("status.fidelitySummary", { list: parts.join(t("status.listSeparator")) });
   }
 
   return {

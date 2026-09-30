@@ -28,6 +28,7 @@ import {
 } from "../store/graph-metrics";
 import { ALPHA_DECAY, MAX_FRAMES, PAD, shouldFreeze, stepLayout, worldFor, type SimPoint } from "../store/graph-physics";
 import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry } from "../store/graph-draw";
+import { useT } from "../i18n";
 
 export interface GraphNode {
   id: string;
@@ -169,6 +170,7 @@ const isWideViewport = () =>
  * that blocked main thread (e2e/cases/perf-map.mjs).
  */
 function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, onExport, headingsFor, onOpenHeading, unresolved }: GraphViewProps) {
+  const t = useT();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const posRef = useRef<Map<string, Pt>>(new Map());
@@ -793,15 +795,15 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const outboundDocs = useMemo(() => {
     if (!detail) return [];
     const ids = new Set(graph.edges.filter((e) => e.source === detail.id).map((e) => e.target));
-    return [...ids].map((id) => ({ id, title: titleById.get(id) ?? "Untitled" }))
+    return [...ids].map((id) => ({ id, title: titleById.get(id) ?? t("common.untitled") }))
       .sort((a, b) => a.title.localeCompare(b.title));
-  }, [detail, graph.edges, titleById]);
+  }, [detail, graph.edges, titleById, t]);
   const inboundDocs = useMemo(() => {
     if (!detail) return [];
     const ids = new Set(graph.edges.filter((e) => e.target === detail.id).map((e) => e.source));
-    return [...ids].map((id) => ({ id, title: titleById.get(id) ?? "Untitled" }))
+    return [...ids].map((id) => ({ id, title: titleById.get(id) ?? t("common.untitled") }))
       .sort((a, b) => a.title.localeCompare(b.title));
-  }, [detail, graph.edges, titleById]);
+  }, [detail, graph.edges, titleById, t]);
   const detailBroken = useMemo(
     () => (detail ? brokenList.filter((b) => b.sourceId === detail.id) : []),
     [detail, brokenList]
@@ -1067,12 +1069,12 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       {graph.nodes.map((node) => (
         <li key={node.id}>
           <button type="button" onClick={() => onNavigate(node.id)}>
-            Open {node.title} ({node.backlinks || 0} inbound, {node.forwardLinks || 0} outbound links)
+            {t("graph.nodeOpen", { title: node.title, inbound: t("graph.inboundCount", { count: node.backlinks || 0 }), outbound: t("graph.outboundLinksCount", { count: node.forwardLinks || 0 }) })}
           </button>
         </li>
       ))}
     </ul>
-  ), [graph.nodes, onNavigate]);
+  ), [graph.nodes, onNavigate, t]);
 
   // ── Header ────────────────────────────────────────────────────────────────────
   const header = (
@@ -1085,9 +1087,9 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       <div className="hidden min-w-0 shrink-0 items-center gap-2 lg:flex">
         <Network className="size-4 shrink-0 text-primary" />
         <div className="min-w-0 leading-tight">
-          <h2 className="truncate text-xs font-semibold text-foreground">Relationship map</h2>
+          <h2 className="truncate text-xs font-semibold text-foreground">{t("graph.relationshipMap")}</h2>
           <p className="truncate text-[10px] text-muted-foreground">
-            {graph.nodes.length} note{graph.nodes.length === 1 ? "" : "s"} · {graph.edges.length} link{graph.edges.length === 1 ? "" : "s"}
+            {t("graph.summary", { notes: t("graph.noteCount", { count: graph.nodes.length }), links: t("graph.linkCount", { count: graph.edges.length }) })}
           </p>
         </div>
       </div>
@@ -1099,15 +1101,15 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusSearch(); } }}
-          placeholder="Search notes…"
-          aria-label="Search notes in the map"
+          placeholder={t("graph.searchNotes")}
+          aria-label={t("graph.searchNotesInTheMap")}
           className="h-8 w-full rounded-md border border-border bg-background pl-7 pr-7 text-base md:text-xs outline-none focus-visible:ring-1 focus-visible:ring-primary"
         />
         {query && (
           <button
             type="button"
             onClick={() => setQuery("")}
-            aria-label="Clear search"
+            aria-label={t("graph.clearSearch")}
             className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <X className="size-3.5" />
@@ -1123,16 +1125,20 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
           count={orphanCount}
           active={orphansOnly}
           onClick={() => setOrphansOnly((v) => !v)}
-          label="unlinked"
-          title="Show only notes with no links"
+          label={t("graph.filterUnlinked", { count: orphanCount })}
+          ariaLabel={t("graph.filterUnlinkedCount", { count: orphanCount })}
+          title={t("graph.filterUnlinkedTitle")}
+          emptyTitle={t("graph.filterUnlinkedNone")}
         />
         <HealthChip
           icon={<AlertTriangle className="size-3.5" />}
           count={brokenCount}
           active={brokenHi}
           onClick={() => { setBrokenHi((v) => { const nv = !v; if (!nv) setShowGhosts(false); return nv; }); }}
-          label="broken"
-          title="Highlight notes with broken [[links]]"
+          label={t("graph.filterBroken", { count: brokenCount })}
+          ariaLabel={t("graph.filterBrokenCount", { count: brokenCount })}
+          title={t("graph.filterBrokenTitle")}
+          emptyTitle={t("graph.filterBrokenNone")}
           warn
         />
         {/* The ghost-target switch lives HERE, beside the chip that turns broken
@@ -1144,7 +1150,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
             type="button"
             aria-pressed={showGhosts}
             onClick={() => setShowGhosts((v) => !v)}
-            title="Draw the missing link targets on the map"
+            title={t("graph.ghostTargetsTitle")}
             className={cn(
               "h-8 rounded-md border px-2 text-[11px] font-medium transition-colors",
               showGhosts
@@ -1152,35 +1158,35 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
                 : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
             )}
           >
-            targets
+            {t("graph.ghostTargets")}
           </button>
         )}
       </div>
 
       {anyFilter && (
         <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1 text-[11px] text-muted-foreground" onClick={clearFilters}>
-          <X className="size-3.5" /> <span className="hidden sm:inline">Clear filters</span>
+          <X className="size-3.5" /> <span className="hidden sm:inline">{t("graph.clearFilters")}</span>
         </Button>
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         {onExport && (
-          <Button variant="ghost" size="icon-sm" aria-label="Export map data as JSON" title="Export map data (JSON)" onClick={onExport}><Share2 /></Button>
+          <Button variant="ghost" size="icon-sm" aria-label={t("graph.exportMapDataAsJson")} title={t("graph.exportMapDataJson")} onClick={onExport}><Share2 /></Button>
         )}
         <Button
           variant="ghost"
           size="icon-sm"
           aria-pressed={railOpen}
-          aria-label={railOpen ? "Hide details panel" : "Show details panel"}
-          title={railOpen ? "Hide details panel" : "Show details panel"}
+          aria-label={railOpen ? t("graph.hideDetailsPanel") : t("graph.showDetailsPanel")}
+          title={railOpen ? t("graph.hideDetailsPanel") : t("graph.showDetailsPanel")}
           className={cn(railOpen && "bg-accent text-accent-foreground")}
           onClick={() => setRailOpen((v) => !v)}
         >
           <PanelRight />
         </Button>
       </div>
-      <Button variant="default" size="sm" className="shrink-0 gap-1.5" aria-label="Back to the editor" title="Back to editor (Esc)" onClick={onClose}>
-        <ArrowLeft className="size-4" /> <span className="hidden sm:inline">Back to editor</span>
+      <Button variant="default" size="sm" className="shrink-0 gap-1.5" aria-label={t("graph.backToTheEditor")} title={t("graph.backToEditorEsc")} onClick={onClose}>
+        <ArrowLeft className="size-4" /> <span className="hidden sm:inline">{t("graph.backToEditor")}</span>
       </Button>
     </div>
   );
@@ -1188,8 +1194,8 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
   const emptyState = !graph?.nodes?.length ? (
     <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
       <Info className="mb-2 size-8 opacity-20" />
-      <p className="text-sm font-medium">No notes yet</p>
-      <p className="mt-1 text-xs opacity-70">Create notes and link them with [[wiki links]] to see them here.</p>
+      <p className="text-sm font-medium">{t("graph.noNotesYet")}</p>
+      <p className="mt-1 text-xs opacity-70">{t("graph.createNotesAndLinkThem")}</p>
     </div>
   ) : graph.edges.length === 0 ? (
     /* Nodes but no edges — the map is technically drawing, but a scatter of
@@ -1198,12 +1204,12 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     <div className="flex h-full flex-col items-center justify-center px-6 text-center text-muted-foreground">
       <Network className="mb-3 size-8 opacity-20" />
       <p className="text-sm font-medium text-foreground">
-        {graph.nodes.length === 1 ? "One note, nothing linked yet" : `${graph.nodes.length} notes, none linked yet`}
+        {t("graph.noneLinkedYet", { count: graph.nodes.length })}
       </p>
       <p className="mt-1 max-w-sm text-xs leading-relaxed">
-        This map draws a line between two notes when one links to the other. Type{" "}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">[[</code>{" "}
-        in any document and pick a note to link it — the connection appears here.
+        {t.rich("graph.howToLink", {
+          code: <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground">[[</code>,
+        })}
       </p>
       <ul className="mt-4 flex max-w-md flex-wrap justify-center gap-1.5">
         {graph.nodes.slice(0, 12).map((n) => (
@@ -1212,7 +1218,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               type="button"
               onClick={() => onNavigate(n.id)}
               className="max-w-[16rem] truncate rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-foreground hover:bg-accent"
-              title={`Open ${n.title}`}
+              title={t("graph.openTitle", { title: n.title })}
             >
               {n.title}
             </button>
@@ -1228,7 +1234,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
       viewBox={`0 0 ${dims.w} ${dims.h}`}
       className="h-full w-full touch-none select-none"
       role="group"
-      aria-label={`Relationship map: ${graph.nodes.length} documents, ${graph.edges.length} links`}
+      aria-label={t("graph.mapLabel", { documents: t("graph.documentCount", { count: graph.nodes.length }), links: t("graph.linkCountLong", { count: graph.edges.length }) })}
       style={{ cursor: dragRef.current || panRef.current?.moved ? "grabbing" : large && hoveredId ? "grab" : "default" }}
       onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
@@ -1422,7 +1428,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               data-doc-id={node.id}
               role="button"
               tabIndex={0}
-              aria-label={`${node.title} — ${node.backlinks || 0} inbound, ${node.forwardLinks || 0} outbound links. Enter to open.`}
+              aria-label={t("graph.nodeLabel", { title: node.title, inbound: t("graph.inboundCount", { count: node.backlinks || 0 }), outbound: t("graph.outboundLinksCount", { count: node.forwardLinks || 0 }) })}
               onPointerDown={(e) => onNodeDown(e, node.id)}
               // A large map hit-tests hover in code (`onLargePointerMove`): a
               // note drawn in full there must not fight it with its own.
@@ -1513,7 +1519,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
           layout rests; say so, on the canvas itself. */}
       {large && drawPosRef.current?.size === 0 && (
         <text x={dims.w / 2} y={dims.h / 2} textAnchor="middle" className="fill-muted-foreground text-xs">
-          Laying out {graph.nodes.length} notes…
+          {t("graph.layingOut", { count: graph.nodes.length })}
         </text>
       )}
     </svg>
@@ -1526,25 +1532,25 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
     <div className="flex shrink-0 items-center gap-3 border-t border-border bg-card/60 px-3 py-1.5">
       <div className="hidden min-w-0 items-center gap-3 text-[10px] text-muted-foreground md:flex">
         <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-primary" aria-hidden /> open note
+          <span className="size-2 rounded-full bg-primary" aria-hidden /> {t("graph.legendOpenNote")}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full border border-dashed border-muted-foreground/60" aria-hidden /> unlinked
+          <span className="size-2 rounded-full border border-dashed border-muted-foreground/60" aria-hidden /> {t("graph.legendUnlinked")}
         </span>
         {folders.length > 0 && (
           <span className="hidden items-center gap-1.5 lg:flex">
-            <span className="h-2 w-3 rounded-sm border border-dashed border-muted-foreground/60" aria-hidden /> folder
+            <span className="h-2 w-3 rounded-sm border border-dashed border-muted-foreground/60" aria-hidden /> {t("graph.legendFolder")}
           </span>
         )}
         <span className="hidden text-muted-foreground/70 xl:inline">
-          Click to select · Double-click to open · Drag to rearrange
+          {t("graph.legendHint")}
         </span>
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
-        <Button variant="ghost" size="icon-sm" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(1 / 1.3)}><ZoomOut /></Button>
+        <Button variant="ghost" size="icon-sm" aria-label={t("graph.zoomOut")} title={t("graph.zoomOut")} onClick={() => zoomBy(1 / 1.3)}><ZoomOut /></Button>
         <span className="w-10 text-center font-mono text-[10px] tabular-nums text-muted-foreground" aria-live="off">{zoomPct}%</span>
-        <Button variant="ghost" size="icon-sm" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(1.3)}><ZoomIn /></Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Fit map to view" title="Fit to view" onClick={handleFit}><Maximize2 /></Button>
+        <Button variant="ghost" size="icon-sm" aria-label={t("graph.zoomIn")} title={t("graph.zoomIn")} onClick={() => zoomBy(1.3)}><ZoomIn /></Button>
+        <Button variant="ghost" size="icon-sm" aria-label={t("graph.fitMapToView")} title={t("graph.fitToView")} onClick={handleFit}><Maximize2 /></Button>
       </div>
     </div>
   );
@@ -1581,7 +1587,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
         "max-h-[46%] border-t",
         "lg:max-h-none lg:w-[20rem] lg:border-l lg:border-t-0"
       )}
-      aria-label="Map details"
+      aria-label={t("graph.mapDetails")}
     >
       {detail ? (
         <>
@@ -1593,18 +1599,18 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
                 </h3>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1">
                   {detailFolder && <RailTag>{detailFolder}</RailTag>}
-                  {detail.id === activeDocId && <RailTag tone="primary">open in editor</RailTag>}
-                  {orphanSet.has(detail.id) && <RailTag>unlinked</RailTag>}
+                  {detail.id === activeDocId && <RailTag tone="primary">{t("graph.tagOpenInEditor")}</RailTag>}
+                  {orphanSet.has(detail.id) && <RailTag>{t("graph.tagUnlinked")}</RailTag>}
                   {detailBroken.length > 0 && (
-                    <RailTag tone="warn">{detailBroken.length} broken</RailTag>
+                    <RailTag tone="warn">{t("graph.tagBroken", { count: detailBroken.length })}</RailTag>
                   )}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => { setSelectedId(null); setIsolate(false); }}
-                aria-label="Clear selection"
-                title="Clear selection"
+                aria-label={t("graph.clearSelection")}
+                title={t("graph.clearSelection")}
                 className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="size-3.5" />
@@ -1612,38 +1618,38 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
             </div>
 
             <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-              <StatCell value={inboundDocs.length} label="links in" />
-              <StatCell value={outboundDocs.length} label="links out" />
-              <StatCell value={allDetailHeadings.length} label="headings" />
+              <StatCell value={inboundDocs.length} label={t("graph.statLinksIn", { count: inboundDocs.length })} />
+              <StatCell value={outboundDocs.length} label={t("graph.statLinksOut", { count: outboundDocs.length })} />
+              <StatCell value={allDetailHeadings.length} label={t("graph.statHeadings", { count: allDetailHeadings.length })} />
             </div>
 
             <div className="mt-2.5 flex items-center gap-1.5">
-              <Button size="sm" className="h-7 flex-1 text-[11px]" onClick={() => onNavigate(detail.id)}>Open note</Button>
-              <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" title="Centre the map on this note" onClick={() => focusOnNode(detail.id)}>
-                <Crosshair className="size-3.5" /> Focus
+              <Button size="sm" className="h-7 flex-1 text-[11px]" onClick={() => onNavigate(detail.id)}>{t("graph.openNote")}</Button>
+              <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" title={t("graph.focusTitle")} onClick={() => focusOnNode(detail.id)}>
+                <Crosshair className="size-3.5" /> {t("graph.focus")}
               </Button>
               <Button
                 size="sm"
                 variant={isolate ? "default" : "outline"}
                 aria-pressed={isolate}
                 className="h-7 px-2 text-[11px]"
-                title="Show only this note and its direct links"
+                title={t("graph.isolateTitle")}
                 onClick={() => { setSelectedId(detail.id); setIsolate((v) => !v); }}
               >
-                Isolate
+                {t("graph.isolate")}
               </Button>
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2.5">
-            <RailSection label="Contents" count={allDetailHeadings.length} empty="No headings in this note">
+            <RailSection label={t("graph.contents")} count={allDetailHeadings.length} empty={t("graph.contentsEmpty")}>
               {detailHeadings.map((h, i) => (
                 <li key={i}>
                   <button
                     type="button"
                     onClick={() => onOpenHeading?.(detail.id, h.index)}
                     disabled={!onOpenHeading}
-                    title={onOpenHeading ? `Open "${h.text}"` : h.text}
+                    title={onOpenHeading ? t("graph.openHeading", { heading: h.text }) : h.text}
                     style={{ paddingLeft: `${Math.max(0, h.level - 1) * 10 + 6}px` }}
                     className="block w-full truncate rounded py-1 pr-1 text-left text-xs text-foreground/80 enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-default"
                   >
@@ -1653,12 +1659,12 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               ))}
               {detailHeadingOverflow > 0 && (
                 <li className="px-1.5 pt-0.5 text-[10px] text-muted-foreground">
-                  +{detailHeadingOverflow} more — open the note to see all
+                  {t("graph.moreHeadings", { count: detailHeadingOverflow })}
                 </li>
               )}
             </RailSection>
 
-            <RailSection label="Links out" count={outboundDocs.length} empty="This note links to nothing yet">
+            <RailSection label={t("graph.linksOut")} count={outboundDocs.length} empty={t("graph.linksOutEmpty")}>
               {outboundDocs.map((n) => (
                 <li key={n.id}>
                   <NoteRow title={n.title} onSelect={() => pick(n.id)} onOpen={() => onNavigate(n.id)} />
@@ -1666,7 +1672,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               ))}
             </RailSection>
 
-            <RailSection label="Links in" count={inboundDocs.length} empty="Nothing links here yet">
+            <RailSection label={t("graph.linksIn")} count={inboundDocs.length} empty={t("graph.linksInEmpty")}>
               {inboundDocs.map((n) => (
                 <li key={n.id}>
                   <NoteRow title={n.title} onSelect={() => pick(n.id)} onOpen={() => onNavigate(n.id)} />
@@ -1675,7 +1681,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
             </RailSection>
 
             {detailBroken.length > 0 && (
-              <RailSection label="Broken links" count={detailBroken.length} empty="">
+              <RailSection label={t("graph.brokenLinks")} count={detailBroken.length} empty="">
                 {detailBroken.map((b, i) => (
                   <li key={`${b.target}-${i}`} className="flex items-center gap-1.5 px-1.5 py-1 text-xs">
                     <AlertTriangle className="size-3 shrink-0 text-amber-500" />
@@ -1690,14 +1696,14 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
           <div className="rounded-md border border-dashed border-border px-3 py-4 text-center">
             <Network className="mx-auto mb-1.5 size-5 text-muted-foreground/40" />
-            <p className="text-xs font-medium text-foreground">Nothing selected</p>
+            <p className="text-xs font-medium text-foreground">{t("graph.nothingSelected")}</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-              Click any note on the map to see its headings and both link directions.
+              {t("graph.nothingSelectedHint")}
             </p>
           </div>
 
           <div className="mt-3">
-            <RailSection label="Most connected" count={mostConnected.length} empty="No links in the workspace yet">
+            <RailSection label={t("graph.mostConnected")} count={mostConnected.length} empty={t("graph.mostConnectedEmpty")}>
               {mostConnected.map((n) => (
                 <li key={n.id}>
                   <NoteRow
@@ -1710,7 +1716,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               ))}
             </RailSection>
 
-            <RailSection label="Unlinked notes" count={orphanDocs.length} empty="Every note is connected">
+            <RailSection label={t("graph.unlinkedNotes")} count={orphanDocs.length} empty={t("graph.unlinkedNotesEmpty")}>
               {orphanDocs.slice(0, LIST_CAP).map((n) => (
                 <li key={n.id}>
                   <NoteRow title={n.title} onSelect={() => pick(n.id)} onOpen={() => onNavigate(n.id)} />
@@ -1718,22 +1724,22 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               ))}
               {orphanDocs.length > LIST_CAP && (
                 <li className="px-1.5 pt-0.5 text-[10px] text-muted-foreground">
-                  +{orphanDocs.length - LIST_CAP} more
+                  {t("graph.more", { count: orphanDocs.length - LIST_CAP })}
                 </li>
               )}
             </RailSection>
 
-            <RailSection label="Broken links" count={brokenCount} empty="No broken [[links]]">
+            <RailSection label={t("graph.brokenLinks")} count={brokenCount} empty={t("graph.brokenLinksEmpty")}>
               {brokenList.slice(0, LIST_CAP).map((b, i) => (
                 <li key={`${b.sourceId}-${b.target}-${i}`}>
                   <button
                     type="button"
                     onClick={() => pick(b.sourceId)}
                     className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left hover:bg-accent"
-                    title={`${titleById.get(b.sourceId) ?? b.sourceId} → [[${b.target}]] (missing)`}
+                    title={t("graph.brokenLinkTitle", { source: titleById.get(b.sourceId) ?? b.sourceId, target: b.target })}
                   >
                     <span className="min-w-0 flex-1 truncate text-xs text-foreground/85">
-                      {titleById.get(b.sourceId) ?? "Untitled"}
+                      {titleById.get(b.sourceId) ?? t("common.untitled")}
                     </span>
                     <ArrowRight className="size-3 shrink-0 text-muted-foreground/60" />
                     <span className="max-w-[7rem] shrink-0 truncate font-mono text-[10px] text-amber-600">{b.target}</span>
@@ -1742,7 +1748,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
               ))}
               {brokenCount > LIST_CAP && (
                 <li className="px-1.5 pt-0.5 text-[10px] text-muted-foreground">
-                  +{brokenCount - LIST_CAP} more
+                  {t("graph.more", { count: brokenCount - LIST_CAP })}
                 </li>
               )}
             </RailSection>
@@ -1767,14 +1773,18 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
 }
 
 function HealthChip({
-  icon, count, active, onClick, label, title, warn,
+  icon, count, active, onClick, label, ariaLabel, title, emptyTitle, warn,
 }: {
   icon: React.ReactNode;
   count: number;
   active: boolean;
   onClick: () => void;
   label: string;
+  /** The count and its word, as one phrase ("3 unlinked"). */
+  ariaLabel: string;
   title: string;
+  /** Title while the count is zero and the chip is disabled. */
+  emptyTitle: string;
   warn?: boolean;
 }) {
   const disabled = count === 0;
@@ -1784,8 +1794,8 @@ function HealthChip({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={active}
-      aria-label={`${count} ${label}`}
-      title={disabled ? `No ${label}` : title}
+      aria-label={ariaLabel}
+      title={disabled ? emptyTitle : title}
       className={cn(
         "flex h-8 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors",
         disabled
@@ -1866,12 +1876,13 @@ function NoteRow({ title, meta, onSelect, onOpen }: {
   onSelect: () => void;
   onOpen: () => void;
 }) {
+  const t = useT();
   return (
     <div className="group/link flex items-center gap-1 rounded hover:bg-accent">
       <button
         type="button"
         onClick={onSelect}
-        title={`Show "${title}" in the map`}
+        title={t("graph.showInMap", { title })}
         className="min-w-0 flex-1 truncate px-1.5 py-1 text-left text-xs text-foreground/85 group-hover/link:text-foreground"
       >
         {title}
@@ -1882,8 +1893,8 @@ function NoteRow({ title, meta, onSelect, onOpen }: {
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open ${title}`}
-        title={`Open "${title}"`}
+        aria-label={t("graph.openTitle", { title })}
+        title={t("graph.openQuoted", { title })}
         className="mr-1 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 hover:text-foreground group-hover/link:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       >
         <ArrowRight className="size-3" />

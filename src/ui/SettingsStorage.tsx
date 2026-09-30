@@ -12,12 +12,13 @@ import {
   subscribeDurability,
   type PersistenceStatus,
 } from "../store/storage-durability";
+import { t, useT } from "../i18n";
 
 export function formatStorageBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (n < 1024) return t("settings.sizeBytes", { count: n });
+  if (n < 1024 * 1024) return t("settings.sizeKb", { count: Math.round(n / 1024) });
+  if (n < 1024 * 1024 * 1024) return t("settings.sizeMb", { count: (n / (1024 * 1024)).toFixed(1) });
+  return t("settings.sizeGb", { count: (n / (1024 * 1024 * 1024)).toFixed(1) });
 }
 
 /**
@@ -26,6 +27,7 @@ export function formatStorageBytes(n: number): string {
  * decide whether a browser clean-up costs the user their work.
  */
 export function StorageBackupSection({ open, onBackup }: { open: boolean; onBackup?: () => void }) {
+  const t = useT();
   const [status, setStatus] = useState<PersistenceStatus | null>(null);
   const [storageOk, setStorageOk] = useState<boolean | null>(null);
   const [asking, setAsking] = useState(false);
@@ -60,44 +62,45 @@ export function StorageBackupSection({ open, onBackup }: { open: boolean; onBack
   const lastBackup = readLastBackup();
 
   let persistence: string;
-  if (!status) persistence = "Checking…";
-  else if (!status.supported) persistence = "Not supported by this browser — it decides on its own when to clear site data.";
-  else if (status.persisted) persistence = "On — this browser has agreed to keep your library when it clears space.";
-  else persistence = "Off — this browser may clear your library when space runs low or after a long gap between visits.";
+  if (!status) persistence = t("settings.persistenceChecking");
+  else if (!status.supported) persistence = t("settings.persistenceUnsupported");
+  else if (status.persisted) persistence = t("settings.persistenceOn");
+  else persistence = t("settings.persistenceOff");
 
   return (
-    <section className="space-y-3" aria-label="Storage and backup">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Storage &amp; backup</h3>
+    <section className="space-y-3" aria-label={t("settings.storageAndBackupRegion")}>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("settings.storageAndBackup")}</h3>
       {storageOk === false && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Browser storage is unavailable in this window — nothing is being saved. Use File ▸ Export to keep a copy.
+          {t("settings.browserStorageIsUnavailableIn")}
         </p>
       )}
       <div className="space-y-1.5">
-        <p className="text-sm">Persistent storage</p>
+        <p className="text-sm">{t("settings.persistentStorage")}</p>
         <p className="text-xs text-muted-foreground" data-testid="persistence-status">{persistence}</p>
         {status?.supported && status.persisted === false && (
           <Button size="sm" variant="outline" className="h-7 gap-1 text-xs pointer-coarse:h-9" disabled={asking} onClick={() => void ask()}>
-            <ShieldCheck className="size-3.5" /> Ask the browser to keep it
+            <ShieldCheck className="size-3.5" /> {t("settings.askTheBrowserToKeep")}
           </Button>
         )}
         {status?.usage != null && (
           <p className="text-[11px] text-muted-foreground">
-            Using {formatStorageBytes(status.usage)}
-            {status.quota != null ? ` of about ${formatStorageBytes(status.quota)} this browser allows for this site` : ""}.
+            {status.quota != null
+              ? t("settings.storageUsingOfAbout", { used: formatStorageBytes(status.usage), quota: formatStorageBytes(status.quota) })
+              : t("settings.storageUsing", { used: formatStorageBytes(status.usage) })}
           </p>
         )}
       </div>
       <div className="space-y-1.5">
-        <p className="text-sm">Last full backup</p>
+        <p className="text-sm">{t("settings.lastFullBackup")}</p>
         <p className="text-xs text-muted-foreground" data-testid="last-backup">
           {lastBackup
-            ? `${daysAgoLabel(lastBackup)} (${new Date(lastBackup).toLocaleDateString()})`
-            : "Never. A full backup (.zip) restores your whole library, folders included, in any browser."}
+            ? t("settings.lastBackupWhen", { ago: daysAgoLabel(lastBackup), date: new Date(lastBackup).toLocaleDateString() })
+            : t("settings.neverAFullBackupZip")}
         </p>
         {onBackup && (
           <Button size="sm" variant="outline" className="h-7 gap-1 text-xs pointer-coarse:h-9" onClick={onBackup}>
-            <DownloadCloud className="size-3.5" /> Download full backup
+            <DownloadCloud className="size-3.5" /> {t("settings.downloadFullBackup")}
           </Button>
         )}
       </div>

@@ -7,6 +7,7 @@ import type { IngestFormat } from "../store/ingest";
 import { normalizeMarkdownFeatures } from "../store/settings";
 import { noteLibraryAtBoot } from "../store/storage-durability";
 import { diagError } from "../utils/diag";
+import { t } from "../i18n";
 import type { PerssonifyEditorProps } from "./props";
 import type { CmRef, DocStore, Engine, Lifecycle, SyncEngine, UIStore } from "./types";
 import type { useImportPipeline } from "./useImportPipeline";
@@ -132,7 +133,7 @@ export function useEditorBoot({
   useEffect(() => {
     if (!engineReady || !engine || initDoneRef.current) return;
     (async () => {
-      const loadingId = toastSonner.loading("Initializing editor…", { duration: Infinity });
+      const loadingId = toastSonner.loading(t("editor.initializingEditor"), { duration: Infinity });
       try {
         // Hydrate syncMode from storage prefs before rendering content
         const storage = useDocumentStore.getState().getStorage();
@@ -221,7 +222,7 @@ export function useEditorBoot({
             setFromHtml(html || engine.mdToHtml(md));
             useDocumentStore.getState().markHydrated(existingDoc.id);
           }
-          toastSonner.success("Restored: " + existingDoc.title, { id: loadingId, duration: 3000 });
+          toastSonner.success(t("editor.restored", { title: existingDoc.title }), { id: loadingId, duration: 3000 });
         } else if (initialDocument && !libraryWiped) {
           // No stored documents — seed with the provided initial document.
           const doc = createDoc(initialDocument.content, "markdown", "api", { mdToHtml: engine.mdToHtml });
@@ -276,7 +277,7 @@ export function useEditorBoot({
                   diagError("initEffect.starterDocuments", e);
                 }
               }
-              toastSonner.success("Ready", { id: loadingId, duration: 3000 });
+              toastSonner.success(t("editor.ready"), { id: loadingId, duration: 3000 });
             } else if (cmRef.current && doc._ingestHtml) {
               // Fallback: if editor still not ready, set markdown and persist manually
               const md = engine.htmlToMd(doc._ingestHtml);
@@ -289,7 +290,7 @@ export function useEditorBoot({
               // NOTE: deliberately NOT marking hydrated here — the editor never
               // mounted, so it holds nothing. The first md→html sync (user
               // typing) marks hydration; until then saves stay safely blocked.
-              toastSonner.success("Ready", { id: loadingId, duration: 3000 });
+              toastSonner.success(t("editor.ready"), { id: loadingId, duration: 3000 });
             } else {
               toastSonner.dismiss(loadingId);
             }
@@ -307,7 +308,7 @@ export function useEditorBoot({
         setEditorReady(true); // Ensure the loading screen is dismissed
         // Optionally, store an error state if you want to display an error UI component
         // setInitError(e instanceof Error ? e : new Error(String(e)));
-        toastSonner.error("Failed to initialize", { id: loadingId, duration: 4000 });
+        toastSonner.error(t("editor.failedToInitialize"), { id: loadingId, duration: 4000 });
         diagError("initEffect.CRASHED", e);
       }
     })();
