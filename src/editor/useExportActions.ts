@@ -119,8 +119,8 @@ export function useExportActions({
       const count = Object.keys(files).length;
       if (count === 0) return 0;
       for (const [hash, a] of assets) files[`assets/${hash}.${extForMime(a.mime)}`] = a.bytes;
-      const note = missingImagesNote(missing.length);
-      if (note) toastRef.current.show(`${note} in this export`, "warning");
+      const note = missingImagesNote(missing.length, { inArchive: true });
+      if (note) toastRef.current.show(note, "warning");
       const zip = await buildZipAsync(files);
       // Timestamped filename (YYYYMMDD-HHMMSSmmm) so each export is implicitly
       // version-stamped — a rudimentary portability/backup system.

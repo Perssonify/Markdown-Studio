@@ -2,7 +2,7 @@ import { mergeAttributes, Node } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { useIsDarkTheme } from "../theme/useThemeMode";
 import { useAssetSrc } from "../ui/asset-dom";
-import { MISSING_IMAGE_TITLE } from "./AssetImages";
+import { MISSING_IMAGE_TITLE, missingImageAlt } from "./AssetImages";
 
 /**
  * `<picture>` support that is aware of the IN-APP theme, not just the OS.
@@ -46,7 +46,7 @@ function ThemeImageView(props: any) {
     <NodeViewWrapper as="span" className="theme-image" contentEditable={false}>
       <img
         src={src || undefined}
-        alt={missing ? (alt ? `Image unavailable: ${alt}` : "Image unavailable") : alt}
+        alt={missing ? missingImageAlt(alt) : alt}
         title={missing ? MISSING_IMAGE_TITLE : title || undefined}
         {...(missing ? { "data-pf-asset-missing": "" } : {})}
       />

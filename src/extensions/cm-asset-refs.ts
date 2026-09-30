@@ -23,6 +23,12 @@ import { markHandledImageDrop } from "./AssetImages";
 const REF = /pf-asset:([0-9a-f]{64})/gi;
 const KEEP = "pf-asset:".length + 8;
 
+/** The pane's user-visible strings, in one place. */
+const TEXT = {
+  stored: "Image stored in this browser",
+  storedWithRef: (hash: string) => `Image stored in this browser (pf-asset:${hash})`,
+};
+
 class FoldedHash extends WidgetType {
   constructor(private readonly hash: string) { super(); }
   override eq(other: FoldedHash) { return other.hash === this.hash; }
@@ -30,13 +36,13 @@ class FoldedHash extends WidgetType {
     const span = document.createElement("span");
     span.className = "cm-pf-asset-fold";
     span.textContent = "…";
-    span.title = `Image stored in this browser (pf-asset:${this.hash})`;
+    span.title = TEXT.storedWithRef(this.hash);
     return span;
   }
   override ignoreEvent() { return false; }
 }
 
-const assetMark = Decoration.mark({ class: "cm-pf-asset", attributes: { title: "Image stored in this browser" } });
+const assetMark = Decoration.mark({ class: "cm-pf-asset", attributes: { title: TEXT.stored } });
 
 function build(view: EditorView): DecorationSet {
   const out: Range<Decoration>[] = [];

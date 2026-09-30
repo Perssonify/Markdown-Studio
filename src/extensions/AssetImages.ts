@@ -39,6 +39,22 @@ import { assetStore } from "../store/asset-store";
 
 // ─── Placeholder ─────────────────────────────────────────────────────────────
 
+/** Every user-visible string about a stored image that cannot be shown, in one
+ *  place (the rich pane, theme images and rendered markdown all use these). */
+export const ASSET_IMAGE_TEXT = {
+  unavailable: "Image unavailable",
+  unavailableWithAlt: (alt: string) => `Image unavailable: ${alt}`,
+  unavailableTitle:
+    "Image unavailable — it is not stored in this browser (restore the backup it came from to bring it back)",
+};
+
+export const MISSING_IMAGE_TITLE = ASSET_IMAGE_TEXT.unavailableTitle;
+
+/** The alt text a missing image is shown with. */
+export function missingImageAlt(alt: string | null | undefined): string {
+  return alt ? ASSET_IMAGE_TEXT.unavailableWithAlt(alt) : ASSET_IMAGE_TEXT.unavailable;
+}
+
 /** A constant raster-free placeholder. Ours, not document content, so the
  *  `data:image/svg+xml` refusal in isDangerousUrl (about DOCUMENT urls) does not
  *  apply; it is only ever assigned to a live `<img>` by the node view below. */
@@ -47,12 +63,9 @@ export const MISSING_SVG =
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="72" viewBox="0 0 240 72">' +
       '<rect x="1" y="1" width="238" height="70" rx="4" fill="#8881" stroke="#888" stroke-dasharray="5 4"/>' +
-      '<text x="120" y="42" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#777">Image unavailable</text>' +
+      `<text x="120" y="42" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#777">${ASSET_IMAGE_TEXT.unavailable}</text>` +
       "</svg>"
   );
-
-export const MISSING_IMAGE_TITLE =
-  "Image unavailable — it is not stored in this browser (restore the backup it came from to bring it back)";
 
 // ─── Node view ───────────────────────────────────────────────────────────────
 
@@ -127,7 +140,7 @@ export class AssetImageView implements NodeView {
   private showMissing(hash: string): void {
     const { alt } = this.node.attrs as { alt?: string | null };
     this.dom.setAttribute("data-pf-asset-missing", "");
-    this.dom.setAttribute("alt", alt ? `Image unavailable: ${alt}` : "Image unavailable");
+    this.dom.setAttribute("alt", missingImageAlt(alt));
     this.dom.setAttribute("title", MISSING_IMAGE_TITLE);
     this.dom.src = MISSING_SVG;
     // A backup restored while this document is open brings the asset back:

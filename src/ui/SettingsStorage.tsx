@@ -24,6 +24,29 @@ export function formatStorageBytes(n: number): string {
   return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+const images = (n: number) => `${n} image${n === 1 ? "" : "s"}`;
+
+/** StoredImagesSection's user-visible strings, in one place. */
+const IMAGES_TEXT = {
+  heading: "Images",
+  groupLabel: "Stored images",
+  inline: "Images are kept inside each document in this browser.",
+  checking: "Checking…",
+  summary: (count: number, size: string) =>
+    `${images(count)} stored (${size}), each kept once however many documents use it.`,
+  cleanUp: "Clean up unused images",
+  noneRecent: (recent: number) =>
+    `No images to clean up. ${recent} no longer used ${recent === 1 ? "is" : "are"} kept for a day, in case an undo or another tab still needs ${recent === 1 ? "it" : "them"}.`,
+  none: "No unused images — every stored image is still used.",
+  confirmTitle: (n: number) => `Delete ${n} unused image${n === 1 ? "" : "s"}?`,
+  confirmDescription: (size: string) =>
+    `${size} of images that no document, unsaved draft or saved version uses any more. ` +
+    "Images still in use — including in version history — are kept.",
+  confirmLabel: "Delete unused images",
+  deleted: (n: number, size: string) => `Deleted ${n} unused image${n === 1 ? "" : "s"} (${size})`,
+  failed: "Couldn't check which images are unused — nothing was deleted",
+};
+
 /**
  * Images stored as assets (A086): how many and how big, and the ONE way they
  * are ever deleted while documents exist — an explicit clean-up that scans
@@ -54,28 +77,21 @@ export function StoredImagesSection({ open }: { open: boolean }) {
     try {
       const report = await findUnusedAssets();
       if (!report.unused.length) {
-        toast.info(
-          report.recent
-            ? `No images to clean up. ${report.recent} no longer used ${report.recent === 1 ? "is" : "are"} kept for a day, in case an undo or another tab still needs ${report.recent === 1 ? "it" : "them"}.`
-            : "No unused images — every stored image is still used."
-        );
+        toast.info(report.recent ? IMAGES_TEXT.noneRecent(report.recent) : IMAGES_TEXT.none);
         return;
       }
-      const n = report.unused.length;
       const ok = await confirm({
-        title: `Delete ${n} unused image${n === 1 ? "" : "s"}?`,
-        description:
-          `${formatStorageBytes(report.unusedBytes)} of images that no document, unsaved draft or saved version uses any more. ` +
-          "Images still in use — including in version history — are kept.",
-        confirmLabel: "Delete unused images",
+        title: IMAGES_TEXT.confirmTitle(report.unused.length),
+        description: IMAGES_TEXT.confirmDescription(formatStorageBytes(report.unusedBytes)),
+        confirmLabel: IMAGES_TEXT.confirmLabel,
         destructive: true,
       });
       if (!ok) return;
       const done = await cleanUpUnusedAssets();
-      toast.success(`Deleted ${done.deleted} unused image${done.deleted === 1 ? "" : "s"} (${formatStorageBytes(done.freedBytes)})`);
+      toast.success(IMAGES_TEXT.deleted(done.deleted, formatStorageBytes(done.freedBytes)));
       useDocumentStore.getState().storageFreed();
     } catch {
-      toast.error("Couldn't check which images are unused — nothing was deleted");
+      toast.error(IMAGES_TEXT.failed);
     } finally {
       setBusy(false);
       void refresh();
@@ -83,18 +99,18 @@ export function StoredImagesSection({ open }: { open: boolean }) {
   };
 
   return (
-    <div className="space-y-1.5" aria-label="Stored images" role="group">
-      <p className="text-sm">Images</p>
+    <div className="space-y-1.5" aria-label={IMAGES_TEXT.groupLabel} role="group">
+      <p className="text-sm">{IMAGES_TEXT.heading}</p>
       <p className="text-xs text-muted-foreground" data-testid="stored-images">
         {available === false
-          ? "Images are kept inside each document in this browser."
+          ? IMAGES_TEXT.inline
           : stats
-            ? `${stats.count} image${stats.count === 1 ? "" : "s"} stored (${formatStorageBytes(stats.bytes)}), each kept once however many documents use it.`
-            : "Checking…"}
+            ? IMAGES_TEXT.summary(stats.count, formatStorageBytes(stats.bytes))
+            : IMAGES_TEXT.checking}
       </p>
       {available && (
         <Button size="sm" variant="outline" className="h-7 gap-1 text-xs pointer-coarse:h-9" disabled={busy} onClick={() => void cleanUp()}>
-          <ImageMinus className="size-3.5" /> Clean up unused images
+          <ImageMinus className="size-3.5" /> {IMAGES_TEXT.cleanUp}
         </Button>
       )}
     </div>
