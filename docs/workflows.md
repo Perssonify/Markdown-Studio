@@ -14,7 +14,7 @@
   ```bash
   bun run test           # one-shot
   bun run test:watch     # watch
-  bun run test:coverage  # coverage over ALL of src (38.5% of lines when it was widened)
+  bun run test:coverage  # coverage over ALL of src (81.8% of lines after A108)
   bun run lint           # ESLint + React hook rules: 0 errors required
   ```
 - **Known-flaky: none.** The suite used to exit 1 in about a third of runs with

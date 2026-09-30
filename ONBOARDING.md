@@ -65,7 +65,7 @@ On top of editing, it provides:
 | Build | Vite 8 (Rolldown), @vitejs/plugin-react, @tailwindcss/vite, vite-plugin-pwa (Workbox), custom PostCSS plugins | vite `8.1.5`, plugin-react `6.0.4`, pwa `^1.3.0` | vite 8.1.5 (rolldown 1.1.5), pwa 1.3.0 (workbox-build 7.4.1) | Three configs: `vite.config.ts` (library; externals derived from `package.json` by `build/externals.mjs`, minified with oxc), `vite.app.config.ts`, `vite.embed.config.ts`. |
 | Unit tests | Vitest, jsdom, Testing Library, jest-dom, fake-indexeddb | `4.1.11`, `29.1.1`, `^16.3.2`, `^6.9.1`, `^6.2.5` | same | Only `src/__tests__/*.test.{js,jsx}` is collected. |
 | Lint | ESLint (flat config), typescript-eslint, eslint-plugin-react-hooks | `^10.11.0`, `^8.71.0`, `^7.1.1` | 10.11.0 | `bun run lint`: zero errors required, warnings allowed. |
-| Browser tests | Custom Node runner, playwright-core (Chromium) | `1.62.1` | 1.62.1 | In `e2e/`. |
+| Browser tests | Custom Node runner, playwright-core (Chromium; Firefox and WebKit for five suites) | `1.62.1` | 1.62.1 | In `e2e/`. |
 | Server code | One Vercel Node function using `undici` | `^7.30.0` (a dependency) | 7.30.0 | `api/import.js` |
 | Tooling | Bun 1.4.0 as package manager (`packageManager`; CI pins the same); Node | engines: `^20.19.0` or `>=22.12.0` | — | `bun.lock` is committed and installed with `--frozen-lockfile` in CI and on Vercel. `bun run` executes Vite with Node. |
 | Hosting and CI | Vercel (static SPA plus one function), GitHub Actions | — | — | `vercel.json`; `.github/workflows/ci.yml`, `publish.yml`, `uptime.yml` |
@@ -477,7 +477,7 @@ A few fixes are applied as records and prefs are read:
 
 - **Bun 1.4.0**, the version that produced `bun.lock` (`packageManager` in `package.json`; CI pins the same).
 - **Node `^20.19.0` or `>=22.12.0`.** Vite 8 runs on Node even when started with `bun run`, and the e2e runner is plain Node.
-- **Chromium**, for e2e only. Install it through playwright-core (below) or point `E2E_CHROME` at an existing binary.
+- **Chromium**, for e2e only. Install it through playwright-core (below) or point `E2E_CHROME` at an existing binary. Firefox and WebKit are needed only to run the engine suites locally (`E2E_BROWSER=firefox|webkit`).
 
 ### 7.2 Commands
 
@@ -502,7 +502,7 @@ bun run preview              # serve dist-app/
 
 ```bash
 bun run build:app && bun run build:embed && bun run build
-bunx playwright-core install chromium        # CI (Linux) adds --with-deps
+bunx playwright-core install chromium        # CI (Linux) adds --with-deps; add firefox webkit for E2E_BROWSER
 bun run e2e                                  # every suite except perf
 bun run e2e:harness   # also: e2e:smoke, e2e:deep, e2e:dataloss, e2e:library, e2e:bridge,
                       #       e2e:journeys, e2e:faults, e2e:stress, e2e:csp, e2e:pwa, e2e:perf
@@ -802,14 +802,14 @@ This revision re-checked every item from the 1.77.0 pass:
   - the CSP-hash test against the built `index.html`
   - the sourcemap strip
   - `build` and `build:embed`
-- The `e2e` job builds all three outputs, installs Chromium and runs the suites one after another.
+- The `e2e` job builds all three outputs, installs Chromium and runs the suites one after another. The `e2e-engines` job runs harness, surfaces, surfaces-deep, dataloss and floor on Firefox and WebKit (A100).
 
 **Findings:**
 
 - **TST-1: The orchestrator is thinly tested.** `Medium` · `Confirmed`
   - Better than at 1.77.0: `PerssonifyEditor` is now rendered in six test files. Those cover boot seeding, remount, ⌘S, the import loop, `importContent`, a feature toggle and the card save path. The real `initialize()` runs in two store tests.
-  - Still missing: `onContentChange` has no behavioural test. Several store tests still stub `initialize()`.
-  - Coverage is now measured over all of `src/`. When the scope was widened it read 38.5% of lines, lowest in `ui/` (A108, partial).
+  - `onContentChange` is covered (`behave-editor-commands.test.jsx`). Several store tests still stub `initialize()`.
+  - Since A108, sixteen behavioural suites (`behave-*.test.jsx`) mount the real editor and judge outcomes by storage, both panes, toasts and downloads. Coverage over all of `src/` is 81.8% of lines (71.2% before them); `PerssonifyEditor` with `src/editor/` went from 46% to 85%.
   - Evidence: `src/__tests__/persistence-remount.test.jsx`, `persistence-import-content.test.jsx`, `hydration-guard.test.js:91`.
 - **TST-2: Two e2e suites can pass without testing anything.** `Medium` · `Confirmed`
   - The `library` and `bridge` suites exit green with zero checks when their build output is missing. CI builds both first, so the false green happens only locally.
