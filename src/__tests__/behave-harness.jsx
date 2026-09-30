@@ -240,4 +240,40 @@ export async function menuClick(triggerText, ...path) {
   }
 }
 
+/** Right-click a library row and pick through its menu (submenus included). */
+export async function rowMenuClick(rowEl, ...path) {
+  await act(async () => { fireEvent.contextMenu(rowEl, { clientX: 5, clientY: 5 }); });
+  await pickPath(path);
+}
+
+async function pickPath(path) {
+  for (let i = 0; i < path.length; i++) {
+    const label = path[i];
+    const item = await until(() => findMenuItem(label), `menu item "${label}"`);
+    await act(async () => {
+      if (i < path.length - 1) { fireEvent.mouseEnter(item); fireEvent.pointerEnter?.(item); }
+      fireEvent.click(item);
+    });
+    await tick(20);
+  }
+}
+
+/** Hand files to the importer through File ▸ Open file… (the hidden picker). */
+export async function pickFiles(files) {
+  const input = document.querySelector('input[type="file"]');
+  await act(async () => {
+    Object.defineProperty(input, "files", { value: files, configurable: true });
+    fireEvent.change(input);
+  });
+}
+
+/** Drop files onto an element, as a drag from the desktop would. */
+export async function dropFiles(el, files) {
+  const dataTransfer = { files, types: ["Files"], dropEffect: "none" };
+  await act(async () => {
+    fireEvent.dragOver(el, { dataTransfer });
+    fireEvent.drop(el, { dataTransfer });
+  });
+}
+
 export { act, fireEvent };
