@@ -138,9 +138,23 @@ export function useSyncEngine({
       // can never retry the same content, so the mirror stayed silently frozen
       // until a force-sync (a doc switch, a sync-mode change, a toolbar
       // command). The finally below restores the previous value on a throw.
-      const html = engine.mdToHtml(md);
-      lastMdHash.current = hash;
-      tiptapRef.current.setHTML(html);
+      //
+      // With a live editor the engine plans the change itself (A083,
+      // incremental-rich.ts): the transaction re-parses only the top-level
+      // blocks that changed and leaves the document exactly as the whole
+      // HTML would — no update event, one history step, as setContent did.
+      const editor = tiptapRef.current.getEditor?.();
+      const view = editor && !editor.isDestroyed ? editor.view : null;
+      if (engine.planRich && view?.state?.doc) {
+        const plan = engine.planRich(md, view.state);
+        lastMdHash.current = hash;
+        if (plan.tr) view.dispatch(plan.tr);
+        plan.commit(view.state.doc);
+      } else {
+        const html = engine.mdToHtml(md);
+        lastMdHash.current = hash;
+        tiptapRef.current.setHTML(html);
+      }
 
       // Remember the doc node we just produced instead of serializing it back
       // out to hash it. ProseMirror normalizes the HTML it parses, so the input
@@ -295,6 +309,8 @@ export function useSyncEngine({
 
     syncing.current = true;
     try {
+      // Another document: what the markdown→rich projection knew is of no use.
+      engine.forgetRich?.();
       const editor = tiptapRef.current.getEditor?.();
       if (editor) {
         editor.commands.setContent(pmJson, { emitUpdate: false });
@@ -329,6 +345,7 @@ export function useSyncEngine({
 
     syncing.current = true;
     try {
+      engine.forgetRich?.(); // see setCanonical
       tiptapRef.current.setHTML(html);
 
       if (cmRef.current) {

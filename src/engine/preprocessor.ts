@@ -71,6 +71,20 @@ function looksLikeFrontmatter(body: string): boolean {
   return /^[ \t]*(?:#|[^\s:#][^:\n]*:(?:[ \t]|$))/.test(first);
 }
 
+/** A leading `---` … `---` block (anchored, non-global: never a mid-document rule). */
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+
+/**
+ * How many characters at the start of `md` the front matter pass replaces —
+ * 0 when there is no front matter. The incremental markdown→rich projection
+ * (incremental-rich.ts) uses it to keep that block out of a partial re-parse.
+ */
+export function frontmatterLength(md: string): number {
+  if (!md.startsWith("---")) return 0;
+  const m = FRONTMATTER.exec(md);
+  return m && looksLikeFrontmatter(m[1]!) ? m[0].length : 0;
+}
+
 // ---------------------------------------------------------------------------
 // Code detection, shared by the preprocessor's mask and normalizeMarkdown.
 // ---------------------------------------------------------------------------
@@ -395,7 +409,7 @@ export function preprocessMarkdown(
   // non-global) so it never captures a mid-document thematic break.
   if (frontmatter) {
     md = md.replace(
-      /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/,
+      FRONTMATTER,
       (whole: string, body: string) => {
         if (!looksLikeFrontmatter(body)) return whole;
         // The JSON goes through the FULL attribute escape, `&` first. Escaping
