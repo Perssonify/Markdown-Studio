@@ -464,6 +464,9 @@ function joinPieces(html: string[], marker: string): string {
   return out + (html[html.length - 1] ?? "");
 }
 
+/** Text that follows each run in its parse, to find out whether it ends clean (see parsePieces). */
+const SENTINEL = "pf-a083-end";
+
 /** How much whitespace a piece's markup ends with (the marker goes before it). */
 function trailingWs(h: string): number {
   let ws = h.length;
@@ -598,27 +601,49 @@ function parsePieces(html: string[], schema: Schema, placement: Placement): Pars
         cursor = n;
       }
     };
-    const parseRun = (): { nodes: PMNode[]; clean: boolean } => {
+    // Whether the parser has a node open at the end of the run takes two
+    // checks. The position there against the size of what was parsed catches
+    // an open wrapper (an implicit list around a stray <li>) — but not an
+    // implicit PARAGRAPH (top-level text) whose text ends in a space: closing
+    // it strips that space, which shrinks it by exactly the one position being
+    // inside it adds. So a text node follows the run: it joins whatever
+    // textblock is open, and makes a paragraph of its own only after a clean
+    // end. (A run that is then parsed alone is the one place a following block
+    // would have closed that paragraph — a <pre> keeps its trailing space.)
+    const parseRun = (last: boolean): { nodes: PMNode[]; clean: boolean } => {
       const probe: { node: Node; offset: number; pos?: number } = { node: box, offset: box.childNodes.length };
+      const sentinel = box.appendChild(dom.createTextNode(SENTINEL));
       const doc = parser.parse(box, { findPositions: [probe], topNode: schema.topNodeType.create(), topMatch });
+      box.removeChild(sentinel);
       const out: PMNode[] = [];
       let size = 0;
       doc.forEach((n) => {
         out.push(n);
         size += n.nodeSize;
       });
-      return { nodes: out, clean: probe.pos === size };
+      const tail = out[out.length - 1];
+      const own = !!tail && tail.isTextblock && tail.childCount === 1 && tail.firstChild!.isText &&
+        tail.firstChild!.text === SENTINEL && !tail.firstChild!.marks.length;
+      if (own) {
+        out.pop();
+        size -= tail!.nodeSize;
+        if (probe.pos === size) return { nodes: out, clean: true };
+      }
+      // Not clean. At the end of the text that stands (endClean says so), but
+      // the nodes must be the ones the markup makes without the sentinel.
+      if (!last) return { nodes: out, clean: false };
+      return { nodes: childrenOf(parser.parse(box, { topNode: schema.topNodeType.create(), topMatch })), clean: false };
     };
     // The run ends at the next cut; while the parser is left with a node open
     // there, take in more (doubling, so a long unclean stretch costs a
     // constant factor, not a square).
     let end = nextCut(start + 1);
     take(startOf[end]);
-    let run = parseRun();
+    let run = parseRun(end === pieces);
     for (let more = 1; !run.clean && end < pieces; more *= 2) {
       for (let m = 0; m < more && end < pieces; m++) end = nextCut(end + 1);
       take(startOf[end]);
-      run = parseRun();
+      run = parseRun(end === pieces);
     }
     if (placeholder) {
       // The placeholder came through as a node of its own, first, or nothing
@@ -720,6 +745,21 @@ const isTrailingNode = (node: PMNode, schema: Schema): boolean => {
 };
 
 const eqNode = (a: PMNode, b: PMNode): boolean => a === b || a.eq(b);
+
+/**
+ * The first `count` top-level nodes of `after` are those of `planned`, the
+ * same objects — except a table fixTables mended, still a table in its place.
+ * Only runs when an appended transaction changed the document, which is rare.
+ */
+function sameNodes(planned: PMNode, after: PMNode, count: number): boolean {
+  if (planned.childCount < count || after.childCount < count) return false;
+  for (let k = 0; k < count; k++) {
+    const a = planned.child(k);
+    const b = after.child(k);
+    if (a !== b && !(a.type === b.type && a.type.spec["tableRole"] === "table")) return false;
+  }
+  return true;
+}
 
 /**
  * Replace top-level nodes [from, to) of the document with `nodes`, keeping the
@@ -855,6 +895,13 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
         // a model that no longer adds up — is dropped rather than trusted.
         let ok = sum <= doc.childCount;
         for (let k = sum; ok && k < doc.childCount; k++) ok = isTrailingNode(doc.child(k), schema);
+        // Adding up is not enough: fixTables DELETES a table it cannot mend (a
+        // raw `<table>` the browser left empty) and TrailingNode then appends
+        // its paragraph — same count, every node after the table one place off.
+        // So when anything changed the planned document, each counted node must
+        // still be the planned one, or a table where a table was.
+        const made = tr?.doc;
+        if (ok && made && made !== doc) ok = sameNodes(made, doc, sum);
         model = ok ? { marked: m, schema, md, doc, lens, counts, fm } : null;
       },
     };
@@ -994,9 +1041,11 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
       }
       const runs = runsOf(pieces, parsed, () => false);
       const liveFrom = nodeStarts[i]!;
-      // Through the end, the appended tail goes too: whether it is needed is
-      // decided again for the new last block, as the whole document's parse would.
-      const liveTo = j === n ? live.childCount : live.childCount - (docN - nodeStarts[j]!);
+      // Through the last NODE, the appended tail goes too: whether it is needed
+      // is decided again for the new last block, as the whole document's parse
+      // would. (The runs after the window may make none — a comment left open
+      // to the end — which puts the window at the end all the same.)
+      const liveTo = nodeStarts[j] === nodeStarts[n] ? live.childCount : live.childCount - (docN - nodeStarts[j]!);
       // An empty document: the whole parse fills in its paragraph.
       if (liveFrom + parsed.nodes.length + (live.childCount - liveTo) === 0) return "empty";
       last = { path: "incremental", reason: `${j - i} of ${n} runs` };

@@ -307,6 +307,14 @@ describe("A083 — the incremental markdown→rich projection is identical to th
     expect(totals.incremental).toBeGreaterThan(totals.build + totals.whole);
   });
 
+  // RICH_LONG_SEEDS=<n> adds n more long walks of each kind (RICH_SEED_FROM
+  // offsets them too) — equivalence only, for a deeper run than CI's.
+  const longSeeds = Number(process.env.RICH_LONG_SEEDS) || 0;
+  it.each(Array.from({ length: longSeeds }, (_, i) => [5000 + (from + i) * 104729]))("a long document, deep-run seed %i", (seed) => {
+    walk(seed, { steps: 30, start: 60, richEvery: 0.1, toggleEvery: 0, corpus: CUTTABLE, snippets: LOCAL_SNIPPETS });
+    walk(seed + 1, { steps: 30, start: 400, richEvery: 0.1, toggleEvery: 0, corpus: CUTTABLE, snippets: LOCAL_SNIPPETS, runLength: 2048 });
+  }, 600000);
+
   it.each([[91], [92], [93]])("a long document, seed %i (windows grow across many runs)", (seed) => {
     const paths = walk(seed, { steps: 30, start: 60, richEvery: 0.1, toggleEvery: 0, corpus: CUTTABLE, snippets: LOCAL_SNIPPETS });
     expect(paths.incremental).toBeGreaterThan(paths.build + paths.whole);
