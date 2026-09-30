@@ -100,9 +100,11 @@ describe("an ordinary code block", () => {
 });
 
 describe("becoming a diagram", () => {
-  // The card is the first React node view of the file: under a loaded full-suite
-  // run its first render can take longer than waitFor's default 1 s.
-  const CARD_BUDGET = { timeout: 8000 };
+  // The card is the first React node view of the file, and mounting it pulls in
+  // the diagram preview's lazy imports cold: under a loaded full-suite run that
+  // took longer than vitest's 5 s per test. Each test states its own budget.
+  const CARD_BUDGET = { timeout: 15000 };
+  const TEST_BUDGET = 20000;
   function mountReact(content) {
     editor = new ReactEditor({ extensions: extensions(), content });
     render(<EditorContent editor={editor} />);
@@ -113,7 +115,7 @@ describe("becoming a diagram", () => {
     const q = mountReact(MERMAID);
     await vi.waitFor(() => expect(q(".diagram-frame")).not.toBeNull(), CARD_BUDGET);
     expect(q(".react-renderer")).not.toBeNull();
-  });
+  }, TEST_BUDGET);
 
   it("changing the language to mermaid swaps the plain view for the card", async () => {
     const q = mountReact(CODE);
@@ -124,7 +126,7 @@ describe("becoming a diagram", () => {
       editor.commands.updateAttributes("codeBlock", { language: "mermaid" });
     });
     await vi.waitFor(() => expect(q(".diagram-frame")).not.toBeNull(), CARD_BUDGET);
-  });
+  }, TEST_BUDGET);
 
   it("turning diagrams ON turns an existing mermaid block into its card — no edit, no undo step", async () => {
     setFeatures({ diagrams: false });
@@ -140,7 +142,7 @@ describe("becoming a diagram", () => {
     expect(editor.getHTML()).toBe(html);
     expect(updates).not.toHaveBeenCalled();
     expect(editor.can().undo()).toBe(false);
-  });
+  }, TEST_BUDGET);
 });
 
 describe("the icons match lucide-react's", () => {
