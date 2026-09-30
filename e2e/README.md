@@ -113,7 +113,7 @@ suites therefore never boot the app before seeding.
 | `cases/surfaces.mjs` | tier 1 — blast radius |
 | `cases/surfaces-deep.mjs` | the surfaces no other suite opens: Settings, Version history, the bottom tray, `/about` and `/help`, the guided tour, the Outline tab |
 | `cases/floor.mjs` | the browser floor (A097) in a real parser: with `CSS.registerProperty` removed before any page script runs, the message shows, the module script is swallowed as text and never runs, the boot watchdog does nothing, and the stored document, the caches and the service worker survive; back at the floor, the app opens that document. The embed half needs `dist-embed/` |
-| `cases/dataloss.mjs` | the data-loss sequences with two real tabs and real IndexedDB — picks up where `faults.mjs`'s multi-tab case stops: the conflicted-draft rebase (F003), closing a conflicted document (F001) and reloading after a conflict (A018) |
+| `cases/dataloss.mjs` | the data-loss sequences with two real tabs and real IndexedDB: live sync between tabs (a save in one reaches the other's panes and library; unsaved work in the other parks a conflict with Keep mine / Use theirs / Save mine as a copy, each checked on disk and in Version history; the open document deleted in the other tab), then the conflicted-draft rebase (F003), closing a conflicted document (F001) and reloading after a conflict (A018) |
 | `cases/stress.mjs` | tier 2 — scale and duration |
 | `cases/journeys.mjs` | tier 3 — user simulation |
 | `cases/faults.mjs` | tier 4 — fault injection |
@@ -201,6 +201,19 @@ suite asserts. Nothing runs them automatically, so a regression there shows up
 only when someone runs them.
 
 **Now reproduced in a browser that previously was not**
+- **Live sync between tabs** (`src/store/tab-sync.ts`, `src/editor/useTabSync.ts`):
+  two tabs of one real browser over one real IndexedDB and a real
+  BroadcastChannel. A save in tab A reaches clean tab B's panes and library
+  without a reload; B with unsaved typing parks the conflict and each of its
+  three choices is checked on disk AND in the Version history database; the
+  document open in B deleted from A is never written back and is kept under a
+  new id. `faults.mjs`'s multi-tab case now asserts the sequential edit that
+  used to conflict is saved on top instead. NOT driven in a browser: the
+  storage-event fallback (every engine here has BroadcastChannel), a tab
+  restored from the back/forward cache (it missed the messages sent while it
+  was frozen; the save guard's own read still refuses an overwrite), and the
+  reload deferred by a live composition — `behave-tab-sync.test.jsx` covers
+  that one against the real editor.
 - The **conflicted-draft rebase** and the **silent close of a conflicted
   document** (both fixed in 1.77.0). `faults.mjs` drove two tabs into a conflict
   and stopped there; `cases/dataloss.mjs` continues — it leaves the document
