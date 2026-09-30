@@ -58,6 +58,22 @@
 - **Library (`@perssonify/editor`):** bump `version` in [package.json](../package.json) (the single source — Vite injects it as `__APP_VERSION__`, re-exported as `VERSION` in `src/constants.ts`), merge, then push a `vX.Y.Z` tag. [.github/workflows/publish.yml](../.github/workflows/publish.yml) verifies the tag, runs the type check, tests and library build, `require`s the built CommonJS entries, and publishes with **npm provenance** behind the `npm` environment. Never publish from a laptop. Owner setup (npm org, 2FA, token or trusted publishing): [deployment.md ▸ Publishing](deployment.md#publishing-the-npm-package).
 - **Feature flags:** none. Build-time gates exist for dev-only surfaces (the ad placeholders; the Settings Admin section, which a support session can reveal with `localStorage["pf:admin"] = "1"` — [src/utils/build-gates.ts](../src/utils/build-gates.ts)).
 
+## TypeScript 7
+
+The type gate runs on **TypeScript 6.0** (`typescript@^6.0.3`), the newest release every tool in this repo can use. TypeScript 7 (the native compiler) was tried for A113 and is **blocked by tooling, not by this code**:
+
+- **typescript-eslint** — 8.71, the latest release, declares `typescript >=4.8.4 <6.1.0` — parses through the `typescript` package's JavaScript API (`ts.createSourceFile`, programs, the type checker). The `typescript@7` package's main entry exports only `version`; its compiler API is an IPC client under `typescript/unstable/*`. With 7 installed as `typescript`, `bun run lint` cannot run.
+- **`converter-escape.test.js`** (the A097 guard: no lookbehind regex literal in the entry chunk) calls `ts.createSourceFile` too.
+
+What 7.0.2 does today, measured against this tree (30 September 2026): `tsc --noEmit` is clean in 1.6 s (6.0 takes 9.4 s), and `tsc -p tsconfig.build.json` emits the same 218 declaration files as 6.0 does, differing only in the order of union members and object properties. The configuration 7 needs is already in place and 6.0 accepts it: no `baseUrl` (removed in 7 — `paths` resolve from the tsconfig's directory), an explicit `rootDir` in `tsconfig.build.json` (the default became the tsconfig's own directory, which would publish `dist/src/index.d.ts` under an exports map that points at `dist/index.d.ts`), and `src/types/side-effect-imports.d.ts`, because `noUncheckedSideEffectImports` is on by default since 6.0. Check 7 at any time without touching the lockfile:
+
+```bash
+bunx -p typescript@7 tsc --noEmit
+bunx -p typescript@7 tsc -p tsconfig.build.json --outDir /tmp/ts7-dts
+```
+
+The move, once unblocked: (1) a typescript-eslint release whose peer range includes 7; (2) `converter-escape.test.js` reads regex literals through an API 7 provides — `typescript/unstable/ast`, or `@typescript/typescript6`, the compatibility package that re-exports the 6.0 API (with a `tsc6` binary) beside 7; (3) bump `typescript` to `^7`, update `src/data/credits.ts` and run every gate. Installing 7 as `typescript` next to an aliased 6 is not a shortcut: typescript-eslint imports the package named `typescript`.
+
 ## Observability
 
 Most observability is browser-side, and none of the browser-side part leaves the device unless the user copies it:
