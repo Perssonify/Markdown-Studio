@@ -1,0 +1,31 @@
+import type { Message } from "../types";
+
+/** Interior pages: AboutPage.tsx, HelpPage.tsx, PageChrome.tsx (long-form copy lives in their content modules, not here). */
+export const pages = {
+  "pages.backToEditor": "Back to editor",
+  "pages.helpContents": "Help contents",
+  "pages.onThisPage": "On this page",
+  "pages.everythingYouCanDoWhere": "Everything you can do, where to find it, and the shortcuts that make it fast.",
+  "pages.searchHelpPlaceholder": "Search help…",
+  "pages.searchHelpLabel": "Search help",
+  "pages.tip": "Tip ·",
+  "pages.buildAShareEmbedLink": "Build a share / embed link",
+  "pages.keyboardShortcuts": "Keyboard shortcuts",
+  "pages.macos": "macOS",
+  "pages.windowsLinux": "Windows / Linux",
+  "pages.helpTitle": "{app} Help",
+  "pages.takeATour": "Take a tour",
+  "pages.howToUse": "How to use {app}",
+  "pages.noHelpMatches": "No help topics match “{query}”. Try a different word.",
+  "pages.aboutTitle": "About {app}",
+  "pages.aboutVersion": "Version {version} · <b>{brand}</b>",
+  "pages.madeWith": "Made with {heart} by Perssonify",
+  "pages.love": "love",
+  "pages.builtWithOpenSource": "Built with open source",
+  "pages.creditsPackage": "Package",
+  "pages.creditsUsedFor": "Used for",
+  "pages.creditsVersion": "Version",
+  "pages.creditsLicense": "License",
+  "pages.somethingNotWorking": "Something not working?",
+  "pages.thirdPartyLicences": "Third-party licences",
+} satisfies Record<`pages.${string}`, Message>;

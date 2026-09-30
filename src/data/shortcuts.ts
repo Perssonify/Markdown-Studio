@@ -8,12 +8,25 @@
  *
  * When a binding changes in src/hooks/useKeyboardShortcuts.ts, update it HERE.
  * ⌘ is displayed for brevity; Ctrl is handled equivalently on Windows/Linux.
+ *
+ * Names and notes are read from the translation catalog (`shortcuts.*`) when
+ * they are READ, not when this module loads, so they follow the interface
+ * language; the key glyphs are data and stay here.
  */
+import { t, type MessageKey } from "../i18n/core";
 
 export interface ShortcutRow {
   action: string;
   keys: string;
 }
+
+/** A row whose name is looked up in the current language each time it is read. */
+const row = (action: MessageKey, keys: string): ShortcutRow => ({
+  get action() {
+    return t(action);
+  },
+  keys,
+});
 
 // Mac gets the ⌘/⇧ glyphs it expects; everyone else gets Ctrl+/Shift+ text.
 // Shortcut data is authored in glyph form and converted at display time.
@@ -53,83 +66,83 @@ export interface ShortcutGroup {
 
 export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
-    group: "Documents",
+    get group() { return t("shortcuts.groupDocuments"); },
     rows: [
-      { action: "New document", keys: "⌘N" },
-      { action: "Save", keys: "⌘S" },
-      { action: "Find", keys: "⌘F" },
-      { action: "Find & Replace", keys: "⌥⌘F" },
-      { action: "Search all notes", keys: "⌘⇧F" },
-      { action: "Toggle workspace panel", keys: "⌘⇧D" },
-      { action: "Toggle relationship graph", keys: "⌘⇧G" },
-      { action: "Toggle cards board", keys: "⌘⇧K" },
-      { action: "Undo / Redo", keys: "⌘Z / ⌘⇧Z" },
+      row("shortcuts.newDocument", "⌘N"),
+      row("shortcuts.save", "⌘S"),
+      row("shortcuts.find", "⌘F"),
+      row("shortcuts.findAndReplace", "⌥⌘F"),
+      row("shortcuts.searchAllNotes", "⌘⇧F"),
+      row("shortcuts.toggleWorkspacePanel", "⌘⇧D"),
+      row("shortcuts.toggleRelationshipGraph", "⌘⇧G"),
+      row("shortcuts.toggleCardsBoard", "⌘⇧K"),
+      row("shortcuts.undoRedo", "⌘Z / ⌘⇧Z"),
     ],
   },
   {
-    group: "Inline formatting",
+    get group() { return t("shortcuts.groupInlineFormatting"); },
     rows: [
-      { action: "Bold", keys: "⌘B" },
-      { action: "Italic", keys: "⌘I" },
-      { action: "Underline", keys: "⌘U" },
-      { action: "Inline code", keys: "⌘E" },
-      { action: "Strikethrough", keys: "⌘⇧X" },
-      { action: "Highlight", keys: "⌘⇧H" },
-      { action: "Insert link", keys: "⌘K" },
+      row("shortcuts.bold", "⌘B"),
+      row("shortcuts.italic", "⌘I"),
+      row("shortcuts.underline", "⌘U"),
+      row("shortcuts.inlineCode", "⌘E"),
+      row("shortcuts.strikethrough", "⌘⇧X"),
+      row("shortcuts.highlight", "⌘⇧H"),
+      row("shortcuts.insertLink", "⌘K"),
     ],
   },
   {
-    group: "Blocks & structure",
+    get group() { return t("shortcuts.groupBlocksAndStructure"); },
     rows: [
-      { action: "Heading 1–6", keys: "⌘⇧1 … ⌘⇧6" },
-      { action: "Normal text", keys: "⌘⇧0" },
-      { action: "Numbered list", keys: "⌘⇧7" },
-      { action: "Bulleted list", keys: "⌘⇧8" },
-      { action: "Blockquote", keys: "⌘⇧9" },
-      { action: "Indent / Outdent list item", keys: "⌘] / ⌘[" },
+      row("shortcuts.heading1to6", "⌘⇧1 … ⌘⇧6"),
+      row("shortcuts.normalText", "⌘⇧0"),
+      row("shortcuts.numberedList", "⌘⇧7"),
+      row("shortcuts.bulletedList", "⌘⇧8"),
+      row("shortcuts.blockquote", "⌘⇧9"),
+      row("shortcuts.indentOutdentListItem", "⌘] / ⌘["),
     ],
-    note: "Indent nests a list item — including a checklist item. Markdown has no paragraph indent, so on an ordinary paragraph it does nothing.",
+    get note() { return t("shortcuts.noteIndentNestsAListItem"); },
   },
   {
-    group: "Alignment",
-    note: "Alignment applies in the rich pane. Plain Markdown cannot record it, so it is flagged by the fidelity indicator and does not survive an export.",
+    get group() { return t("shortcuts.groupAlignment"); },
+    get note() { return t("shortcuts.noteAlignmentAppliesInTheRich"); },
     rows: [
-      { action: "Align left", keys: "⌘⇧L" },
-      { action: "Align center", keys: "⌘⇧E" },
-      { action: "Align right", keys: "⌘⇧R" },
-      { action: "Justify", keys: "⌘⇧J" },
+      row("shortcuts.alignLeft", "⌘⇧L"),
+      row("shortcuts.alignCenter", "⌘⇧E"),
+      row("shortcuts.alignRight", "⌘⇧R"),
+      row("shortcuts.justify", "⌘⇧J"),
     ],
   },
   {
-    group: "Keyboard navigation",
-    note: "The Markdown editor keeps Tab for indenting, so press Esc first to move focus out of it. Lists and the toolbar are one Tab stop each; arrow keys move within them.",
+    get group() { return t("shortcuts.groupKeyboardNavigation"); },
+    get note() { return t("shortcuts.noteTheMarkdownEditorKeepsTab"); },
     rows: [
-      { action: "Skip to the editor", keys: "Tab (first stop on the page)" },
-      { action: "Leave the Markdown editor", keys: "Esc, then Tab" },
-      { action: "Move between toolbar buttons", keys: "← / →" },
-      { action: "Move through the document library", keys: "↑ / ↓, Home / End" },
-      { action: "Open or close a folder", keys: "→ / ←" },
-      { action: "Open the selected document", keys: "Enter" },
-      { action: "Rename the selected item", keys: "F2" },
-      { action: "Actions for the selected item", keys: "⇧F10" },
+      { get action() { return t("shortcuts.skipToTheEditor"); }, get keys() { return t("shortcuts.keysTabFirstStopOnThe"); } },
+      { get action() { return t("shortcuts.leaveTheMarkdownEditor"); }, get keys() { return t("shortcuts.keysEscThenTab"); } },
+      row("shortcuts.moveBetweenToolbarButtons", "← / →"),
+      row("shortcuts.moveThroughTheDocumentLibrary", "↑ / ↓, Home / End"),
+      row("shortcuts.openOrCloseAFolder", "→ / ←"),
+      row("shortcuts.openTheSelectedDocument", "Enter"),
+      row("shortcuts.renameTheSelectedItem", "F2"),
+      row("shortcuts.actionsForTheSelectedItem", "⇧F10"),
     ],
   },
 ];
 
 /** Curated everyday subset for compact surfaces (embedder fallback dialog). */
 export const COMMON_SHORTCUTS: ShortcutRow[] = [
-  { action: "New document", keys: "⌘N" },
-  { action: "Save", keys: "⌘S" },
-  { action: "Find", keys: "⌘F" },
+  row("shortcuts.newDocument", "⌘N"),
+  row("shortcuts.save", "⌘S"),
+  row("shortcuts.find", "⌘F"),
   // NOT ⌘F, which opens plain Find, and NOT ⌘H on a Mac: AppKit consumes that
   // as Hide Application before the page sees it, which is the whole reason
   // ⌥⌘F exists. This row said "Find & Replace ⌘F" and had no Replace binding
   // at all — and it is the list an embedder's fallback dialog shows.
-  { action: "Find & Replace", keys: "⌥⌘F" },
-  { action: "Search all notes", keys: "⌘⇧F" },
-  { action: "Toggle workspace panel", keys: "⌘⇧D" },
-  { action: "Toggle relationship graph", keys: "⌘⇧G" },
-  { action: "Bold / Italic / Underline", keys: "⌘B / ⌘I / ⌘U" },
-  { action: "Undo / Redo", keys: "⌘Z / ⌘⇧Z" },
-  { action: "Insert link", keys: "⌘K" },
+  row("shortcuts.findAndReplace", "⌥⌘F"),
+  row("shortcuts.searchAllNotes", "⌘⇧F"),
+  row("shortcuts.toggleWorkspacePanel", "⌘⇧D"),
+  row("shortcuts.toggleRelationshipGraph", "⌘⇧G"),
+  row("shortcuts.boldItalicUnderline", "⌘B / ⌘I / ⌘U"),
+  row("shortcuts.undoRedo", "⌘Z / ⌘⇧Z"),
+  row("shortcuts.insertLink", "⌘K"),
 ];

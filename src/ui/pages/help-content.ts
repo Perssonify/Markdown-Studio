@@ -2,7 +2,14 @@
  * Help content model. Keeping copy as data (not JSX) makes the Help page a thin
  * renderer, keeps the table of contents in sync automatically, and lets tests
  * assert on coverage (e.g. "every section has an id and a title").
+ *
+ * This is CONTENT, not interface labels: it is not in the translation
+ * catalog (src/i18n). `HELP_SECTIONS` is the English version; a translation
+ * is another array of the same shape added to `HELP_CONTENT` under its locale
+ * (keep the section ids — the page links to them), and the Help page picks
+ * the version for the interface language, falling back to English.
  */
+import type { LocalizedContent } from "../../i18n";
 
 export interface HelpBlock {
   /** A short paragraph. */
@@ -290,3 +297,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
 ];
+
+/** Help sections per interface language (English required). */
+export const HELP_CONTENT: LocalizedContent<HelpSection[]> = { en: HELP_SECTIONS };
