@@ -19,6 +19,12 @@ person — is listed in [`docs/audit-2026-09.md`](docs/audit-2026-09.md). The
 finding IDs (A001–A114) are cited below.
 
 ### Changed — what you will notice
+- **Images are stored once.** A pasted, dropped or imported image is kept once in
+  this browser, however many documents or saved versions use it, instead of as
+  text inside every copy. Exports and backups still carry the image, and a Word
+  export now shows it as a picture instead of an `<img>` tag. Settings ▸ Storage
+  shows the space images use and can clean up unused ones; nothing is deleted
+  automatically. Documents saved before this keep their images as they are. (A086)
 - **The interface can be translated.** Every label, message and menu now comes
   from a translation catalog (English is the only language shipped so far), and
   the Help and About pages are per-language content. Exported HTML and printouts
@@ -241,6 +247,10 @@ finding IDs (A001–A114) are cited below.
 - Startup download 915 → 680 KiB gzip (A084); the Cards board reloads only what
   changed (A087); snapshot pruning, batched backup export and a single KaTeX copy
   (A088).
+- **Images no longer weigh down saving.** With five ~880 KB images in a document,
+  the saved record went from 5.74 MB to 1.3 KB, one version-history copy from
+  11.5 MB to 2 KB, and a save from 42–50 ms to 19–32 ms; a document with images now
+  fits the crash-recovery stash, which it used to exceed. (A086)
 - **The relationship map at 2,000 notes** (measured with the CPU slowed 4×): the
   first frame appears in 1.0 s instead of 8.9 s, the page is blocked for 6 s
   instead of 64 s, the layout settles in 17–23 s instead of 65 s, and zooming
@@ -280,6 +290,9 @@ finding IDs (A001–A114) are cited below.
   CommonJS build can be `require`d in Node — it threw on the Tiptap starter kit —
   and marked is 18 (ESM-only since 16: CommonJS consumers need Node 20.19+/22.12+
   or a bundler, and Jest users must transform it) (A113).
+- **Stored images are opt-in for hosts** (`storageConfig.assets: true`): without it
+  a host's content keeps its images inline, since a stored-image reference resolves
+  only in the browser that stored it (A086).
 - On the app's own hosts the embed keeps its documents in a database of its own
   (`perssonify-embed-docs`), so a page framing it can never reach the app's
   library; a self-hosted embed keeps `perssonify-docs` (A072).
