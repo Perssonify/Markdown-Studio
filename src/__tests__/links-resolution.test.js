@@ -2,10 +2,12 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setWikiLinkLibrary, UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
+import {
+  setWikiLinkLibrary, unresolvedLinkDecorations, UnresolvedWikiLinks, unresolvedWikiLinksKey,
+} from "../extensions/UnresolvedWikiLinks";
 import { WikiLink } from "../extensions/WikiLink";
 import { useLinkIndex } from "../hooks/useLinkIndex";
-import { buildLinkIndex, resolveWikiLink, scanWikiLinks } from "../store/link-index";
+import { buildLinkIndex, createWikiResolver, resolveWikiLink, scanWikiLinks } from "../store/link-index";
 import { useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 
@@ -227,5 +229,104 @@ describe("broken wiki links are marked (A058)", () => {
     await settle();
     expect(brokenTexts()).toEqual(["Ghost"]);
     useDocumentStore.setState({ documents: [], activeDocId: null });
+  });
+});
+
+// ── Incremental marking (A083) ──────────────────────────────────────────────
+
+describe("broken-link marking is incremental and exact", () => {
+  // An edit re-judges only the top-level blocks it touched. The guard: after
+  // every step of a random edit walk, the plugin's decorations equal a full
+  // rescan of the document — including mark-only steps (making text a link,
+  // retargeting it), which map no positions and so are invisible to a reading
+  // of the step maps alone.
+  let editor;
+  afterEach(() => { editor?.destroy(); editor = null; setWikiLinkLibrary(null); });
+
+  const LIBRARY = [doc("r", "Real"), doc("cs", "C# Tips")];
+  const TARGETS = ["Ghost", "Real", "Nowhere", "C", "C# Tips", ""];
+  const spans = (set) => set.find().map((d) => `${d.from}-${d.to}`).sort();
+  const pluginSpans = () => spans(unresolvedWikiLinksKey.getState(editor.state));
+  const fullSpans = () => spans(unresolvedLinkDecorations(editor.state.doc, createWikiResolver(LIBRARY)));
+
+  function rng(seed) {
+    let s = seed >>> 0;
+    return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+  }
+  /** Every position inside a textblock's content, as [pos, parentEnd]. */
+  function textPositions(d) {
+    const out = [];
+    d.descendants((node, pos) => {
+      if (!node.isTextblock) return true;
+      for (let p = pos + 1; p <= pos + 1 + node.content.size; p++) out.push(p);
+      return false;
+    });
+    return out;
+  }
+
+  function step(r) {
+    const { state } = editor;
+    const positions = textPositions(state.doc);
+    const pick = () => positions[Math.floor(r() * positions.length)];
+    const link = state.schema.marks.link;
+    let a = pick(), b = pick();
+    if (a > b) [a, b] = [b, a];
+    const tr = state.tr;
+    const kind = Math.floor(r() * 8);
+    try {
+      if (kind === 0) tr.insertText(r() < 0.5 ? "x" : " word ", a);
+      else if (kind === 1 && b > a) tr.delete(a, b);
+      else if (kind === 2 && b > a) {
+        const target = TARGETS[Math.floor(r() * TARGETS.length)];
+        tr.addMark(a, b, link.create({ docLink: target, anchor: target === "C" ? "Tips" : null, href: "#" }));
+      } else if (kind === 3 && b > a) tr.removeMark(a, b, link);
+      else if (kind === 4) tr.split(a);
+      else if (kind === 5) {
+        const $a = state.doc.resolve(a);
+        if ($a.depth >= 1 && $a.index(0) > 0) tr.join($a.before(1));
+      } else if (kind === 6) {
+        const target = TARGETS[Math.floor(r() * TARGETS.length)];
+        tr.insert(state.doc.content.size, state.schema.nodes.paragraph.create(null,
+          state.schema.text(target || "anchor", [link.create({ docLink: target, href: "#" })])));
+      } else tr.insertText("edited", a, b > a ? b : a);
+    } catch {
+      return; // a structurally invalid random step: skip it
+    }
+    if (tr.docChanged) editor.view.dispatch(tr);
+  }
+
+  it.each([1, 2, 3, 4, 5, 6, 7, 8])("matches a full rescan after every step (seed %i)", (seed) => {
+    editor = new Editor({
+      extensions: [StarterKit.configure({ link: false }), WikiLink, UnresolvedWikiLinks],
+      content:
+        '<p>Intro <a data-doc-link="Ghost" class="wiki-link" href="#">Ghost</a> and <a data-doc-link="Real" class="wiki-link" href="#">Real</a></p>' +
+        '<ul><li><p>item <a data-doc-link="Nowhere" class="wiki-link" href="#">Nowhere</a></p></li><li><p>plain</p></li></ul>' +
+        '<blockquote><p>quoted <a data-doc-link="C" data-anchor="Tips" class="wiki-link" href="#">C# Tips</a></p></blockquote>' +
+        "<p>tail text here</p>",
+    });
+    setWikiLinkLibrary(LIBRARY, editor);
+    const r = rng(seed);
+    let marked = 0;
+    for (let i = 0; i < 60; i++) {
+      step(r);
+      const full = fullSpans();
+      marked += full.length;
+      expect(pluginSpans(), `seed ${seed}, step ${i}`).toEqual(full);
+    }
+    // The walk must actually have carried broken links, or it proves nothing.
+    expect(marked).toBeGreaterThan(20);
+  });
+
+  it("a mark-only step is seen: making text a link to a missing note marks it", () => {
+    editor = new Editor({
+      extensions: [StarterKit.configure({ link: false }), WikiLink, UnresolvedWikiLinks],
+      content: "<p>one</p><p>two words</p>",
+    });
+    setWikiLinkLibrary(LIBRARY, editor);
+    const { state } = editor;
+    // "two" in the second paragraph: 5 (after "<p>one</p>") + 1.
+    editor.view.dispatch(state.tr.addMark(6, 9, state.schema.marks.link.create({ docLink: "Ghost", href: "#" })));
+    expect(pluginSpans()).toEqual(["6-9"]);
+    expect(pluginSpans()).toEqual(fullSpans());
   });
 });

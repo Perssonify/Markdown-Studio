@@ -8,7 +8,7 @@
  * and included in export dialogs.
  */
 
-import { newCountAcc, countTextRun, type CountAcc, type PMNode } from "./document";
+import { newCountAcc, countTextRun, endWordRun, type CountAcc, type PMNode } from "./document";
 import { t } from "../i18n/core";
 
 // --- Types ---
@@ -91,8 +91,31 @@ function collectLosses(
 ): void {
   if (!node) return;
 
-  if (counts && node.type === "text" && node.text) countTextRun(node.text, counts);
+  if (counts) {
+    if (node.type === "text") {
+      if (node.text) countTextRun(node.text, counts);
+    } else {
+      endWordRun(counts); // see endWordRun: only adjacent text continues a word
+    }
+  }
 
+  ownLosses(node, syncMode, losses);
+
+  const content = node.content;
+  if (!content) return;
+  for (const child of content) {
+    collectLosses(child as PMNodeWithMarks, syncMode, losses, counts);
+  }
+  if (counts) endWordRun(counts);
+}
+
+/** The losses carried by `node` itself — its marks and attributes, not its
+ *  children. */
+function ownLosses(
+  node: PMNodeWithMarks,
+  syncMode: "clean" | "styled",
+  losses: Map<string, FidelityLoss>
+): void {
   const marks = node.marks;
   if (marks) {
     for (const mark of marks) {
@@ -131,12 +154,6 @@ function collectLosses(
         addAttrLoss(losses, node.type, "blocks", "structure");
       }
     }
-  }
-
-  const content = node.content;
-  if (!content) return;
-  for (const child of content) {
-    collectLosses(child as PMNodeWithMarks, syncMode, losses, counts);
   }
 }
 
@@ -248,11 +265,69 @@ export function computeCanonicalStats(
       counts: { chars: 0, words: 0 },
     };
   }
+  const root = canonical as PMNodeWithMarks;
   const buckets = new Map<string, FidelityLoss>();
-  const acc = newCountAcc();
-  collectLosses(canonical as PMNodeWithMarks, syncMode, buckets, acc);
+  if (root.type === "text" || !root.content) {
+    const acc = newCountAcc();
+    collectLosses(root, syncMode, buckets, acc);
+    return { fidelity: summarizeLosses(Array.from(buckets.values())), counts: { chars: acc.chars, words: acc.words } };
+  }
+  // Per top-level block, from a cache (A083). Every node boundary ends a word
+  // (endWordRun), so a block's counts and losses depend on nothing but the
+  // block — and the sync engine hands over the SAME JSON object for every block
+  // an edit did not touch (canonicalOf, useSyncEngine.ts). A keystroke therefore
+  // walks one block, not the whole document: the full walk cost ~160 ms per
+  // keystroke at 1.6 MB under a 4× CPU slowdown. Merging in block order keeps
+  // the first-seen order (and the first value of an attribute loss) that one
+  // walk of the whole document produces; `fidelity-block-cache.test.js`
+  // compares the two.
+  ownLosses(root, syncMode, buckets);
+  let chars = 0;
+  let words = 0;
+  for (const block of root.content) {
+    const stats = blockStats(block as PMNodeWithMarks, syncMode);
+    chars += stats.chars;
+    words += stats.words;
+    for (const [key, loss] of stats.losses) {
+      const existing = buckets.get(key);
+      if (existing) existing.count += loss.count;
+      else buckets.set(key, { ...loss }); // a copy: the cached entry is never handed out
+    }
+  }
   return {
     fidelity: summarizeLosses(Array.from(buckets.values())),
-    counts: { chars: acc.chars, words: acc.words },
+    counts: { chars, words },
   };
+}
+
+interface BlockStats {
+  chars: number;
+  words: number;
+  /** In first-seen order. */
+  losses: Array<[string, FidelityLoss]>;
+}
+
+/**
+ * Keyed on the block's JSON OBJECT, so the canonical must be read, never
+ * mutated in place — the same contract `canonicalOf`'s cache already relies
+ * on. Losses depend on the sync mode; the counts do not, but live beside them.
+ */
+const blockStatsCache = new WeakMap<object, { clean?: BlockStats; styled?: BlockStats }>();
+
+function blockStats(block: PMNodeWithMarks, syncMode: "clean" | "styled"): BlockStats {
+  let slot = block && typeof block === "object" ? blockStatsCache.get(block) : undefined;
+  const hit = slot?.[syncMode];
+  if (hit) return hit;
+  const buckets = new Map<string, FidelityLoss>();
+  const acc = newCountAcc();
+  collectLosses(block, syncMode, buckets, acc);
+  const stats: BlockStats = { chars: acc.chars, words: acc.words, losses: Array.from(buckets) };
+  if (block && typeof block === "object") {
+    if (!slot) {
+      slot = {};
+      blockStatsCache.set(block, slot);
+    }
+    slot[syncMode] = stats;
+  }
+  return stats;
 }

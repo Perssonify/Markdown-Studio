@@ -390,15 +390,31 @@ export function countTextRun(text: string, acc: CountAcc): void {
   }
 }
 
+/**
+ * End the current word at a node boundary. Only adjacent TEXT nodes continue a
+ * word — they differ only in their marks, so `un**believ**able` is one word.
+ * Any other node boundary ends it: a paragraph, heading, list item, table cell
+ * or hard break. Without this the last word of every block ran into the first
+ * word of the next, so a four-item list counted as ONE word. A segmented run
+ * is already credited (countTextRun credits provisionally), so ending it is
+ * just leaving it.
+ */
+export function endWordRun(acc: CountAcc): void {
+  acc.inWord = false;
+  acc.head = "";
+}
+
 function countInto(node: PMNode | null | undefined, acc: CountAcc): void {
   if (!node) return;
   if (node.type === "text") {
     if (node.text) countTextRun(node.text, acc);
     return;
   }
+  endWordRun(acc);
   const content = node.content;
   if (!content) return;
   for (const child of content) countInto(child, acc);
+  endWordRun(acc);
 }
 
 /**

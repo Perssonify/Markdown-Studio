@@ -94,7 +94,7 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 ### Add a storage field
 
 1. Extend `DocumentRecord` in [src/store/document.ts](../src/store/document.ts) and default it on read.
-2. `serializeForStorage` ([:418](../src/store/document.ts#L418)) writes an explicit list of fields: **add a field that must persist to it**, and leave a derived one out. If a backup should carry the field, add it to `toExportEnvelope` ([src/store/import-export.ts](../src/store/import-export.ts)) and forward it in the `pmjson` branch of `ingest()`.
+2. `serializeForStorage` ([:434](../src/store/document.ts#L434)) writes an explicit list of fields: **add a field that must persist to it**, and leave a derived one out. If a backup should carry the field, add it to `toExportEnvelope` ([src/store/import-export.ts](../src/store/import-export.ts)) and forward it in the `pmjson` branch of `ingest()`.
 3. Only bump `DB_VERSION` if you need a new object store or a data transform — see [database.md#migrations](database.md#migrations).
 
 ### Run one test file in watch mode
