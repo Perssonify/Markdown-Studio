@@ -32,6 +32,64 @@ export function numberedDoc(id, title, lines) {
   return doc(id, title, content);
 }
 
+/**
+ * A large document of EVERY common shape — headings, marked-up prose, hard
+ * breaks, bullet / ordered / task lists, code, quotes, tables, rules — in
+ * roughly `kb` KB of markdown. What a real long document looks like to the
+ * converters, where prose alone flatters them (A083).
+ */
+export function mixedDoc(id, title, kb) {
+  const t = (text, marks) => (marks ? { type: "text", text, marks } : { type: "text", text });
+  const li = (text) => ({ type: "listItem", content: [P(text)] });
+  const cell = (text, header) => ({
+    type: header ? "tableHeader" : "tableCell",
+    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+    content: [P(text)],
+  });
+  const shapes = [
+    (i) => H(2, `Section ${i}`),
+    (i) => ({ type: "paragraph", content: [
+      t(`${LOREM} Item ${i} has `), t("bold", [{ type: "bold" }]), t(", "), t("italic", [{ type: "italic" }]),
+      t(", "), t(`code ${i}`, [{ type: "code" }]), t(" and a "),
+      t("link", [{ type: "link", attrs: { href: `https://example.com/${i}`, target: "_blank" } }]), t("."),
+    ] }),
+    (i) => ({ type: "bulletList", content: [li(`First point ${i}`), {
+      type: "listItem", content: [P("Second point"), { type: "bulletList", content: [li(`nested ${i}`)] }],
+    }, li("Third point")] }),
+    (i) => ({ type: "paragraph", content: [t(`Line one of ${i}`), { type: "hardBreak" }, t("line two after a hard break")] }),
+    // A code block in one cycle of four: each is a React node view, and opening
+    // a document mounts them one by one, each forcing a layout of the whole
+    // editor (quadratic — see e2e/cases/perf.mjs). Denser, and a 4 MB fixture
+    // measures that instead of what the case is for.
+    (i) => (i % 48 === 4
+      ? { type: "codeBlock", attrs: { language: "js" }, content: [t(`const value${i} = ${i};\n\nconsole.log(value${i});`)] }
+      : P(`Plain paragraph ${i}: ${LOREM}`)),
+    (i) => ({ type: "orderedList", attrs: { start: 1 }, content: [li(`one ${i}`), li("two"), li("three")] }),
+    (i) => ({ type: "blockquote", content: [P(`Quoted ${i}: ${LOREM}`)] }),
+    (i) => ({ type: "table", content: [
+      { type: "tableRow", content: [cell("Name", true), cell("Value", true), cell("Note", true)] },
+      { type: "tableRow", content: [cell(`row ${i}`), cell(String(i)), cell("ok")] },
+      { type: "tableRow", content: [cell("second"), cell("2"), cell("fine")] },
+    ] }),
+    (i) => ({ type: "taskList", content: [
+      { type: "taskItem", attrs: { checked: false }, content: [P(`Open task ${i}`)] },
+      { type: "taskItem", attrs: { checked: true }, content: [P("Done task")] },
+    ] }),
+    () => P(`${LOREM} ${LOREM}`),
+    (i) => H(3, `Subsection ${i}`),
+    () => ({ type: "horizontalRule" }),
+  ];
+  const content = [H(1, title)];
+  let bytes = 0;
+  for (let i = 0; bytes < kb * 1024; i++) {
+    const node = shapes[i % shapes.length](i);
+    content.push(node);
+    bytes += JSON.stringify(node).length / 3.8; // ≈ its markdown, measured on this mix
+  }
+  content.push(P("The end."));
+  return doc(id, title, content);
+}
+
 /** Prose broken up by headings — exercises the split-pane anchor mapping. */
 export function sectionedDoc(id, title, kb) {
   const content = [H(1, title)];
