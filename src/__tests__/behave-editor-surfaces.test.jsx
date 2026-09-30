@@ -105,8 +105,15 @@ describe("links and search", () => {
 });
 
 describe("the Cards board", () => {
-  it("the switcher opens it over the editor, with a card per document", async () => {
+  it("the switcher opens it over the editor, with a card per document — saving what was just typed first", async () => {
+    const open = store().activeDocId;
+    await typeMd("\n\ntyped just before opening the board");
+    await until(() => store().saveStatus === "editing", "unsaved typing");
     await click(screen.getByLabelText("Cards"));
+    // The board reads the library, so opening it persists the open document at
+    // once — well inside the 5s autosave it would otherwise wait for.
+    await until(async () => textOf((await onDisk(adapter, open)).canonical).includes("typed just before opening the board"),
+      "the flush on opening Cards", { timeout: 2500 });
     await until(() => overlay()?.getAttribute("data-workspace-overlay") === "cards", "the Cards overlay");
     expect(overlay().getAttribute("aria-label")).toBe("Cards");
     const titles = await until(() => {
