@@ -26,6 +26,7 @@ import TurndownService from "turndown";
 import { describe, expect, it, vi } from "vitest";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
 import { createIncrementalConverter } from "../engine/incremental-md";
+import { withPortableBreaks } from "../engine/portable-breaks";
 import { normalizeMarkdown } from "../engine/preprocessor";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 import { addBaseRules, installEscape, turndownLinear } from "../engine/turndown-rules";
@@ -444,6 +445,17 @@ describe("A083 — the cases the random walk must not leave to chance", () => {
       ed.view.dispatch(ed.state.tr.insertText(" ", ed.state.doc.content.size - 1));
       same(engine, ed, "clean");
       expect(engine.docToMd(ed.state.doc, "clean").endsWith("Last")).toBe(true);
+    } finally {
+      ed.destroy();
+    }
+  });
+
+  it("is the editor's form even inside an export, and caches nothing of the export's", () => {
+    const { engine, ed } = editorWith("Jane Doe\n12 Oak Street");
+    try {
+      const inside = withPortableBreaks(() => engine.docToMd(ed.state.doc, "clean"));
+      expect(inside).toBe("Jane Doe\n12 Oak Street");
+      expect(engine.docToMd(ed.state.doc, "clean")).toBe(engine.htmlToCleanMd(ed.getHTML()));
     } finally {
       ed.destroy();
     }

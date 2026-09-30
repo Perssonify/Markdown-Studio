@@ -7,6 +7,7 @@ import TurndownService from 'turndown';
 import { preprocessMarkdown, normalizeMarkdown } from './preprocessor';
 import { cleanHtmlForTurndown } from './html-cleaner';
 import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
+import { holdsBreakMark, portableBreaksActive, stripBreakMarks, withoutPortableBreaks } from './portable-breaks';
 import { createIncrementalConverter } from './incremental-md';
 import { buildMarked } from './build-marked';
 import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
@@ -215,10 +216,16 @@ export function createMarkdownEngine(
   addBaseRules(tdClean);
   installEscape(tdClean, escapeOptions);
 
+  // The whitespace pass, after dropping the markers an export's hard breaks
+  // leave behind (A051, portable-breaks.ts) — BEFORE the pass, so it treats
+  // the lines they were on exactly as it does in the editor.
+  const finish = (md: string): string => normalizeMarkdown(portableBreaksActive() ? stripBreakMarks(md) : md);
   // turndownLinear, not td.turndown: the plain conversion is quadratic in
   // document length (turndown-rules.ts).
   const toMarkdown = (td: TurndownService, html: string): string =>
-    normalizeMarkdown(turndownLinear(td, cleanHtmlForTurndown(html)));
+    portableBreaksActive() && holdsBreakMark(html)
+      ? withoutPortableBreaks(() => toMarkdown(td, html))
+      : finish(turndownLinear(td, cleanHtmlForTurndown(html)));
 
   const incremental = createIncrementalConverter({
     converters: { styled: tdInline, clean: tdClean },
@@ -264,7 +271,9 @@ export function createMarkdownEngine(
     },
     htmlToMd: (html: string) => toMarkdown(tdInline, html),
     htmlToCleanMd: (html: string) => toMarkdown(tdClean, html),
-    docToMd: (doc: PMNode, mode: "styled" | "clean") => incremental.toMarkdown(doc, mode),
+    // The editor's own form, always: this is the markdown pane's projection,
+    // and its cache must never hold an export's output.
+    docToMd: (doc: PMNode, mode: "styled" | "clean") => withoutPortableBreaks(() => incremental.toMarkdown(doc, mode)),
     docHtmlHash: (doc: PMNode) => incremental.htmlHash(doc),
     docMdHash: (md: string) => incremental.markdownHash(md),
   };

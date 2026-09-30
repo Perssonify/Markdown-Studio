@@ -1,5 +1,5 @@
 import { type MutableRefObject, useCallback } from "react";
-import { canonicalToHtml, canonicalToMarkdown } from "../engine/serialize-doc";
+import { canonicalToHtml, canonicalToMarkdown, canonicalToPortableMarkdown } from "../engine/serialize-doc";
 import { resolveDocTitle, type DocumentRecord } from "../store/document";
 import { useDocumentStore } from "../store/documentStore";
 import { collectFolderExport, useFolderStore } from "../store/folders";
@@ -88,7 +88,7 @@ export function useExportActions({
         // prefer portable Markdown, falling back to JSON only when serialization fails.
         const md = opts.canonical
           ? null
-          : (rec.markdownCache ?? (engine ? canonicalToMarkdown(rec.canonical, engine.htmlToCleanMd) : null));
+          : (rec.markdownCache ?? (engine ? canonicalToPortableMarkdown(rec.canonical, engine.htmlToCleanMd) : null));
         // Resolve the authoritative title (honors a pinned rename) for both the
         // filename and the backup envelope, so a renamed doc exports correctly.
         const resolvedTitle = resolveDocTitle(rec, rec.canonical).title;
