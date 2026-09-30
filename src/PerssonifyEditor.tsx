@@ -25,6 +25,7 @@ import { useEditorActions } from "./editor/useEditorActions";
 import { useLibraryQueries } from "./editor/useLibraryQueries";
 import { useCardHandlers } from "./editor/useCardHandlers";
 import { useHostApi } from "./editor/useHostApi";
+import { useHeadingRenameLinks } from "./editor/useHeadingRenameLinks";
 import { MemorySheet } from "./ui/MemorySheet";
 import { VersionHistorySheet } from "./ui/VersionHistorySheet";
 import { LinkBuilderDialog } from "./ui/LinkBuilderDialog";
@@ -366,6 +367,12 @@ function PerssonifyEditorInstance({
   // The host's realtime-sync callback, debounced (useContentChangeEmitter).
   const emitContentChange = useContentChangeEmitter({ cmRef, tiptapRef, activeDoc, getCanonical, onContentChange });
 
+  // Renamed headings keep their links (useHeadingRenameLinks, below). The
+  // leaving paths report the document they leave through this ref: the hook
+  // needs the link index, which is created after the lifecycle.
+  const headingLeaveRef = useRef<((docId: string) => void) | null>(null);
+  const noteLeavingDoc = useCallback((docId: string) => { headingLeaveRef.current?.(docId); }, []);
+
   // ── Document lifecycle ────────────────────────────────────────────────────
   const {
     handleMdChange: _handleMdChange,
@@ -381,7 +388,7 @@ function PerssonifyEditorInstance({
     resetHashes, setCanonical, setFromHtml, switchToDoc, closeTab,
     createDoc, deleteDoc, finalizeDoc, revertActiveDoc, saveActiveDoc,
     setDirty, handleCanonicalChange, pasteStyled, setPasteStyled,
-    syncMode, setSyncMode, toast, confirm, confirmUnsaved, onDocDeleted,
+    syncMode, setSyncMode, toast, confirm, confirmUnsaved, onDocDeleted, onLeavingDoc: noteLeavingDoc,
   });
 
   // Unmount is a document-leaving path (see releaseEditor). A LAYOUT cleanup,
@@ -503,6 +510,12 @@ function PerssonifyEditorInstance({
   // The tray's tabs (Document Links, and the admin-gated diagnostics Console
   // with its read-only context). Both memoized — the tray is React.memo'd.
   const consoleCtx = useConsoleContext({ getCanonical, fullDocsRef });
+
+  // Offer to retarget the links to a heading that was renamed.
+  useHeadingRenameLinks({
+    tiptapRef, cmRef, fullDocsRef, lastFocusedPaneRef, flushPendingSync, forceSyncHtmlToMd, setDirty,
+    leaveRef: headingLeaveRef,
+  });
   const trayTabs = useTrayTabs({
     activeBacklinks, activeForwardLinks, activeUnresolved, navigateToDoc, consoleEnabled, consoleCtx,
   });

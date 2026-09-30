@@ -40,6 +40,7 @@ const REASON_LABEL: Record<SnapshotReason, string> = {
   get "pre-clear"() { return t("dialogs.reasonPreClear"); },
   get "pre-delete"() { return t("dialogs.reasonPreDelete"); },
   get "pre-restore"() { return t("dialogs.reasonPreRestore"); },
+  get "pre-link-update"() { return t("dialogs.reasonPreLinkUpdate"); },
   get manual() { return t("dialogs.reasonManual"); },
 };
 

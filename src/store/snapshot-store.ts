@@ -32,6 +32,7 @@ export type SnapshotReason =
   | "pre-clear"   // captured a large shrink / explicit clear
   | "pre-delete"  // the doc was about to be deleted
   | "pre-restore" // captured current state before restoring an older snapshot
+  | "pre-link-update" // before links to a renamed heading were retargeted (heading-renames.ts)
   | "manual";     // user asked to snapshot now
 
 export interface SnapshotMeta {
