@@ -414,11 +414,19 @@ const CORPUS = {
   ),
 };
 
-/** The implementation this replaced: build the whole text, then split it. */
-const countsByString = (canonical) => {
-  const t = extractText(canonical);
-  return { chars: t.length, words: t.trim().split(/\s+/).filter(Boolean).length };
-};
+/**
+ * A string-building reference: adjacent text nodes join (they differ only in
+ * marks), and every other node boundary — a block, a list item, a hard break —
+ * separates words. It used to split `extractText`, which joins blocks with
+ * nothing, so it agreed with the counter's old bug of running the last word of
+ * each block into the first word of the next.
+ */
+const withBoundaries = (node) =>
+  !node ? "" : node.type === "text" ? node.text ?? "" : " " + (node.content ?? []).map(withBoundaries).join("") + " ";
+const countsByString = (canonical) => ({
+  chars: extractText(canonical).length,
+  words: withBoundaries(canonical).trim().split(/\s+/).filter(Boolean).length,
+});
 
 describe("word and character counts", () => {
   for (const [name, canonical] of Object.entries(CORPUS)) {

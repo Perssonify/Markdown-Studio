@@ -59,7 +59,7 @@ erDiagram
 ## The `documents` store
 
 - **Key:** the document `id` (a generated string, `generateId` in [src/store/document.ts](../src/store/document.ts)).
-- **Value:** a serialized `DocumentRecord` (JSON string). Written by `serializeForStorage()` ([src/store/document.ts:418](../src/store/document.ts#L418)), which writes an explicit list of fields — the derived caches (`markdownCache`, `htmlCache`, `fidelityReport`) and the transient `_ingestHtml` are not among them and are recomputed on load. A new field that must persist has to be added to that list.
+- **Value:** a serialized `DocumentRecord` (JSON string). Written by `serializeForStorage()` ([src/store/document.ts:434](../src/store/document.ts#L434)), which writes an explicit list of fields — the derived caches (`markdownCache`, `htmlCache`, `fidelityReport`) and the transient `_ingestHtml` are not among them and are recomputed on load. A new field that must persist has to be added to that list.
 - **Rough size:** one record per document, images included — pasted and imported images are stored inline as `data:` URLs (storing them as blobs is deferred, A086). Expect tens to low-hundreds of documents for a typical user; the ceiling is the browser's quota, shown in Settings ▸ Storage & backup.
 
 ### The document record
