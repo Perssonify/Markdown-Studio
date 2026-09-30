@@ -146,10 +146,22 @@ export class PrefsMemoryAdapter extends MemoryStorageAdapter {
   async setPrefs(p) { this.prefs = { ...this.prefs, ...p }; }
 }
 
+/**
+ * An adapter holding `docs` exactly as given — including their `updated`.
+ *
+ * `save()` stamps `updated` with the current time (the adapters honour
+ * `touchUpdated`), so seeding through it threw the fixtures' dates away and the
+ * library's newest-first order — which document boot opens — came down to
+ * whether two consecutive saves landed in the same millisecond. On an idle
+ * machine they usually did (a tie keeps insertion order); under load they did
+ * not, the LAST seeded document opened instead, and behave-editor-surfaces'
+ * beforeAll clicked a library row that had not rendered yet: its twelve cases
+ * reported as skipped about one full run in ten.
+ */
 export async function seededAdapter(docs = [], { prefs } = {}) {
   const adapter = new PrefsMemoryAdapter();
   if (prefs) adapter.prefs = { ...prefs };
-  for (const d of docs) await adapter.save(d);
+  for (const d of docs) await adapter.save(Object.assign(d, { _preserveUpdated: true }));
   return adapter;
 }
 

@@ -52,7 +52,7 @@ beforeAll(async () => {
   await mountEditor({ storageAdapter: adapter });
   await until(() => store().hydratedDocId, "a document to open");
   if (store().activeDocId !== "report") {
-    await click(document.querySelector('[role="tree"] [data-key="d:report"] button'));
+    await click(await until(() => document.querySelector('[role="tree"] [data-key="d:report"] button'), "Report in the library"));
   }
   await untilHydrated("report");
 }, 30000);
