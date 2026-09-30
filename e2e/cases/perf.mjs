@@ -17,6 +17,10 @@
 // the MARKDOWN pane of the large document, timed until the rich pane shows it
 // (A083 — the markdown→rich projection). Same sizes, knobs and columns.
 //   DIR=<dist> REPS=1 THROTTLE=4 PANE=md node e2e/cases/perf.mjs <label> [sizeKb...]
+// Both large modes also report firstMs (the first sample: in the markdown
+// pane, the keystroke that parses the whole document once to build the
+// incremental projection's model) and laterMedianMs (the rest), and print
+// every sample in order. SAMPLES=<n> takes more than the default 5.
 // CODE_EVERY=12 puts a code block in every cycle of the mixed document (the
 // default, 48, one in four) — to measure OPENING a code-heavy document.
 // DOC=math opens a formula-heavy document instead (mathDoc).
@@ -210,10 +214,17 @@ async function richOnce(kb) {
   const lt = await pg.evaluate(() => window.__lt);
   await browser.close();
   const sorted = [...samples].sort((a, b) => a - b);
+  // The FIRST markdown keystroke after opening a document parses all of it
+  // once (the incremental projection's model, A083); the rest do not. Both are
+  // reported: the first, and the median of the others.
+  const rest = samples.slice(1).sort((a, b) => a - b);
   return {
     loadMs,
     mirrorMedianMs: sorted[Math.floor((sorted.length - 1) / 2)],
     mirrorMaxMs: sorted[sorted.length - 1],
+    firstMs: samples[0],
+    laterMedianMs: rest.length ? rest[Math.floor((rest.length - 1) / 2)] : 0,
+    samples: samples.join(" "),
     longestTaskMs: Math.round(Math.max(0, ...lt)),
     blockingMs: Math.round(lt.reduce((a, d) => a + Math.max(0, d - 50), 0)),
     errors: errors.length,
@@ -230,13 +241,16 @@ if (LARGE) {
     for (let i = 0; i < REPS; i++) runs.push(await richOnce(kb));
     const pick = (k) => median(runs.map((r) => r[k]));
     rows.push({ kb, loadMs: pick("loadMs"), mirrorMedianMs: pick("mirrorMedianMs"), mirrorMaxMs: pick("mirrorMaxMs"),
-      longestTaskMs: pick("longestTaskMs"), blockingMs: pick("blockingMs"), errors: runs.reduce((n, r) => n + r.errors, 0) });
+      firstMs: pick("firstMs"), laterMedianMs: pick("laterMedianMs"),
+      longestTaskMs: pick("longestTaskMs"), blockingMs: pick("blockingMs"), errors: runs.reduce((n, r) => n + r.errors, 0),
+      samples: runs.map((r) => r.samples).join(" | ") });
   }
   srv.close();
-  const H = ["docKB", "loadMs", "mirrorMedianMs", "mirrorMaxMs", "longestTaskMs", "blockingMs", "errors"];
+  const H = ["docKB", "loadMs", "mirrorMedianMs", "mirrorMaxMs", "firstMs", "laterMedianMs", "longestTaskMs", "blockingMs", "errors"];
   console.log(`\n=== ${LABEL} (${MD_LARGE ? "markdown pane -> rich pane" : "rich pane -> markdown pane"}) ===`);
   console.log(H.map((h) => h.padStart(15)).join(""));
   for (const r of rows) console.log(H.map((h) => String(r[h === "docKB" ? "kb" : h]).padStart(15)).join(""));
+  for (const r of rows) console.log(`  ${r.kb} KB samples (ms, in order): ${r.samples}`);
   fs.writeFileSync(path.join(process.env.OUT || ".", `${LABEL}.json`), JSON.stringify(rows, null, 1));
   process.exit(0);
 }
