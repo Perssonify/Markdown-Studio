@@ -1,7 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { DownloadCloud, ShieldCheck } from "lucide-react";
+import { DownloadCloud, ImageMinus, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
+import { cleanUpUnusedAssets, findUnusedAssets } from "../store/asset-gc";
+import { assetStore } from "../store/asset-store";
 import { useDocumentStore } from "../store/documentStore";
+import { useDialog } from "./DialogProvider";
 import {
   daysAgoLabel,
   getDurabilitySnapshot,
@@ -18,6 +22,83 @@ export function formatStorageBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
   return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+/**
+ * Images stored as assets (A086): how many and how big, and the ONE way they
+ * are ever deleted while documents exist — an explicit clean-up that scans
+ * every place a reference can live first (asset-gc.ts). Nothing is collected
+ * automatically during editing. Rendered by the Settings sheet right after
+ * the storage section (it needs the app's dialog provider for its confirm).
+ */
+export function StoredImagesSection({ open }: { open: boolean }) {
+  const { confirm } = useDialog();
+  const [stats, setStats] = useState<{ count: number; bytes: number } | null>(null);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const ok = await assetStore.available();
+    setAvailable(ok);
+    setStats(ok ? await assetStore.stats() : null);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void refresh();
+    return assetStore.subscribe(() => { void refresh(); });
+  }, [open, refresh]);
+
+  const cleanUp = async () => {
+    setBusy(true);
+    try {
+      const report = await findUnusedAssets();
+      if (!report.unused.length) {
+        toast.info(
+          report.recent
+            ? `No images to clean up. ${report.recent} no longer used ${report.recent === 1 ? "is" : "are"} kept for a day, in case an undo or another tab still needs ${report.recent === 1 ? "it" : "them"}.`
+            : "No unused images — every stored image is still used."
+        );
+        return;
+      }
+      const n = report.unused.length;
+      const ok = await confirm({
+        title: `Delete ${n} unused image${n === 1 ? "" : "s"}?`,
+        description:
+          `${formatStorageBytes(report.unusedBytes)} of images that no document, unsaved draft or saved version uses any more. ` +
+          "Images still in use — including in version history — are kept.",
+        confirmLabel: "Delete unused images",
+        destructive: true,
+      });
+      if (!ok) return;
+      const done = await cleanUpUnusedAssets();
+      toast.success(`Deleted ${done.deleted} unused image${done.deleted === 1 ? "" : "s"} (${formatStorageBytes(done.freedBytes)})`);
+      useDocumentStore.getState().storageFreed();
+    } catch {
+      toast.error("Couldn't check which images are unused — nothing was deleted");
+    } finally {
+      setBusy(false);
+      void refresh();
+    }
+  };
+
+  return (
+    <div className="space-y-1.5" aria-label="Stored images" role="group">
+      <p className="text-sm">Images</p>
+      <p className="text-xs text-muted-foreground" data-testid="stored-images">
+        {available === false
+          ? "Images are kept inside each document in this browser."
+          : stats
+            ? `${stats.count} image${stats.count === 1 ? "" : "s"} stored (${formatStorageBytes(stats.bytes)}), each kept once however many documents use it.`
+            : "Checking…"}
+      </p>
+      {available && (
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs pointer-coarse:h-9" disabled={busy} onClick={() => void cleanUp()}>
+          <ImageMinus className="size-3.5" /> Clean up unused images
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /**

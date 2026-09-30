@@ -20,7 +20,7 @@ import { useUIStore } from "../store/uiStore";
 import { MODES } from "../constants";
 import { adminSettingsAvailable, adsAvailable } from "../utils/build-gates";
 import { PrivacySection } from "./SettingsPrivacy";
-import { StorageBackupSection } from "./SettingsStorage";
+import { StorageBackupSection, StoredImagesSection } from "./SettingsStorage";
 import { AccentCircleRow, ThemeCircleRow } from "./ThemeControls";
 import { EraseLocalDataSection } from "./EraseLocalData";
 
@@ -359,6 +359,7 @@ function SettingsSheetInner({
 
             {/* Storage & backup (SettingsStorage.tsx), then Privacy (SettingsPrivacy.tsx). */}
             <StorageBackupSection open={open} onBackup={onBackup} />
+            <StoredImagesSection open={open} />
 
             <Separator />
 
