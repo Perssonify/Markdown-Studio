@@ -543,8 +543,7 @@ async function applyTitleOnly(
  * change afterwards is ignored, like an adapter swap.
  */
 export function configureLocalStores(
-  config?: Pick<IDBStorageConfig, "dbName" | "namespace" | "snapshots" | "crashRecovery" | "assets">,
-  opts: { customAdapter?: boolean } = {}
+  config?: Pick<IDBStorageConfig, "dbName" | "namespace" | "snapshots" | "crashRecovery" | "assets">
 ): void {
   if (initialized) return;
   const ns = config?.namespace || (config?.dbName && config.dbName !== "perssonify-docs" ? config.dbName : "");
@@ -556,12 +555,15 @@ export function configureLocalStores(
     key: ns ? `pf:recovery:${ns}` : undefined,
     enabled: config?.crashRecovery !== false,
   });
-  // Images as binary assets (A086), namespaced exactly like version history.
-  // A host's own adapter keeps its documents somewhere this browser database
-  // does not follow, so there it is opt-in: images stay inline by default.
+  // Images as binary assets (A086), namespaced exactly like version history,
+  // and OPT-IN for every host: what a host reads back out of the editor
+  // (onContentChange, onSave, getMarkdown/getHTML, the iframe bridge) would
+  // otherwise carry `pf-asset:` references it cannot resolve anywhere else,
+  // and a host's own adapter keeps documents where this browser database does
+  // not follow them. The standalone app turns it on for itself (App.tsx).
   assetStore.configure({
     dbName: ns ? `perssonify-assets:${ns}` : undefined,
-    enabled: opts.customAdapter ? config?.assets === true : config?.assets !== false,
+    enabled: config?.assets === true,
   });
 }
 

@@ -111,7 +111,9 @@ class AssetStore {
   private db: IDBDatabase | null = null;
   private ready: Promise<boolean> | null = null;
   private dbName = ASSETS_DB_NAME;
-  private enabled = true;
+  /** OFF until someone turns it on: the standalone app does (App.tsx), a
+   *  library host or the embed through `storageConfig.assets`. */
+  private enabled = false;
   private listeners = new Set<() => void>();
   private urls = new Map<string, UrlEntry>();
   private dataUrls = new Map<string, string>();
@@ -123,9 +125,8 @@ class AssetStore {
   /**
    * Where assets live, and whether the store is used at all. Namespaced with
    * the rest of a host's browser stores (configureLocalStores); `enabled:
-   * false` keeps every image inline, which is what a host with its own
-   * StorageAdapter gets unless it opts in — its documents live somewhere this
-   * browser-local database does not follow them.
+   * false` keeps every image inline, which is what every library host and the
+   * iframe embed get unless they opt in (see configureLocalStores for why).
    */
   configure(opts: { dbName?: string; enabled?: boolean } = {}): void {
     const dbName = opts.dbName || ASSETS_DB_NAME;
