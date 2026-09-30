@@ -21,18 +21,14 @@ interface HostApiParams {
   tiptapRef: TiptapRef;
   engine: Engine;
   getCanonical: SyncEngine["getCanonical"];
-  setCanonical: SyncEngine["setCanonical"];
   setFromHtml: SyncEngine["setFromHtml"];
   fidelityReport: DocStore["fidelityReport"];
-  documents: DocStore["documents"];
   activeDoc: DocStore["activeDoc"];
   createDoc: DocStore["createDoc"];
-  finalizeDoc: DocStore["finalizeDoc"];
   switchToDoc: DocStore["switchToDoc"];
   patchDocById: DocStore["patchDocById"];
   setMode: UIStore["setMode"];
   setChrome: (level: "full" | "minimal" | "none") => void;
-  linkIndex: LinkIndexApi["linkIndex"];
   fullDocsRef: LinkIndexApi["fullDocsRef"];
   rebuildLinks: LinkIndexApi["rebuildLinks"];
   handleSwitchDoc: Lifecycle["handleSwitchDoc"];
@@ -54,9 +50,9 @@ interface HostApiParams {
  */
 export function useHostApi({
   _integrationRef, _onIntegrationGraphUpdate,
-  cmRef, tiptapRef, engine, getCanonical, setCanonical, setFromHtml,
-  fidelityReport, documents, activeDoc, createDoc, finalizeDoc, switchToDoc, patchDocById,
-  setMode, setChrome, linkIndex, fullDocsRef, rebuildLinks,
+  cmRef, tiptapRef, engine, getCanonical, setFromHtml,
+  fidelityReport, activeDoc, createDoc, switchToDoc, patchDocById,
+  setMode, setChrome, fullDocsRef, rebuildLinks,
   handleSwitchDoc, hydrateEditorWithDoc, prepareToLeaveActiveDoc,
   activateAndCapture, isEditorTargeting, waitForEditor, handleAction,
 }: HostApiParams) {
@@ -128,8 +124,46 @@ export function useHostApi({
       } catch { /* ignore */ }
     }
     return { ids };
-  }, [createDoc, engine, activateAndCapture, rebuildLinks,
+  }, [createDoc, engine, activateAndCapture, rebuildLinks, fullDocsRef,
       _onIntegrationGraphUpdate, prepareToLeaveActiveDoc, hydrateEditorWithDoc]);
+
+  // Rebuild the link index and push a fresh graph to the host after a document
+  // mutation (add/update/append), reading live store state so the host sees the
+  // new nodes/edges without a stale-render race.
+  const emitGraphUpdate = useCallback(async () => {
+    try { await rebuildLinks(); } catch { /* ignore */ }
+    try {
+      const idx = useEditorStore.getState().linkIndex;
+      const docs = useDocumentStore.getState().documents;
+      const merged = fullDocsRef.current.map((d) => ({ ...d, ...docs.find((s) => s.id === d.id) }));
+      _onIntegrationGraphUpdate?.(exportGraph(merged as Parameters<typeof exportGraph>[0], idx));
+    } catch { /* ignore */ }
+  }, [rebuildLinks, _onIntegrationGraphUpdate, fullDocsRef]);
+
+  // Fallback body-edit path used only when no editor is mounted (empty embed):
+  // mount the target doc's editor, replace content from full markdown, capture
+  // canonical, and persist. This one path does briefly switch the active doc.
+  const captureDocFromMarkdown = useCallback(async (
+    id: string,
+    markdownFull: string,
+    title?: string
+  ): Promise<{ id: string; updated: boolean }> => {
+    if (useDocumentStore.getState().activeDocId !== id) {
+      await switchToDoc(id, tiptapRef.current?.getEditor() ?? null);
+    }
+    const editor = await waitForEditor(2000);
+    if (!editor) return { id, updated: false };
+    const html = engine?.mdToHtml ? engine.mdToHtml(markdownFull) : markdownFull;
+    setFromHtml(html);
+    await new Promise((r) => requestAnimationFrame(r));
+    useDocumentStore.getState().markHydrated(id); // editor now holds this doc's content
+    const canonical = editor.getJSON();
+    await patchDocById(id, {
+      canonical,
+      ...(title != null ? { title, userTitle: title } : {}),
+    });
+    return { id, updated: true };
+  }, [switchToDoc, waitForEditor, engine, setFromHtml, patchDocById, tiptapRef]);
 
   // ── Integration imperative API ────────────────────────────────────────────
   useImperativeHandle(_integrationRef, () => ({
@@ -302,43 +336,17 @@ export function useHostApi({
     /** Erase everything the editor keeps in this browser (see clearLocalData)
      *  — for a host's logout on a shared device. */
     clearLocalData: (opts?: { preferences?: boolean }) => clearLocalData(opts),
-  }), [getCanonical, fidelityReport, linkIndex, documents, activeDoc, createDoc, setFromHtml, finalizeDoc, engine, setMode, handleSwitchDoc, patchDocById, setCanonical, hydrateEditorWithDoc, prepareToLeaveActiveDoc, activateAndCapture]);
+  }), [
+    // EVERY value the methods close over. The list used to omit handleAction,
+    // addDocumentsImpl, emitGraphUpdate and captureDocFromMarkdown, so a method
+    // ran with whatever those were when a LISTED value last changed: a host that
+    // re-rendered with a new _onIntegrationGraphUpdate kept being called on the
+    // old one (A108). Nothing holds on to the handle's identity — the
+    // integration reads `ref.current` at call time — so re-creating it is free.
+    getCanonical, cmRef, tiptapRef, fidelityReport, fullDocsRef, activeDoc, createDoc, engine,
+    prepareToLeaveActiveDoc, activateAndCapture, addDocumentsImpl, patchDocById, emitGraphUpdate,
+    isEditorTargeting, hydrateEditorWithDoc, captureDocFromMarkdown, setMode, setChrome,
+    handleSwitchDoc, handleAction,
+  ]);
 
-  // Rebuild the link index and push a fresh graph to the host after a document
-  // mutation (add/update/append), reading live store state so the host sees the
-  // new nodes/edges without a stale-render race.
-  const emitGraphUpdate = useCallback(async () => {
-    try { await rebuildLinks(); } catch { /* ignore */ }
-    try {
-      const idx = useEditorStore.getState().linkIndex;
-      const docs = useDocumentStore.getState().documents;
-      const merged = fullDocsRef.current.map((d) => ({ ...d, ...docs.find((s) => s.id === d.id) }));
-      _onIntegrationGraphUpdate?.(exportGraph(merged as Parameters<typeof exportGraph>[0], idx));
-    } catch { /* ignore */ }
-  }, [rebuildLinks, _onIntegrationGraphUpdate, fullDocsRef]);
-
-  // Fallback body-edit path used only when no editor is mounted (empty embed):
-  // mount the target doc's editor, replace content from full markdown, capture
-  // canonical, and persist. This one path does briefly switch the active doc.
-  const captureDocFromMarkdown = useCallback(async (
-    id: string,
-    markdownFull: string,
-    title?: string
-  ): Promise<{ id: string; updated: boolean }> => {
-    if (useDocumentStore.getState().activeDocId !== id) {
-      await switchToDoc(id, tiptapRef.current?.getEditor() ?? null);
-    }
-    const editor = await waitForEditor(2000);
-    if (!editor) return { id, updated: false };
-    const html = engine?.mdToHtml ? engine.mdToHtml(markdownFull) : markdownFull;
-    setFromHtml(html);
-    await new Promise((r) => requestAnimationFrame(r));
-    useDocumentStore.getState().markHydrated(id); // editor now holds this doc's content
-    const canonical = editor.getJSON();
-    await patchDocById(id, {
-      canonical,
-      ...(title != null ? { title, userTitle: title } : {}),
-    });
-    return { id, updated: true };
-  }, [switchToDoc, waitForEditor, engine, setFromHtml, patchDocById]);
 }
