@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TiptapPane } from "../ui/TiptapPane";
 import { assetStore, sha256Hex } from "../store/asset-store";
 import { assetRef, bytesToDataUrl, collectImageSrcs } from "../store/asset-refs";
-import { assetImagesKey } from "../extensions/AssetImages";
+import { assetImagesKey, isHandledImageDrop } from "../extensions/AssetImages";
 
 /**
  * Stored images in the LIVE rich pane (A086): shown through object URLs and
@@ -213,6 +213,27 @@ describe("image files pasted into the rich pane", () => {
     const editor = await mount("<p>x</p>");
     await act(async () => { pasteFiles(editor, [file(png(12), "diagram.png", "image/png")]); });
     await vi.waitFor(() => expect(collectImageSrcs(editor.getJSON())).toEqual([dataUrl(12)]));
+  });
+
+  it("an image file DROPPED on the rich pane is stored and inserted — and not also imported", async () => {
+    const editor = await mount("<p>x</p>");
+    const event = {
+      dataTransfer: { files: [file(png(15), "chart.png", "image/png")] },
+      clientX: 0, clientY: 0,
+      defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; },
+    };
+    let handled = false;
+    await act(async () => {
+      editor.view.someProp("handleDrop", (f) => { if (!handled) handled = !!f(editor.view, event, null, false); return handled; });
+    });
+    expect(handled).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(isHandledImageDrop(event)).toBe(true); // the container's importer skips it
+    const hash = await sha256Hex(png(15));
+    await vi.waitFor(() => expect(collectImageSrcs(editor.getJSON())).toEqual([assetRef(hash)]));
+    const img = editor.getJSON().content.flatMap((b) => b.content ?? []).find((c) => c.type === "image");
+    expect(img.attrs.alt).toBe("chart");
   });
 
   it("a file pasted just before the document changes is not inserted into the next one", async () => {

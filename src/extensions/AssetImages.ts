@@ -341,10 +341,13 @@ export const AssetImages = Extension.create({
             if (moved || !view.editable) return false;
             const files = imageFiles((event as DragEvent).dataTransfer);
             if (!files.length) return false;
-            const coords = view.posAtCoords({ left: (event as DragEvent).clientX, top: (event as DragEvent).clientY });
+            let pos: number | null = null;
+            try {
+              pos = view.posAtCoords({ left: (event as DragEvent).clientX, top: (event as DragEvent).clientY })?.pos ?? null;
+            } catch { /* no layout to hit-test against: insert at the selection */ }
             event.preventDefault();
             handledDrops.add(event);
-            void insertImageFiles(editor, files, coords?.pos ?? null);
+            void insertImageFiles(editor, files, pos);
             return true;
           },
         },
