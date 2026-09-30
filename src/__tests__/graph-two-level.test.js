@@ -251,6 +251,28 @@ describe("a folder map above FOLDER_LAYOUT_MAX is laid out on two levels", () =>
     expect(flat(one.pos)).toEqual(flat(two.pos));
   });
 
+  it("plans the same way whatever order the notes, folders and links arrive in", () => {
+    // The map's graph is rebuilt with the link index, not always in the same
+    // order; a re-plan must not move a single region or home for that.
+    const ws = fromLibrary(600, 7);
+    const shuffled = {
+      ...ws,
+      nodes: [...ws.nodes].reverse(),
+      edges: [...ws.edges].reverse(),
+      folders: [...ws.folders].reverse().map((f) => ({ ...f, docIds: [...f.docIds].reverse() })),
+    };
+    const a = planFor(ws), b = planFor(shuffled);
+    const byFolder = (plan) => new Map(plan.regions.map((r) => [r.folderId, r]));
+    expect(byFolder(b)).toEqual(byFolder(a));
+    expect(new Map([...b.home].sort())).toEqual(new Map([...a.home].sort()));
+    // …and it rests in the same place — to within rounding: the forces still
+    // sum in the order the notes and links came in.
+    const one = settle(ws).pos, two = settle(shuffled).pos;
+    let worst = 0;
+    for (const [id, p] of one) worst = Math.max(worst, Math.hypot(p.x - two.get(id).x, p.y - two.get(id).y));
+    expect(worst).toBeLessThan(1e-6);
+  });
+
   it("puts linked folders nearer each other than a packing that ignores links would", () => {
     // Where the packing sends a region is decided partly by the regions it
     // links to. Scrambling which folder the links run between must make the

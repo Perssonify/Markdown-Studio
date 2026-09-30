@@ -532,7 +532,7 @@ export interface LayoutRegion {
   y0: number;
   x1: number;
   y1: number;
-  /** Its notes, in `ids` order. */
+  /** Its notes, in id order. */
   ids: string[];
 }
 
@@ -590,11 +590,17 @@ export interface PlanInput {
 /**
  * The first level of a two-level layout: where each folder's region goes.
  * Null for a map that does not get one (`twoLevel`) — every other map lays out
- * exactly as it did. Deterministic: a function of the ids, the folders, the
- * links and the names alone.
+ * exactly as it did. Deterministic: a function of the notes, the folders, the
+ * links and the drawn sizes alone — not of the order any of them come in.
  */
 export function planFolderLayout(input: PlanInput): FolderPlan | null {
-  const { ids, folders, edges, radius, label } = input;
+  const { edges, radius, label } = input;
+  // The same library plans the same way whatever order its notes and folders
+  // arrive in: the map's graph is rebuilt with the link index, not always in
+  // the same order. (Code-unit order, not localeCompare, which varies.)
+  const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const ids = [...input.ids].sort(byId);
+  const folders = [...input.folders].sort((a, b) => byId(a.id, b.id));
   const folderOf = new Map<string, number>();
   folders.forEach((f, fi) => {
     for (const id of f.docIds) if (!folderOf.has(id)) folderOf.set(id, fi);
@@ -608,8 +614,7 @@ export function planFolderLayout(input: PlanInput): FolderPlan | null {
   }
   if (!twoLevel(ids.length, loose.length < ids.length)) return null;
 
-  // One unit per folder with a note on the map (in folder order), then the
-  // notes in no folder.
+  // One unit per folder with a note on the map, then the notes in no folder.
   const units: { folderId: string | null; name: string | null; ids: string[] }[] = [];
   folders.forEach((f, fi) => {
     if (groups[fi]!.length) units.push({ folderId: f.id, name: f.name, ids: groups[fi]! });
@@ -691,7 +696,7 @@ function regionHomes(
   }
   cells.sort((p, q) => p.d - q.d || p.a - q.a || p.r - q.r || p.c - q.c);
 
-  // Breadth-first, best-connected first (ties in `ids` order).
+  // Breadth-first, best-connected first (ties in id order).
   const index = new Map(reg.ids.map((id, i) => [id, i]));
   const degree = (id: string) => near.get(id)?.length ?? 0;
   const byDegree = [...reg.ids].sort((a, b) => degree(b) - degree(a) || index.get(a)! - index.get(b)!);
