@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { Marked } from 'marked';
+import type { Node as PMNode } from '@tiptap/pm/model';
 import TurndownService from 'turndown';
 import { preprocessMarkdown, normalizeMarkdown } from './preprocessor';
 import { cleanHtmlForTurndown } from './html-cleaner';
 import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
+import { createIncrementalConverter } from './incremental-md';
 import { buildMarked } from './build-marked';
 import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
 import { useUIStore } from '../store/uiStore';
@@ -145,6 +147,19 @@ export interface MarkdownEngine {
   mdToHtml: (md: string) => string;
   htmlToMd: (html: string) => string;
   htmlToCleanMd: (html: string) => string;
+  /**
+   * The rich pane's document as markdown — `htmlToMd` / `htmlToCleanMd` of
+   * `editor.getHTML()`, byte for byte — converting only the top-level blocks
+   * that changed since they were last converted (A083, incremental-md.ts).
+   * Optional, like `docHtmlHash`: an engine without them (a test's, a host's)
+   * takes the sync engine's whole-document path.
+   */
+  docToMd?: (doc: PMNode, mode: "styled" | "clean") => string;
+  /** `quickHash(editor.getHTML())`, computed per block (see docToMd). */
+  docHtmlHash?: (doc: PMNode) => number;
+  /** `quickHash(md)` for the markdown docToMd last returned, from its pieces'
+   *  hashes; null when it does not know it. */
+  docMdHash?: (md: string) => number | null;
 }
 
 /**
@@ -200,6 +215,20 @@ export function createMarkdownEngine(
   addBaseRules(tdClean);
   installEscape(tdClean, escapeOptions);
 
+  // turndownLinear, not td.turndown: the plain conversion is quadratic in
+  // document length (turndown-rules.ts).
+  const toMarkdown = (td: TurndownService, html: string): string =>
+    normalizeMarkdown(turndownLinear(td, cleanHtmlForTurndown(html)));
+
+  const incremental = createIncrementalConverter({
+    converters: { styled: tdInline, clean: tdClean },
+    signature: () => {
+      const e = escapeOptions();
+      return `${e.math ? 1 : 0}${e.strikethrough ? 1 : 0}${e.curly ? 1 : 0}`;
+    },
+    normalize: normalizeMarkdown,
+  });
+
   return {
     mdToHtml: (md: string) => {
       const features = getFeatures();
@@ -233,10 +262,11 @@ export function createMarkdownEngine(
         html = html.replace(/<li(?![^>]*data-type="taskItem")(?=[\s>])/g, '<li style="display:list-item;margin-bottom:2px"');
       return html;
     },
-    // turndownLinear, not td.turndown: the plain conversion is quadratic in
-    // document length (turndown-rules.ts).
-    htmlToMd: (html: string) => normalizeMarkdown(turndownLinear(tdInline, cleanHtmlForTurndown(html))),
-    htmlToCleanMd: (html: string) => normalizeMarkdown(turndownLinear(tdClean, cleanHtmlForTurndown(html))),
+    htmlToMd: (html: string) => toMarkdown(tdInline, html),
+    htmlToCleanMd: (html: string) => toMarkdown(tdClean, html),
+    docToMd: (doc: PMNode, mode: "styled" | "clean") => incremental.toMarkdown(doc, mode),
+    docHtmlHash: (doc: PMNode) => incremental.htmlHash(doc),
+    docMdHash: (md: string) => incremental.markdownHash(md),
   };
 }
 
