@@ -121,9 +121,14 @@ describe("library consumers still on React 18 stay tested (A113)", () => {
     }
   });
 
-  it("the repo itself develops on a newer React than the one that job swaps in", () => {
-    // Otherwise the job re-runs exactly what `verify` already ran.
-    expect(Number(pkg.devDependencies.react.replace(/^[\^~]/, "").split(".")[0])).toBeGreaterThan(18);
+  it("the peer range also admits a newer major — the one the rest of CI runs on", () => {
+    // Read from the PEER range, not devDependencies: this file runs inside the
+    // react18 job too, where `bun add -d` has just rewritten devDependencies.
+    for (const name of ["react", "react-dom"]) {
+      const majors = pkg.peerDependencies[name].split("||").map((c) => Number(/\^(\d+)\./.exec(c)?.[1]));
+      expect(majors, name).toContain(18);
+      expect(Math.max(...majors), name).toBeGreaterThan(18);
+    }
   });
 
   it("no other job, and no publish, rewrites the manifest", () => {
