@@ -72,26 +72,30 @@ flowchart TD
 - **Code:** [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts); markdown engine [src/engine/useMarkdownEngine.ts](../src/engine/useMarkdownEngine.ts); marked configuration [src/engine/build-marked.ts](../src/engine/build-marked.ts); markdown preprocessing [src/engine/preprocessor.ts](../src/engine/preprocessor.ts); Turndown rules [src/engine/turndown-rules.ts](../src/engine/turndown-rules.ts).
 - **Two directions:**
 
-  **MD → canonical** (`syncMdToHtml`, [:41](../src/engine/useSyncEngine.ts#L41)):
+  **MD → canonical** (`syncMdToHtml`, [:108](../src/engine/useSyncEngine.ts#L108)):
   ```
   CM6 text → quickHash gate → preprocessMarkdown → marked.parse → HTML
            → tiptap.setHTML → Tiptap normalizes → editor.getJSON() = canonical
   ```
   The preprocessor only rewrites what must change before marked tokenizes the source: the front-matter block, the `|` of a wiki-link alias (written `\|`, so a GFM table does not split the link across cells), and the opt-in `{key=val}` syntax — off by default, and when on, a group renders only if every key is known and every value validates; anything else stays exactly as written (A039). Code is masked first, with the one fence scanner (`findFencedCodeRanges`) that `normalizeMarkdown` also uses (A046). Wiki links and heading anchors, maths, footnotes, task lists and callouts are marked extensions or renderer overrides in `build-marked.ts`; wiki links are an inline extension ([src/engine/wiki-link-marked.ts](../src/engine/wiki-link-marked.ts)), so they never fire inside code of any kind (A045, A048).
 
-  **canonical → MD** (`syncHtmlToMd`, [:108](../src/engine/useSyncEngine.ts#L108)):
+  **canonical → MD** (`syncHtmlToMd`, [:175](../src/engine/useSyncEngine.ts#L175)):
   ```
   PM doc node unchanged? → skip           (reference check, nothing serialized)
-  tiptap.getHTML() → quickHash gate → cleanHtmlForTurndown
-                   → (styled) engine.htmlToMd      ── Turndown tdInline (keeps <span style>)
-                   → (clean)  engine.htmlToCleanMd ── Turndown tdClean (strips styling)
-                   → normalizeMarkdown → CM6.setValue(md)
+  per top-level block (cached on its immutable PM node; only changed blocks do this):
+      serialize → cleanHtmlForTurndown → Turndown   (tdInline styled / tdClean clean)
+  quickHash gate (combined from the per-block hashes = quickHash(getHTML()))
+  → join the blocks with Turndown's own seam rule → normalizeMarkdown → CM6.setValue(md)
   ```
-  Both Turndown instances share the base rules and an escaper that backslash-escapes only what would otherwise become live syntax on the next pass: `<` before a tag-like character, `&` before an entity, `N)` at a line start, and `$`, `~~` or a recognised `{…}` group only while maths, strikethrough or the curly syntax is on (A040). Thematic breaks are written `---` (A051); footnotes come back as `[^label]` and `[^label]: text` (A043); a table cell's markdown comes from the same outer conversion, and column alignment survives (A044). The conversion is linear in document length: `turndownLinear` converts the top level in runs of 64 blocks, byte-identical to plain Turndown (A083).
+  Both Turndown instances share the base rules and an escaper that backslash-escapes only what would otherwise become live syntax on the next pass: `<` before a tag-like character, `&` before an entity, `N)` at a line start, and `$`, `~~` or a recognised `{…}` group only while maths, strikethrough or the curly syntax is on (A040). Thematic breaks are written `---` (A051); footnotes come back as `[^label]` and `[^label]: text` (A043); a table cell's markdown comes from the same outer conversion, and column alignment survives (A044).
+
+  The projection is incremental (A083, [src/engine/incremental-md.ts](../src/engine/incremental-md.ts)): ProseMirror nodes are immutable, so an edit shares every untouched top-level block with the previous document, and each block's cleaned HTML, content hash and Turndown output are cached on its node. A keystroke converts the block it changed; the rest is joined from the cache. The result is byte-identical to `htmlToMd(editor.getHTML())` — `converter-incremental.test.js` checks that after every step of random edit sequences — because the pieces are cut only where `turndownLinear` may cut (between two blocks Turndown treats as blocks, never after a heading the footnote rule reads past), and the whitespace pass still runs over the joined whole. A `<details>` block is not a block to Turndown, so it is converted together with its neighbours. The whole-document path (`getHTML()` → `htmlToMd`) remains for an engine without the per-block methods, and for exports; it is linear in document length (`turndownLinear`, runs of 64 blocks).
+
+  Exports write hard breaks as `\` + newline so renderers without the app's `breaks: true` dialect keep them ([src/engine/portable-breaks.ts](../src/engine/portable-breaks.ts), A051); the markdown pane's projection is unchanged.
 
 - **Input/output shapes:** strings (markdown ⇄ HTML) on the wire; PM JSON at the canonical end.
 - **State persisted:** none directly — sync only updates in-memory editors and fires `onCanonicalChange`.
-- **Guarantees & the echo gate:** each direction early-exits when nothing changed — the markdown side on a `quickHash` ([src/utils/index.ts:57](../src/utils/index.ts#L57)) of its text; the rich side first on the ProseMirror doc node itself (`lastHtmlDoc`, [src/engine/useSyncEngine.ts:27](../src/engine/useSyncEngine.ts#L27) — reference equality, no serialization), then on a hash of the HTML. Combined with the `syncing` re-entrancy ref ([:28](../src/engine/useSyncEngine.ts#L28)), this prevents the MD→HTML→MD echo loop. The gates are committed only after a conversion succeeds. This is **at-most-once per content change**, not ordered transactionally — it's a debounced projection, not a log.
+- **Guarantees & the echo gate:** each direction early-exits when nothing changed — the markdown side on a `quickHash` ([src/utils/index.ts:57](../src/utils/index.ts#L57)) of its text; the rich side first on the ProseMirror doc node itself (`lastHtmlDoc`, [src/engine/useSyncEngine.ts:94](../src/engine/useSyncEngine.ts#L94) — reference equality, no serialization), then on a hash of the HTML. Combined with the `syncing` re-entrancy ref ([:95](../src/engine/useSyncEngine.ts#L95)), this prevents the MD→HTML→MD echo loop. The gates are committed only after a conversion succeeds. This is **at-most-once per content change**, not ordered transactionally — it's a debounced projection, not a log.
 - **Backpressure:** handled by a **debounce with a ceiling**, not a queue ([src/hooks/sync-schedule.ts](../src/hooks/sync-schedule.ts)). Two numbers, both derived from a moving average of what recent projections measurably cost on the device in use:
   - `syncDelayFor` — the wait after your last keystroke, clamped to `SYNC_MIN_DELAY_MS`…`SYNC_MAX_DELAY_MS` (120–800ms).
   - `syncMaxWaitFor` — the longest the other pane may lag while changes keep arriving, clamped to `SYNC_MIN_MAX_WAIT_MS`…`SYNC_MAX_MAX_WAIT_MS` (250–1200ms). Without it the debounce was purely trailing and the other pane never updated during continuous typing.
@@ -124,7 +128,7 @@ flowchart TD
 
 ### Stage 5 — Readers (canonical → outputs)
 
-- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:290](../src/store/import-export.ts#L290)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
+- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:301](../src/store/import-export.ts#L301)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
 - **Knowledge graph:** `exportGraph` ([src/store/link-index.ts:411](../src/store/link-index.ts#L411)); every link is resolved by the one wiki-link resolver, `createWikiResolver` ([:193](../src/store/link-index.ts#L193)), which the click handler and the broken-link decoration use too (A059).
 - **Copy as Prompt:** `buildContextPrompt` ([src/integration/prompt-builder.ts:232](../src/integration/prompt-builder.ts#L232)).
 - All readers derive from canonical; none mutate it.
@@ -154,7 +158,7 @@ flowchart LR
 1. User pastes Google-Docs HTML into the rich-text pane → Tiptap's `handlePaste` ([src/ui/TiptapPane.tsx:262](../src/ui/TiptapPane.tsx#L262)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:305](../src/hooks/useDocumentLifecycle.ts#L305)).
 2. With Paste Styled on (the default), `sanitizePastedHtml()` ([src/engine/html-cleaner.ts:165](../src/engine/html-cleaner.ts#L165)) strips Office junk and keeps only allow-listed CSS; with it off (or ⇧ held), `cleanPasteHtml()` ([:244](../src/engine/html-cleaner.ts#L244)) also converts `font-weight:700` → `<strong>`.
 3. Cleaned HTML is inserted into Tiptap; the editor normalizes it to canonical PM JSON.
-4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:108](../src/engine/useSyncEngine.ts#L108)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
+4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:175](../src/engine/useSyncEngine.ts#L175)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
 5. `onCanonicalChange` fires → `updateDerived` ([src/store/documentStore.ts:1610](../src/store/documentStore.ts#L1610)) computes the fidelity report and the word/character counts in one walk (`computeCanonicalStats`, [src/store/fidelity.ts:239](../src/store/fidelity.ts#L239)) and publishes them only when they change; if styling can't be represented in the chosen markdown mode, the report records the loss and the StatusBar shows a fidelity badge.
 6. Autosave (≤5s later) → `saveActiveDoc` (after its pre-save checks) → `serializeForStorage` → IndexedDB `documents` store; `__manifest` updated in the same transaction.
 
