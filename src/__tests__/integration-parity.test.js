@@ -64,7 +64,7 @@ describe("published package surface", () => {
 
   it("declares a types condition on every code subpath export", () => {
     for (const [sub, entry] of Object.entries(PKG.exports)) {
-      if (typeof entry === "string") continue; // e.g. "./styles.css"
+      if (typeof entry === "string") continue; // a plain asset path, if one is ever added
       expect(entry.types, `${sub} is missing a types condition`).toBeTruthy();
     }
   });
@@ -72,7 +72,8 @@ describe("published package surface", () => {
   it("exports the stylesheet the library build actually emits", () => {
     // The export used to point at dist/styles.css while the lib build emitted
     // no CSS at all — consumers rendered completely unstyled.
-    expect(PKG.exports["./styles.css"]).toBe("./dist/styles.css");
+    // An object since the stylesheet gained a `types` target (pkg-declarations.test.js).
+    expect(PKG.exports["./styles.css"].default).toBe("./dist/styles.css");
     const viteConfig = read("vite.config.ts");
     expect(viteConfig).toMatch(/cssFileName:\s*['"]styles['"]/);
     // ...and something in the entry chain must import it, or nothing is emitted.

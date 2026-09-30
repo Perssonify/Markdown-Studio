@@ -157,17 +157,18 @@ describe("npm publishing happens from CI, with provenance (A006)", () => {
   });
 });
 
-describe("the built CommonJS entries are required before they ship (A113)", () => {
-  const CHECK = "bunx vitest run src/__tests__/pkg-cjs-require.test.js";
-  // The unit run skips the built half of that file (no dist/ yet), so it only
-  // guards the build when it is re-run AFTER `bun run build`.
+describe("the built CommonJS entries and declarations are checked before they ship (A113)", () => {
+  // The unit run skips the built half of these files (no dist/ yet), so they
+  // only guard the build when they are re-run AFTER `bun run build`.
+  const CHECKS = ["src/__tests__/pkg-cjs-require.test.js", "src/__tests__/pkg-declarations.test.js"];
+  const STEP = `bunx vitest run ${CHECKS.join(" ")}`;
   it.each([
     ["ci.yml", read(`${GH}/workflows/ci.yml`), null],
     ["publish.yml", read(`${GH}/workflows/publish.yml`), "npm publish"],
-  ])("%s re-runs the CJS require check after the library build", (_f, text, before) => {
-    expect(text.indexOf(CHECK), CHECK).toBeGreaterThan(-1);
-    expect(text.indexOf(CHECK)).toBeGreaterThan(text.indexOf("run: bun run build\n"));
-    if (before) expect(text.indexOf(CHECK)).toBeLessThan(text.indexOf(before));
+  ])("%s re-runs the require and consumer type checks after the library build", (_f, text, before) => {
+    expect(text.indexOf(STEP), STEP).toBeGreaterThan(-1);
+    expect(text.indexOf(STEP)).toBeGreaterThan(text.indexOf("run: bun run build\n"));
+    if (before) expect(text.indexOf(STEP)).toBeLessThan(text.indexOf(before));
   });
 });
 

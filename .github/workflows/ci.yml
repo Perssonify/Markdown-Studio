@@ -81,10 +81,12 @@ jobs:
       - name: Build (library)
         run: bun run build
 
-      # What `require("@perssonify/editor")` loads. Nothing else in CI touches
-      # the CommonJS build, and it once could not be required at all (A113).
-      - name: The built CommonJS entries load in Node
-        run: bunx vitest run src/__tests__/pkg-cjs-require.test.js
+      # What `require("@perssonify/editor")` loads, and what a TypeScript
+      # consumer's compiler reads. Nothing else in CI touches the CommonJS build
+      # or the declarations; the first once could not be required at all, and
+      # the second failed a consumer with `skipLibCheck: false` (A113).
+      - name: The built CommonJS entries load; a consumer type-checks against the declarations
+        run: bunx vitest run src/__tests__/pkg-cjs-require.test.js src/__tests__/pkg-declarations.test.js
 
       - name: Build (embed)
         run: bun run build:embed

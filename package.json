@@ -54,7 +54,10 @@
       "import": "./dist/integration.js",
       "require": "./dist/integration.cjs"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": {
+      "types": "./dist/styles.css.d.ts",
+      "default": "./dist/styles.css"
+    }
   },
   "files": [
     "dist",
@@ -74,14 +77,14 @@
   },
   "scripts": {
     "dev": "vite --config vite.app.config.ts",
-    "build": "vite build && tsc -p tsconfig.build.json",
+    "build": "vite build && tsc -p tsconfig.build.json && node build/finish-declarations.mjs",
     "build:app": "vite build --config vite.app.config.ts && node scripts/third-party-licenses.mjs",
     "build:embed": "vite build --config vite.embed.config.ts",
     "preview": "vite preview --config vite.app.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "build:types": "tsc -p tsconfig.build.json",
+    "build:types": "tsc -p tsconfig.build.json && node build/finish-declarations.mjs",
     "lint": "eslint .",
     "e2e": "node e2e/run.mjs",
     "e2e:smoke": "node e2e/run.mjs surfaces",
