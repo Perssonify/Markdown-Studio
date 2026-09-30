@@ -421,6 +421,17 @@ let blankSaveAllowedFor: string | null = null;
 // resurrecting a document the user just deleted. Consulted by the save path.
 const deletingDocs = new Set<string>();
 
+// Completed deletions, numbered. A write that READ a document and then awaited
+// can find the deletion already FINISHED — `deletingDocs` cleared again — and
+// save the record straight back. `patchDocById` (card saves, host updates,
+// retargeted heading links) notes the counter before its read and refuses a
+// document deleted after it.
+let deletionSeq = 0;
+const deletedAtSeq = new Map<string, number>();
+/** Deleted (or being deleted) since the counter read `since`. */
+const deletedSince = (docId: string, since: number) =>
+  deletingDocs.has(docId) || (deletedAtSeq.get(docId) ?? 0) > since;
+
 // Documents locked read-only because their content does not fit this build
 // (see `schemaLock`). Module scope, like `deletingDocs`: the save path consults
 // it synchronously.
@@ -1354,6 +1365,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       } catch { /* best effort — never block a delete on the snapshot net */ }
     }
     await storage.delete(docId);
+    deletedAtSeq.set(docId, ++deletionSeq);
     if (opts?.purgeHistory) {
       try { await snapshotStore.deleteForDoc?.(docId); } catch { /* best effort */ }
     }
@@ -1454,9 +1466,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // on disk looking older than it was: another tab's newer version was
     // overwritten and its conflict check then saw nothing, so two tabs
     // ping-ponged last-writer-wins.
+    const readAt = deletionSeq;
     if (patch.touchUpdated === false) {
       const stored = await storage.get(docId);
-      if (!stored) return null;
+      if (!stored || deletedSince(docId, readAt)) return null;
       if (patch.metadata) stored.metadata = { ...stored.metadata, ...patch.metadata };
       // Tell the adapter's save() to leave `updated` alone — see stampUpdated.
       (stored as DocumentRecord & { _preserveUpdated?: boolean })._preserveUpdated = true;
@@ -1481,6 +1494,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const stored = await storage.get(docId);
     const target = liveActive?.id === docId ? { ...liveActive } : stored;
     if (!target) return null;
+    // Deleted while this read was in flight: writing now would re-create it.
+    // (Nothing below awaits before the save, so this holds up to the write.)
+    if (deletedSince(docId, readAt)) return null;
 
     // The same multi-tab check saveActiveDoc makes. The base is the OLDEST
     // revision this write's content derives from: the open document's, a

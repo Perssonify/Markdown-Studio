@@ -178,7 +178,9 @@ export function useHeadingRenameLinks({
       if (!writableThroughStorage(id)) return null;
       try {
         // expectedUpdated: another tab's write since this read is a ConflictError.
-        await useDocumentStore.getState().patchDocById(id, { canonical: canonical as typeof stored.canonical, expectedUpdated: stored.updated });
+        const written = await useDocumentStore.getState().patchDocById(id, { canonical: canonical as typeof stored.canonical, expectedUpdated: stored.updated });
+        // Nothing written: the document was deleted meanwhile — no links to count.
+        if (!written) return 0;
       } catch {
         return null;
       }
