@@ -445,7 +445,14 @@ export function preprocessMarkdown(
   // rewrite code content: `[[Doc]]` or `{color=red}` shown as code must stay
   // literal. Restored verbatim just before returning.
   const codeStore: string[] = [];
-  const stash = (m: string) => `@@PFCODE${codeStore.push(m) - 1}@@`;
+  const PLACEHOLDER = /@@PFCODE(\d+)@@/g;
+  // A later mask can take in an earlier one's placeholder — a backtick run
+  // across a fence that interrupts its paragraph (`` `a\n```\nx\n```\nb` ``),
+  // say — and the one restore pass below expands each placeholder once, so the
+  // inner one reached the document as the text "@@PFCODE0@@" (A083's random
+  // walks found it). Each entry is stored with its own placeholders expanded.
+  const stash = (m: string) =>
+    `@@PFCODE${codeStore.push(m.replace(PLACEHOLDER, (p, i) => codeStore[Number(i)] ?? p)) - 1}@@`;
   // Only when a pass below can match: this runs on every md→rich projection,
   // and the engine always asks for the table-pipe pass.
   const hasWiki = md.indexOf("[[") !== -1;
@@ -535,7 +542,7 @@ export function preprocessMarkdown(
 
   // Restore masked code verbatim (see the mask step above).
   if (codeStore.length) {
-    md = md.replace(/@@PFCODE(\d+)@@/g, (_m, i) => codeStore[Number(i)] ?? "");
+    md = md.replace(PLACEHOLDER, (_m, i) => codeStore[Number(i)] ?? "");
   }
 
   return md;

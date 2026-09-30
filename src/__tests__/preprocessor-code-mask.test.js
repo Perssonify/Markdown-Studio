@@ -23,6 +23,20 @@ describe('preprocessor code masking', () => {
     expect(out).not.toContain('type="checkbox"');
   });
 
+  it('restores a mask that took in another mask (A083)', () => {
+    // The backtick run spans a fence that interrupts its paragraph: the fence
+    // is masked first, then the run is masked WITH the fence's placeholder in
+    // it. One restore pass left "@@PFCODE0@@" in the document.
+    for (const md of [
+      '[[Page]]\n\n`start\n```\ncode\n```\nend`',
+      '[[Page]]\n\n`a\n~~~\nb\n~~~\nc` and `d\n```\ne\n```\nf`',
+    ]) {
+      const out = preprocessMarkdown(md, { wikiLinkTablePipes: true });
+      expect(out).not.toContain('@@PFCODE');
+      expect(out).toBe(md);
+    }
+  });
+
   it('preserves inline code content exactly', () => {
     const out = preprocessMarkdown('use `?import_url=` and `<img width="120">`', {});
     expect(out).toContain('`?import_url=`');
