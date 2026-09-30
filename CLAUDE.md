@@ -113,9 +113,14 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     **compact form** (`shortLabel`) — a single fixed position under the dot meant
     one crowded neighbour silently cost a note its name when there was room an
     inch away, and a phone went almost entirely anonymous. A label is also vetoed
-    if it would cross a folder container the note does not belong to (`reject` —
-    it cannot be a shared obstacle, since a note's own container must not block
-    its own name), or fall outside the canvas (`bounds`). Dropping a label is the
+    if it would cross a folder container the note does not belong to (`reject` =
+    `crossesForeignContainer` — it cannot be a shared obstacle, since a note's own
+    container must not block its own name), or fall outside the canvas (`bounds`).
+    The veto ignores a foreign box the note's DOT already sits in, and any foreign
+    box when the name lies wholly inside the note's OWN box: both only happen where
+    folders overlap, and vetoing them stripped a 2,000-note map of every name.
+    Only notes whose dot is ON the canvas compete for the `LABEL_CANDIDATES` slots
+    — the best-connected notes of the whole map left a zoomed-in view unnamed. Dropping a label is the
     only sanctioned outcome; the note is still named in the rail and on hover.
     Priority: selection/active/hover, then `rankByDegree`, then the rest. It MUST
     be recomputed every render (positions live in a mutable ref, so a memo keyed
@@ -192,9 +197,23 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     **zero**. **Container↔container and a stranger's dot inside a container are NOT
     zero** — that claim used to be here too and was wrong: with `e2e/map-library.mjs`
     at 153 notes in 15 skewed folders they measure 20 and 158 at fit (25 / 339 before
-    A088), while every TEXT overlap stays zero. At 2,000 notes in 60 folders the
-    containers overlap enough to veto nearly every name, so that map places no labels
-    at any zoom — an open follow-up.
+    A088), while every TEXT overlap stays zero.
+  - **With folders, the layout STACKS notes on the same spot — an open layout
+    defect, not a label one.** Measured (`e2e/probes/map-labels-2000.mjs`, and a
+    headless run of `stepLayout` on the same library): 2,000 notes in 60 folders
+    rest at 751 distinct positions in the browser, with stacks of up to 89 notes;
+    without folders, 1,995. It is not only a scale problem — 150 notes in 15
+    folders lose about a quarter. Cause: notes are seeded on ONE ring, so each
+    folder's members start scattered around it and every container starts huge and
+    overlapping; the container↔container constraint then shoves whole folders
+    into the world walls, and `shift` clamps each member to the wall on its own,
+    collapsing them onto one coordinate. `worldFor` also caps the world at
+    2,600 × 1,872 from 23 notes up. Moving a folder as a unit (clamp the SHIFT, not
+    each member) was tried and only helps (252 → 753 distinct, headless); the fix is
+    folder-aware seeding plus a world sized to the library — a visible change to
+    every map with folders, and it retires the "small maps lay out exactly as
+    before" pin in `graph-physics.test.js`, so it is a product decision. A stacked
+    dot has no room for a name, which is why a 2,000-note map names only a handful.
     **`chip↔dot` is NOT zero and cannot be** — that claim used to be here and was
     wrong. Below ~40% zoom the dots converge into a band by design (density, not a
     defect) and a screen-constant chip covers a lot of world, so no slot along a
@@ -936,8 +955,15 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   conversion never lands in a different document, a read-only one or mid-composition.
   Existing documents are not migrated.
   - **A `pf-asset:` src must never reach a live `<img>`**: the browser cannot load
-    it, and under the CSP it is a violation even on a detached element. ProseMirror's
-    `getHTML`/`generateHTML` build in an inert document and are safe; every surface
+    it, and under the CSP it is a violation even on a detached element. **TipTap's
+    `getHTML()`/`generateHTML()` are NOT safe**: they build every node with the
+    PAGE's document and only then move the result into an inert one, so each `<img>`
+    starts loading — WebKit logged a failed load for the reference on every HTML
+    export, and a remote image was fetched on every export and host callback. HTML
+    of document content goes through `engine/inert-html.ts` (`fragmentToHtml`,
+    byte-identical): the rich pane's `getHTML` handle, `canonicalToHtml` and the
+    per-block converter all do (`inert-html.test.jsx`). Never call
+    `editor.getHTML()`/`generateHTML()` directly for content. Every surface
     that SHOWS document HTML resolves through the node view, `useAssetSrc`, or
     `neutralizeAssetSrcs` + `useResolvedAssetImages` (`ui/asset-dom.ts`). `e2e:csp`
     pins it.
@@ -956,6 +982,19 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     before deleting it. **Any new place that can hold a document's content must be
     added to `defaultReferenceSources`**, or the clean-up deletes images it still
     uses. Erase all local data clears the store too.
+- **An ordinary code block is a PLAIN DOM node view** (`ui/code-block-plain-view.ts`,
+  A083); only diagram and score blocks are React. TipTap mounts each React node view
+  with a synchronous render that re-renders the ONE portal list holding every node
+  view, so opening a document was quadratic in its code blocks. The plain view keeps
+  the React one's markup (`code-block-*` classes, `pre > code`), stops the Copy
+  button's events and ignores its mutations (they are not content), and follows the
+  interface language. A plain block that must BECOME a diagram gets a new view: a
+  language change is declined in `update`; a diagrams/music feature toggle
+  dispatches a `codeBlockRebuildKey` node decoration — re-setting identical
+  attributes does NOT work, because ProseMirror matches an identical node
+  structurally and never calls `update` (`code-block-plain-view.test.jsx`). Math
+  nodes and theme images are still React node views: a formula-heavy document may
+  open slowly for the same reason.
 - **Mermaid/ABC blocks render by default in ONE cohesive framed card** (`CodeBlockWithCopy.tsx`
   `.diagram-frame`: header label + Edit/Copy · source · live preview), mirroring the math
   nodes. The `<pre><NodeViewContent/></pre>` stays MOUNTED (hidden via `.diagram-source.is-hidden`)
@@ -1163,7 +1202,16 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   new object on every keyup. The word count (`countTextRun`) segments a
   whitespace-free run of Han, kana, Thai, Lao, Khmer or Myanmar with
   `Intl.Segmenter` (a bounded cache), so a Japanese paragraph is no longer one word;
-  spaced languages count exactly as before (A098).
+  spaced languages count exactly as before (A098). **Every node boundary other than
+  adjacent text ends a word** (`endWordRun`, document.ts): text nodes that differ
+  only in marks continue one (`un**believ**able` is one word), but a paragraph,
+  heading, list item, cell or hard break does not — the counter used to run the last
+  word of each block into the first of the next, so a four-item list was ONE word.
+  Because of that, `computeCanonicalStats` caches PER TOP-LEVEL BLOCK, keyed on the
+  block's JSON object (which `canonicalOf` keeps for every block an edit did not
+  touch): a keystroke walks one block, not the document (A083). The canonical is
+  read, never mutated in place — a cached block edited in place would not be
+  re-counted (`fidelity-block-cache.test.js`).
 - **A memoized child must not be handed a freshly-built prop.** MenuBar,
   StatusBar and BottomTray were `React.memo` and never once bailed out, because
   every handler was an inline arrow and the tray's `tabs` an array literal of
@@ -1828,7 +1876,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (A059). **Broken links are a ProseMirror DECORATION** (`extensions/UnresolvedWikiLinks.ts`,
   a plugin — no schema change) that `useLinkIndex` feeds the library after every
   re-index, judged live with the same resolver; nothing is marked before the
-  library loads. The old DOM marking compared `String()` of objects ("[object
+  library loads. **An edit re-judges only the top-level blocks it touched** (A083):
+  the previous decorations are mapped through it, and the changed ranges come from
+  the STEPS, not the step maps — a mark step (making text a link, retargeting one)
+  maps no positions, so a map-only reading never sees it. An unknown step shape
+  falls back to a full rescan; a library change always rescans. The old DOM marking compared `String()` of objects ("[object
   Object]") and never marked a single link (A058). Its dashed underline uses `:has()`
   in a rule of its own — an engine without `:has()` drops a whole selector list.
   **Link clicks are delegated on `document`** and resolve the current editor at

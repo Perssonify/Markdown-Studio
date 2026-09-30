@@ -178,6 +178,10 @@ finding IDs (A001–A114) are cited below.
   one-click backup (A004).
 
 ### Security and privacy
+- **Exporting, copying or sending a document to a host no longer fetches its
+  images.** The document's HTML was built in the live page, so every image in it
+  started loading: a remote image was requested on every export, and WebKit
+  reported a failed load for each stored image.
 - **The full app can no longer be framed at `/embed.html`.** The production
   deploy has no embed build, so that address served the full app under the
   embed's anti-framing exemption; it now returns 404 unless an embed build is
@@ -227,6 +231,10 @@ finding IDs (A001–A114) are cited below.
   the keyboard navigation keys.
 
 ### Editor, links and search
+- **The word count counts every paragraph, heading, list item and table cell
+  separately.** It ran the last word of each block into the first word of the
+  next, so a four-item list counted as one word and every heading lost one.
+- Escape in the Find box closes the panel once (it closed it twice).
 - **Broken wiki links are marked** — the 1.76.0 marking never actually fired
   (A058). Links go to the right document, titles containing `#` can be linked
   (A059), and link clicks keep working after the editor remounts (A064).
@@ -262,6 +270,11 @@ finding IDs (A001–A114) are cited below.
   the saved record went from 5.74 MB to 1.3 KB, one version-history copy from
   11.5 MB to 2 KB, and a save from 42–50 ms to 19–32 ms; a document with images now
   fits the crash-recovery stash, which it used to exceed. (A086)
+- **Opening a document with many code blocks is no longer quadratic.** A 1.6 MB
+  document with a code block every 12 blocks opens in 5.4 s instead of 58.5 s,
+  and the mixed large-document fixture in 3.2 s instead of 13.1 s. The word
+  count, the export-fidelity check and broken-link marking now look only at the
+  blocks an edit touched. (A083)
 - **The relationship map at 2,000 notes** (measured with the CPU slowed 4×): the
   first frame appears in 1.0 s instead of 8.9 s, the page is blocked for 6 s
   instead of 64 s, the layout settles in 17–23 s instead of 65 s, and zooming
@@ -283,6 +296,8 @@ finding IDs (A001–A114) are cited below.
   a failed update.
 
 ### npm library
+- `importFile` names a document by its first heading (it used the file name
+  until the host finished the import).
 - Every runtime import is declared (A101); the stylesheet no longer restyles the
   host page or its design tokens (A102); the tarball is 0.66 MB instead of 13 MB,
   the ES build mounts in browser bundles and the CommonJS build loads in Node

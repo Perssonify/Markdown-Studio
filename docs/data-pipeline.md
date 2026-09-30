@@ -128,7 +128,7 @@ flowchart TD
 
 ### Stage 5 — Readers (canonical → outputs)
 
-- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:301](../src/store/import-export.ts#L301)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
+- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:315](../src/store/import-export.ts#L315)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
 - **Knowledge graph:** `exportGraph` ([src/store/link-index.ts:411](../src/store/link-index.ts#L411)); every link is resolved by the one wiki-link resolver, `createWikiResolver` ([:193](../src/store/link-index.ts#L193)), which the click handler and the broken-link decoration use too (A059).
 - **Copy as Prompt:** `buildContextPrompt` ([src/integration/prompt-builder.ts:232](../src/integration/prompt-builder.ts#L232)).
 - All readers derive from canonical; none mutate it.
