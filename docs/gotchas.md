@@ -110,14 +110,14 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## Decorative formatting silently lost in Clean mode
 
 - **Symptom:** You apply text color/highlight/font, switch to Clean mode, and it vanishes from the markdown.
-- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:70](../src/engine/useSyncEngine.ts#L70)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
+- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:38](../src/engine/useSyncEngine.ts#L38)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
 - **Fix/Workaround:** Use Styled mode to preserve styling, or export as JSON for a lossless copy.
 - **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/fidelity.ts](../src/store/fidelity.ts).
 
 ## IndexedDB transactions abort if you await the wrong thing
 
 - **Symptom:** A storage write silently fails / the transaction aborts mid-operation.
-- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented above `idbTransaction` ([src/store/idb-storage-adapter.ts:200](../src/store/idb-storage-adapter.ts#L200)). The same rule applies to the version-history database: read first, in its own transaction, then open the write.
+- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented above `idbTransaction` ([src/store/idb-storage-adapter.ts:229](../src/store/idb-storage-adapter.ts#L229)). The same rule applies to the version-history database: read first, in its own transaction, then open the write.
 - **Fix/Workaround:** Keep all awaits inside a transaction limited to `idbRequest` wrappers; do any other async work before/after the transaction.
 - **Related:** [database.md#invariants](database.md#invariants).
 
@@ -275,6 +275,34 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Related:** [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts),
   [src/extensions/BidiAuto.ts](../src/extensions/BidiAuto.ts),
   [src/extensions/UnresolvedWikiLinks.ts](../src/extensions/UnresolvedWikiLinks.ts).
+
+## React walks the focused rich pane on every commit — anywhere on the page
+
+- **Symptom:** With a large document open and the caret in the rich pane, every
+  React update froze the page for a moment — a save's status change, the word
+  count, the library listing — though no component near the editor rendered.
+  Profiles showed the time inside react-dom itself, reading `nextSibling` and
+  `nodeType`.
+- **Cause:** Before each commit React saves the focused element's caret so it can
+  restore it if the commit moves focus (`getSelectionInformation`). For a
+  contenteditable it computes the caret's character offsets by walking every DOM
+  node before the caret: with the caret near the end of a 4 MB document, nearly
+  the whole editor — ~0.5 s per commit at 4x CPU. It happens whichever React root
+  commits, because it asks the document for the focused element.
+- **What works:** React reads an element that has a `selectionStart` property
+  directly (that is how it treats inputs). `ReactSelectionShield` gives the rich
+  pane one — reads 0, writes ignored — while its document is large, and only
+  then: a browser extension that takes an element with `selectionStart` for a
+  text field and reads its `value` sees small documents exactly as before. React
+  writes it back only when a commit moved focus, and then focuses the editor
+  itself; ProseMirror restores its own selection on focus. The walk was most of
+  what was left of an autosave's freeze once the save itself was cheap.
+- **Don't** fight it by cutting commits one by one, or by lazy-rendering DOM
+  inside the editor for this reason alone: the cost is per commit and per node,
+  wherever the commit comes from. `react-selection-shield.test.jsx` drives React
+  itself — if an upgrade drops the shortcut, it fails.
+- **Related:** [src/extensions/ReactSelectionShield.ts](../src/extensions/ReactSelectionShield.ts),
+  [e2e/probes/autosave-cost.mjs](../e2e/probes/autosave-cost.mjs).
 
 ## Folder chips are painted LAST on purpose — don't "fix" the draw order
 

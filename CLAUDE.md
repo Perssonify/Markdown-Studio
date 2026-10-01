@@ -1142,7 +1142,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   document model (`document.ts`), persistence adapters (`storage-adapter.ts`,
   `idb-storage-adapter.ts`), ingest/sanitize (`ingest.ts`, `canonical-sanitize.ts`),
   `settings.ts`, `schema-version.ts`, `storage-durability.ts`, `crash-recovery.ts`,
-  `snapshot-store.ts`.
+  `snapshot-store.ts`, `canonical-json.ts` (`canonicalOf` — getJSON() from each block's
+  cached JSON — and `canonicalJsonText`, its text from each block's cached text).
 - `src/ui/` — view components (panes, toolbar, sidebar, settings, dialogs, graph).
 - `src/utils/` — `build-gates.ts` (dev-only surfaces), `diagnostics.ts` (the local
   error ring), `app-health.ts` (when a reload is safe), `remote-images.ts`,
@@ -1151,8 +1152,9 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   service-worker update prompts.
 - `src/extensions/` — custom TipTap nodes and plugins (BackgroundColor,
   MathInline/MathBlock, Callout, Details, ThemeImage, SizedImage, WikiLink,
-  TableCellAlign; the schema-less plugins BidiAuto, UnresolvedWikiLinks,
-  AltGraphPassthrough, ListKeymapNoTab; CodeMirror's `cm-bidi.ts`). BlockId,
+  TableCellAlign; the schema-less plugins BidiAuto (and `TaskItemAutoDir`),
+  UnresolvedWikiLinks, AltGraphPassthrough, ListKeymapNoTab, ReactSelectionShield;
+  CodeMirror's `cm-bidi.ts`). BlockId,
   FieldBlock and TransclusionBlock are exported by the library but registered in
   NEITHER schema — deprecated, and they warn once when used (A105).
 - `src/theme/palette.ts` — accent-palette selection (orthogonal to light/dark).
@@ -1254,7 +1256,9 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   block's JSON object (which `canonicalOf` keeps for every block an edit did not
   touch): a keystroke walks one block, not the document (A083). The canonical is
   read, never mutated in place — a cached block edited in place would not be
-  re-counted (`fidelity-block-cache.test.js`).
+  re-counted (`fidelity-block-cache.test.js`). `computeCounts` (document.ts) keeps
+  its own per-block cache the same way, for the save, the library summary and the
+  snapshot check (`canonical-json.test.js`).
 - **A memoized child must not be handed a freshly-built prop.** MenuBar,
   StatusBar and BottomTray were `React.memo` and never once bailed out, because
   every handler was an inline arrow and the tray's `tabs` an array literal of
@@ -1471,6 +1475,38 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   The close path also never calls `flushAndCacheIfDirty`, unlike `handleNewDoc`.
   So closing a document whose save was in conflict discarded the live content
   with no prompt, nothing on disk, nothing cached, and history dropped.
+- **A save checks a REVISION, not the record, when it can** (A083). An autosave of
+  a 4 MB note froze the page for 1.0–1.9 s at 4x CPU: it read its own record back
+  and parsed and re-sanitized all of it, stringified the whole document, walked it
+  for counts twice, deep-copied it into a snapshot, and the link index then read
+  it back once more. Now `knownStored` (documentStore) remembers, per document,
+  the revision, content and title this tab last WROTE or READ (seeded by boot and
+  `switchToDoc`), and a save asks `storage.getRevision` (optional on
+  `StorageAdapter`; the IndexedDB adapter reads `updated` off the END of the stored
+  text, `readRevision` — so `serializeForStorage` MUST keep `updated` and
+  `schemaVersion` last). The same revision → judge against what is remembered;
+  another revision → `get` as before (conflicts are still caught); a BLANK editor →
+  always `get`: the blank backstop judges against storage, never a memory of it. A
+  failed revision read fails closed like `get`. The canonical comes from
+  `canonicalOf`, the record text from `canonicalJsonText` (each unchanged block's
+  cached text; `serializeForStorage` writes field by field, byte-identical to the
+  old stringify — `document-serialize.test.js`), the counts from the per-block
+  cache, the link index takes the store's own record (`storedRecordIfCurrent`), and
+  the adapter remembers each record's size as written (`_recordBytes`). Measured:
+  longest task per autosave 1.0–1.9 s → 0–0.44 s, most saves none
+  (`e2e/probes/autosave-cost.mjs`, `persistence-save-revision.test.js`).
+- **React walks a focused contenteditable on EVERY commit — `ReactSelectionShield`**
+  (A083, docs/gotchas.md). Before each commit React saves the focused element's
+  caret (`getSelectionInformation`), and for a contenteditable it finds the offsets
+  by walking every DOM node before the caret: ~0.5 s per commit at 4 MB under a 4x
+  CPU slowdown, for ANY commit on the page while the rich pane has focus. React
+  reads an element with a `selectionStart` property directly, so the rich pane gets
+  one (reads 0, writes ignored) while its document is ≥ `SHIELD_FROM_SIZE`
+  (200,000 positions) and loses it below that and on destroy — a browser extension
+  that takes such an element for a text field sees small documents as before.
+  React writes it back only when a commit moved focus, and then focuses the editor
+  itself; ProseMirror restores its own selection. `react-selection-shield.test.jsx`
+  drives React itself and fails if an upgrade drops the shortcut.
 - **`saveActiveDoc` resolves `true` ONLY when the write committed** — check the
   boolean, never the absence of a throw. It used to resolve normally on a refused
   blank, an aborted ownership check and a caught non-quota error, so ⌘S toasted
@@ -1592,6 +1628,13 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   Falls back to an in-memory ring when IndexedDB is absent (SSR/tests). Do NOT
   route snapshots through the main doc schema/adapter — the sidecar is
   deliberate (keeps the delicate doc save-path and IDB schema untouched).
+  **A database record keeps the content as JSON TEXT (`json`)** since A083 —
+  records written before keep an object (`canonical`); every reader takes both
+  (`payloadOf`), and the memory ring keeps objects. IndexedDB deep-copies an
+  object graph on every write and read: a 4 MB note's snapshot spent ~1 s at 4x
+  CPU in that copy. A build from before lists the new records but cannot restore
+  them. Dedup reads ONE record (`latestForDoc`: the doc's keys, then the highest),
+  not every version kept, content and all.
 - **Vitest only picks up `*.test.{js,jsx}`** (see `vitest.config.js` `include`).
   Test files must be `.js` — renaming to `.ts` silently drops them.
 - **`src/components/ui/*` are generated shadcn primitives** — regenerate via CLI,
