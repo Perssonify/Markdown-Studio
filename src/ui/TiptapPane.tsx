@@ -7,8 +7,7 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { Subscript } from "@tiptap/extension-subscript";
 import { Superscript } from "@tiptap/extension-superscript";
 import { Table } from "@tiptap/extension-table";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TableHeader } from "@tiptap/extension-table-header";
+import { TableCellFast as TableCell, TableHeaderFast as TableHeader } from "../engine/table-colwidth";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -39,6 +38,7 @@ import { ListKeymapNoTab } from "../extensions/ListKeymapNoTab";
 import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
 import { AssetImages } from "../extensions/AssetImages";
 import { fragmentToHtml } from "../engine/inert-html";
+import { parseHtmlDoc } from "../engine/incremental-rich";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
 import { TableBubbleMenu } from "./TableBubbleMenu";
@@ -333,7 +333,10 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
       getJSON: () => editor?.getJSON(),
       setHTML: (html) => {
         if (!editor || editor.isDestroyed) return;
-        editor.commands.setContent(html, {
+        // The document setContent(html) would build, parsed without TipTap's
+        // elementFromString: its whitespace pass is quadratic in top-level
+        // blocks (A083, incremental-rich.ts). Same markup, same parser.
+        editor.commands.setContent(parseHtmlDoc(html, editor.schema), {
           emitUpdate: false,
           errorOnInvalidContent: false,
         });

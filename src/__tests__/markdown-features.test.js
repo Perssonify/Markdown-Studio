@@ -1,6 +1,7 @@
 import TurndownService from 'turndown';
 import { describe, expect, it } from 'vitest';
 import { buildMarked } from '../engine/build-marked.ts';
+import { createMarkdownEngine } from '../engine/useMarkdownEngine.ts';
 import { cleanHtmlForTurndown } from '../engine/html-cleaner.ts';
 import { addBaseRules, addInlineStyleRule } from '../engine/turndown-rules.ts';
 import { DEFAULT_MARKDOWN_FEATURES } from '../store/settings.ts';
@@ -50,6 +51,33 @@ describe('markdown flavors & features', () => {
     const src = 'text[^1]\n\n[^1]: a note';
     expect(buildMarked(feat({ footnotes: true })).parse(src)).toContain('footnote');
     expect(buildMarked(feat({ footnotes: false })).parse(src)).not.toContain('footnote');
+  });
+
+  it('renders footnotes in a document that opens with a display formula (A083)', () => {
+    // marked tries the last-registered extension first; with maths asked
+    // before marked-footnote, the footnote section token was not tokens[0] and
+    // every reference threw — and kept throwing for the next document too.
+    const m = buildMarked(feat({ footnotes: true, math: true }));
+    const html = m.parse('$$\nx^2\n$$\n\nA claim[^1].\n\n[^1]: The source.');
+    expect(html).toContain('data-math-block');
+    expect(html).toContain('The source.');
+    expect(html).toContain('href="#footnote-1"');
+    expect(m.parse('Plain[^a].\n\n[^a]: note')).toContain('note');
+  });
+
+  it('numbers footnote references from 1 in every parse (A083)', () => {
+    // A reference inside a definition nothing refers to is lexed (counted)
+    // and never rendered (the only thing that resets the count), so the next
+    // document's first reference came out as "2", "3", … on every parse.
+    // One settings object: a new one per call would rebuild marked (and its
+    // counter) for every parse, as a settings change does.
+    const settings = feat({ footnotes: true });
+    const engine = createMarkdownEngine(() => settings);
+    const dirty = 'x\n\n[^a]: unreferenced, holding a reference[^b]\n\n[^b]: other';
+    for (let k = 0; k < 3; k++) {
+      engine.mdToHtml(dirty);
+      expect(engine.mdToHtml('y[^1]\n\n[^1]: n')).toMatch(/<sup><a [^>]*>1<\/a><\/sup>/);
+    }
   });
 
   it('tokenizes LaTeX math into placeholders when enabled', () => {

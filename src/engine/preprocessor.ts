@@ -71,6 +71,20 @@ function looksLikeFrontmatter(body: string): boolean {
   return /^[ \t]*(?:#|[^\s:#][^:\n]*:(?:[ \t]|$))/.test(first);
 }
 
+/** A leading `---` … `---` block (anchored, non-global: never a mid-document rule). */
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+
+/**
+ * How many characters at the start of `md` the front matter pass replaces —
+ * 0 when there is no front matter. The incremental markdown→rich projection
+ * (incremental-rich.ts) uses it to keep that block out of a partial re-parse.
+ */
+export function frontmatterLength(md: string): number {
+  if (!md.startsWith("---")) return 0;
+  const m = FRONTMATTER.exec(md);
+  return m && looksLikeFrontmatter(m[1]!) ? m[0].length : 0;
+}
+
 // ---------------------------------------------------------------------------
 // Code detection, shared by the preprocessor's mask and normalizeMarkdown.
 // ---------------------------------------------------------------------------
@@ -395,7 +409,7 @@ export function preprocessMarkdown(
   // non-global) so it never captures a mid-document thematic break.
   if (frontmatter) {
     md = md.replace(
-      /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/,
+      FRONTMATTER,
       (whole: string, body: string) => {
         if (!looksLikeFrontmatter(body)) return whole;
         // The JSON goes through the FULL attribute escape, `&` first. Escaping
@@ -431,7 +445,14 @@ export function preprocessMarkdown(
   // rewrite code content: `[[Doc]]` or `{color=red}` shown as code must stay
   // literal. Restored verbatim just before returning.
   const codeStore: string[] = [];
-  const stash = (m: string) => `@@PFCODE${codeStore.push(m) - 1}@@`;
+  const PLACEHOLDER = /@@PFCODE(\d+)@@/g;
+  // A later mask can take in an earlier one's placeholder — a backtick run
+  // across a fence that interrupts its paragraph (`` `a\n```\nx\n```\nb` ``),
+  // say — and the one restore pass below expands each placeholder once, so the
+  // inner one reached the document as the text "@@PFCODE0@@" (A083's random
+  // walks found it). Each entry is stored with its own placeholders expanded.
+  const stash = (m: string) =>
+    `@@PFCODE${codeStore.push(m.replace(PLACEHOLDER, (p, i) => codeStore[Number(i)] ?? p)) - 1}@@`;
   // Only when a pass below can match: this runs on every md→rich projection,
   // and the engine always asks for the table-pipe pass.
   const hasWiki = md.indexOf("[[") !== -1;
@@ -521,7 +542,7 @@ export function preprocessMarkdown(
 
   // Restore masked code verbatim (see the mask step above).
   if (codeStore.length) {
-    md = md.replace(/@@PFCODE(\d+)@@/g, (_m, i) => codeStore[Number(i)] ?? "");
+    md = md.replace(PLACEHOLDER, (_m, i) => codeStore[Number(i)] ?? "");
   }
 
   return md;

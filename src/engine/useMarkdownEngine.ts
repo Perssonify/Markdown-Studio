@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef } from "react";
 import type { Marked } from 'marked';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import type { EditorState } from '@tiptap/pm/state';
 import TurndownService from 'turndown';
-import { preprocessMarkdown, normalizeMarkdown } from './preprocessor';
+import { preprocessMarkdown, normalizeMarkdown, type PreprocessFeatures } from './preprocessor';
+import { createRichProjector, type RichPath, type RichPlan } from './incremental-rich';
 import { cleanHtmlForTurndown } from './html-cleaner';
 import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
 import { holdsBreakMark, portableBreaksActive, stripBreakMarks, withoutPortableBreaks } from './portable-breaks';
 import { createIncrementalConverter } from './incremental-md';
-import { buildMarked } from './build-marked';
+import { buildMarked, resetFootnoteNumbering } from './build-marked';
 import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
 import { useUIStore } from '../store/uiStore';
 import { diag } from '../utils/diag';
@@ -161,6 +163,54 @@ export interface MarkdownEngine {
   /** `quickHash(md)` for the markdown docToMd last returned, from its pieces'
    *  hashes; null when it does not know it. */
   docMdHash?: (md: string) => number | null;
+  /**
+   * The markdown pane's projection into the rich pane: the transaction that
+   * turns the editor's document into exactly `setContent(mdToHtml(md))`'s,
+   * re-parsing only the top-level blocks that changed (A083,
+   * incremental-rich.ts). Optional like docToMd: without it the sync engine
+   * hands the pane the whole HTML.
+   */
+  planRich?: (md: string, state: EditorState) => RichPlan;
+  /** Drop what planRich knows about the document (another one was loaded). */
+  forgetRich?: () => void;
+  /** How the last planRich was made, and why — for tests and diagnostics. */
+  lastRichPath?: () => RichPath;
+}
+
+/** What `mdToHtml` asks of the preprocessor, for the given features. */
+function preprocessOptions(features: MarkdownFeatureSettings): PreprocessFeatures {
+  return {
+    taskLists: features.taskLists,
+    frontmatter: true,
+    // Wiki links / heading anchors are rendered by the marked extension
+    // in build-marked.ts (so they can never land inside code); this
+    // pass only protects an alias's `|` from GFM table cell splitting.
+    wikiLinkTablePipes: true,
+    // Undocumented and opt-in: see PreprocessFeatures.
+    curlyBraceFormatting: features.curlyBraceFormatting === true,
+  };
+}
+
+/**
+ * List styling on rendered HTML. Skip task lists (data-type="taskList"/
+ * "taskItem") — they render as a checkbox row, not a disc/decimal marker, and
+ * TaskList/TaskItem parse on their data-type so a disc bullet would just sit
+ * beside the checkbox. The negative lookaheads leave those elements untouched.
+ *
+ * Each of these is a backtracking scan of the WHOLE rendered document, run on
+ * every projection. Most documents contain no list at all, and an `indexOf`
+ * scan is far cheaper than a regex one, so check for the tag before scanning
+ * for it. Every match is one tag, so the pass may run on pieces of the
+ * document as well as on the whole (incremental-rich.ts relies on that).
+ */
+function styleLists(html: string): string {
+  if (html.indexOf("<ul") !== -1)
+    html = html.replace(/<ul(?![^>]*data-type="taskList")(?=[\s>])/g, '<ul style="list-style:disc outside;padding-left:24px;margin:8px 0"');
+  if (html.indexOf("<ol") !== -1)
+    html = html.replace(/<ol(?=[\s>])/g, '<ol style="list-style:decimal outside;padding-left:24px;margin:8px 0"');
+  if (html.indexOf("<li") !== -1)
+    html = html.replace(/<li(?![^>]*data-type="taskItem")(?=[\s>])/g, '<li style="display:list-item;margin-bottom:2px"');
+  return html;
 }
 
 /**
@@ -177,6 +227,8 @@ export interface MarkdownEngine {
 export function createMarkdownEngine(
   getFeatures: () => MarkdownFeatureSettings,
   getMarked?: () => Marked,
+  /** `richRunLength`: see RichProjectorOptions.runLength (tests cut as finely as they can). */
+  engineOptions: { richRunLength?: number } = {},
 ): MarkdownEngine {
   let cachedFor: MarkdownFeatureSettings | null = null;
   let cached: Marked | null = null;
@@ -236,39 +288,23 @@ export function createMarkdownEngine(
     normalize: normalizeMarkdown,
   });
 
+  const mdToHtml = (md: string): string => {
+    const m = marked();
+    resetFootnoteNumbering(m); // every parse numbers its references from 1
+    return styleLists(m.parse(preprocessMarkdown(md, preprocessOptions(getFeatures())), { async: false }) as string);
+  };
+
+  const rich = createRichProjector({
+    marked,
+    features: getFeatures,
+    preprocess: preprocessOptions,
+    mdToHtml,
+    style: styleLists,
+    runLength: engineOptions.richRunLength,
+  });
+
   return {
-    mdToHtml: (md: string) => {
-      const features = getFeatures();
-      let html = marked().parse(
-        preprocessMarkdown(md, {
-          taskLists: features.taskLists,
-          frontmatter: true,
-          // Wiki links / heading anchors are rendered by the marked extension
-          // in build-marked.ts (so they can never land inside code); this
-          // pass only protects an alias's `|` from GFM table cell splitting.
-          wikiLinkTablePipes: true,
-          // Undocumented and opt-in: see PreprocessFeatures.
-          curlyBraceFormatting: features.curlyBraceFormatting === true,
-        }),
-        { async: false }
-      ) as string;
-      // Skip task lists (data-type="taskList"/"taskItem") — they render as
-      // a checkbox row, not a disc/decimal marker, and TaskList/TaskItem
-      // parse on their data-type so a disc bullet would just sit beside the
-      // checkbox. The negative lookaheads leave those elements untouched.
-      //
-      // Each of these is a backtracking scan of the WHOLE rendered
-      // document, run on every projection. Most documents contain no list
-      // at all, and an `indexOf` scan is far cheaper than a regex one, so
-      // check for the tag before scanning for it.
-      if (html.indexOf("<ul") !== -1)
-        html = html.replace(/<ul(?![^>]*data-type="taskList")(?=[\s>])/g, '<ul style="list-style:disc outside;padding-left:24px;margin:8px 0"');
-      if (html.indexOf("<ol") !== -1)
-        html = html.replace(/<ol(?=[\s>])/g, '<ol style="list-style:decimal outside;padding-left:24px;margin:8px 0"');
-      if (html.indexOf("<li") !== -1)
-        html = html.replace(/<li(?![^>]*data-type="taskItem")(?=[\s>])/g, '<li style="display:list-item;margin-bottom:2px"');
-      return html;
-    },
+    mdToHtml,
     htmlToMd: (html: string) => toMarkdown(tdInline, html),
     htmlToCleanMd: (html: string) => toMarkdown(tdClean, html),
     // The editor's own form, always: this is the markdown pane's projection,
@@ -276,6 +312,9 @@ export function createMarkdownEngine(
     docToMd: (doc: PMNode, mode: "styled" | "clean") => withoutPortableBreaks(() => incremental.toMarkdown(doc, mode)),
     docHtmlHash: (doc: PMNode) => incremental.htmlHash(doc),
     docMdHash: (md: string) => incremental.markdownHash(md),
+    planRich: (md: string, state: EditorState) => rich.plan(md, state),
+    forgetRich: () => rich.forget(),
+    lastRichPath: () => rich.last,
   };
 }
 

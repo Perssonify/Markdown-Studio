@@ -41,14 +41,23 @@ export function buildMarked(features: MarkdownFeatureSettings): Marked {
     );
   }
 
-  if (features.footnotes) {
-    m.use(markedFootnote());
-  }
-
   // LaTeX math → data-attribute placeholders rendered live by the TipTap
   // MathInline/MathBlock nodes (lazy KaTeX). Round-trips via turndown rules.
   if (features.math) {
     m.use({ extensions: [mathBlockExtension, mathInlineExtension] });
+  }
+
+  // Footnotes AFTER maths, on purpose: marked tries the LAST-registered
+  // extension's tokenizer first, and marked-footnote must be asked about the
+  // very first block — that is when it puts its section token at `tokens[0]`,
+  // where its reference tokenizer reads it. Registered before maths, a
+  // document opening with a `$$` block had the section token second, and any
+  // `[^1]` then threw ("reading 'filter'"); the throw skipped the walkTokens
+  // that resets the extension, so every later parse with a reference threw
+  // too. (No block or inline syntax is claimed by both, so the order changes
+  // nothing else.)
+  if (features.footnotes) {
+    m.use(markedFootnote());
   }
 
   // Per-feature disables (only meaningful when gfm is on). Overriding a
@@ -169,4 +178,17 @@ export function buildMarked(features: MarkdownFeatureSettings): Marked {
   }
 
   return m;
+}
+
+/**
+ * Start marked-footnote's reference numbering from zero. Its counter is
+ * shared by every parse of the instance and only RENDERING a reference resets
+ * it — but a reference inside a definition nothing refers to is lexed and
+ * never rendered, so the next parse numbered its references from where that
+ * one stopped ("7" for the first). Rendering one empty reference resets it;
+ * call this before lexing. A no-op without the extension.
+ */
+export function resetFootnoteNumbering(m: Marked): void {
+  const render = m.defaults.extensions?.renderers?.["footnoteRef"];
+  if (render) render.call({ parser: new m.Parser(m.defaults) } as never, { type: "footnoteRef", raw: "", index: 0, id: "", label: "" } as never);
 }
