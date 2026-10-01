@@ -11,7 +11,7 @@ import { cleanHtmlForTurndown } from './html-cleaner';
 import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
 import { holdsBreakMark, portableBreaksActive, stripBreakMarks, withoutPortableBreaks } from './portable-breaks';
 import { createIncrementalConverter } from './incremental-md';
-import { buildMarked } from './build-marked';
+import { buildMarked, resetFootnoteNumbering } from './build-marked';
 import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
 import { useUIStore } from '../store/uiStore';
 import { diag } from '../utils/diag';
@@ -288,8 +288,11 @@ export function createMarkdownEngine(
     normalize: normalizeMarkdown,
   });
 
-  const mdToHtml = (md: string): string =>
-    styleLists(marked().parse(preprocessMarkdown(md, preprocessOptions(getFeatures())), { async: false }) as string);
+  const mdToHtml = (md: string): string => {
+    const m = marked();
+    resetFootnoteNumbering(m); // every parse numbers its references from 1
+    return styleLists(m.parse(preprocessMarkdown(md, preprocessOptions(getFeatures())), { async: false }) as string);
+  };
 
   const rich = createRichProjector({
     marked,

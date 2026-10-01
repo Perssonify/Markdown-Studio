@@ -179,3 +179,16 @@ export function buildMarked(features: MarkdownFeatureSettings): Marked {
 
   return m;
 }
+
+/**
+ * Start marked-footnote's reference numbering from zero. Its counter is
+ * shared by every parse of the instance and only RENDERING a reference resets
+ * it — but a reference inside a definition nothing refers to is lexed and
+ * never rendered, so the next parse numbered its references from where that
+ * one stopped ("7" for the first). Rendering one empty reference resets it;
+ * call this before lexing. A no-op without the extension.
+ */
+export function resetFootnoteNumbering(m: Marked): void {
+  const render = m.defaults.extensions?.renderers?.["footnoteRef"];
+  if (render) render.call({ parser: new m.Parser(m.defaults) } as never, { type: "footnoteRef", raw: "", index: 0, id: "", label: "" } as never);
+}

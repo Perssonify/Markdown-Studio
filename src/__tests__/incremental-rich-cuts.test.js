@@ -333,7 +333,9 @@ describe("the cut rules", () => {
     const r = rig(`${paras(3)}\n\n<table>\n\n${paras(3, "Q")}\n\n## End`);
     try {
       r.same();
-      expect(r.project(r.md.replace("Q1 ", "Q1 x "))).toEqual({ path: "build", reason: "no model" });
+      // Today a raw table keeps the text whole, which the model never sees:
+      // the rule below it (sameNodes) is unreachable while that holds.
+      expect(r.project(r.md.replace("Q1 ", "Q1 x "))).toEqual({ path: "whole", reason: "raw <table>" });
       r.same();
     } finally { r.destroy(); }
   });
@@ -345,7 +347,7 @@ describe("the cut rules", () => {
     // there must not be that node.
     const r = rig(paras(8));
     try {
-      expect(r.project(r.md.replace("P5 ", "<table>P5 ")).path).toBe("incremental");
+      expect(r.project(r.md.replace("P5 ", "<table>P5 "))).toEqual({ path: "whole", reason: "raw <table>" });
       r.same();
       r.project(r.md.replace("P2 ", "<table>P2 "));
       r.same();

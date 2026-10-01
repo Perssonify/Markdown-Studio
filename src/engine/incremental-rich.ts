@@ -48,6 +48,7 @@ import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { TableMap } from "@tiptap/pm/tables";
 import type { MarkdownFeatureSettings } from "../store/settings";
 import { frontmatterLength, preprocessMarkdown, type PreprocessFeatures } from "./preprocessor";
+import { resetFootnoteNumbering } from "./build-marked";
 
 // ─── HTML → ProseMirror, as TipTap's setContent does it ─────────────────────
 
@@ -316,7 +317,10 @@ const DEF_MAY_CONTINUE = /^ {0,3}\[(?:\\[\s\S]|[^[\]\\])*$|^ {0,3}\[(?:\\[\s\S]|
  * keeps the text from being cut. (The style may sit on a heading holding a
  * block, which closes the heading early the same way.)
  */
-const WS_STYLE = /\sstyle\s*=\s*(?:"[^"]*(?:white-space|\\)[^"]*"|'[^']*(?:white-space|\\)[^']*'|[^\s"'=<>`]*(?:white-space|\\))/i;
+/** Raw HTML holding a table (see lex). */
+const RAW_TABLE = /<table(?![\w-])/i;
+
+const WS_STYLE =/\sstyle\s*=\s*(?:"[^"]*(?:white-space|\\)[^"]*"|'[^']*(?:white-space|\\)[^']*'|[^\s"'=<>`]*(?:white-space|\\))/i;
 const PRE_OPEN = /<pre(?![\w-])/gi;
 /** A pre holding only text, perhaps in one <code> — the code block a serialiser writes. */
 const SIMPLE_PRE = /<pre(?![\w-])[^>]*>\s*(?:<code(?![\w-])[^>]*>)?[^<]*(?:<\/code>)?\s*<\/pre>/gi;
@@ -345,12 +349,17 @@ interface Lexed {
  */
 function lex(m: Marked, src: string): Lexed {
   const opt = { ...m.defaults, async: false } as MarkedOptions;
+  resetFootnoteNumbering(m); // as mdToHtml does: every parse numbers from 1
   const lexer = new Lexer(opt);
   const tokens = lexer.lex(src);
   let preserves = false;
+  let rawTable = false;
   const walk = opt.walkTokens;
   m.walkTokens(tokens, function (this: Marked, t: Token) {
-    if (t.type === "html" && preservesWhitespace(t.raw)) preserves = true;
+    if (t.type === "html") {
+      if (preservesWhitespace(t.raw)) preserves = true;
+      if (RAW_TABLE.test(t.raw)) rawTable = true;
+    }
     return walk ? walk.call(this as never, t) : undefined;
   });
   const no = (why: string): Lexed => ({ opt, tokens, top: null, clear: [], clearAtEnd: false, why });
@@ -359,6 +368,13 @@ function lex(m: Marked, src: string): Lexed {
   // ProseMirror keeps whitespace for the REST of the document after some raw
   // `<pre>` (see preservesWhitespace): state no cut can carry.
   if (preserves) return no("raw <pre> or white-space");
+  // A table written as raw HTML is not cut around at all. Three defects the
+  // random walks found came from one: text foster-parented out of an
+  // unclosed one (which jsdom places differently from browsers), and
+  // fixTables mending a malformed one (`colspan="0"`) differently each pass.
+  // Each has a rule below; this keeps such documents on the whole path while
+  // those rules are new. A GFM table is marked's own token and is unaffected.
+  if (rawTable) return no("raw <table>");
   const top: Token[] = [];
   let sum = 0;
   let section = -1; // where marked-footnote's section token sits, in `top` terms
@@ -584,6 +600,8 @@ function parsePieces(html: string[], schema: Schema, placement: Placement): Pars
     // there), but with the marker in between jsdom appends it to the end of
     // the parent instead (its insertTextBefore ignores the reference node;
     // browsers do not). No marker can stand there in both: decline.
+    // (Unreachable while raw tables keep the text whole — see lex — and kept
+    // for the day that is relaxed.)
     if (prev?.nodeType === 3 && trailingWs(html[k]!) === 0 && TABLE_FIRST.test(html[k + 1]!)) return null;
     body.removeChild(mk);
     if (prev && next && prev.nodeType === 3 && next.nodeType === 3) {
@@ -792,6 +810,8 @@ const isTrailingNode = (node: PMNode, schema: Schema): boolean => {
  * walks: a rich-pane edit had serialised a mended table back into the
  * markdown). Runs outside the window need nothing: they hold what an earlier
  * projection made of the same markdown — the same parse, mended the same way.
+ * (Only a raw HTML table can be malformed, and those keep the text whole
+ * today — see lex — so this is unreachable until that is relaxed.)
  */
 function holdsMendableTable(node: PMNode): boolean {
   if (node.isTextblock || node.isLeaf) return false;
@@ -956,7 +976,9 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
         // raw `<table>` the browser left empty) and TrailingNode then appends
         // its paragraph — same count, every node after the table one place off.
         // So when anything changed the planned document, each counted node must
-        // still be the planned one, or a table where a table was.
+        // still be the planned one, or a table where a table was. (Only a raw
+        // table can be deleted, and raw tables keep the text whole today:
+        // unreachable until that is relaxed.)
         const made = tr?.doc;
         if (ok && made && made !== doc) ok = sameNodes(made, doc, sum);
         model = ok ? { marked: m, schema, md, doc, lens, counts, fm } : null;
