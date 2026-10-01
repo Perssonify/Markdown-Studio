@@ -51,8 +51,8 @@ bun run build        # library build (@perssonify/editor)
 - **Add tests under [`src/__tests__/`](src/__tests__/)** for anything you fix.
 - **`src/components/ui/*` are generated shadcn primitives** — regenerate them
   via the CLI rather than hand-editing. (`input.tsx` and `textarea.tsx` are the
-  documented exception: their `forwardRef` wrappers are deliberate on React 18
-  and must be re-applied after any regeneration.)
+  documented exception: their `forwardRef` wrappers are deliberate while React 18
+  is in the library's peer range, and must be re-applied after any regeneration.)
 - **A node or mark added to `TiptapPane.tsx` must also be registered in
   `src/engine/serialize-doc.ts`** (`SERIALIZE_EXTENSIONS`), or headless export
   silently corrupts or throws on documents that use it.

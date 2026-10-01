@@ -209,9 +209,8 @@ findings are lower-severity/narrower and are deferred with notes:
   parks the terminal `"conflict"` status (status bar: "Changed in another tab — not
   saving"); a reload after a conflict keeps the other tab's work (audits A018, A027),
   and rename, card pin/colour and bridge patches respect the conflict (audit A028).
-  Still open: no live cross-tab refresh — no `BroadcastChannel`/`storage`-event
-  invalidation — so a tab learns of another's edits only when it next saves or
-  reloads; and the non-IndexedDB fallbacks' `setPrefs` still reads, merges and writes
+  Live cross-tab refresh is DONE (`store/tab-sync.ts`, a `BroadcastChannel` with a
+  `storage`-event fallback). Still open: the non-IndexedDB fallbacks' `setPrefs` still reads, merges and writes
   across an `await`, so two overlapping calls can drop a key (the IndexedDB adapter
   merges inside one transaction).
 - ~~**Minor:** `getMetrics()` returns a fresh object each call~~ — **FIXED**

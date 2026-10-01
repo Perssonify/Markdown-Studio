@@ -7,6 +7,7 @@
  */
 
 import { safeStorage } from "../utils/safe-storage";
+import { t } from "../i18n/core";
 
 export interface PaletteDef {
   id: string;
@@ -16,13 +17,13 @@ export interface PaletteDef {
 }
 
 export const PALETTES: PaletteDef[] = [
-  { id: "amber", label: "Amber", swatch: "hsl(44, 98%, 48%)" },
-  { id: "blue", label: "Blue", swatch: "hsl(201, 90%, 48%)" },
-  { id: "violet", label: "Violet", swatch: "hsl(262, 83%, 58%)" },
-  { id: "emerald", label: "Emerald", swatch: "hsl(160, 84%, 39%)" },
-  { id: "rose", label: "Rose", swatch: "hsl(347, 77%, 50%)" },
+  { id: "amber", get label() { return t("settings.paletteAmber"); }, swatch: "hsl(44, 98%, 48%)" },
+  { id: "blue", get label() { return t("settings.paletteBlue"); }, swatch: "hsl(201, 90%, 48%)" },
+  { id: "violet", get label() { return t("settings.paletteViolet"); }, swatch: "hsl(262, 83%, 58%)" },
+  { id: "emerald", get label() { return t("settings.paletteEmerald"); }, swatch: "hsl(160, 84%, 39%)" },
+  { id: "rose", get label() { return t("settings.paletteRose"); }, swatch: "hsl(347, 77%, 50%)" },
   // Monochrome: black accent in light mode, white accent in dark mode.
-  { id: "mono", label: "Mono", swatch: "linear-gradient(135deg, #111 0 50%, #fff 50% 100%)" },
+  { id: "mono", get label() { return t("settings.paletteMono"); }, swatch: "linear-gradient(135deg, #111 0 50%, #fff 50% 100%)" },
 ];
 
 export const DEFAULT_PALETTE = "amber";

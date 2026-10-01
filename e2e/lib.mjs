@@ -1,10 +1,11 @@
 // Shared rig for the browser campaign: a static server over a built bundle, a
-// Chromium page with the knobs the cases need (CPU throttling, touch, CDP), and
-// helpers for seeding documents, driving real IME composition, and reporting.
+// page with the knobs the cases need (CPU throttling, touch, CDP), and helpers
+// for seeding documents, driving real IME composition, and reporting.
 //
 // Deliberately dependency-light: `playwright-core` plus node built-ins, no test
-// runner. CI installs one Chromium and runs `bun run e2e:smoke`.
-import { chromium } from "playwright-core";
+// runner. CI runs every suite on Chromium, and the cross-engine suites again on
+// Firefox and WebKit (`E2E_BROWSER`, below).
+import { chromium, firefox, webkit } from "playwright-core";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -13,6 +14,37 @@ import { fileURLToPath } from "node:url";
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const APP_DIR = process.env.E2E_APP_DIR || path.join(ROOT, "dist-app");
 export const EMBED_DIR = process.env.E2E_EMBED_DIR || path.join(ROOT, "dist-embed");
+
+const ENGINES = { chromium, firefox, webkit };
+
+/**
+ * The engine this run drives: `E2E_BROWSER=chromium` (the default), `firefox`
+ * or `webkit`. The campaign ran on Chromium alone (A100), so nothing
+ * Safari- or Firefox-specific had ever met a real engine.
+ */
+export const ENGINE = (process.env.E2E_BROWSER || "chromium").trim().toLowerCase();
+if (!ENGINES[ENGINE]) {
+  throw new Error(`E2E_BROWSER must be chromium, firefox or webkit (got "${process.env.E2E_BROWSER}")`);
+}
+
+/**
+ * Chromium's DevTools protocol is what drives a REAL IME composition
+ * (`Input.imeSetComposition`) and CPU throttling. Firefox and WebKit have no
+ * equivalent, so a block that needs it must go through `requireChromium`.
+ */
+export const HAS_CDP = ENGINE === "chromium";
+
+/**
+ * Guard for a block that needs CDP. On another engine it records a visible
+ * SKIP with the reason and returns false, so the block neither runs nor counts
+ * as passed. (`open({ cdp })` throws there too, so a forgotten guard fails
+ * loudly instead of passing without the thing it was testing.)
+ */
+export function requireChromium(rep, what, why) {
+  if (HAS_CDP) return true;
+  rep.skip(what, `needs Chromium's DevTools protocol (${why}); ${ENGINE} has none`);
+  return false;
+}
 
 /**
  * Where Chromium lives. `playwright install chromium` (CI) puts it where
@@ -46,6 +78,13 @@ const MIME = {
 };
 
 /**
+ * A same-origin page with no app code on it: where `seed` writes, so that no
+ * running app instance can race the write. File-shaped on purpose — the
+ * service worker's navigation route never answers those with the app shell.
+ */
+export const BLANK_PATH = "/__e2e-blank.html";
+
+/**
  * Static server with SPA fallback. `extra` maps URL prefixes to other dirs.
  * `opts.headers(path)` adds response headers per request path (the CSP case
  * replays vercel.json's), and `opts.transform(path, buffer)` may rewrite a
@@ -54,6 +93,10 @@ const MIME = {
 export async function serve(dir, extra = {}, opts = {}) {
   const srv = http.createServer((q, r) => {
     const url = decodeURIComponent(q.url.split("?")[0]);
+    if (url === BLANK_PATH) {
+      r.writeHead(200, { "content-type": "text/html" }).end("<!doctype html><title>e2e blank</title>");
+      return;
+    }
     let root = dir, rel = url;
     for (const [prefix, d] of Object.entries(extra)) {
       if (url === prefix || url.startsWith(prefix + "/")) {
@@ -84,6 +127,34 @@ export async function serve(dir, extra = {}, opts = {}) {
     kill: () => new Promise((res) => { srv.close(() => res()); for (const s of sockets) s.destroy(); }),
   };
 }
+
+/**
+ * Console errors an engine prints that are not defects. Each is exact, so a
+ * real failure of the same kind still fails the run.
+ *
+ * - Firefox reports a font download that a NAVIGATION cancelled as an error
+ *   ("downloadable font: download failed … status=2152398850", which is
+ *   NS_BINDING_ABORTED): the cases navigate while a page is still loading all
+ *   the time. A font that really fails (a 404, a blocked request) reports a
+ *   different status.
+ * - WebKit reports that it ignores the viewport meta's `interactive-widget`
+ *   key. The key is deliberate (it stops the on-screen keyboard covering the
+ *   editor on Chromium and Firefox for Android) and must stay — see CLAUDE.md,
+ *   "Embedded / in-app webview invariants".
+ * - WebKit reports a service-worker registration that a NAVIGATION cancelled
+ *   as an uncaught "Cannot load …/sw.js due to access control checks." with no
+ *   stack: the app's own code catches the rejection (onRegisterError), and a
+ *   page that stays registers and is controlled. Measured: it appears only when
+ *   the page is left in the moments after `load` (as `seed` does when a case
+ *   booted the app before seeding).
+ */
+const ENGINE_NOISE = {
+  firefox: [/downloadable font: download failed .*status=2152398850\b/],
+  webkit: [
+    /^console: Viewport argument key "interactive-widget" not recognized and ignored\.$/,
+    /^pageerror: Cannot load http: \/127\.0\.0\.1:\d+\/sw\.js due to access control checks\.$/,
+  ],
+};
 
 /**
  * Every rig `open()` has created, in order.
@@ -118,7 +189,12 @@ export async function open(port, {
   cdp = false,
   ignoreErrors = [],
 } = {}) {
-  const browser = await chromium.launch({ executablePath: chromePath() });
+  if ((throttle || cdp) && !HAS_CDP) {
+    throw new Error(`open({ ${throttle ? "throttle" : "cdp"} }) needs Chromium's DevTools protocol, which ${ENGINE} does not have — guard the block with requireChromium()`);
+  }
+  const browser = ENGINE === "chromium"
+    ? await chromium.launch({ executablePath: chromePath() })
+    : await ENGINES[ENGINE].launch();
   const context = await browser.newContext({
     viewport,
     hasTouch: touch,
@@ -127,7 +203,8 @@ export async function open(port, {
   });
   const page = await context.newPage();
   const errors = [];
-  const keep = (t) => !ignoreErrors.some((re) => re.test(t));
+  const ignore = [...ignoreErrors, ...(ENGINE_NOISE[ENGINE] || [])];
+  const keep = (t) => !ignore.some((re) => re.test(t));
   page.on("pageerror", (e) => { const t = "pageerror: " + String(e).slice(0, 300); if (keep(t)) errors.push(t); });
   page.on("console", (m) => {
     if (m.type() !== "error") return;
@@ -163,11 +240,41 @@ export async function boot(page, port, { mode = "Split", settle = 4000, query = 
   }
 }
 
-/** Seed documents straight into the app's IndexedDB, before it boots. */
-export const seed = (page, docs) =>
-  page.evaluate(async (docs) => {
+/**
+ * Make the app's library exactly `docs`, before it boots. The page must be on
+ * the app's origin; it is left on a blank page there, for `boot` to load the
+ * app from.
+ *
+ * It used to write from the app's own page, racing that page's first boot: an
+ * app whose `initialize()` got there first found an empty library, seeded the
+ * starter documents around the case's own, and the next boot opened Welcome.
+ * On Chromium the seed usually landed first; on Firefox the app usually did.
+ * Now no app instance is running while it writes, and the stores are cleared
+ * first.
+ */
+export async function seed(page, docs) {
+  // Best: the caller never booted the app, and is already on BLANK_PATH. From
+  // the app's own page, leave only once it has gone quiet: Firefox aborts a
+  // navigation issued while the page is still loading (NS_BINDING_ABORTED), and
+  // one issued while the app is fetching a lazy chunk is cancelled by the APP —
+  // Firefox rejects the in-flight import, the app takes that for a stale deploy
+  // and reloads (a defect of its own: e2e/probes/leave-during-lazy-chunk.mjs).
+  // Network-idle narrows that window but cannot close it.
+  const at = new URL(page.url());
+  if (at.pathname !== BLANK_PATH) {
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.goto(at.origin + BLANK_PATH, { waitUntil: "load" });
+  }
+  await page.evaluate(async (docs) => {
     const db = await new Promise((res, rej) => {
       const r = indexedDB.open("perssonify-docs");
+      // The app's own schema (idb-storage-adapter.ts), for a first write that
+      // happens before the app has ever opened the database.
+      r.onupgradeneeded = () => {
+        for (const s of ["documents", "meta"]) {
+          if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s);
+        }
+      };
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
     });
@@ -178,6 +285,8 @@ export const seed = (page, docs) =>
     }));
     await new Promise((res, rej) => {
       const tx = db.transaction(["documents", "meta"], "readwrite");
+      tx.objectStore("documents").clear();
+      tx.objectStore("meta").clear();
       for (const d of docs) {
         tx.objectStore("documents").put(JSON.stringify({
           id: d.id, userTitle: d.title, titlePinnedByUser: true, title: d.title,
@@ -192,6 +301,7 @@ export const seed = (page, docs) =>
     });
     db.close();
   }, docs);
+}
 
 /** Read a document's stored canonical back out of IndexedDB. */
 export const storedDoc = (page, id) =>
@@ -319,6 +429,24 @@ export const mdText = (page) =>
     await frame();
     return found.sort((a, b) => a.top - b.top).map((f) => f.text).join("\n");
   });
+/**
+ * Paste `text` into the element matching `selector`, as a paste event
+ * carrying plain text. Firefox leaves a synthetic ClipboardEvent's
+ * `clipboardData` EMPTY whatever its init dictionary says (measured: 0 bytes,
+ * where Chromium and WebKit carry the text), so the data is also put on the
+ * event itself; the editor reads `event.clipboardData` either way.
+ */
+export const pasteText = (page, selector, text) =>
+  page.evaluate(({ selector, text }) => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", text);
+    const ev = new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true });
+    if (!ev.clipboardData || ev.clipboardData.getData("text/plain") !== text) {
+      Object.defineProperty(ev, "clipboardData", { value: dt });
+    }
+    document.querySelector(selector).dispatchEvent(ev);
+  }, { selector, text });
+
 export const richText = (page) =>
   page.evaluate(() => document.querySelector(".ProseMirror")?.textContent ?? "");
 export const richHtml = (page) =>
@@ -421,12 +549,38 @@ export function reporter(suite) {
       rows.push({ name, ok: !!ok, detail: ok ? "" : String(detail).slice(0, 400) });
       console.log(`${ok ? "PASS" : "FAIL"}  ${name}${!ok && detail ? "  — " + String(detail).slice(0, 200) : ""}`);
     },
+    /** A check this engine cannot run. Printed and counted, never a PASS. */
+    skip(name, reason) {
+      rows.push({ name, ok: true, skipped: true, detail: String(reason) });
+      console.log(`SKIP  ${name}  — ${reason}`);
+    },
+    /**
+     * A check KNOWN to fail on this engine because of a reported app defect
+     * (`reason` names it). Printed as XFAIL and not counted as a failure — but
+     * the moment it passes it FAILS, so the marker goes out with the fix
+     * instead of outliving it.
+     */
+    xfail(name, ok, reason) {
+      if (ok) {
+        rows.push({ name, ok: false, detail: `passes on ${ENGINE} now: remove its known-failure marker (${reason})` });
+        console.log(`FAIL  ${name}  — a KNOWN failure now passes on ${ENGINE}: remove its xfail marker`);
+        return;
+      }
+      rows.push({ name, ok: true, xfail: true, detail: String(reason) });
+      console.log(`XFAIL ${name}  — ${reason}`);
+    },
     note: (msg) => console.log(`      ${msg}`),
     finish() {
       const failed = rows.filter((r) => !r.ok);
-      console.log(failed.length ? `\n${suite}: ${failed.length}/${rows.length} FAILED` : `\n${suite}: ${rows.length} checks passed`);
+      const skipped = rows.filter((r) => r.skipped).length;
+      const known = rows.filter((r) => r.xfail).length;
+      const ran = rows.length - skipped - known;
+      const tail = (skipped ? `, ${skipped} skipped` : "") + (known ? `, ${known} known failure(s)` : "");
+      console.log(failed.length
+        ? `\n${suite} [${ENGINE}]: ${failed.length}/${ran} FAILED${tail}`
+        : `\n${suite} [${ENGINE}]: ${ran} checks passed${tail}`);
       if (process.env.E2E_JSON) {
-        fs.writeFileSync(process.env.E2E_JSON, JSON.stringify({ suite, rows }, null, 2));
+        fs.writeFileSync(process.env.E2E_JSON, JSON.stringify({ suite, engine: ENGINE, rows }, null, 2));
       }
       return failed.length;
     },

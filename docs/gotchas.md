@@ -8,7 +8,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 - **Symptom:** After "improving" `useSyncEngine`, the app freezes, the CPU spikes, or the two panes flicker endlessly.
 - **Cause:** `forceSyncMdToHtml` / `forceSyncHtmlToMd` deliberately use **empty dependency arrays** and call the current sync function through a ref ([src/engine/useSyncEngine.ts:190-202](../src/engine/useSyncEngine.ts#L190-L202)). Adding any dependency makes the callbacks change identity on render, which re-triggers effects that call sync, which re-renders… an infinite [echo loop](domain-glossary.md#echo-loop).
-- **Fix/Workaround:** Don't add dependencies. If you need fresh values inside, reach them via refs, as the existing code does. The `quickHash` guards ([src/engine/useSyncEngine.ts:62](../src/engine/useSyncEngine.ts#L62), [:124](../src/engine/useSyncEngine.ts#L124) — the rich side checks its doc node's identity, `lastHtmlDoc`, before it hashes) and the `syncing` ref ([:28](../src/engine/useSyncEngine.ts#L28)) are the other two legs of the stool — leave all three intact.
+- **Fix/Workaround:** Don't add dependencies. If you need fresh values inside, reach them via refs, as the existing code does. The `quickHash` guards (in `syncMdToHtml` and `syncHtmlToMd`, [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts) — the rich side checks its doc node's identity, `lastHtmlDoc`, before it hashes) and the `syncing` ref ([:95](../src/engine/useSyncEngine.ts#L95)) are the other two legs of the stool — leave all three intact.
 - **Related:** [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts), [architecture.md ADR-2](architecture.md#adr-2--echo-gated-debounced-bidirectional-sync).
 
 ## ~~`bun run dev` references a `.js` config that doesn't exist~~ (RESOLVED)
@@ -73,10 +73,13 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
     report counts it;
   - **a list or a second paragraph inside a table cell, and merged cells** — a GFM
     cell is one line, so these flatten; the fidelity report flags them;
-  - **two-space hard breaks in exported Markdown** — the app reads a single newline
-    as a line break (marked's `breaks: true`), so a hard break is written back as a
-    plain newline. It round-trips inside the app, but a strict CommonMark reader of
-    the exported file joins the lines (A051, deferred until that dialect is decided);
+  - **a hard break inside link text, in an exported file** — the app reads a single
+    newline as a line break (marked's `breaks: true`), so the markdown pane writes a
+    hard break as a plain newline. Exports (`.md` files, single or zipped) write
+    `\` + newline instead, which strict CommonMark readers draw too (A051,
+    [portable-breaks.ts](../src/engine/portable-breaks.ts)) — except inside a
+    link's brackets, where marked itself does not accept `\` + newline, so the
+    plain newline stays and a strict reader shows a space there;
   - **tabs inside a fenced code block** — see below.
 - **Fix/Workaround:** For a document that must stay byte-for-byte as typed, edit
   in the markdown pane (its text is preserved until you edit the rich pane), and
@@ -107,14 +110,14 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## Decorative formatting silently lost in Clean mode
 
 - **Symptom:** You apply text color/highlight/font, switch to Clean mode, and it vanishes from the markdown.
-- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:149](../src/engine/useSyncEngine.ts#L149)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
+- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:38](../src/engine/useSyncEngine.ts#L38)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
 - **Fix/Workaround:** Use Styled mode to preserve styling, or export as JSON for a lossless copy.
 - **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/fidelity.ts](../src/store/fidelity.ts).
 
 ## IndexedDB transactions abort if you await the wrong thing
 
 - **Symptom:** A storage write silently fails / the transaction aborts mid-operation.
-- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented above `idbTransaction` ([src/store/idb-storage-adapter.ts:188](../src/store/idb-storage-adapter.ts#L188)). The same rule applies to the version-history database: read first, in its own transaction, then open the write.
+- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented above `idbTransaction` ([src/store/idb-storage-adapter.ts:229](../src/store/idb-storage-adapter.ts#L229)). The same rule applies to the version-history database: read first, in its own transaction, then open the write.
 - **Fix/Workaround:** Keep all awaits inside a transaction limited to `idbRequest` wrappers; do any other async work before/after the transaction.
 - **Related:** [database.md#invariants](database.md#invariants).
 
@@ -131,33 +134,50 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Cause — measured, not assumed:** a CPU profile of a 153-note settle never surfaced the simulation at all. Not `stepOnce`; not `placeLabels`, which benchmarks at ~1ms at 150 nodes. 69% of samples were browser-internal work (style, layout, paint) for the SVG tree the render rewrites, and the frame measured a **44ms median**. The force loop *is* O(n²) per tick, and at these sizes that is still cheap next to one DOM pass.
 - **What was done:** above 60 notes the layout advances several steps per rendered frame (`stepsPerFrame` in [src/store/graph-metrics.ts](../src/store/graph-metrics.ts), capped at 6 so one huge library cannot stall a single frame) — the same steps, the same resting layout, a third of the renders. Measured at 153 notes: **108 rendered frames / 5.6s / 3.9s blocking → 35 frames / 2.3s / 1.7s**.
 - **If you optimise further:** the remaining win is in the DOM, not the maths — fewer per-frame attribute writes (memoising the rail, or mutating node transforms imperatively instead of through React) beats Barnes-Hut here. Profile before you start; this entry exists because the obvious answer was the wrong one.
+- **At library scale both halves matter (A088).** At 2,000 notes the exact O(n²) loop and the per-note SVG are each too slow, so above `BARNES_HUT_MIN` (300) the layout is Barnes–Hut and above `LARGE_MAP_MIN` (250) ordinary notes and links are drawn as a few batched paths, with each frame planned to either step or paint (`planFrame`). Below those thresholds nothing changed — the small-map loop is pinned bit-for-bit against `graph-legacy.js`, a frozen copy that must never be "fixed". Measure with `node e2e/run.mjs perf-map` rather than eyeballing.
 - **Related:** [features.md#17-knowledge-graph-the-relationship-map](features.md#17-knowledge-graph-the-relationship-map).
 
-## Tabs inside a fenced code block become four spaces
+## Tabs inside a fenced code block became four spaces (fixed by marked 14.1.1)
 
-- **Symptom:** paste a Go function, a Makefile recipe, or any tab-indented
-  snippet into a fenced block; after the first markdown → rich → markdown round
-  trip the tabs are four spaces each. For a Makefile that is not cosmetic — make
-  requires a literal tab.
-- **Cause:** marked expands leading tabs across the WHOLE source before it
-  tokenises. `Lexer.blockTokens` runs
-  `src.replace(/^( *)(\t+)/gm, (_, lead, tabs) => lead + "    ".repeat(tabs.length))`
-  unconditionally — not only under `pedantic` — so fence CONTENT is expanded
-  along with block-structure indentation. CommonMark preserves tabs in code
-  content, so this is a marked deviation, not the spec.
-- **Fix/Workaround:** not fixed. `preprocessMarkdown` masks fenced code (found by
-  `findFencedCodeRanges`) for its own passes, but it restores the code BEFORE
-  marked runs, so marked still sees the tabs. The fix is to carry a mask across
-  marked itself — stash fence bodies in `hooks.preprocess` and restore them,
-  HTML-escaped, in `hooks.postprocess`, both configured in `build-marked.ts`. That
-  is a change to the whole md→html path and wants its own verification pass. Pinned
-  in `fenced-code-roundtrip.test.js` by a case that asserts today's behaviour (a
-  tab comes back as four spaces), so it fails — and names the reason — the moment
-  the behaviour changes. (It used to be an `it.fails`, which vitest would have
-  reported as a failure on the day someone fixed the bug.)
+- **Symptom (marked 12):** paste a Go function, a Makefile recipe, or any
+  tab-indented snippet into a fenced block; after the first markdown → rich →
+  markdown round trip the tabs were four spaces each. For a Makefile that is not
+  cosmetic — make requires a literal tab.
+- **Cause:** marked up to 14.1.0 expanded leading tabs across the WHOLE source
+  before it tokenised, fence content included. CommonMark preserves tabs in code
+  content, so this was a marked deviation, not the spec.
+- **Fix:** marked 14.1.1 stopped doing it, and the move to marked 18 (A113) took
+  the fix. `fenced-code-roundtrip.test.js` now pins tabs byte for byte (a Makefile
+  recipe, tabs inside a line); both cases fail on marked 12. It used to pin the
+  deviation, so that the day it changed the suite would say why.
 - **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
-  [src/engine/preprocessor.ts](../src/engine/preprocessor.ts),
   [src/__tests__/fenced-code-roundtrip.test.js](../src/__tests__/fenced-code-roundtrip.test.js).
+
+## A code span ending in a backslash hid the emphasis after it (marked ≥ 15.0.8)
+
+- **Symptom:** "Use `` `\` `` to escape. `**Note:**` …" showed the asterisks
+  literally — in the rich pane and in the Word export — and so did every `*`, `_`
+  and `**` up to the next backtick in the paragraph. CLAUDE.md contained exactly
+  such a paragraph (`` `Mod-Alt-\` ``). marked 12 rendered it correctly.
+- **Cause:** to decide which delimiters may close emphasis, marked masks the run
+  first. Since 15.0.8 it masks backslash escapes BEFORE code spans, but inside a
+  code span a backslash is literal, so the span's closing backtick reads as
+  escaped and its opener pairs with the next backtick instead. The code span
+  itself is still tokenised correctly; only the mask is wrong. Still present in
+  18.0.14.
+- **Fix:** `emStrongMaskFix` ([src/engine/marked-emphasis-mask.ts](../src/engine/marked-emphasis-mask.ts)),
+  an `emStrong` tokenizer override that both `build-marked.ts` and the Word export
+  install, hands marked's own emStrong a mask built with code spans and escapes in
+  ONE left-to-right pass. It steps in only for a run that contains a backslash
+  directly before a backtick.
+- **Watch for:** the module mirrors marked's reference-link masking and calls its
+  (TypeScript-private) `linkInText`. After a marked upgrade, the "emphasis after
+  backslash code span" cases in `marked-upgrade-parity.test.js` say whether it
+  still works — and whether upstream has fixed it, in which case delete the module
+  and keep the cases.
+- **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
+  [src/store/docx-export.ts](../src/store/docx-export.ts),
+  [src/__tests__/marked-upgrade-parity.test.js](../src/__tests__/marked-upgrade-parity.test.js).
 
 ## Reading CodeMirror's text with `innerText` double-counts blank lines
 
@@ -193,30 +213,96 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   to win here and alignment to lose.
 - **Related:** [src/ui/EditorPanes.tsx](../src/ui/EditorPanes.tsx).
 
-## Don't "optimise" the rich pane's projection into an incremental write
+## An incremental WRITE of a whole-document parse buys nothing — parse less instead
 
-- **Symptom:** `TiptapPane.setHTML` calls `editor.commands.setContent(html)`,
-  which replaces the ENTIRE ProseMirror document on every cross-pane projection.
-  It looks like an obvious win to diff the parsed document against the live one
-  and dispatch only the changed range — preserving the node views (KaTeX,
-  Mermaid/ABC, code blocks, theme images) that a wholesale replace appears to
-  destroy.
+- **Symptom:** The markdown→rich projection used to be `setContent(mdToHtml(md))`,
+  replacing the ENTIRE ProseMirror document every time. It looks like an obvious
+  win to parse the whole document as before, diff the result against the live
+  one and dispatch only the changed range — preserving the node views (KaTeX,
+  Mermaid/ABC, code blocks, theme images) a wholesale replace appears to destroy.
 - **Cause:** That premise is wrong. `EditorView.updateState` already diffs the
   new document against the existing view tree and REUSES the DOM and node-view
-  instances wherever the markup matches, so a whole-document replace does not,
-  in fact, rebuild them. Measured directly: a code block's rendered element is
-  the same DOM node before and after a projection on the unmodified build.
-- **Fix/Workaround:** It was built and measured — `findDiffStart`/`findDiffEnd`
-  to find the range, a verification against the target document before
-  dispatching, the lot. Over five runs per size under 4x CPU throttling it moved
-  no metric outside the run-to-run spread (10KB blocking 191±60 → 177±124; 50KB
-  499±119 → 506±153) while adding a second structural walk of the document to
-  every projection. It was reverted. A string-level "already holding exactly
-  this HTML" memo was tried too, and is equally pointless: the sync engine's own
-  hash and doc-identity gates already stop a redundant projection before it
-  reaches the pane.
-- **Related:** [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx),
-  [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts).
+  instances wherever the markup matches, so a whole-document replace does not
+  rebuild them. It was built and measured — `findDiffStart`/`findDiffEnd`, a
+  verification before dispatching — and over five runs per size under 4x CPU
+  it moved no metric outside the run-to-run spread (10KB blocking 191±60 →
+  177±124; 50KB 499±119 → 506±153). A string-level "already holding exactly
+  this HTML" memo was equally pointless: the hash and doc-identity gates already
+  stop a redundant projection.
+- **What did work (A083):** not parsing the whole document. At 1.6 MB the cost
+  was the PARSE, not the write — marked over every block, TipTap's quadratic
+  `elementFromString` whitespace pass, a per-cell `querySelectorAll` whose cost
+  grows with the whole document, ProseMirror's parse — ~23 s a keystroke at 4x.
+  [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts) keeps a
+  model of where the markdown can be cut into runs that lex, render and parse
+  exactly as they do in place, re-parses only the runs an edit touched, and
+  replaces their nodes; the result is `Node.eq` to the whole-document parse
+  (`incremental-rich.test.js` checks it after every step of random walks). The
+  write it dispatches is small because the parse was — the node views were
+  never the problem.
+- **Related:** [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts),
+  [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts),
+  [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
+
+## A transaction's step count, and a decoration set's size, are costs of their own
+
+- **Symptom:** After the projection stopped re-parsing the whole document
+  (above), the first markdown keystroke in a 4 MB document still took seconds
+  at 4x CPU, though the parse was now a fraction of a second.
+- **Cause:** Three things that are linear for an ordinary edit turn quadratic
+  when a transaction holds hundreds of steps or a plugin holds thousands of
+  decorations. (1) Each `ReplaceStep` rebuilds the document's top-level node
+  list, so a step per changed stretch costs steps × blocks — about 900 code
+  blocks changed by the first projection after a load (marked writes the
+  trailing newline a rich-pane code block lacks): 6 s. (2) A plugin that maps
+  each step's range through every LATER step is steps²: `BidiAuto` and
+  `UnresolvedWikiLinks` both did, 1.6 s and 0.8 s. (3) Building or adding to a
+  `DecorationSet` scans every decoration once per top-level block
+  (`takeSpansForNode`): `BidiAuto`'s one decoration per task item cost 1.5 s
+  each time a large range changed — and at every document open.
+- **What works:** above `STEP_LIMIT` stretches, `replaceRange`
+  (incremental-rich.ts) takes ONE step carrying the unchanged nodes as the same
+  objects — the view matches children by node equality, so their DOM stays —
+  and maps the selection itself as the per-stretch steps would have. A plugin
+  carries the changed range FORWARD through each step's map instead. And a
+  per-block view attribute belongs in a node view, never a decoration:
+  `BidiAuto` has no decorations at all now; task items get `dir="auto"` from
+  `TaskItemAutoDir`, TipTap's own node view with the attribute added.
+- **Still there:** TipTap's code-block highlighter re-highlights EVERY code
+  block and rebuilds its whole decoration set whenever a code block changes or
+  the caret is in one — the same quadratic build, with one decoration per
+  highlighted token.
+- **Related:** [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts),
+  [src/extensions/BidiAuto.ts](../src/extensions/BidiAuto.ts),
+  [src/extensions/UnresolvedWikiLinks.ts](../src/extensions/UnresolvedWikiLinks.ts).
+
+## React walks the focused rich pane on every commit — anywhere on the page
+
+- **Symptom:** With a large document open and the caret in the rich pane, every
+  React update froze the page for a moment — a save's status change, the word
+  count, the library listing — though no component near the editor rendered.
+  Profiles showed the time inside react-dom itself, reading `nextSibling` and
+  `nodeType`.
+- **Cause:** Before each commit React saves the focused element's caret so it can
+  restore it if the commit moves focus (`getSelectionInformation`). For a
+  contenteditable it computes the caret's character offsets by walking every DOM
+  node before the caret: with the caret near the end of a 4 MB document, nearly
+  the whole editor — ~0.5 s per commit at 4x CPU. It happens whichever React root
+  commits, because it asks the document for the focused element.
+- **What works:** React reads an element that has a `selectionStart` property
+  directly (that is how it treats inputs). `ReactSelectionShield` gives the rich
+  pane one — reads 0, writes ignored — while its document is large, and only
+  then: a browser extension that takes an element with `selectionStart` for a
+  text field and reads its `value` sees small documents exactly as before. React
+  writes it back only when a commit moved focus, and then focuses the editor
+  itself; ProseMirror restores its own selection on focus. The walk was most of
+  what was left of an autosave's freeze once the save itself was cheap.
+- **Don't** fight it by cutting commits one by one, or by lazy-rendering DOM
+  inside the editor for this reason alone: the cost is per commit and per node,
+  wherever the commit comes from. `react-selection-shield.test.jsx` drives React
+  itself — if an upgrade drops the shortcut, it fails.
+- **Related:** [src/extensions/ReactSelectionShield.ts](../src/extensions/ReactSelectionShield.ts),
+  [e2e/probes/autosave-cost.mjs](../e2e/probes/autosave-cost.mjs).
 
 ## Folder chips are painted LAST on purpose — don't "fix" the draw order
 
@@ -311,7 +397,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Symptom:** The shipped iframe build ignores every message a host sends it.
 - **Cause:** `allowedOrigins` was set to the editor's own origin — which is never the sender — so the bridge rejected everything. In the other direction `createEditorClient` defaulted to `"*"`, i.e. it would post the document to any window that answered.
 - **Fix:** `resolveEmbedAllowedOrigins` ([src/integration/embed-origins.ts](../src/integration/embed-origins.ts), called from [src/embed.tsx](../src/embed.tsx)) decides, in order: a deploy-time allowlist (`VITE_EMBED_ALLOWED_ORIGINS`, baked in at build) filters everything; where the browser reports the real framer (`location.ancestorOrigins`), a requested origin must BE that framer, and a page that is not framed gets no partner; the requested origins are a validated `?allowed_origin=` (a literal `"*"` is rejected), else the reported framer, else the origin of `document.referrer`; otherwise `[]` — deny-all is the safe failure. Any page that frames the embed used to get a bridge that can read and overwrite every document the embed sees; set the deploy-time allowlist. `resolveEditorOrigin` ([src/integration/host-bridge.ts](../src/integration/host-bridge.ts)) derives the target from the iframe's own `src`.
-- **Watch for:** the embed still stores its documents in the default database (`perssonify-docs`); renaming it would orphan every existing embed user's library ([decisions.md](decisions.md)).
+- **Watch for:** a self-hosted embed stores its documents in the default database (`perssonify-docs`), and renaming it would orphan every existing embed user's library ([decisions.md](decisions.md)). Only on the app's own hosts (`APP_HOSTS`) does the embed keep a database of its own, `perssonify-embed-docs` (`embedStorageConfig`, guarded by `embed-storage.test.js`).
 - **Guard:** `embed-origin.test.js`.
 
 ## A converter that throws must not leave the echo gate claiming agreement
@@ -398,3 +484,10 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Cause:** A lookbehind (`(?<=…)` / `(?<!…)`) in a regex LITERAL is a parse-time error on those engines, and one in any module the entry chunk loads stops the whole bundle from parsing — before any error boundary exists.
 - **Fix:** keep the entry chunk free of them. Where one is needed, compile it from a string at runtime inside a `try`, with a fallback (Clear formatting in the markdown pane does this, and its fallback is pinned equal to the primary passes).
 - **Guard:** `converter-escape.test.js` ("A097 — no lookbehind in the modules the entry chunk loads"), which asks the TypeScript parser for real regex literals; `formatting-clear-fallback.test.js`.
+
+## Below the browser floor, the page must stop itself — and the watchdog must stay away
+
+- **Symptom:** On Safari/iOS before 16.4, Chrome/Edge before 111 or Firefox before 128 the app was a blank page: the Tailwind v4 stylesheet does not apply there, and the bundle can die on a `SyntaxError`. The boot watchdog in `index.html` took that error for a broken deploy, unregistered the service worker, deleted every cache and reloaded — into the same blank page.
+- **Fix (A097):** an inline script in `index.html` and `embed.html` (the same bytes in both) tests the three features the floor is made of — `CSS.registerProperty`, `color-mix()` and regex lookbehind, the last compiled from a string — and below the floor writes a self-contained, inline-styled message followed by `<plaintext>`. The tokenizer never leaves that state, so everything after the check — the watchdog, the stylesheet and the module script Vite injects at the end of `<head>` — is inert text: no app code runs and nothing stored is touched. The watchdog also stands down on `window.__PF_UNSUPPORTED`, in case the two scripts are ever reordered.
+- **Watch for:** the check must stay ES5 (it has to parse where it fails) and ABOVE the watchdog and the module entry, and every edit changes its CSP hash in `vercel.json`. Moving the floor means changing the feature tests and the message's version list together.
+- **Guard:** `ops-browser-floor.test.js` (the shipped script in a sandbox and in jsdom, ES5 via a parser, the watchdog standing down), `ops-vercel-headers.test.js` (the hashes), and `e2e/cases/floor.mjs` in Chromium, Firefox and WebKit (the module script is never parsed, storage and caches survive, the document is there after "updating").

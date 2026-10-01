@@ -129,7 +129,7 @@ describe("rich pane list nesting", () => {
  * with real editors behind the refs, so the guard has to be CALLED to pass.
  */
 describe("dispatch('indent') wiring", () => {
-  const mdView = (doc, line) => {
+  const mdView = (doc) => {
     const state = EditorState.create({
       doc,
       extensions: [EditorState.allowMultipleSelections.of(true)],
@@ -150,7 +150,7 @@ describe("dispatch('indent') wiring", () => {
   };
 
   async function rig({ doc = "", mode = "md", richHtml = "<p>x</p>" } = {}) {
-    const cm = mdView(doc, 1);
+    const cm = mdView(doc);
     const ref = createRef();
     await act(async () => {
       render(<TiptapPane ref={ref} isDark={false} defaultValue={richHtml} />);

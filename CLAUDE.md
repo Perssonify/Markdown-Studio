@@ -3,11 +3,13 @@
 > **The product is Markdown Studio** (home: markdownstudio.com). The repo, the
 > npm package (`@perssonify/editor`) and every DATA identifier keep their old
 > names ON PURPOSE — `pf:` preference keys, the `perssonify-document` export
-> envelope, `perssonify-backup` archives and the `perssonify-snapshots` IndexedDB
-> database are on-disk contracts with existing installs. Renaming them orphans
-> users' documents. The display name lives in `APP_NAME` (`src/constants.ts`)
-> with `APP_DOMAIN`/`APP_URL` beside it; surfaces that can't import TypeScript
-> (index.html, embed.html, site.webmanifest, the PWA manifest in
+> envelope, `perssonify-backup` archives, the `perssonify-snapshots` IndexedDB
+> database, the embed's `perssonify-embed-docs` database and the image store
+> (`perssonify-assets`, the `pf-asset:` scheme, `assets/<hash>.<ext>` in ZIPs and the
+> envelope's `assets` member) are on-disk contracts with existing installs.
+> Renaming them orphans users' documents. The display name lives in `APP_NAME`
+> (`src/constants.ts`) with `APP_DOMAIN`/`APP_URL` beside it; surfaces that can't
+> import TypeScript (index.html, embed.html, site.webmanifest, the PWA manifest in
 > vite.app.config.ts) are pinned to it by `src/__tests__/app-identity.test.js`.
 
 `@perssonify/editor` is a **dual-pane, bidirectionally-synced Markdown editor**:
@@ -35,7 +37,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   ON PURPOSE: with a single document the relationship map opened on one unconnected dot
   with nothing to explore, and the folder gives it a labelled cluster too. Seeded via PE's
   **`starterDocuments`** prop — standalone app ONLY (`App.tsx`); an embedder's
-  `initialDocument` stays exactly one document. They are seeded through the ordinary
+  `initialDocument` stays exactly one document. They are seeded by the boot sequence
+  (`useEditorBoot`, `src/editor/useEditorBoot.ts`) through the ordinary
   `importItems` path AFTER the initial doc is live — so they convert against the
   mounted editor's schema; `importItems` never activates anything, so Welcome stays
   open — and failures are caught so startup can't break. Seeding happens only when
@@ -44,10 +47,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   **Wiki links resolve by TITLE, which comes from the first `# H1`** — renaming a
   heading silently breaks the seed graph, so `src/__tests__/starter-documents.test.js`
   asserts every link target is a seeded title and no document is orphaned.
-  **Known gap (open):** the test hard-codes `WELCOME_TITLE = "Welcome"`, but since
-  1.76.0 the seed no longer pins that name — the Welcome document's title follows its
-  H1, "Markdown Studio" — so the `[[Welcome]]` links in the other two starter
-  documents resolve to nothing and, since A058, are drawn as broken on first run.
+  The test takes `WELCOME_TITLE` from the Welcome document's OWN H1
+  (`titleOf(DEFAULT_CONTENT)`): since 1.76.0 that title is "Markdown Studio", so the
+  other starters link to it as `[[Markdown Studio|Welcome]]`. The test used to
+  hard-code "Welcome", so it agreed with `[[Welcome]]` links that resolved to
+  nothing and were drawn as broken on first run.
 - `src/store/doc-outline.ts` — `extractHeadings(canonical)` + `buildHeadingTree()`
   (stack-nesting), consumed by the Workspace Outline tab. **`src/ui/GraphView.tsx`
   is the MAP-ONLY knowledge-graph overlay** — the force-directed relationship graph
@@ -109,9 +113,14 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     **compact form** (`shortLabel`) — a single fixed position under the dot meant
     one crowded neighbour silently cost a note its name when there was room an
     inch away, and a phone went almost entirely anonymous. A label is also vetoed
-    if it would cross a folder container the note does not belong to (`reject` —
-    it cannot be a shared obstacle, since a note's own container must not block
-    its own name), or fall outside the canvas (`bounds`). Dropping a label is the
+    if it would cross a folder container the note does not belong to (`reject` =
+    `crossesForeignContainer` — it cannot be a shared obstacle, since a note's own
+    container must not block its own name), or fall outside the canvas (`bounds`).
+    The veto ignores a foreign box the note's DOT already sits in, and any foreign
+    box when the name lies wholly inside the note's OWN box: both only happen where
+    folders overlap, and vetoing them stripped a 2,000-note map of every name.
+    Only notes whose dot is ON the canvas compete for the `LABEL_CANDIDATES` slots
+    — the best-connected notes of the whole map left a zoomed-in view unnamed. Dropping a label is the
     only sanctioned outcome; the note is still named in the rail and on hover.
     Priority: selection/active/hover, then `rankByDegree`, then the rest. It MUST
     be recomputed every render (positions live in a mutable ref, so a memo keyed
@@ -164,7 +173,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   - **The rail is the whole information layer.** With a node selected: title,
     folder/state tags, three stat cells (links in · out · headings), Open/Focus/
     Isolate, then the document's **headings** (`headingsFor`, capped at 10 — click
-    one to open the doc there via `onOpenHeading` → PE's `scrollToHeading`), BOTH
+    one to open the doc there via `onOpenHeading` → `scrollToHeading` in
+    `src/editor/useHeadingNavigation.ts`), BOTH
     link directions as clickable documents (`Links out`/`Links in`, from
     `graph.edges` — clicking a row moves the map's selection, the arrow opens it)
     and that note's broken links. Counts alone said a relationship existed but not
@@ -183,8 +193,55 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     sit in the global status bar, visible to users who had never opened the map.
   - **NO TEXT IS EVER DRAWN OVER** — re-measured in a real browser across 3/12/25/40/153-note
     workspaces, desktop AND phone widths, at fit / 4 clicks out / 8 clicks in:
-    label↔label, label↔dot, label↔chip, container↔container, stranger dot/label
-    inside a container, chip↔chip and label↔canvas-edge are all **zero**.
+    label↔label, label↔dot, label↔chip and label↔canvas-edge are all **zero**.
+    **chip↔chip is not always zero** — that claim was here too and was wrong on the
+    old build and the new alike: a 150-note `mapLibrary` workspace measures 1 at
+    desktop 4-out and phone fit, a 400-note folder map 24 at phone 4-out. **Container↔container and a stranger's dot inside a container are NOT
+    zero** — that claim used to be here too and was wrong: with `e2e/map-library.mjs`
+    at 153 notes in 15 skewed folders they measure 20 and 158 at fit (25 / 339 before
+    A088), while every TEXT overlap stays zero.
+  - **Folder maps get a FOLDER-AWARE layout (up to `FOLDER_LAYOUT_MAX`, 500
+    notes).** With folders the old layout STACKED notes on the same spot — 150
+    notes in 15 folders rested at 117 distinct positions — for four reasons, each
+    fixed and each mutation-tested: notes were seeded on ONE ring, so a folder's
+    members started scattered and every container started spanning the world (now
+    `seedPositions`: each folder its own shelf-packed cluster); `worldFor` stopped
+    growing at 23 notes (now `worldFor(n, withFolders)` grows with a folder map's
+    notes — `FOLDER_NOTE_AREA`); the 1/d² repulsion is uncapped and the container
+    constraint and walls keep making close pairs, so a pair two units apart was
+    thrown ~1,700 units in a step (now `FOLDER_MAX_SPEED`); and folders pushed
+    apart were clamped to the wall member by member (now `shiftGroup` moves a
+    folder as a unit). Measured (`e2e/probes/map-stacks.mjs`): every note on its
+    own spot at 150 and 400 notes. **A folderless map is untouched** — its seed,
+    world and dynamics are the old ones, pinned bit-for-bit. The zoom floor is 6%
+    so Fit can show a folder map's larger world.
+  - **Above `FOLDER_LAYOUT_MAX` a folder map is laid out on TWO LEVELS**
+    (`planFolderLayout` + `stepTwoLevel`): the single-level settle is chaotic there
+    (2,000 notes in 60 folders rested at ~790 distinct positions, stacks of 89).
+    **Level 1** is made whenever the map is seeded — on open, and when a note changes
+    folder (`planKey`, sorted: the graph arrives in varying order). Each folder is a
+    rectangle sized for a grid of its notes' dots and names (at least its name tab),
+    plus one for notes in no folder; they are packed largest first at the free spot
+    that best balances "next to linked folders" against "grows the block"
+    (`PACK_COMPACT`). Candidates sit flush against placed rectangles and are
+    accepted only where nothing is, so no two regions come within `REGION_GAP` BY
+    CONSTRUCTION; a cell grid keeps that test local (a full scan was cubic — 2.5 s
+    for 1,000 folders). The plan does not depend on arrival order. Each note gets a
+    HOME cell — breadth-first along its region's links, middle first, with a hashed
+    wobble. **Level 2:** repulsion and springs act only WITHIN a region
+    (cross-region springs drove notes into walls and stacked them again); each note
+    is pulled to its HOME, not the region's middle (the centre packed densest and
+    names ran through each other); each note is HELD where its dot, name and
+    container padding lie inside its region, and a container its name tab widens
+    past the region is shifted back as a unit — so containers cannot overlap and no
+    stranger sits in one, at any zoom down to Fit. Entering or leaving a plan
+    re-seeds EVERY note, so a library always rests the same way; a dragged note is
+    held inside its region (`clampToRegion`); the world comes from the plan, not
+    `worldFor`. Measured: 600 and 2,000 notes in 60 folders — every note distinct,
+    0 overlapping boxes, 0 stranger dots, 0 text overlaps; settles in 1–2 s at 600
+    (was 12–24 s). Pinned by `graph-two-level.test.js`, the 600-note case in
+    `graph-large-map.test.jsx` and the stress tier. Adding, removing or refiling a
+    note on an open large folder map re-settles the whole map.
     **`chip↔dot` is NOT zero and cannot be** — that claim used to be here and was
     wrong. Below ~40% zoom the dots converge into a band by design (density, not a
     defect) and a screen-constant chip covers a lot of world, so no slot along a
@@ -212,7 +269,31 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     Measured at 153 notes: 108 rendered frames / 5.6s / 3.9s blocking → **35
     frames / 2.3s / 1.7s blocking**. At or below 60 notes it stays 1:1, where the
     frame is cheap and step-per-frame is the smoothest way to watch it unfold.
-    `framesRef` counts STEPS so `MAX_FRAMES` remains the same hard budget.
+    `framesRef` counts STEPS so `MAX_FRAMES` remains the same hard budget. Large
+    maps are also capped by the clock (`SLICE_MS`, next bullet).
+  - **Above `LARGE_MAP_MIN` (250) notes the map is drawn and paced for scale; at or
+    below it nothing changes** (A088). Ordinary dots, links and arrowheads are batched
+    `<path>`s (`store/graph-draw.ts`, integer hundredths inside
+    `scale(1/BATCH_UNITS)`), memoized on `layoutVersionRef` and the zoom, never on
+    the camera position; open, selected, hovered and keyboard-focused notes are drawn
+    in full on top, and the pointer is hit-tested in code against the copy that was
+    PAINTED. Each loop frame holds, paints or steps (`planFrame`) — never a step and
+    a paint in one frame, never a step in the frame that shows a paint; extra steps
+    stop at `SLICE_MS`, and the layout holds for `CAMERA_HOLD_MS` after camera or
+    pointer activity (held steps are deferred, not skipped). Under reduced motion the
+    settle runs in slices and draws nothing that moves (`drawPosRef`). Batched dots
+    carry `pf-node-dots` plus `data-doc-ids` in draw order (`parseCircles`,
+    `e2e/map-measure.mjs`) — keep them measurable. Measured at 2,000 notes under 4×
+    CPU: first frame 8.9 → 1.0 s, blocking 64 → 6 s, a frame 3.7 s → 83 ms.
+  - **The layout is `stepLayout` in `store/graph-physics.ts`.** At or below
+    `BARNES_HUT_MIN` (300) it is the exact loop — a FOLDERLESS map pinned
+    bit-for-bit against `graph-legacy.js` (a frozen copy of the old loop — never
+    "fix" it; folder maps changed on purpose, above); above it,
+    Barnes–Hut (θ 0.9) plus a grid for the label-room pairs. Coincident notes are
+    separated by `pairJitter`, never `Math.random`. Container membership is a
+    lookup; `folderBounds` is `folderRects` without the chip, and both come from
+    `containerGeometry`. `placeLabels` and the chip scorer query `BoxGrid`, which
+    must stay EXACTLY equivalent to the linear scan (insertion-order sums).
   - (History: an earlier build led with the document structure; that was reversed
     once the Outline tab took over structure — do not re-add an in-graph structure
     pane. An earlier build also floated the inspector over the canvas — do not
@@ -221,12 +302,13 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   only — the menu bar, workspace panel and surface switcher stay usable beside it
   by design — so `aria-modal="true"` told screen readers to ignore controls the
   design intends you to use. Instead, the covered editor (which must stay mounted)
-  is marked **`inert`** while an overlay is open, imperatively, because React 18
-  does not forward `inert` as a prop. The same pattern covers the interior pages
+  is marked **`inert`** while an overlay is open, imperatively, because React 18 (still
+  in the peer range) does not forward `inert` as a prop and 19 treats it as a boolean. The same pattern covers the interior pages
   (`PageChrome`), which additionally take focus and restore it. Do NOT add a Tab
   trap: the switcher outside is meant to be reachable.
 - **Workspace views are ONE exclusive selection** (`workspaceView: "editor"|"map"|
-  "cards"` in `PerssonifyEditor`). Cards and the map are PEERS — full-canvas views of
+  "cards"` from `useWorkspaceViews`, `src/editor/useWorkspaceViews.ts`, which also holds
+  the overlay's focus/inert effect `useOverlayInert`). Cards and the map are PEERS — full-canvas views of
   the whole library, each an overlay over `<main>` with the editor still mounted — so
   they are derived from one value and rendered through **one overlay shell**, not two
   independent booleans. They WERE two booleans, and both could mount at once: two
@@ -242,7 +324,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   entered through read as an escape hatch. So the switcher buttons SELECT
   (`setWorkspaceView(x)`) while the **keyboard shortcuts stay toggles**
   (`toggleWorkspaceView`, so ⌘⇧K twice returns). Choosing a LAYOUT (MD/Rich/Split)
-  routes through PE's `handleSetMode`, which also returns to the editor — those panes
+  routes through `handleSetMode` (`useWorkspaceViews`), which also returns to the editor — those panes
   are invisible under an overlay, so it would otherwise be a control that silently does
   nothing. Same reason the heading/anchor navigation paths call `setWorkspaceView("editor")`
   rather than just `setGraphVisible(false)`. The switcher stays visible because the
@@ -365,7 +447,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `docs.list`, `doc.outline` (`extractHeadings`), `doc.links`
   (`getBacklinks`/`getForwardLinks`), `graph.stats` (`exportGraph`). It is **NOT an
   `eval` REPL** and exposes no arbitrary property access: PE injects a typed
-  read-only `ConsoleContext` of getters (no write path); adding a capability means
+  read-only `ConsoleContext` of getters (`useConsoleContext`,
+  `src/editor/useBottomTray.tsx`; no write path); adding a capability means
   adding a vetted entry, never a general escape hatch. `console-commands.ts` is PURE
   (tests inject a fake context). If a mutating command is ever added it MUST route
   through `dispatch`/`patchDocById` and honor read-only — never a raw storage write.
@@ -391,7 +474,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   graph tab** — an earlier "Map" tab (a horizontal `DocumentGraph`, then a vertical
   `StructureMap`) was tried and REMOVED: the outline covers document navigation, and
   the knowledge graph is the full-screen **relationship-map overlay** toggled from
-  the View menu / graph button (PE `graphVisible`, `src/ui/GraphView.tsx`) — do not
+  the View menu / graph button (`graphVisible` from `useWorkspaceViews`,
+  `src/ui/GraphView.tsx`) — do not
   re-add a graph into the narrow dock. `StructureMap.tsx` was deleted; a persisted
   `pf:workspace-tab==="map"` migrates to `"outline"` in `uiStore`. This **replaced
   the shadcn Sidebar + DocNavPanel + the old `docNav` "closed|toc|split|full" expand
@@ -444,8 +528,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   would steal the click). `cardPreview` (plain text, `{ skipTasks: true }`) stays for
   the empty-check, the a11y label and the unfiltered search `haystack`. **The opened
   card is a Preview·Split·Write surface** (`CardEditor`, persisted `pf:card-view`,
-  default `preview` on narrow / `split` on wide): the rendered side reuses PE's
-  `cardRenderMarkdown` = `sanitizeForIngest(engine.mdToHtml(md))` so a card renders
+  default `preview` on narrow / `split` on wide): the rendered side reuses
+  `cardRenderMarkdown` (`src/editor/useCardHandlers.ts`) = `sanitizeForIngest(engine.mdToHtml(md))` so a card renders
   IDENTICALLY to the main preview and reflects unsaved edits; links inside it are
   `preventDefault`-ed (reading, not navigation — real nav is Open in editor). No
   `renderMarkdown` prop ⇒ write-only fallback. Editing still hands MARKDOWN to
@@ -481,18 +565,18 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   dimmed text on a card stays at ≥85% opacity, the lowest that keeps 4.5:1 on every
   card colour in both themes (`cards-text-contrast.test.js`, A095).
 - **`src/components/ui/input.tsx` / `textarea.tsx` are wrapped in `forwardRef` ON
-  PURPOSE.** The generated shadcn source targets React 19 (ref-as-prop); this repo is on
-  React **18.3.1**, which STRIPS `ref` from function components. Without the wrapper every
-  consumer ref read null — ⌘F opened Find, left focus in the document, and typed the query
-  INTO the user's content; inline rename and prompt autofocus were dead too. If you
-  regenerate these primitives, re-apply the `forwardRef` until the project moves to React 19.
+  PURPOSE.** The shadcn source targets React 19 (ref as a prop). The app runs 19.3,
+  but the library's peer range still admits React 18.3, which STRIPS `ref` from
+  function components: there every consumer ref read null — ⌘F typed the query INTO
+  the document, and inline rename and prompt autofocus died. `forwardRef` works on
+  both. Re-apply it after any regeneration while 18 is in the peer range.
 - **Bottom tray** (`src/ui/BottomTray.tsx`): an expandable, tabbed tray above the
   `StatusBar` (collapsed = zero height). Document Links is the first tab
   (`BacklinksPanel` has a `hideHeader` embed mode); a **Console** tab
   (`ConsolePanel`) appears as a second tab only when the admin `consoleEnabled`
   flag is on (spread into the `tabs` array). Toggled by the status-bar links chip
   and the primary **far-left "Panel" chevron** on the status bar; state
-  (`trayOpen`/`trayTab`) lives in PE. Replaced the old always-on backlinks strip +
+  (`trayOpen`/`trayTab`) lives in `useBottomTray` (`src/editor/useBottomTray.tsx`). Replaced the old always-on backlinks strip +
   the floating links popover. **Collapsed, it stays mounted (it animates to 0fr) and
   is therefore `inert`**, set imperatively in a layout effect — `aria-hidden` alone
   left its tabs and chevron in the Tab order; collapsing around focus hands focus
@@ -551,7 +635,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   breakpoint (480px) is defined in `styles.css` `@theme` (`--breakpoint-xs: 30rem`).
   Every unsaved state has its own label: "Save failed — retrying" (`error`), "Empty
   editor — not saving" (`blocked`), "Changed in another tab — not saving"
-  (`conflict`), "Storage full — not saving" (`full`) and "Newer version — read-only"
+  (`conflict`), "Deleted in another tab — not saving" (`conflict` too, told apart by
+  the tab-sync notice), "Storage full — not saving" (`full`) and "Newer version — read-only"
   (the schema lock). **The save indicator is not a live region**: it walks editing →
   saving → saved on every autosave (nine announcements in twelve seconds of typing).
   One visually hidden region speaks only when saving starts failing, fails in a new
@@ -672,7 +757,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   per primitive — extend the shared body. A folder dropped on a document row lands
   in that document's folder (`docRowDrop`) — the drop used to bubble to the root
   handler and move it to the top level (A066). **Per-document export** (`onExportDoc` →
-  `handleExportDoc(docId, "md"|"html"|"docx"|"json")` in PE) derives every format
+  `handleExportDoc(docId, "md"|"html"|"docx"|"json")` in `src/editor/useExportActions.ts`) derives every format
   from the STORED canonical via `canonicalToHtml`/`canonicalToMarkdown`
   (`serialize-doc.ts`) + `exportAs*`, so it works on ANY list item without that doc
   being loaded in the editor (it prefers the LIVE canonical when `hydratedDocId`
@@ -788,7 +873,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   central-directory (fallback: local-header) general-purpose bit 0 with NO dependency;
   `extractArchive` throws `ArchiveEncryptedError` when encrypted+no password, and
   decrypts via a **lazy** `@zip.js/zip.js` import when a `password` option is given
-  (wrong password → `ArchiveWrongPasswordError`). File import (PE) and URL import
+  (wrong password → `ArchiveWrongPasswordError`). File import (`collectImportItems`,
+  `src/editor/useImportPipeline.ts`) and URL import
   (`fetchImportResource` + `UrlImportDialog`) prompt for a masked password (the shared
   `useDialog().prompt` gained a `type: "password"`) and retry.
 - **Archive path safety**: `normalizeArchivePath(path)` in `store/archive.ts` strips
@@ -806,7 +892,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (NOT just id/canonical/title — omitting them silently drops the state and resets
   timestamps); (2) `archiveEntriesToItems` detects an all-envelope archive
   (`isBackup`) and keeps entry paths VERBATIM — it must NOT apply the loose-file
-  `<zip-name>/` wrap, or the whole library nests under a synthetic folder.
+  `<zip-name>/` wrap, or the whole library nests under a synthetic folder. The
+  backup also carries every referenced image as `assets/<sha256>.<ext>`: those
+  entries are recognised by path AND image extension, `isBackup` looks at documents
+  only, and they come back separately as `extractArchive(...).assets` (the returned
+  entries array carries an `assets` property).
   **Every export ZIP filename carries an `exportTimestamp()` `YYYYMMDD-HHMMSSmmm` suffix**
   (`store/import-export.ts`) for implicit version control. JSON and backup exports
   share **`toExportEnvelope`**, which stamps `schemaVersion` and LEAVES OUT
@@ -839,7 +929,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     A013, A074). `Sec-Fetch-Site` must be `same-origin`/`none`: that stops OTHER web
     pages from using the relay, NOT curl, which sends whatever headers it likes — to
     non-browser clients it is a bounded proxy, and the rate limit and spend alerts
-    are owner setup in Vercel (`docs/import-relay.md`).
+    are owner setup in Vercel (`docs/import-relay.md`). **Its `fetch` comes from
+    undici, next to its `Agent` — never Node's global**: a dispatcher works only
+    with the fetch of its own major, and undici 8's Agent with Node 24's built-in
+    fetch failed EVERY request (`invalid onRequestStart method`) while the stubbed
+    unit tests stayed green. `import-relay-dispatcher.test.js` sends a real request
+    over a socket; `allowH2: false` (undici 8 defaults HTTP/2 on).
   - **The relay is opt-in** (A076). `fetchImportResource` never relays without a
     stored `"allow"` (`pf:import-relay`) or a `confirmRelay` callback that answers
     yes; the answer is remembered and can be changed in Settings ▸ Privacy. It used
@@ -871,6 +966,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     `initialize()` only, never by a diagram's `%%{init}%%` or front matter. Mermaid
     pastes them into a `<style>` and checks only brace balance, so any opened
     document could restyle the page (A069).
+  - **Mermaid 12 defaults to ELK; `mermaidConfig` pins `layout: "dagre"`** so existing
+    diagrams keep their layout — a diagram may still opt into ELK
+    (`ops-mermaid-secure` pins both). ELK (elkjs, **EPL-2.0**, 436 KiB gzip) is lazy
+    and precached; the csp/pwa renderer probe draws an ELK diagram, found by its own
+    label. Mermaid 12's notes say Safari 17.4+ against our 16.4 floor: a scan of the
+    built chunks found no post-16.4 API, which is evidence, not a device run.
   - **CSP ships REPORT-ONLY and hash-pinned; anti-framing is ENFORCED**
     (`vercel.json`: `frame-ancestors 'none'` + `X-Frame-Options: DENY` everywhere but
     `/embed.html`, A068) — framing the app root is broken by design. **Editing an
@@ -879,6 +980,62 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     (LF-normalised) and names the new one. Moving CSP to enforcing is an owner
     decision; `e2e:csp` runs the build under the ENFORCED policy and must stay at
     zero violations.
+- **Images are binary assets** (A086, `store/asset-store.ts`, `asset-refs.ts`,
+  `assets.ts`, `asset-gc.ts`; `extensions/AssetImages.ts` and `cm-asset-refs.ts`).
+  Pasted, dropped and imported images live ONCE in a sidecar IndexedDB,
+  `perssonify-assets` (`perssonify-assets:<ns>` under a host namespace; stores
+  `meta` and `bytes`, keyed by SHA-256), and a document refers to one as
+  `pf-asset:<sha256>` (an optional `#fragment` is kept). On in the app shell
+  (`App.tsx`); OPT-IN for library hosts and the embed (`storageConfig.assets`),
+  because a host reading content back out would get references that resolve only
+  in this browser. **A reference is written only after the bytes commit, and there
+  is no memory fallback**: an unavailable or disabled store, or a failed write,
+  leaves the image inline as a `data:` URL exactly as before (`data:` URLs under
+  2,048 characters always stay inline). Only USER transactions are converted —
+  loads and syncs (`preventUpdate`) never, conversions are not undo steps, and a
+  conversion never lands in a different document, a read-only one or mid-composition.
+  Existing documents are not migrated.
+  - **A `pf-asset:` src must never reach a live `<img>`**: the browser cannot load
+    it, and under the CSP it is a violation even on a detached element. **TipTap's
+    `getHTML()`/`generateHTML()` are NOT safe**: they build every node with the
+    PAGE's document and only then move the result into an inert one, so each `<img>`
+    starts loading — WebKit logged a failed load for the reference on every HTML
+    export, and a remote image was fetched on every export and host callback. HTML
+    of document content goes through `engine/inert-html.ts` (`fragmentToHtml`,
+    byte-identical): the rich pane's `getHTML` handle, `canonicalToHtml` and the
+    per-block converter all do (`inert-html.test.jsx`). Never call
+    `editor.getHTML()`/`generateHTML()` directly for content. Every surface
+    that SHOWS document HTML resolves through the node view, `useAssetSrc`, or
+    `neutralizeAssetSrcs` + `useResolvedAssetImages` (`ui/asset-dom.ts`). `e2e:csp`
+    pins it.
+  - **Exports are self-contained.** HTML, markdown, PDF/print, Word and Copy as
+    MD/HTML inline the bytes (`inlineAssetRefsInText`); the JSON export's envelope
+    carries an `assets` member `{hash: {mime, data}}`; the full backup and the crash
+    screen's emergency backup write `assets/<hash>.<ext>`; the markdown ZIP links
+    images by relative path. Images that cannot be found are reported
+    (`missingImagesNote`), never silently dropped. Restores check each asset
+    against its hash.
+  - **Nothing deletes assets automatically.** Settings ▸ Storage ▸ Clean up unused
+    images checks every place a reference can live (`defaultReferenceSources`:
+    documents, every snapshot including deleted documents', the live editor, unsaved
+    drafts, localStorage), deletes NOTHING if any of them cannot be read, keeps
+    anything stored or shown in the last 24 hours and re-checks each image just
+    before deleting it. **Any new place that can hold a document's content must be
+    added to `defaultReferenceSources`**, or the clean-up deletes images it still
+    uses. Erase all local data clears the store too.
+- **An ordinary code block is a PLAIN DOM node view** (`ui/code-block-plain-view.ts`,
+  A083); only diagram and score blocks are React. TipTap mounts each React node view
+  with a synchronous render that re-renders the ONE portal list holding every node
+  view, so opening a document was quadratic in its code blocks. The plain view keeps
+  the React one's markup (`code-block-*` classes, `pre > code`), stops the Copy
+  button's events and ignores its mutations (they are not content), and follows the
+  interface language. A plain block that must BECOME a diagram gets a new view: a
+  language change is declined in `update`; a diagrams/music feature toggle
+  dispatches a `codeBlockRebuildKey` node decoration — re-setting identical
+  attributes does NOT work, because ProseMirror matches an identical node
+  structurally and never calls `update` (`code-block-plain-view.test.jsx`). Math
+  nodes and theme images are still React node views: a formula-heavy document may
+  open slowly for the same reason.
 - **Mermaid/ABC blocks render by default in ONE cohesive framed card** (`CodeBlockWithCopy.tsx`
   `.diagram-frame`: header label + Edit/Copy · source · live preview), mirroring the math
   nodes. The `<pre><NodeViewContent/></pre>` stays MOUNTED (hidden via `.diagram-source.is-hidden`)
@@ -910,19 +1067,21 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   digits, so it can't collide with numbers in the document.
 - **Archive imports wrap loose root files in a folder named after the archive** via
   `archiveEntriesToItems(entries, zipBaseName)` in `store/archive.ts` (used by both the
-  file-upload and URL-import sites in PE). A single top-level folder is kept as-is; a
+  file-upload and URL-import sites in `src/editor/useImportPipeline.ts`). A single top-level folder is kept as-is; a
   lone file imports at root.
 - **DOCX import** (`store/docx-import.ts` `convertDocxToHtml`): a `.docx` upload can't take
-  the text path (`getFileContentAndFormat` reads text → binary garbage), so PE's import loop
-  branches on `.docx` BEFORE that call and routes through **lazy** `mammoth` (`await import`,
+  the text path (`getFileContentAndFormat` reads text → binary garbage), so the import loop
+  (`collectImportItems`) branches on `.docx` BEFORE that call and routes through **lazy** `mammoth` (`await import`,
   own chunk — never in the main bundle) → HTML → the existing `format:"html"` ingest branch
   (`sanitizeForIngest` keeps inlined `data:` raster images, strips scripts; `analyzeHtml`
   reports residuals). Best-effort/lossy: headings/bold/italic/lists/tables/raster images
   convert; Word equations (OMML), text boxes, and complex layout do not. `convertToHtml` is
   called with **BOTH** `{ arrayBuffer, buffer: arrayBuffer }` — mammoth's browser build reads
   `arrayBuffer`, its node build (tests) reads `buffer` — so one call works in both without a
-  throw-and-retry. Images inline as base64, so a small `.docx` can expand past the 5MB import
-  skip once images are embedded.
+  throw-and-retry. mammoth emits images as base64 `data:` URLs; the import then
+  stores each one as an asset where the asset store is on (see the image-asset bullet),
+  so the document holds references, not the bytes. The 5 MB skip is on the `.docx`
+  file's own size.
 - The standalone app shell (`src/App.tsx`) is a `h-dvh` viewport-locked column;
   PerssonifyEditor receives `fitParent` there and sizes to its parent. Embed/
   library mounts omit it and keep viewport (`h-dvh`) sizing. Never let the shell
@@ -936,7 +1095,44 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - Interior pages/graph are wired through PE via optional props (`onAbout`,
   `onHelp`, `onStartTour`, `graphOpen`/`onGraphOpenChange`); omitted by the
   library/iframe embed, which keep the built-in dialogs + internal graph toggle.
-- `src/PerssonifyEditor.tsx` — the orchestrator wiring stores, engine, panes.
+- `src/PerssonifyEditor.tsx` — the orchestrator: reads the stores, owns the refs and
+  engines, calls the hooks below, and renders. **Where PerssonifyEditor's parts live**
+  (`src/editor/`, A110 — each hook takes its dependencies explicitly; `types.ts`
+  names them by the hook or store that produces them):
+  - `props.ts` — `PerssonifyEditorProps`.
+  - `useWorkspaceViews.ts` — the editor/map/cards selection, the switcher and shortcut
+    handlers, `handleSetMode`; `useOverlayInert` (the overlay's focus/inert effect).
+  - `useEditorBoot.ts` — `usePersistPreferences` (preferences written back after boot)
+    and `useEditorBoot` (first-render storage injection; the init effect: preferences,
+    library, hydration or first-run seeding, the wiped-library check; metrics feed).
+  - `useChangeNotifications.ts` — `useCanonicalChangeHandler` (the sync engine's
+    STABLE `onCanonicalChange`) and `useContentChangeEmitter` (debounced `onContentChange`).
+  - `useHeadingNavigation.ts` — `scrollToHeading`, `scrollToHeadingByAnchor`; `useOutline`.
+  - `usePaneCommands.ts` — the context-menu API, clipboard, heading-anchor insertion,
+    insert prompts, and the pane focus handlers with `lastFocusedPaneRef`.
+  - `useBottomTray.tsx` — tray state and the height-guarded toggles; `useConsoleContext`;
+    `useTrayTabs`.
+  - `useImportPipeline.ts` — `importItems`, `handleImportUrl`, `activateAndCapture`,
+    `isEditorTargeting`, `waitForEditor`; `collectImportItems` (file expansion).
+  - `useAutosave.ts` — ⌘S, the idle autosave and its re-arm, the surface-open flush,
+    the unload safety net (`beforeunload`/`pagehide` + the synchronous stash).
+  - `useEditorActions.ts` — `handleAction` (the menu dispatcher), file drop, "Back up now".
+  - `useExportActions.ts` — per-document / folder / selection ZIP exports, and the
+    File-menu export helpers `handleAction` calls (incl. the recorded full backup).
+  - `useLibraryQueries.ts` — search, the Files body filter, the map rail's headings.
+  - `useCardHandlers.ts` — the Cards board's load / save / create / metadata handlers.
+  - `useHeadingRenameLinks.ts` — the offer to retarget links to a renamed heading.
+  - `useHostApi.ts` — the imperative handle the integration wrapper and the iframe
+    bridge drive (`useImperativeHandle`, `addDocuments`, `updateDocument`, …). Its
+    dependency list names EVERYTHING its methods close over — nothing holds the
+    handle's identity, and an omitted callback went stale
+    (`behave-host-api-stale.test.jsx`).
+  Still in PE itself: the store selectors and refs, `registerLiveCanonical`, the
+  `releaseEditor` layout cleanup, the markdown-feature re-sync, the format dispatcher,
+  the keyboard-shortcut wiring and the whole render. **Hook call order is effect
+  order**: each hook is called where its block stood, so effects run exactly as they
+  did in one file — keep it that way when adding to them. Source-pin tests read the
+  module that holds their subject, and pin the editor's wiring separately.
 - `src/engine/` — markdown conversion + sync. `useSyncEngine.ts` (hash-gated bidi
   sync), `useMarkdownEngine.ts` (a thin hook over the PURE `createMarkdownEngine`,
   which `src/__tests__/converter-harness.js` drives with the real schema), `build-marked.ts`
@@ -946,16 +1142,19 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   document model (`document.ts`), persistence adapters (`storage-adapter.ts`,
   `idb-storage-adapter.ts`), ingest/sanitize (`ingest.ts`, `canonical-sanitize.ts`),
   `settings.ts`, `schema-version.ts`, `storage-durability.ts`, `crash-recovery.ts`,
-  `snapshot-store.ts`.
+  `snapshot-store.ts`, `canonical-json.ts` (`canonicalOf` — getJSON() from each block's
+  cached JSON — and `canonicalJsonText`, its text from each block's cached text).
 - `src/ui/` — view components (panes, toolbar, sidebar, settings, dialogs, graph).
 - `src/utils/` — `build-gates.ts` (dev-only surfaces), `diagnostics.ts` (the local
   error ring), `app-health.ts` (when a reload is safe), `remote-images.ts`,
-  `safe-storage.ts`, `alt-graph.ts`, `lazy-import.ts`. `src/pwa/sw-updates.ts` —
+  `safe-storage.ts`, `alt-graph.ts`, `lazy-import.ts`, `idle.ts` (`runWhenIdle`:
+  idle-time slices, a timer where Safari has no `requestIdleCallback`). `src/pwa/sw-updates.ts` —
   service-worker update prompts.
 - `src/extensions/` — custom TipTap nodes and plugins (BackgroundColor,
   MathInline/MathBlock, Callout, Details, ThemeImage, SizedImage, WikiLink,
-  TableCellAlign; the schema-less plugins BidiAuto, UnresolvedWikiLinks,
-  AltGraphPassthrough, ListKeymapNoTab; CodeMirror's `cm-bidi.ts`). BlockId,
+  TableCellAlign; the schema-less plugins BidiAuto (and `TaskItemAutoDir`),
+  UnresolvedWikiLinks, AltGraphPassthrough, ListKeymapNoTab, ReactSelectionShield;
+  CodeMirror's `cm-bidi.ts`). BlockId,
   FieldBlock and TransclusionBlock are exported by the library but registered in
   NEITHER schema — deprecated, and they warn once when used (A105).
 - `src/theme/palette.ts` — accent-palette selection (orthogonal to light/dark).
@@ -1033,7 +1232,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   When no doc node is available (editor unmounted) it falls back to the old
   hash — the echo gate must NOT depend on the fast path. `cm.setValue` likewise
   returns the text the pane settled on (null when it wrote nothing), so the md
-  side never reads the rope back just to hash it.
+  side never reads the rope back just to hash it. The per-block projection
+  combines each block's hash into EXACTLY `quickHash(getHTML())` (31^n weights,
+  `pow31` in incremental-md.ts), so the echo gate is unchanged — changing
+  `quickHash` means changing `pow31`. `onCanonicalChange` reuses each unchanged
+  block's JSON.
 - **Derived values are published only when they CHANGE.** `updateDerived`
   computes the fidelity report and the word/char counts in ONE walk of the
   canonical (`computeCanonicalStats`) and keeps the previous object when the
@@ -1044,7 +1247,18 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   new object on every keyup. The word count (`countTextRun`) segments a
   whitespace-free run of Han, kana, Thai, Lao, Khmer or Myanmar with
   `Intl.Segmenter` (a bounded cache), so a Japanese paragraph is no longer one word;
-  spaced languages count exactly as before (A098).
+  spaced languages count exactly as before (A098). **Every node boundary other than
+  adjacent text ends a word** (`endWordRun`, document.ts): text nodes that differ
+  only in marks continue one (`un**believ**able` is one word), but a paragraph,
+  heading, list item, cell or hard break does not — the counter used to run the last
+  word of each block into the first of the next, so a four-item list was ONE word.
+  Because of that, `computeCanonicalStats` caches PER TOP-LEVEL BLOCK, keyed on the
+  block's JSON object (which `canonicalOf` keeps for every block an edit did not
+  touch): a keystroke walks one block, not the document (A083). The canonical is
+  read, never mutated in place — a cached block edited in place would not be
+  re-counted (`fidelity-block-cache.test.js`). `computeCounts` (document.ts) keeps
+  its own per-block cache the same way, for the save, the library summary and the
+  snapshot check (`canonical-json.test.js`).
 - **A memoized child must not be handed a freshly-built prop.** MenuBar,
   StatusBar and BottomTray were `React.memo` and never once bailed out, because
   every handler was an inline arrow and the tray's `tabs` an array literal of
@@ -1109,7 +1323,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   document, a switch reports it could not be opened, the link index skips it. The
   ONLY sanctioned blank persist is the explicit **Clear document**
   command, which calls `allowBlankSaveOnce()` (a one-shot module flag) to bypass
-  the backstop; PE toasts "Document is empty — not saved…" when a blank is blocked.
+  the backstop; the autosave (`useAutosave`) toasts "Document is empty — not saved…" when a blank is blocked.
   **Do NOT re-add a focus-based ("is the rich editor focused?") heuristic inside
   `syncHtmlToMd`** — it was tried and removed because it silently REVERTED genuine
   deletions when the user blurred the rich pane before the debounce fired. The sync
@@ -1166,7 +1380,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   clean and hidden (`decideUpdateReload`, `utils/app-health.ts`) and asks otherwise.
   Do NOT re-add any of the three. Tabs check for a new worker hourly
   (`UPDATE_CHECK_MS` — `pushState` routes are not navigations). **Every JS chunk is
-  precached**, so the app works offline after ONE online visit — any lazy feature
+  precached** (about 9.9 MiB since mermaid 12's ELK chunk), so the app works offline after ONE online visit — any lazy feature
   not opened online used to fail offline (A085) — and `public/sw-recover.js` falls
   back to THIS worker's own precached `index.html`. `e2e:pwa` proves both.
 - **The boot watchdog acts only on EVIDENCE, and only online** (A011). The inline
@@ -1261,6 +1475,38 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   The close path also never calls `flushAndCacheIfDirty`, unlike `handleNewDoc`.
   So closing a document whose save was in conflict discarded the live content
   with no prompt, nothing on disk, nothing cached, and history dropped.
+- **A save checks a REVISION, not the record, when it can** (A083). An autosave of
+  a 4 MB note froze the page for 1.0–1.9 s at 4x CPU: it read its own record back
+  and parsed and re-sanitized all of it, stringified the whole document, walked it
+  for counts twice, deep-copied it into a snapshot, and the link index then read
+  it back once more. Now `knownStored` (documentStore) remembers, per document,
+  the revision, content and title this tab last WROTE or READ (seeded by boot and
+  `switchToDoc`), and a save asks `storage.getRevision` (optional on
+  `StorageAdapter`; the IndexedDB adapter reads `updated` off the END of the stored
+  text, `readRevision` — so `serializeForStorage` MUST keep `updated` and
+  `schemaVersion` last). The same revision → judge against what is remembered;
+  another revision → `get` as before (conflicts are still caught); a BLANK editor →
+  always `get`: the blank backstop judges against storage, never a memory of it. A
+  failed revision read fails closed like `get`. The canonical comes from
+  `canonicalOf`, the record text from `canonicalJsonText` (each unchanged block's
+  cached text; `serializeForStorage` writes field by field, byte-identical to the
+  old stringify — `document-serialize.test.js`), the counts from the per-block
+  cache, the link index takes the store's own record (`storedRecordIfCurrent`), and
+  the adapter remembers each record's size as written (`_recordBytes`). Measured:
+  longest task per autosave 1.0–1.9 s → 0–0.44 s, most saves none
+  (`e2e/probes/autosave-cost.mjs`, `persistence-save-revision.test.js`).
+- **React walks a focused contenteditable on EVERY commit — `ReactSelectionShield`**
+  (A083, docs/gotchas.md). Before each commit React saves the focused element's
+  caret (`getSelectionInformation`), and for a contenteditable it finds the offsets
+  by walking every DOM node before the caret: ~0.5 s per commit at 4 MB under a 4x
+  CPU slowdown, for ANY commit on the page while the rich pane has focus. React
+  reads an element with a `selectionStart` property directly, so the rich pane gets
+  one (reads 0, writes ignored) while its document is ≥ `SHIELD_FROM_SIZE`
+  (200,000 positions) and loses it below that and on destroy — a browser extension
+  that takes such an element for a text field sees small documents as before.
+  React writes it back only when a commit moved focus, and then focuses the editor
+  itself; ProseMirror restores its own selection. `react-selection-shield.test.jsx`
+  drives React itself and fails if an upgrade drops the shortcut.
 - **`saveActiveDoc` resolves `true` ONLY when the write committed** — check the
   boolean, never the absence of a throw. It used to resolve normally on a refused
   blank, an aborted ownership check and a caught non-quota error, so ⌘S toasted
@@ -1271,13 +1517,41 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   already refused to overwrite a stored doc a DIFFERENT tab wrote (its `updated`
   drifted >2s ahead of what this tab loaded). It now parks a **terminal
   `"conflict"` saveStatus** (set before it throws) — like `"blocked"`, it must
-  NOT re-arm autosave. PE's autosave catch detects the conflict error and RETURNS
+  NOT re-arm autosave. The autosave catch (`useAutosave`) detects the conflict error and RETURNS
   without the error→editing re-arm (re-arming would just re-detect the conflict
   every few seconds — a toast/status loop); a later real edit (`setDirty` →
   `"editing"`) resumes saving. Surfaced in the StatusBar ("Changed in another tab
   — not saving") and counted as unsaved by the `beforeunload` guard (warns, but
-  never re-attempts the conflicting write). This is the SAFE slice of the
-  deferred multi-tab work — NOT a `BroadcastChannel`/FSM rewrite (still backlog).
+  never re-attempts the conflicting write). Live sync between tabs sits on top of
+  it (next bullet); the save-status machine itself was not rewritten and the
+  terminal statuses are unchanged.
+- **Live sync between tabs** (`store/tab-sync.ts`, `editor/useTabSync.ts`,
+  `ui/TabSyncNotice.tsx`). Every COMMITTED write announces `{type, id, updated}` —
+  never content — from `documentStore`, right after the adapter resolves and never
+  for a refused write: **any new commit path must add its own `announce`**. The
+  channel is named after the database or namespace (`pf-tab-sync:idb:<dbName>`,
+  `:host[:<namespace>]`, …), so the app, its embed and two host namespaces never
+  cross-talk; without `BroadcastChannel` it falls back to a `storage` event through
+  `safeStorage`. A message is a HINT: the receiver re-reads its own storage and acts
+  only on a revision ANOTHER tab announced (`isForeignRevision` — this tab's own
+  settling write also looks newer). Announced revisions are noted on arrival and
+  `isOvertaken` gives them no 2 s tolerance, closing the gap where a write inside
+  the tolerance was overwritten silently. On receipt: the library listing (and the
+  folder tree, when it changed) refreshes — Cards, the map and the link index follow;
+  a changed document open here with NO unsaved work reloads ONLY through the
+  hydration ritual, after `markHydrated(null)` (so the heading-rename baseline
+  restarts), deferring while unhydrated, saving, composing or a projection is
+  pending, and re-deciding after its read; WITH unsaved work (editing, error,
+  blocked, full, conflict, or a parked draft) it `markConflict`s now and offers Keep
+  mine / Use theirs / Save mine as a copy — every choice keeps the side set aside in
+  Version history (`tab-conflict`), and nothing is written on receipt. A document
+  deleted elsewhere while open is refused by `saveActiveDoc` while its record is
+  still missing (`isDeletedElsewhere`), its unsaved text goes to Version history, and
+  the notice offers Keep as a new document or Close. The folder tree is never
+  written back from a remote apply (`withRemoteApply`) nor rewritten when unchanged
+  (it is one last-writer-wins preference). Known gaps: read-check-write is still not
+  atomic across tabs; a tab restored from the back/forward cache missed messages sent
+  while frozen (its save's own read still protects).
   **The non-editor writes respect it too** (A028): `renameDoc` and `patchDocById`
   used to merge this tab's live content and save with no drift check. A content
   patch against a stored revision newer than this tab's base (the open document's,
@@ -1322,11 +1596,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   document), and none of them claimed a generation at all —
   `restoreSnapshotAsNew` bumped it to invalidate others and then never checked
   its own. `composition-guards.test.js` pins that set behaviourally and by
-  source. PerssonifyEditor's own hydration sites — boot, the bridge's
-  update/append, card save, `activateAndCapture`, the no-editor import branch —
-  re-check `activeDocId` after their awaits instead (`isEditorTargeting`, below);
-  the source pin names the hook's functions only, so a new PE site must be
-  checked by hand.
+  source. The editor's own hydration sites — boot (`useEditorBoot`), the bridge's
+  update/append (`useHostApi`), card save (`useCardHandlers`),
+  `activateAndCapture` and the no-editor import branch (`useImportPipeline`), all in
+  `src/editor/` — re-check `activeDocId` after their awaits instead
+  (`isEditorTargeting`, below); the source pin names the lifecycle hook's functions
+  only, so a new site in `src/editor/` must be checked by hand.
 - **Recoverable snapshot net (`store/snapshot-store.ts`).** The LAST line of
   defence: a SIDECAR IndexedDB (`perssonify-snapshots`, its own DB — independent
   of the injected StorageAdapter, must survive reloads) keeps a bounded, per-doc
@@ -1353,6 +1628,13 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   Falls back to an in-memory ring when IndexedDB is absent (SSR/tests). Do NOT
   route snapshots through the main doc schema/adapter — the sidecar is
   deliberate (keeps the delicate doc save-path and IDB schema untouched).
+  **A database record keeps the content as JSON TEXT (`json`)** since A083 —
+  records written before keep an object (`canonical`); every reader takes both
+  (`payloadOf`), and the memory ring keeps objects. IndexedDB deep-copies an
+  object graph on every write and read: a 4 MB note's snapshot spent ~1 s at 4x
+  CPU in that copy. A build from before lists the new records but cannot restore
+  them. Dedup reads ONE record (`latestForDoc`: the doc's keys, then the highest),
+  not every version kept, content and all.
 - **Vitest only picks up `*.test.{js,jsx}`** (see `vitest.config.js` `include`).
   Test files must be `.js` — renaming to `.ts` silently drops them.
 - **`src/components/ui/*` are generated shadcn primitives** — regenerate via CLI,
@@ -1386,12 +1668,102 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   a join that makes V8 flatten the whole accumulated string — quadratic in
   top-level blocks, on every projection. The top level now converts in runs of 64
   blocks joined with turndown's own separator rule, byte-identical to
-  `td.turndown(html)`: any new rule must keep `converter-linear.test.js` green
-  (A083 — large documents are still slow; incremental projection is deferred).
+  `td.turndown(html)`: any new rule must keep `converter-linear.test.js` green.
   `converter-roundtrip.test.js` drives md → rich → md′ → rich → md″ through the real
   engine and schema (`converter-harness.js`) and pins hard breaks (A037), content
   nested under checklist items (A038), blank lines inside list items and their code
   (A041) and footnotes, which now ROUND-TRIP as `[^label]` (A043).
+- **Rich→markdown projects PER TOP-LEVEL BLOCK** (`engine/incremental-md.ts`, A083),
+  byte-identical to `htmlToMd(getHTML())`. A WeakMap keyed on each top-level PM
+  node caches its HTML hash, cleaned HTML, turndown output (per mode and escaper
+  setting) and the whitespace-passed result, so a keystroke re-converts only the
+  blocks that changed; seams follow `turndownLinear`'s rules and runs are joined
+  with turndown's own seam rule. **A turndown rule that reads OUTSIDE its own
+  top-level block** (a sibling, like `footnoteHeading`) must be handled in
+  `holdsNextSibling` (turndown-rules.ts), or the per-block and linear paths
+  diverge — `converter-incremental.test.js` (seeded random edit walks, both modes,
+  after every step) and `converter-linear.test.js` must both stay green. A change
+  to `normalizeMarkdown`'s fence placeholder must follow `FENCE_PLACEHOLDER`
+  (pinned). Blocks are serialised into an INERT document only — a live one loads
+  each `<img>`, which the CSP and dataloss suites caught with stored images.
+  Measured at 1.6 MB: keystroke → markdown pane 23 s → 0.6 s at 4× CPU, 2.5 s →
+  0.17 s at 1×. markdown→rich is incremental too (next bullet).
+- **Markdown→rich is INCREMENTAL** (`engine/incremental-rich.ts`, A083).
+  `syncMdToHtml` dispatches `engine.planRich(md, view.state)`; `setCanonical` and
+  `setFromHtml` call `forgetRich()`. A MODEL (each run of top-level blocks: its
+  source length and node count) lets an edit re-lex, render and parse only the runs
+  it touched, plus runs whose nodes the rich pane changed (found by identity). The
+  result MUST be `Node.eq` to `setContent(mdToHtml(md))` with `preventAutolink`;
+  the transaction sets `preventUpdate` and `preventAutolink` and is one history step.
+  A CUT needs all four: a blank line after a block that cannot run on; marked's
+  inline state clear; the HTML leaving the browser parser clean
+  (`selfContainedHtml`, else the `leavesParserClean` probe); and ProseMirror with no
+  node open (position check plus a sentinel text node). **Anything uncertain falls
+  back to the whole path** — a wrong partial update is data corruption, a fallback
+  only a slow keystroke. Whole document while present: the curly-brace syntax,
+  marked hooks, a `\r`, link reference definitions (or a block one could still grow
+  out of), footnote definitions, a bare-pipe alias wiki link, raw HTML holding a
+  `<pre>` with more than text or a `white-space`/CSS-escape style, ANY raw-HTML
+  `<table>` (three defects came from them), a raw-length mismatch, the
+  preprocessor rewriting the text. **CI's 40 random walks are not enough to trust a
+  change to the cut rules**: deep runs of 600–4,000 seeds each found new defects —
+  run deep, split across processes (`RICH_SEEDS`/`RICH_SEED_FROM`/`RICH_LONG_SEEDS`,
+  and `RICH_PREBUILD_SEEDS` for the prepared-model walks; the corpora and edits live
+  in `incremental-rich-harness.js`; jsdom's `setContent` grows ~3.5 MB per 30
+  projections, so one process crawls).
+  **The model is PREPARED after a load** (`prepare` → `RichPrebuild`; `useSyncEngine`'s
+  `startPrebuild` runs it in `runWhenIdle` slices, `utils/idle.ts`, for documents of
+  64 KB and up — the first keystroke used to parse the whole document to build it).
+  Windows of ~16 KB from the start, each lexed, cut and parsed on its own by the edit
+  window's own rules, ending AFTER A BLANK LINE (ended at a mere line start, a window
+  is never clean, and it doubled until it swallowed the document). Anything a window
+  refuses gives the preparation up and the first keystroke builds as before; a
+  keystroke that comes first finishes what is left; a load, `forget` or a feature
+  switch retires it. The loaded document need not be its markdown's parse (a code
+  block typed in the rich pane lacks marked's trailing newline): parsed nodes equal
+  to the loaded ones ARE the loaded objects, and when all are (`shared`) the model is
+  simply that document's — a rich edit since is found by identity, as any is;
+  otherwise the first projection turns the document into the parse (`replaceRange`,
+  as the build did) and re-parses the edit's window on top, in one transaction
+  (`incremental(..., base)`). Measured at 4× CPU: first keystroke 1.6 MB 9.1 s →
+  0.7 s, 4 MB 28 s → 2.7 s (a document whose ~900 code blocks that first projection
+  rewrites), slices' longest task 55–76 ms; later keystrokes 0.6 s and 1.4 s (were
+  ~23 s and ~116 s). `incremental-rich-prebuild.test.js` walks prepared loads —
+  prepared text messy on purpose, and half the time NOT the converter's own output
+  (the app only ever hands it that, which never holds a link definition or a raw
+  `</div>`). Tokens are walked with `walkTokensLinear` — marked's `walkTokens` rebuilds its result array
+  with `concat` at every token (1 MB: 54 s against 13 ms) — and not at all without a
+  "<" or an extension `walkTokens` (`incremental-rich-walk.test.js`).
+- **A transaction's STEP COUNT is a cost of its own** (A083, docs/gotchas.md). Each
+  ReplaceStep rebuilds the document's top-level node list, so a step per changed
+  stretch is quadratic when there are hundreds (the first projection after a load
+  rewrote ~900 code blocks at 4 MB: 6 s at 4× CPU). Above `STEP_LIMIT` (16)
+  stretches `replaceRange` takes ONE step that carries the unchanged nodes between
+  them as the very same objects — the view matches children by node equality, so
+  their DOM stays — and maps the selection itself as the per-stretch steps would
+  have (the one step's own map would send a caret anywhere in the range to its end).
+  A plugin must never map each step's range through every LATER step: `BidiAuto`
+  did (it now has no state at all); `UnresolvedWikiLinks` carries the range
+  forward through each step's map instead, reporting their union above 32 steps.
+- **marked-footnote is registered AFTER maths**, and every parse calls
+  `resetFootnoteNumbering(m)` first: registered first, a document opening with `$$`
+  that held a `[^1]` threw, and the extension then stayed stuck for every later
+  parse. Its section token must be `tokens[0]`; its reference counter is shared
+  between parses. **`TableCellFast`/`TableHeaderFast`** (`engine/table-colwidth.ts`)
+  replace the stock cells in BOTH schemas (no per-cell `querySelectorAll`), and
+  `TiptapPane.setHTML` parses through `parseHtmlDoc`, whose whitespace pass is
+  linear. **Formulas typeset only near the view** (`MathNodes`, IntersectionObserver;
+  `beforeprint` typesets all) — React's commit walks the whole contenteditable
+  (`getSelectionInformation`) and KaTeX DOM made that walk expensive.
+- **Exported markdown writes hard breaks as `\` + newline** (A051,
+  `engine/portable-breaks.ts`): the app's `breaks: true` dialect draws a line
+  break for a bare newline, which stock markdown renderers drop, so File ▸ Export,
+  the per-document export and the ZIP export (`canonicalToPortableMarkdown`) run
+  the converter inside `withPortableBreaks`. **The editor's own projection must
+  NOT** — `docToMd` always runs with the switch off. A break stays as it was inside
+  a table cell (written `<br>`) and inside link text, where marked rejects `\` +
+  newline. Backups, the clipboard, a card's source and the append API are unchanged
+  (`converter-portable-breaks.test.js`).
 - **Indent/outdent mean LIST NESTING, in both panes.** Markdown has no paragraph
   indent, so the rich side is `sinkListItem`/`liftListItem` — with the item type
   taken from the SELECTION, since a task item's node is `taskItem` and hardcoding
@@ -1419,7 +1791,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   residual list. `clean-vs-styled.test.js` measures the real turndown output for
   every claim the Help page and README make about the two modes.
 
-- **Post-await ownership check (`isEditorTargeting`, PerssonifyEditor).** Any
+- **Post-await ownership check (`isEditorTargeting`, `src/editor/useImportPipeline.ts`).** Any
   path that writes a document and THEN pushes content into the live editor must
   re-check ownership AFTER the await, never capture it before. Persisting goes
   through IndexedDB, which is slow enough that a doc switch lands mid-write
@@ -1479,17 +1851,20 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   blank draft over a non-empty stored doc. The one-shot clear permission is
   **scoped to the document it was granted for** (`blankSaveAllowedFor`): unbound,
   a permission from a clear whose save never happened stayed armed and disarmed
-  the backstop for a different document. **Known gap (open):** unmount's
-  `releaseEditor` (`useDocumentLifecycle`) writes the cached draft through
-  `patchDocById` with no blank check — `collectUnloadStash` keeps a blank out of the
-  stash, but the write-through does not — so a blank editor unmounted inside the
-  autosave window can overwrite stored content. No test covers it; fix it by
-  applying the same blank-over-content check before that write.
+  the backstop for a different document. Unmount's `releaseEditor` (`useDocumentLifecycle`) applies
+  the same blank-over-content check (`blankOverContent`) before it writes the cached
+  draft through `patchDocById` — `persistence-remount-blank.test.jsx`, in a file of
+  its own because the stores keep the FIRST adapter a file installs.
 - **`deleteDoc` claims the id before its awaits** (`deletingDocs`), and
   `saveActiveDoc` refuses to write a doc being deleted. `closeTab` only clears
   `activeDocId`/`hydratedDocId` at the very end, so an in-flight autosave passed
   the hydration re-assert and re-created the record after `storage.delete`
   committed. Bulk delete is sequential and awaited for the same class of reason.
+  **`patchDocById` refuses a document deleted since its read began** — being
+  deleted (`deletingDocs`) OR already deleted (`deletedAtSeq`, numbered, because a
+  delete that finishes entirely during the read has cleared its claim). It used
+  to write the record straight back after the delete (card saves, host updates,
+  retargeted links). Keep the check with no await between it and the write.
 - **`touchUpdated: false` is honoured by the ADAPTERS** via `stampUpdated`
   (`document.ts`) and the `_preserveUpdated` marker. Every `save()` used to stamp
   `updated` regardless, so the flag never did anything and recolouring or pinning
@@ -1510,7 +1885,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   snapshots nothing could read back. Every accessor unions both.
 
 - **A file dropped on the editor must not navigate the tab away**
-  (`EditorLayout`'s `onDragOver`/`onDrop` → PE's `handleFileDropImport`). There
+  (`EditorLayout`'s `onDragOver`/`onDrop` → `handleFileDropImport`, `src/editor/useEditorActions.ts`). There
   was no drop handler anywhere in `src/`, so a file dropped on either pane got
   the browser default: the tab navigates to the file and everything typed since
   the last autosave is gone — the one gesture that leaves no draft, no undo and
@@ -1521,7 +1896,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   can't import this". Pinned by `editor-file-drop.test.js`.
 
 - **Every path that creates AND opens a document outside import uses
-  `activateAndCapture`** (PerssonifyEditor: the bridge's `addDocuments` and
+  `activateAndCapture`** (`src/editor/useImportPipeline.ts`: the bridge's `addDocuments` and
   `importContent`, Cards quick-capture). It converts headlessly FIRST — no yield
   between conversion and persistence — then persists and activates (`finalizeDoc`),
   and hydrates through the ritual only if, after the awaits, the store is still on
@@ -1559,8 +1934,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `?allowed_origin=` (a literal `"*"` is REJECTED), else the reported framer, else
   `document.referrer`'s origin; else `[]` — deny-all, the safe failure. Any
   deployment serving the embed from an origin that holds user documents must set
-  the allowlist. The embed keeps the `perssonify-docs` database: renaming it would
-  orphan every embed user's library. `resolveEditorOrigin` (`host-bridge.ts`)
+  the allowlist. A SELF-HOSTED embed keeps the `perssonify-docs`
+  database (renaming it would orphan every embed user's library); on the app's own
+  hosts (`APP_HOSTS`, constants.ts) `embedStorageConfig(location.hostname)` gives it
+  `perssonify-embed-docs`, so a framing page can never reach the app's library, and
+  its snapshots and crash stash follow the name (`embed-storage.test.js`). `resolveEditorOrigin` (`host-bridge.ts`)
   derives the host's target from the iframe's own `src`. Pinned by
   `embed-origin.test.js`.
 - **`typeof localStorage` EVALUATES the getter**, which throws where a browser
@@ -1682,7 +2060,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (A059). **Broken links are a ProseMirror DECORATION** (`extensions/UnresolvedWikiLinks.ts`,
   a plugin — no schema change) that `useLinkIndex` feeds the library after every
   re-index, judged live with the same resolver; nothing is marked before the
-  library loads. The old DOM marking compared `String()` of objects ("[object
+  library loads. **An edit re-judges only the top-level blocks it touched** (A083):
+  the previous decorations are mapped through it, and the changed ranges come from
+  the STEPS, not the step maps — a mark step (making text a link, retargeting one)
+  maps no positions, so a map-only reading never sees it. An unknown step shape
+  falls back to a full rescan; a library change always rescans. The old DOM marking compared `String()` of objects ("[object
   Object]") and never marked a single link (A058). Its dashed underline uses `:has()`
   in a rule of its own — an engine without `:has()` drops a whole selector list.
   **Link clicks are delegated on `document`** and resolve the current editor at
@@ -1709,7 +2091,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   a full rebuild after a content edit") — if incremental ever diverges from full,
   the classification is wrong; widen what routes to `rebuildLinks`.
 - **Heading anchors resolve in ONE place** — `scrollToHeadingByAnchor`
-  (PerssonifyEditor) calls `findHeadingByAnchor` with THE normaliser,
+  (`src/editor/useHeadingNavigation.ts`) calls `findHeadingByAnchor` with THE normaliser,
   `normalizeHeadingAnchor` (`store/doc-outline.ts`: NFKC, lowercase, keeps
   `\p{L}\p{N}\p{M}`, collapses the rest); generation sites carry the raw heading
   text. The old `[^a-z0-9]` key turned every Cyrillic/CJK/Arabic heading into "", so
@@ -1718,14 +2100,50 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   Devanagari/Thai headings); a heading with no letters or digits compares on its
   exact text. `extractHeadings` is UNBOUNDED by default — a 40-heading cap meant for
   the long-removed in-graph structure view truncated the Outline, "Link to heading"
-  and `doc.outline` (A063); the map rail keeps its own `HEADING_CAP`. Renaming a
-  heading does NOT update the `[[Doc#Heading]]` links that point at it (a candidate
-  in HANDOVER.md §8, not built).
+  and `doc.outline` (A063); the map rail keeps its own `HEADING_CAP`.
+- **Renaming a heading OFFERS to retarget the links to it** (#122): the pure half
+  is `store/heading-renames.ts`, timing and writes `editor/useHeadingRenameLinks.ts`.
+  - **Baseline:** the heading texts at hydration (a `hydratedDocId` subscription).
+  - **When it checks:** `HEADING_RENAME_CHECK_MS` after the caret LEAVES a heading
+    (document `selectionchange`/`keyup`/`pointerup`, deferred one task, read from the
+    last-focused pane — ProseMirror `$from`, CodeMirror `resolveInner`), and on
+    every leaving path via useDocumentLifecycle's `onLeavingDoc` (switch, new,
+    `prepareToLeaveActiveDoc`, close with the content kept) — never on Discard,
+    delete or unmount. The heading the caret is in is excluded; a live composition
+    reschedules.
+  - **Alignment:** unchanged anchors are fixed points (prefix/suffix, then LCS);
+    the gaps pair IN ORDER at the SAME level. Offered only when the old anchor is
+    gone, was the first of its key, the new one is the first of its key, and
+    `isLinkableAnchor` (no `|`, `[`, `]`, line break).
+  - **Consent:** nothing is written without the toast; any close of it is
+    Dismiss, and either answer re-baselines only the offered renames. Renames are
+    claimed at leave time (an import leaves twice).
+  - **Update, open note:** ONE transaction under `closeHistory` (so ⌘Z takes back
+    exactly it), after ending a composition and `flushPendingSync` (a pending
+    markdown projection otherwise landed afterwards and the typed markdown was
+    lost). Read-only: no offer, and Update refuses.
+  - **Update, other notes:** `snapshotStore.record(…, "pre-link-update")`, then
+    `patchDocById({ canonical, expectedUpdated })`; never a note that is active,
+    schema-locked or holds a parked draft (`writableThroughStorage`, checked
+    before the read AND after the awaits). Such notes are named in the result
+    toast, never forced.
+  - **Links** are found like `scanWikiLinks` (marks and literal text, never in code
+    or inside another link) but with the renderer's tokenizer and
+    `parseWikiInner` (so `\|` aliases work), resolved by the ONE resolver; an
+    alias-less link's text follows its target by the turndown `wikiLink` rule's
+    own test.
+  - Known narrow race: a note opened while its `patchDocById` read is in flight
+    can load the pre-rewrite copy and autosave the old links back (the snapshot
+    keeps the rewrite recoverable).
 - **Right-click context menu** (`src/ui/EditorContextMenu.tsx` + generated
   `components/ui/context-menu.tsx`) wraps the panes and reuses `dispatch`; its
   "Link to heading" submenu inserts `[[#Heading]]` via `insertHeadingLink`, and the
   rich-pane link is built by `headingLinkHtml`, which ESCAPES the text — a heading
-  `Use <b> tags` inserted bold text, and one holding `<img …>` an image.
+  `Use <b> tags` inserted bold text, and one holding `<img …>` an image. **Never
+  compute document-derived data in its render**: it re-renders on every keystroke,
+  and building the heading list there (a full `getJSON()` plus a walk) cost ~300 ms
+  per key on a large document at 4× CPU; `HeadingLinkItems` reads them only when
+  the submenu opens (A083).
 - **Split-pane scroll sync** (`EditorPanes.tsx`) uses value-based echo
   suppression (remembers the exact scrollTop it wrote to the other pane and
   swallows that one echo) — never a timer. Do not reintroduce a setTimeout
@@ -1873,10 +2291,58 @@ The product ships three ways from one codebase: the standalone app
   `@tiptap/core`, `@tiptap/pm`, the prosemirror packages, react, react-dom and katex
   (a `katex` override dedupes mermaid's copy) — the unit suite stays green through a
   duplicated prosemirror-model, so after a dependency change run
-  `rm -rf node_modules && bun install --frozen-lockfile` and that test. `@types/react`
-  is 18, like the runtime: no React 19 `RefObject<T | null>` on a `ref=`.
-- **One editor per page** (A106): the stores are module singletons, so two editors
-  on a page share every piece of state. Remounting IS supported — `initialize()` is
+  `rm -rf node_modules && bun install --frozen-lockfile` and that test. React is 19 at runtime and in `@types/react`
+  (same major, `pkg-manifest.test.js`). The peers are `^18.3.0 || ^19.0.0`, and CI's
+  `react18` job re-runs `tsc` and the unit suite on React 18.3.1 and its types, so
+  code must compile and run on BOTH: a ref whose `.current` you READ is
+  `RefObject<T | null>`; a ref prop you only FORWARD to `ref=` is `React.Ref<T>`
+  (`RefObject<T | null>` on a `ref=` fails under 18's types, `RefObject<T>` rejects
+  19's `useRef<T>(null)`); `MutableRefObject` stays where 18 needs a writable ref;
+  and no 19-only API in library code (`use`, `useActionState`, `ref` as a prop,
+  `<Context>` as a provider).
+- **TypeScript is 6.0, not 7** (A113). typescript-eslint (peer `<6.1.0`) and
+  `converter-escape.test.js` need the compiler's JavaScript API, which `typescript@7`
+  does not ship. The tree is ready for 7: no `baseUrl`, an explicit `rootDir` in
+  `tsconfig.build.json`, and `src/types/side-effect-imports.d.ts` for 6.0's default
+  `noUncheckedSideEffectImports` — a new non-`.css` side-effect import needs a line
+  there. `bunx -p typescript@7 tsc --noEmit` is clean; see `docs/workflows.md` ▸
+  TypeScript 7. Re-checked 1 Oct 2026: typescript-eslint 8.71.0 and its newest canary
+  still peer `<6.1.0` — still blocked.
+- **`engines.node` is the intersection of the direct dependencies' ranges**
+  (`^22.22.2 || ^24.15.0 || >=26.0.0` — jsdom 30 and vitest 5 are the narrowest;
+  vitest 5 skips Node 23 and 25). `.node-version` (24) is what every CI job and the
+  publish job install. `ops-node-range.test.js` reads every installed dependency's
+  Node requirement and fails, naming the tool, if our range admits a Node one of
+  them refuses.
+- **Published declarations are FINISHED by `build/finish-declarations.mjs`** (both
+  `build` and `build:types`): no side-effect CSS imports (TS2882 under
+  `skipLibCheck: false`), explicit `./x.js` specifiers (every extensionless import
+  was TS2834 under node16/nodenext, so the entry points re-exported nothing), no `@/`
+  alias, and a `dist/styles.css.d.ts` behind the `./styles.css` export's `types`
+  condition. `pkg-declarations.test.js` compiles a `skipLibCheck: false` consumer
+  against the built `dist` under `bundler` AND `nodenext`. The bridge's
+  `EditorHandle` is written as methods over `unknown`, the integration passes its
+  ref without a cast, `EditorViewMode`/`EditorChromeLevel` are shared (exported from
+  `./integration`), and the bridge REFUSES an unknown mode or chrome level; the core
+  handle is `InternalEditorHandle` in `editor/props.ts`.
+- **Held dependencies:** docx stays at 9.7.x until the Word-export parity fixture is
+  re-recorded for 9.8 (it writes `w:val="clear"` shading); an `overrides` entry
+  keeps lodash-es at ^4.18.1 (mermaid 12's chevrotain pins 4.17.23, which has
+  advisories).
+- **Never DEFAULT-import an `__esModule` CommonJS external** (every `@tiptap/*`):
+  import the named export — `{ StarterKit }`, `{ CodeBlockLowlight }`. The package is
+  `"type": "module"`, so Rolldown gives the CJS build Node's interop and the default
+  becomes the whole module object; `require("@perssonify/editor")` threw until A113.
+  `pkg-cjs-require.test.js` enforces the rule in source and requires the built
+  `dist/*.cjs` after `bun run build` in CI and before `npm publish`.
+- **One editor per page** (A106): the stores are module singletons, so a SECOND
+  editor mounted while one is running refuses to start. `PerssonifyEditor` is a gate
+  (`ui/OneEditorPerPage.tsx`) around `PerssonifyEditorInstance`: it claims the page's
+  slot (`claimEditorInstance`, documentStore.ts) in a LAYOUT effect before anything
+  below it renders and releases it in that effect's cleanup, so a keyed remount never
+  shows the refusal (a passive release would). A refused editor renders a message,
+  logs `SECOND_EDITOR_ERROR`, touches no store, and takes over when the owner
+  unmounts; StrictMode re-claims with the same token (`lib-one-editor.test.jsx`). Remounting IS supported — `initialize()` is
   re-entrant (it re-activates the open document UNHYDRATED for the new editor to
   hydrate), and unmount is a document-leaving path: `releaseEditor`, run from a
   LAYOUT cleanup while both panes still exist, flushes, caches, stashes and releases
@@ -1923,8 +2389,26 @@ The product ships three ways from one codebase: the standalone app
   blanked the whole app there. `converter-escape.test.js` asks the TypeScript parser
   for real regex literals in the entry chunk's modules; where a lookbehind is
   needed, compile it from a string at runtime with a fallback (`emphasisPasses`,
-  md-format-utils, pinned equal by `formatting-clear-fallback.test.js`). Declaring a
-  browser floor is still open (Tailwind v4 needs Safari 16.4 anyway).
+  md-format-utils, pinned equal by `formatting-clear-fallback.test.js`). The floor is declared (next bullet).
+- **The browser floor is an inline script that must stay FIRST** (A097): Safari/iOS
+  16.4, Chrome/Edge 111, Firefox 128. It is ES5 and byte-identical in `index.html`
+  and `embed.html`, after `<title>` and before the watchdog and Vite's module entry.
+  It detects `CSS.registerProperty`, `color-mix()` and lookbehind (compiled from a
+  string) and, below the floor, writes a message and then `<plaintext>`, so nothing
+  after it is parsed and nothing stored is touched; the watchdog stands down on
+  `__PF_UNSUPPORTED`. Editing it changes its CSP hash in `vercel.json`. Pinned by
+  `ops-browser-floor.test.js` and `e2e/cases/floor.mjs` (all engines).
+- **marked is 18.x.** Renderer and tokenizer overrides take ONE token object and are
+  typed `RendererObject` / `TokenizerObject` — never cast `as never`. The task-list
+  checkbox is a TOKEN (inside the first paragraph of a loose item): the `checkbox()`
+  override returns "", and the Word export skips `checkbox` tokens. A mid-line
+  `$$…$$` is a `mathInline` token with `literal: true`, never a `text` token.
+  `emStrongMaskFix` works around an upstream bug (emphasis after a code span ending
+  in a backslash) and is installed by `buildMarked` AND the Word export; it mirrors
+  marked internals (reference-link masking, the private `linkInText`), so if marked
+  fixes the bug upstream, delete the module and keep the parity cases. The Word
+  export uses its OWN `Marked` instance, never the global `marked`. `marked-emoji`
+  stays on 2.x deliberately (its 3.x shortcode matching changed case sensitivity).
 - **Mermaid/ABC** render in the code-block node view (`DiagramPreview.tsx`, lazy),
   round-trip as fenced code for free.
 - **Highlight/background-color** is a `backgroundColor` attribute on the `textStyle`
@@ -1984,14 +2468,40 @@ The product ships three ways from one codebase: the standalone app
   `<sub>`/`<sup>` HTML** (turndown-rules.ts, mirroring the `<u>` underline rule and
   the MD pane's own `<sub>`/`<sup>` insertion) — NOT `~x~`/`^x^`, which collided
   with strikethrough. So single `~`/`^` carry no inline-format meaning.
-- **Right-to-left text is VIEW-ONLY** (A099): `BidiAuto` (a decoration plugin, rich
-  pane, maintained incrementally) gives every text block `dir="auto"`, and
+- **Right-to-left text is VIEW-ONLY** (A099): `BidiAuto` (rich pane) gives every text
+  block `dir="auto"` through NODE VIEWS for paragraph, heading, listItem, blockquote,
+  callout, table cells and summary, and task items through `TaskItemAutoDir` (TipTap's
+  own node view with the attribute added — a plugin's node view cannot replace it;
+  NOT `HTMLAttributes`, which would write `dir` into getHTML()). It holds NO
+  decorations — never go back to one per block: mapping and handing them down is
+  quadratic (one keystroke at 1.6 MB: 714 ms → 8 ms, A083), and so is building the
+  set (the task-item decorations cost 1.5 s at 4x CPU on every 4 MB open and large
+  projection). An extension that adds its own node view for one of those types must
+  take the `dir` over. And
   `extensions/cm-bidi.ts` does the same per visible CodeMirror line with
   `perLineTextDirection`. Do NOT use TipTap's `textDirection` option: it adds a
   `dir` attr to every node of the canonical JSON — rewriting every stored document
-  to say what its text already says. Paste keeps `dir`/`lang`, and HTML export no
-  longer declares `lang="en"`. Still open: the UI is English-only (~330 strings, no
-  translation layer) and `print-export.ts` hard-codes `lang="en"`.
+  to say what its text already says. Paste keeps `dir`/`lang`. HTML and print export
+  declare no `lang`: what is exported is the DOCUMENT, whose language the app does
+  not know.
+- **Interface strings come from `src/i18n` (A099).** In a component: `const t = useT()`,
+  and list `t` in the dependencies of any memo, callback or effect that uses it.
+  Outside a component: the global `t` (stores import `../i18n/core`, which has no
+  React). Module-level label tables are getters (`get label() { return t("…") }`) so
+  they are read at render. A sentence is ONE message with `{vars}` and `t.rich` markup
+  — never glued from several keys — and every message with a count is a plural
+  object. Never translate DATA: stored titles such as "Untitled" or a new folder's
+  name, ids, `data-*` hooks, URL parameters, file names, or anything written into a
+  document. English is the source of truth (`en/<area>.ts`, keys prefixed with the
+  area); `i18n-scanner` fails on a new hard-coded interface literal, and
+  `i18n-catalog` / `i18n-render` hold the rest. **The scanner cannot see a string
+  parked in a module-level object, a helper's return value or markup built in a
+  template** (the stored-image strings arrived that way and passed it) — route those
+  through `t()` yourself, and build anything that holds text when it is USED, never
+  as a load-time constant, or it stays in the language the page loaded in. The Help and About prose is CONTENT
+  in per-locale maps (`HELP_CONTENT`, `ABOUT_CONTENT`), not catalog keys. The app
+  shell and the embed set `<html lang dir>`; the library never does. `?lang=` is
+  session-only; the `en-XA` pseudo-locale is development-only. See `docs/i18n.md`.
 - **MD pane list wrap hangs to the item text** (`CodeMirrorPane.tsx`
   `listHangingIndent` ViewPlugin): with line wrapping on, each list line gets
   `text-indent:-Nch; padding-left:Nch` where N = the content offset (leading
@@ -2033,8 +2543,13 @@ page's credits (`src/data/credits.ts`) are pinned to it by
 **`e2e/` is where the things jsdom cannot see are tested** — real IME
 composition through CDP, real IndexedDB, quota exhaustion, blocked storage, a
 second tab, coarse pointers, duration, the service worker (offline and updates),
-the CSP enforced, and the published library on a host page. It runs Chromium
-only; Firefox and WebKit are not covered (A100). Every guard in it was
+the CSP enforced, and the published library on a host page. Chromium runs every suite; harness, surfaces, surfaces-deep, dataloss and floor
+also run on Firefox and WebKit (`E2E_BROWSER`, CI job `e2e-engines`, kept in step
+with `run.mjs` by `ops-release-config.test.js`). An engine difference is a harness
+fix, a `rep.skip` (the capability is missing; `open({cdp|throttle})` throws off
+Chromium) or a strict `rep.xfail` naming a reported defect — never a loosened check.
+`ENGINE_NOISE` holds the exact non-defect console messages, and `seed()` writes from
+`BLANK_PATH` with the stores cleared, never from the app's page (A100). Every guard in it was
 mutation-tested (revert the fix, confirm the case goes red); a case that cannot
 fail is worse than no case. Timing is measured (`e2e:perf`) but never asserted
 in CI — this container's wall-clock varies by more than 50% run to run.
@@ -2072,7 +2587,15 @@ the viewport, so it cannot be relied on to move a board across a threshold.
   `src/__tests__/setup.js` gives `Range` the empty geometry jsdom already gives
   elements (`testenv-geometry.test.jsx` reproduces the race). A test with cold
   dynamic imports states its own budget rather than inheriting 5s, and a component
-  using `useIsMobile` needs `window.matchMedia` stubbed (jsdom has none).
+  using `useIsMobile` needs `window.matchMedia` stubbed (jsdom has none). Vitest 5:
+  `clearMocks: false` is DELIBERATE — suites create spies once and 147
+  `not.toHaveBeenCalled()` checks rely on call history. `seededAdapter` keeps a
+  fixture's own `updated` (re-stamping it made which document opened at boot a
+  same-millisecond race — the `behave-editor-surfaces` flake), and a `beforeAll`
+  that clicks a library row waits for the row. In e2e, rich-pane typing after a click
+  and Ctrl+End waits for ProseMirror's selection (`richCaretToEnd`): WebKit fired
+  `selectionchange` late, text inherited the bold it was clicked into, and ⌘B then
+  REMOVED bold.
 - **Line endings are LF everywhere** (`.gitattributes` `* text=auto eol=lf`).
   Source-reading tests match call sites such as `"<MenuBar\n"`, so a CRLF checkout
   (`core.autocrlf=true` on Windows) failed `sync-perf.test.js` on untouched code.
@@ -2080,8 +2603,25 @@ the viewport, so it cannot be relied on to move a board across a threshold.
   `rules-of-hooks` is an ERROR; `exhaustive-deps` warns, and a DELIBERATE omission
   (the sync engine's empty-dependency `force*` callbacks) gets an
   `eslint-disable-next-line` with its reason — a disable that suppresses nothing is
-  reported. `bun run test:coverage` measures ALL of `src` (38.5% of lines when it was
-  widened from the pure modules, A108); the large UI files are still thinly covered.
+  reported. `bun run test:coverage` measures ALL of `src`: 81.8% of lines after the
+  behavioural suites (71.2% before them, A108).
+- **`noImplicitAny` is on** (A109). An untyped package gets a declaration in
+  `src/types/` (`turndown.d.ts`); delete it if `@types/turndown` is ever added.
+- **The `behave-*` suites mount the REAL editor once per file** (`behave-harness.jsx`,
+  A108), import `@testing-library/react/pure` (the default entry unmounts after every
+  case), run each file as one ordered journey, and judge outcomes by the adapter,
+  both panes, toasts and downloads. A path that mounts the editor and then waits for
+  it cannot finish inside `act()`, which holds renders until the scope ends — call
+  it through `outsideAct()`. In jsdom a Base UI menu returns focus to its trigger
+  synchronously, which blurs (and commits) a rename box opened from a dropdown item:
+  drive rename by F2 or the context menu. jsdom has no `DragEvent`, so
+  testing-library drops `clientY`; set it on the event (`dragAt`). The plain
+  `MemoryStorageAdapter` drops preferences; use `PrefsMemoryAdapter`.
+- **The marked parity fixture pins md→html and the Word export**
+  (`marked-parity`, 747 KB). A deliberate change to the preprocessor, the marked
+  config, the post-pass or the schema turns it red BY DESIGN: re-record with
+  `MARKED_PARITY_UPDATE=1`, then write every empty `why`. An `editor: "same"`
+  claim is verified through TipTap.
 - **`fake-indexeddb` (devDependency) is how the persistence layer is tested.**
   `import "fake-indexeddb/auto"` at the top of the file gives real IDB with real
   transaction auto-commit semantics. The snapshot store's `_resetForTests()`

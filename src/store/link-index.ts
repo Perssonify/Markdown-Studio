@@ -127,7 +127,7 @@ export function scanWikiLinks(
     regex.lastIndex = 0;
     let match;
     while ((match = regex.exec(text)) !== null) {
-      const inner = match[1];
+      const inner = match[1]!; // the one group is not optional
       const pipeIdx = inner.indexOf("|");
       const ref = pipeIdx >= 0 ? inner.slice(0, pipeIdx).trim() : inner.trim();
       const display = pipeIdx >= 0 ? inner.slice(pipeIdx + 1).trim() : ref;

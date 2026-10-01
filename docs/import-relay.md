@@ -17,7 +17,7 @@
 | **The client that calls it** | [`src/store/url-import.ts`](../src/store/url-import.ts) | `fetchDirectOrProxy` — tries a direct browser fetch first and falls back to the relay only with the visitor's consent: `relayPermitted` reads the stored answer (`pf:import-relay`), and only when there is none does it ask through the caller's `confirmRelay` callback, then remember the reply. `IMPORT_RELAY = "/api/import?url="`. A relay `413` is shown to the user as the relay's own message; any other non-2xx falls through to the download-and-drop guidance. |
 | **Provider URL rewriting** | [`src/store/import-url-normalize.ts`](../src/store/import-url-normalize.ts) | Turns share links into raw-download links *before* either fetch path runs. |
 | **The UI** | [`src/ui/UrlImportDialog.tsx`](../src/ui/UrlImportDialog.tsx), [`src/ui/SettingsPrivacy.tsx`](../src/ui/SettingsPrivacy.tsx) | The dialog supplies `confirmRelay` (`useDialog().confirm` with `relayConsentPrompt`'s wording) and says when the relay was used ("fetched through the Markdown Studio server, as you allowed"). Settings ▸ Privacy ▸ **Import relay** changes the stored answer. |
-| **Tests** | [`src/__tests__/import-relay.test.js`](../src/__tests__/import-relay.test.js), [`src/__tests__/ops-relay-client.test.js`](../src/__tests__/ops-relay-client.test.js), [`src/__tests__/g4-relay-consent.test.js`](../src/__tests__/g4-relay-consent.test.js) | The global-unicast allowlist (incl. the IPv4-in-IPv6, Teredo, 6to4, multicast/reserved and decimal/octal forms), `assertPublicUrl`, the `Sec-Fetch-Site` gate, response hardening, the port allowlist, the 4 MB cap, the log line, CORS pinning; the client's handling of a `413`; and the consent rules (never without a way to ask, a stored "deny" wins, a failed prompt counts as "no"). |
+| **Tests** | [`src/__tests__/import-relay.test.js`](../src/__tests__/import-relay.test.js), [`src/__tests__/import-relay-dispatcher.test.js`](../src/__tests__/import-relay-dispatcher.test.js), [`src/__tests__/ops-relay-client.test.js`](../src/__tests__/ops-relay-client.test.js), [`src/__tests__/g4-relay-consent.test.js`](../src/__tests__/g4-relay-consent.test.js) | The global-unicast allowlist (incl. the IPv4-in-IPv6, Teredo, 6to4, multicast/reserved and decimal/octal forms), `assertPublicUrl`, the `Sec-Fetch-Site` gate, response hardening, the port allowlist, the 4 MB cap, the log line, CORS pinning; a real request through the pinned `Agent` and undici's own `fetch`; the client's handling of a `413`; and the consent rules (never without a way to ask, a stored "deny" wins, a failed prompt counts as "no"). |
 | **Routing** | [`vercel.json`](../vercel.json) | The SPA rewrite is `/((?!api/\|assets/\|\.well-known/).*)` — the `api/` exclusion is what keeps this function reachable. Delete it and every relay call returns `index.html`. `functions["api/import.js"].maxDuration` (25 s) caps what one slow upstream can cost. |
 
 There is **no other server code in the repo.** If you are looking for a backend, this is it.
@@ -166,6 +166,14 @@ Validating an IP and then calling `fetch()` lets the resolver hand back a
 *different* address the second time. The fix is **pinning**: `pinnedDispatcher`
 builds an undici `Agent` whose `lookup` returns only the already-vetted addresses,
 and refuses if the hostname does not match. `fetch` cannot re-resolve.
+
+`pinnedFetch` makes the request with **undici's own `fetch`**, never Node's global
+one. The global `fetch` is a separate copy of undici bundled with Node (7.x in
+Node 24), and a dispatcher only works with the `fetch` of its own major: with
+undici 8's `Agent`, the global `fetch` failed EVERY request (`invalid
+onRequestStart method`) while the stubbed unit tests stayed green.
+[`import-relay-dispatcher.test.js`](../src/__tests__/import-relay-dispatcher.test.js)
+drives the real pairing over a socket, against a local server.
 
 ### 3. Redirects — where most relay hardening leaks
 

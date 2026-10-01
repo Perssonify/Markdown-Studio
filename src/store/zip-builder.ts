@@ -5,7 +5,7 @@
  * Kept out of import-export.ts on purpose — that module ships in the `/store`
  * library entry, and this one pulls in fflate at runtime.
  */
-import { Zip, ZipDeflate, strToU8 } from "fflate";
+import { Zip, ZipDeflate, ZipPassThrough, strToU8 } from "fflate";
 import type { DocumentRecord } from "./document";
 import type { StorageAdapter } from "./storage-adapter";
 
@@ -58,7 +58,7 @@ export async function readDocuments(
  * thread; yielding needs neither.
  */
 export async function buildZipAsync(
-  files: Record<string, string>,
+  files: Record<string, string | Uint8Array>,
   opts: { sliceMs?: number } = {}
 ): Promise<Uint8Array> {
   const sliceMs = opts.sliceMs ?? 12;
@@ -71,9 +71,11 @@ export async function buildZipAsync(
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
   let sliceStart = now();
   for (const [path, content] of Object.entries(files)) {
-    const entry = new ZipDeflate(path, { level: 6 });
+    // Image assets (A086) are already compressed: deflating them again costs
+    // time and saves nothing, so they are stored.
+    const entry = typeof content === "string" ? new ZipDeflate(path, { level: 6 }) : new ZipPassThrough(path);
     zip.add(entry);
-    entry.push(strToU8(content), true);
+    entry.push(typeof content === "string" ? strToU8(content) : content, true);
     if (failure) throw failure;
     if (now() - sliceStart > sliceMs) {
       await new Promise((r) => setTimeout(r, 0));

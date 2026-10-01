@@ -3,30 +3,53 @@ import { RefObject } from "react";
 const PROTOCOL = "perssonify";
 const PROTOCOL_VERSION = "1.0";
 
+/** The editor's view modes: markdown only, rich only ("html") or both side by side. */
+export type EditorViewMode = "md" | "html" | "split";
+/** How much of the editor's chrome is shown. */
+export type EditorChromeLevel = "full" | "minimal" | "none";
+
+const VIEW_MODES: ReadonlySet<unknown> = new Set<EditorViewMode>(["md", "html", "split"]);
+const CHROME_LEVELS: ReadonlySet<unknown> = new Set<EditorChromeLevel>(["full", "minimal", "none"]);
+
+/**
+ * What the bridge drives. The integration's own `EditorHandle` must be
+ * assignable to it: `PerssonifyEditorIntegration` passes its handle ref here
+ * without a cast, so the type gate holds the two together. `setMode` and
+ * `setChrome` used to take `string` here and the literal unions there, so a
+ * consumer handing the integration's ref type to `createHostBridge` got TS2345
+ * (parameters are contravariant: a handle that accepts three modes is not one
+ * that accepts any string). A handle written against this interface with wider
+ * parameters still fits.
+ *
+ * The members are METHODS, and what crosses the wire is `unknown`: the bridge
+ * forwards untyped message values and posts back whatever the handle returns.
+ * Method parameters compare bivariantly, which is what lets a handle whose
+ * `addDocuments` takes a precise document shape still satisfy `unknown[]`.
+ */
 export interface EditorHandle {
-  setDocuments: (docs: any[]) => Promise<any> | any;
-  setFieldSchemas: (schemas: any) => void;
-  setTheme: (theme: string) => void;
-  setMode: (mode: string) => void;
-  setAccent: (accent: string) => void;
-  openDocument: (docId: string) => Promise<void> | void;
-  setChrome: (level: string) => void;
-  addDocuments: (docs: any[]) => Promise<any> | any;
-  updateDocument: (id: string, patch: any) => Promise<any> | any;
-  appendToDocument: (id: string, markdown: string) => Promise<any> | any;
-  importContent: (content: string, format: string) => Promise<any> | any;
-  setAssociations: (associations: any) => void;
-  getCanonicalDocument: () => any;
+  setDocuments(docs: unknown[]): unknown;
+  setFieldSchemas(schemas: unknown): void;
+  setTheme(theme: string): void;
+  setMode(mode: EditorViewMode): void;
+  setAccent(accent: string): void;
+  openDocument(docId: string): Promise<void> | void;
+  setChrome(level: EditorChromeLevel): void;
+  addDocuments(docs: unknown[]): unknown;
+  updateDocument(id: string, patch: { title?: string; markdown?: string; canonical?: unknown }): unknown;
+  appendToDocument(id: string, markdown: string): unknown;
+  importContent(content: string, format: string): unknown;
+  setAssociations(associations: unknown): void;
+  getCanonicalDocument(): unknown;
   /** The real handle returns `{ md, fidelityReport }`, not a bare string — this
    *  interface used to disagree with the one it mirrors. */
-  getMarkdown: () => { md: string; fidelityReport?: any };
-  getHTML: () => string;
-  getGraph: () => any;
-  getAssociations?: (docId?: string) => any;
-  exportAs?: (format: string) => Promise<any> | any;
-  copyAsPrompt: (payload: any) => Promise<any> | any;
-  getDocuments: () => any[];
-  getActiveDocument: () => any;
+  getMarkdown(): { md: string; fidelityReport?: unknown };
+  getHTML(): string;
+  getGraph(): unknown;
+  getAssociations?(docId?: string): unknown;
+  exportAs?(format: string): unknown;
+  copyAsPrompt(payload: unknown): unknown;
+  getDocuments(): unknown[];
+  getActiveDocument(): unknown;
 }
 
 export interface HostBridgeOptions {
@@ -37,21 +60,28 @@ export interface HostMessage {
   type: string;
   action?: string;
   event?: string;
-  payload?: any;
+  payload?: unknown;
   requestId?: string;
   version?: string;
   timestamp?: number;
   error?: string;
-  result?: any;
+  result?: unknown;
 }
 
 export interface HostBridge {
   destroy: () => void;
-  emit: (eventName: string, payload: any, targetWindow?: Window | null) => void;
+  emit: (eventName: string, payload: unknown, targetWindow?: Window | null) => void;
+}
+
+/** A thrown value's message, as the error reply carries it. `err.message` alone
+ *  sent `undefined` for a thrown string, which the client reads as success. */
+function errorMessage(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err) return String((err as { message: unknown }).message);
+  return String(err);
 }
 
 export function createHostBridge(
-  editorRef: RefObject<EditorHandle>,
+  editorRef: RefObject<EditorHandle | null>,
   opts: HostBridgeOptions = {}
 ): HostBridge {
   // Secure by default: deny all cross-origin messages unless the embedder
@@ -64,7 +94,7 @@ export function createHostBridge(
 
   function emit(
     eventName: string,
-    payload: any,
+    payload: unknown,
     targetWindow: Window | null = null,
     targetOrigin?: string
   ): void {
@@ -108,61 +138,76 @@ export function createHostBridge(
     const handle = editorRef.current;
     if (!handle) return;
 
-    const { action, payload, requestId } = msg;
+    const { action, requestId } = msg;
 
     if (!action) return;
 
+    // The wire is untyped. Fields are handed to the handle as they arrived —
+    // it owns their meaning — and only the two enums are checked here. The
+    // casts assert nothing at runtime: a message with no payload still throws
+    // on its first field read, as it always has, and gets an error reply.
+    const payload = msg.payload as Record<string, unknown>;
+    const text = (value: unknown) => value as string;
+
     try {
-      let result: any;
+      let result: unknown;
 
       switch (action) {
         case "setDocuments":
-          result = await handle.setDocuments(payload.documents);
+          result = await handle.setDocuments(payload["documents"] as unknown[]);
           break;
         case "setFieldSchemas":
-          handle.setFieldSchemas(payload.schemas);
+          handle.setFieldSchemas(payload["schemas"]);
           result = { ok: true };
           break;
         case "setTheme":
-          handle.setTheme(payload.theme);
+          handle.setTheme(text(payload["theme"]));
           result = { ok: true };
           break;
-        case "setMode":
-          handle.setMode(payload.mode);
+        case "setMode": {
+          // A message is untyped: refuse what the handle's type does not
+          // accept, instead of storing a mode no pane renders.
+          const mode = payload?.["mode"];
+          if (!VIEW_MODES.has(mode)) throw new Error(`Unknown view mode: ${String(mode)}`);
+          handle.setMode(mode as EditorViewMode);
           result = { ok: true };
           break;
+        }
         case "setAccent":
-          handle.setAccent(payload.accent);
+          handle.setAccent(text(payload["accent"]));
           result = { ok: true };
           break;
         case "openDocument":
           // Activation awaits the leave-save and target hydration. Reply only
           // after it settles, and route async failures through the error reply.
-          await handle.openDocument(payload.docId ?? payload.id);
+          await handle.openDocument(text(payload["docId"] ?? payload["id"]));
           result = { ok: true };
           break;
-        case "setChrome":
-          handle.setChrome(payload.chrome ?? payload.level);
+        case "setChrome": {
+          const level = payload?.["chrome"] ?? payload?.["level"];
+          if (!CHROME_LEVELS.has(level)) throw new Error(`Unknown chrome level: ${String(level)}`);
+          handle.setChrome(level as EditorChromeLevel);
           result = { ok: true };
           break;
+        }
         case "addDocuments":
-          result = await handle.addDocuments(payload.docs);
+          result = await handle.addDocuments(payload["docs"] as unknown[]);
           break;
         case "updateDocument":
-          result = await handle.updateDocument(payload.id ?? payload.docId, {
-            title: payload.title,
-            markdown: payload.markdown,
-            canonical: payload.canonical,
+          result = await handle.updateDocument(text(payload["id"] ?? payload["docId"]), {
+            title: payload["title"] as string | undefined,
+            markdown: payload["markdown"] as string | undefined,
+            canonical: payload["canonical"],
           });
           break;
         case "appendToDocument":
-          result = await handle.appendToDocument(payload.id ?? payload.docId, payload.markdown);
+          result = await handle.appendToDocument(text(payload["id"] ?? payload["docId"]), text(payload["markdown"]));
           break;
         case "importContent":
-          result = await handle.importContent(payload.content, payload.format);
+          result = await handle.importContent(text(payload["content"]), text(payload["format"]));
           break;
         case "setAssociations":
-          handle.setAssociations(payload.associations);
+          handle.setAssociations(payload["associations"]);
           result = { ok: true };
           break;
         case "getCanonicalDocument":
@@ -178,7 +223,7 @@ export function createHostBridge(
           result = handle.getGraph();
           break;
         case "copyAsPrompt":
-          result = await handle.copyAsPrompt(payload);
+          result = await handle.copyAsPrompt(msg.payload);
           break;
         case "getDocuments":
           result = handle.getDocuments();
@@ -187,10 +232,10 @@ export function createHostBridge(
           result = handle.getActiveDocument();
           break;
         case "getAssociations":
-          result = handle.getAssociations?.(payload?.docId);
+          result = handle.getAssociations?.(payload?.["docId"] as string | undefined);
           break;
         case "exportAs":
-          result = await handle.exportAs?.(payload?.format);
+          result = await handle.exportAs?.(text(payload?.["format"]));
           break;
         default:
           // REJECT rather than resolve. `createEditorClient` only rejects on a
@@ -207,9 +252,9 @@ export function createHostBridge(
       if (requestId) {
         emit("response", { requestId, result }, event.source as Window, event.origin);
       }
-    } catch (err: any) {
+    } catch (err) {
       if (requestId) {
-        emit("response", { requestId, error: err.message }, event.source as Window, event.origin);
+        emit("response", { requestId, error: errorMessage(err) }, event.source as Window, event.origin);
       }
     }
   }
@@ -227,15 +272,25 @@ export function createHostBridge(
 }
 
 export interface EditorClient {
-  call: <T = any>(action: string, payload?: any) => Promise<T>;
+  // The two `any`s are the published contract, kept on purpose: a host reads a
+  // reply or an event payload without naming its type. `unknown` there would
+  // stop every such host compiling.
+  call: <T = any>(action: string, payload?: unknown) => Promise<T>;
   on: (event: string, fn: (payload: any) => void) => () => void;
-  send: (action: string, payload?: any) => void;
+  send: (action: string, payload?: unknown) => void;
   destroy: () => void;
 }
 
 interface PendingRequest {
-  resolve: (value: any) => void;
-  reject: (reason?: any) => void;
+  resolve(value: unknown): void;
+  reject(reason?: unknown): void;
+}
+
+/** What a "response" event carries. */
+interface ResponsePayload {
+  requestId?: string;
+  error?: string;
+  result?: unknown;
 }
 
 /**
@@ -278,7 +333,7 @@ export function createEditorClient(
   opts?: string | { editorOrigin?: string; allowedOrigins?: string[] }
 ): EditorClient {
   const editorOrigin = resolveEditorOrigin(iframe, opts);
-  const listeners: Record<string, Array<(payload: any) => void>> = {};
+  const listeners: Record<string, Array<(payload: unknown) => void>> = {};
   let requestCounter = 0;
   const pendingRequests = new Map<string, PendingRequest>();
 
@@ -293,14 +348,15 @@ export function createEditorClient(
     const msg = event.data as HostMessage;
     if (!msg || msg.type !== PROTOCOL) return;
 
-    if (msg.event === "response" && msg.payload?.requestId) {
-      const resolve = pendingRequests.get(msg.payload.requestId);
+    const reply = msg.payload as ResponsePayload | undefined;
+    if (msg.event === "response" && reply?.requestId) {
+      const resolve = pendingRequests.get(reply.requestId);
       if (resolve) {
-        pendingRequests.delete(msg.payload.requestId);
-        if (msg.payload.error) {
-          resolve.reject(new Error(msg.payload.error));
+        pendingRequests.delete(reply.requestId);
+        if (reply.error) {
+          resolve.reject(new Error(reply.error));
         } else {
-          resolve.resolve(msg.payload.result);
+          resolve.resolve(reply.result);
         }
       }
       return;
@@ -323,8 +379,8 @@ export function createEditorClient(
   window.addEventListener("message", handleMessage);
 
   return {
-    call<T = any>(action: string, payload: any = {}): Promise<T> {
-      return new Promise((resolve, reject) => {
+    call<T>(action: string, payload: unknown = {}): Promise<T> {
+      return new Promise<T>((resolve, reject) => {
         const requestId = `req-${++requestCounter}-${Date.now()}`;
         pendingRequests.set(requestId, { resolve, reject });
 
@@ -353,7 +409,7 @@ export function createEditorClient(
       });
     },
 
-    on(event: string, fn: (payload: any) => void): () => void {
+    on(event: string, fn: (payload: unknown) => void): () => void {
       if (!listeners[event]) {
         listeners[event] = [];
       }
@@ -367,7 +423,7 @@ export function createEditorClient(
       };
     },
 
-    send(action: string, payload: any = {}): void {
+    send(action: string, payload: unknown = {}): void {
       const contentWindow = iframe.contentWindow;
       if (contentWindow) {
         contentWindow.postMessage(

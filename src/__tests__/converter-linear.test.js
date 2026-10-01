@@ -60,11 +60,21 @@ const HTML = [
   "<p title='b></p><h2>'>z</p><p>w</p>",
 ];
 
+// Footnotes: the definitions' "Footnotes" heading is dropped only when the
+// footnote list is its next element — a seam between the two used to write it
+// out as `## Footnotes` (holdsNextSibling).
+const FOOTNOTES = [
+  "A claim[^1] and another[^n].\n\nMore text.\n\n[^1]: The first.\n[^n]: Second\n    continued.",
+  "One[^a].\n\n## Footnotes\n\nNot the real section.\n\n[^a]: Def.",
+];
+
 describe("A083 — linear conversion is byte-identical to turndown's", () => {
   const engine = engineFor();
+  const withNotes = engineFor({ footnotes: true });
   const corpus = [
     ...MARKDOWN.map((md) => throughRichPane(engine.mdToHtml(md)).html),
     ...MARKDOWN.map((md) => engine.mdToHtml(md)), // marked output, "\n" between blocks
+    ...FOOTNOTES.map((md) => throughRichPane(withNotes.mdToHtml(md)).html),
     ...HTML,
   ].map((h) => cleanHtmlForTurndown(h));
 

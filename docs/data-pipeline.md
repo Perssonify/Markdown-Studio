@@ -53,14 +53,14 @@ flowchart TD
   - **text** → split on blank lines, each block wrapped in `<p>`; single newlines are kept as line breaks.
   - **html / paste-html** → `sanitizeForIngest()` ([:446](../src/store/ingest.ts#L446)) strips dangerous elements (`BLOCKED_ELEMENTS`, [:194](../src/store/ingest.ts#L194)) using DOMParser, preserving text; then removes event handlers and dangerous URL schemes, keeps only allow-listed style declarations (an allowlist in [src/engine/css-safety.ts](../src/engine/css-safety.ts), so a CSS escape cannot walk past it), and strips `class`/`id`/`name` except `language-*`, `sr-only`, `wiki-link` and `perssonify-link` (A073).
   - **pmjson** → parsed and structure-checked as a ProseMirror `doc` (or a `perssonify-document` envelope); the attributes renderers write into `style` (colour, highlight, font, alignment, column widths, theme-image sources) are validated by `sanitizeCanonicalNode` ([src/store/canonical-sanitize.ts](../src/store/canonical-sanitize.ts), A070); the envelope's `schemaVersion` is carried through (A021); used as canonical.
-- **Output shape:** `{ doc: DocumentRecord, html, needsTiptap }` (`IngestResult`, [:51](../src/store/ingest.ts#L51)). `needsTiptap: true` means the HTML still has to be parsed into canonical PM JSON. Imports do that headlessly — `captureIngestHeadless` ([src/store/headless-ingest.ts](../src/store/headless-ingest.ts)) parses it against the live editor's schema, or `headlessSchema()` when no editor is mounted, and hands the result to `completeIngest()` ([:637](../src/store/ingest.ts#L637)) — then persist the new document without activating it, so a click in the library during a long import can no longer turn a file into an empty "Untitled" (A031).
+- **Output shape:** `{ doc: DocumentRecord, html, needsTiptap }` (`IngestResult`, [:51](../src/store/ingest.ts#L51)). `needsTiptap: true` means the HTML still has to be parsed into canonical PM JSON. Imports do that headlessly — `captureIngestHeadless` ([src/store/headless-ingest.ts](../src/store/headless-ingest.ts)) parses it against the live editor's schema, or `headlessSchema()` when no editor is mounted, and hands the result to `completeIngest()` ([:646](../src/store/ingest.ts#L646)) — then persist the new document without activating it, so a click in the library during a long import can no longer turn a file into an empty "Untitled" (A031).
 - **State persisted:** none yet — ingest builds the in-memory record.
 - **Guarantees:** Output is **sanitized** (this is the trust boundary, see below). What the schema cannot hold is recorded in `residuals` + `ingestReport` via `analyzeHtml()` ([:238](../src/store/ingest.ts#L238)), HTML comments included (`html-comment`, A050). Known gap: on the HTML path the sanitizer runs first, so the elements it removed (script, iframe, form controls) are not reported.
 - **Failure mode:** malformed `pmjson` falls back to wrapping the raw string as a paragraph ([src/store/ingest.ts](../src/store/ingest.ts)); with no DOM parser available `sanitizeForIngest` fails closed — the whole input becomes escaped text.
 
 ### Stage 2 — Paste cleaning (clipboard → editor)
 
-- **Code:** [src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts); paste handling in `handlePaste` ([src/ui/TiptapPane.tsx:262](../src/ui/TiptapPane.tsx#L262)) → `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:305](../src/hooks/useDocumentLifecycle.ts#L305)).
+- **Code:** [src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts); paste handling in `handlePaste` ([src/ui/TiptapPane.tsx:268](../src/ui/TiptapPane.tsx#L268)) → `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:314](../src/hooks/useDocumentLifecycle.ts#L314)).
 - **Input:** `text/html` from the clipboard (Word, Google Docs, web pages — i.e. hostile HTML).
 - **What happens:** with **Paste Styled** on (the default), `sanitizePastedHtml()` ([src/engine/html-cleaner.ts:165](../src/engine/html-cleaner.ts#L165)) removes comments, meta/script/style blocks and Office/VML junk, strips `class`/`id`/`data-*` and event handlers (keeping `dir` and `lang`), and keeps an allow-list of CSS properties; with it off, `cleanPasteHtml()` ([:244](../src/engine/html-cleaner.ts#L244)) additionally turns CSS like `font-weight:bold` into semantic `<strong>`/`<em>`/`<u>`/`<del>` and drops the decorative styling.
 - **Output:** clean HTML safe to hand to Tiptap.
@@ -72,26 +72,30 @@ flowchart TD
 - **Code:** [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts); markdown engine [src/engine/useMarkdownEngine.ts](../src/engine/useMarkdownEngine.ts); marked configuration [src/engine/build-marked.ts](../src/engine/build-marked.ts); markdown preprocessing [src/engine/preprocessor.ts](../src/engine/preprocessor.ts); Turndown rules [src/engine/turndown-rules.ts](../src/engine/turndown-rules.ts).
 - **Two directions:**
 
-  **MD → canonical** (`syncMdToHtml`, [:41](../src/engine/useSyncEngine.ts#L41)):
+  **MD → canonical** (`syncMdToHtml`, [:98](../src/engine/useSyncEngine.ts#L98)):
   ```
   CM6 text → quickHash gate → preprocessMarkdown → marked.parse → HTML
            → tiptap.setHTML → Tiptap normalizes → editor.getJSON() = canonical
   ```
   The preprocessor only rewrites what must change before marked tokenizes the source: the front-matter block, the `|` of a wiki-link alias (written `\|`, so a GFM table does not split the link across cells), and the opt-in `{key=val}` syntax — off by default, and when on, a group renders only if every key is known and every value validates; anything else stays exactly as written (A039). Code is masked first, with the one fence scanner (`findFencedCodeRanges`) that `normalizeMarkdown` also uses (A046). Wiki links and heading anchors, maths, footnotes, task lists and callouts are marked extensions or renderer overrides in `build-marked.ts`; wiki links are an inline extension ([src/engine/wiki-link-marked.ts](../src/engine/wiki-link-marked.ts)), so they never fire inside code of any kind (A045, A048).
 
-  **canonical → MD** (`syncHtmlToMd`, [:108](../src/engine/useSyncEngine.ts#L108)):
+  **canonical → MD** (`syncHtmlToMd`, [:179](../src/engine/useSyncEngine.ts#L179)):
   ```
   PM doc node unchanged? → skip           (reference check, nothing serialized)
-  tiptap.getHTML() → quickHash gate → cleanHtmlForTurndown
-                   → (styled) engine.htmlToMd      ── Turndown tdInline (keeps <span style>)
-                   → (clean)  engine.htmlToCleanMd ── Turndown tdClean (strips styling)
-                   → normalizeMarkdown → CM6.setValue(md)
+  per top-level block (cached on its immutable PM node; only changed blocks do this):
+      serialize → cleanHtmlForTurndown → Turndown   (tdInline styled / tdClean clean)
+  quickHash gate (combined from the per-block hashes = quickHash(getHTML()))
+  → join the blocks with Turndown's own seam rule → normalizeMarkdown → CM6.setValue(md)
   ```
-  Both Turndown instances share the base rules and an escaper that backslash-escapes only what would otherwise become live syntax on the next pass: `<` before a tag-like character, `&` before an entity, `N)` at a line start, and `$`, `~~` or a recognised `{…}` group only while maths, strikethrough or the curly syntax is on (A040). Thematic breaks are written `---` (A051); footnotes come back as `[^label]` and `[^label]: text` (A043); a table cell's markdown comes from the same outer conversion, and column alignment survives (A044). The conversion is linear in document length: `turndownLinear` converts the top level in runs of 64 blocks, byte-identical to plain Turndown (A083).
+  Both Turndown instances share the base rules and an escaper that backslash-escapes only what would otherwise become live syntax on the next pass: `<` before a tag-like character, `&` before an entity, `N)` at a line start, and `$`, `~~` or a recognised `{…}` group only while maths, strikethrough or the curly syntax is on (A040). Thematic breaks are written `---` (A051); footnotes come back as `[^label]` and `[^label]: text` (A043); a table cell's markdown comes from the same outer conversion, and column alignment survives (A044).
+
+  The projection is incremental (A083, [src/engine/incremental-md.ts](../src/engine/incremental-md.ts)): ProseMirror nodes are immutable, so an edit shares every untouched top-level block with the previous document, and each block's cleaned HTML, content hash and Turndown output are cached on its node. A keystroke converts the block it changed; the rest is joined from the cache. The result is byte-identical to `htmlToMd(editor.getHTML())` — `converter-incremental.test.js` checks that after every step of random edit sequences — because the pieces are cut only where `turndownLinear` may cut (between two blocks Turndown treats as blocks, never after a heading the footnote rule reads past), and the whitespace pass still runs over the joined whole. A `<details>` block is not a block to Turndown, so it is converted together with its neighbours. The whole-document path (`getHTML()` → `htmlToMd`) remains for an engine without the per-block methods, and for exports; it is linear in document length (`turndownLinear`, runs of 64 blocks).
+
+  Exports write hard breaks as `\` + newline so renderers without the app's `breaks: true` dialect keep them ([src/engine/portable-breaks.ts](../src/engine/portable-breaks.ts), A051); the markdown pane's projection is unchanged.
 
 - **Input/output shapes:** strings (markdown ⇄ HTML) on the wire; PM JSON at the canonical end.
 - **State persisted:** none directly — sync only updates in-memory editors and fires `onCanonicalChange`.
-- **Guarantees & the echo gate:** each direction early-exits when nothing changed — the markdown side on a `quickHash` ([src/utils/index.ts:57](../src/utils/index.ts#L57)) of its text; the rich side first on the ProseMirror doc node itself (`lastHtmlDoc`, [src/engine/useSyncEngine.ts:27](../src/engine/useSyncEngine.ts#L27) — reference equality, no serialization), then on a hash of the HTML. Combined with the `syncing` re-entrancy ref ([:28](../src/engine/useSyncEngine.ts#L28)), this prevents the MD→HTML→MD echo loop. The gates are committed only after a conversion succeeds. This is **at-most-once per content change**, not ordered transactionally — it's a debounced projection, not a log.
+- **Guarantees & the echo gate:** each direction early-exits when nothing changed — the markdown side on a `quickHash` ([src/utils/index.ts:57](../src/utils/index.ts#L57)) of its text; the rich side first on the ProseMirror doc node itself (`lastHtmlDoc`, [src/engine/useSyncEngine.ts:62](../src/engine/useSyncEngine.ts#L62) — reference equality, no serialization), then on a hash of the HTML. Combined with the `syncing` re-entrancy ref ([:95](../src/engine/useSyncEngine.ts#L95)), this prevents the MD→HTML→MD echo loop. The gates are committed only after a conversion succeeds. This is **at-most-once per content change**, not ordered transactionally — it's a debounced projection, not a log.
 - **Backpressure:** handled by a **debounce with a ceiling**, not a queue ([src/hooks/sync-schedule.ts](../src/hooks/sync-schedule.ts)). Two numbers, both derived from a moving average of what recent projections measurably cost on the device in use:
   - `syncDelayFor` — the wait after your last keystroke, clamped to `SYNC_MIN_DELAY_MS`…`SYNC_MAX_DELAY_MS` (120–800ms).
   - `syncMaxWaitFor` — the longest the other pane may lag while changes keep arriving, clamped to `SYNC_MIN_MAX_WAIT_MS`…`SYNC_MAX_MAX_WAIT_MS` (250–1200ms). Without it the debounce was purely trailing and the other pane never updated during continuous typing.
@@ -101,17 +105,18 @@ flowchart TD
 
 ### Stage 4 — Persist (canonical → IndexedDB)
 
-- **Code:** `useDocumentStore.saveActiveDoc` ([src/store/documentStore.ts:981](../src/store/documentStore.ts#L981)) → storage adapter `save()` → [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts).
+- **Code:** `useDocumentStore.saveActiveDoc` ([src/store/documentStore.ts:1154](../src/store/documentStore.ts#L1154)) → storage adapter `save()` → [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts).
 - **Input:** the active `DocumentRecord` with fresh canonical JSON.
 - **What happens:** the save refuses to write when:
-  - another tab wrote a revision newer than the one this tab's content is based on (the multi-tab guard, 2 s tolerance) → terminal `conflict`, "Changed in another tab — not saving";
+  - another tab wrote a revision newer than the one this tab's content is based on (the multi-tab guard, 2 s tolerance — none for a revision another tab announced over the tab-sync channel) → terminal `conflict`, "Changed in another tab — not saving";
+  - another tab deleted the document while it is open here, and it is still gone → terminal `conflict`, "Deleted in another tab — not saving"; the refused content is kept in Version history;
   - the editor is blank and the stored document is not → terminal `blocked` (only the explicit Clear document command may persist a blank);
   - the document holds content from a newer build (or content this build's schema cannot load), shown read-only → terminal `blocked`, "Newer version — read-only" (A021);
   - the stored copy could not be read at all → `error`, retried: it fails closed rather than guess (A029).
 
-  Otherwise it records the old version in the version-history database (throttled; always on a large shrink), `serializeForStorage()` ([src/store/document.ts:418](../src/store/document.ts#L418)) writes the record without its derived caches and stamps `schemaVersion`, and the adapter writes the record and the document list in one transaction. There is no self-imposed size cap (a host may set a hard `maxBytes`): the limit is the browser's quota, and a write it refuses becomes `StorageQuotaError` ([src/store/idb-storage-adapter.ts:76](../src/store/idb-storage-adapter.ts#L76)) and the terminal status `full` (A086).
+  Otherwise it records the old version in the version-history database (throttled; always on a large shrink), `serializeForStorage()` ([src/store/document.ts:470](../src/store/document.ts#L470)) writes the record without its derived caches and stamps `schemaVersion`, and the adapter writes the record and the document list in one transaction. There is no self-imposed size cap (a host may set a hard `maxBytes`): the limit is the browser's quota, and a write it refuses becomes `StorageQuotaError` ([src/store/idb-storage-adapter.ts:88](../src/store/idb-storage-adapter.ts#L88)) and the terminal status `full` (A086).
 - **Output / state persisted:** the `documents` store record and the `__manifest` summary list. (`__prefs` — the last active document, sync mode, folder tree — is written by other paths.) See [database.md](database.md).
-- **Guarantees:** `saveActiveDoc` resolves `true` only when the write committed, so ⌘S says "Changes saved" and the host's `onSave` fires only then (A026). Renames, card pin/colour and host-bridge patches respect the same multi-tab check (A028). The manifest and the doc are written together, and the listing rebuilds the manifest if it is ever out of step (see [database.md#invariants](database.md#invariants)).
+- **Guarantees:** `saveActiveDoc` resolves `true` only when the write committed, so ⌘S says "Changes saved" and the host's `onSave` fires only then (A026). Renames, card pin/colour and host-bridge patches respect the same multi-tab check (A028). Every write that commits — and only one that commits — is then announced to the other tabs on the same library (ids and revisions only, [src/store/tab-sync.ts](../src/store/tab-sync.ts)). The manifest and the doc are written together, and the listing rebuilds the manifest if it is ever out of step (see [database.md#invariants](database.md#invariants)).
 - **Failure mode:** storage full → the status bar reads "Storage full — not saving", the host's `onStorageQuotaExceeded` (or a toast) fires, and autosave stops; deleting a document (or erasing a document's history), a real edit, or an explicit Save retries — see [runbooks/storage-quota-exceeded.md](runbooks/storage-quota-exceeded.md).
 
 ### Stage 4b — Unload stash (canonical → localStorage → next boot)
@@ -124,7 +129,7 @@ flowchart TD
 
 ### Stage 5 — Readers (canonical → outputs)
 
-- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:290](../src/store/import-export.ts#L290)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
+- **Markdown/HTML/JSON export & clipboard:** [src/store/import-export.ts](../src/store/import-export.ts) (`exportAsMarkdown`/`Html`/`Json`). JSON and full-backup exports share `toExportEnvelope` ([src/store/import-export.ts:315](../src/store/import-export.ts#L315)), which stamps `schemaVersion` and leaves out `origin.raw` and the clipboard alternates — text the user may have deleted since (A079).
 - **Knowledge graph:** `exportGraph` ([src/store/link-index.ts:411](../src/store/link-index.ts#L411)); every link is resolved by the one wiki-link resolver, `createWikiResolver` ([:193](../src/store/link-index.ts#L193)), which the click handler and the broken-link decoration use too (A059).
 - **Copy as Prompt:** `buildContextPrompt` ([src/integration/prompt-builder.ts:232](../src/integration/prompt-builder.ts#L232)).
 - All readers derive from canonical; none mutate it.
@@ -151,11 +156,11 @@ flowchart LR
 
 ## Worked example — paste a styled paragraph and watch it land
 
-1. User pastes Google-Docs HTML into the rich-text pane → Tiptap's `handlePaste` ([src/ui/TiptapPane.tsx:262](../src/ui/TiptapPane.tsx#L262)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:305](../src/hooks/useDocumentLifecycle.ts#L305)).
+1. User pastes Google-Docs HTML into the rich-text pane → Tiptap's `handlePaste` ([src/ui/TiptapPane.tsx:268](../src/ui/TiptapPane.tsx#L268)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:314](../src/hooks/useDocumentLifecycle.ts#L314)).
 2. With Paste Styled on (the default), `sanitizePastedHtml()` ([src/engine/html-cleaner.ts:165](../src/engine/html-cleaner.ts#L165)) strips Office junk and keeps only allow-listed CSS; with it off (or ⇧ held), `cleanPasteHtml()` ([:244](../src/engine/html-cleaner.ts#L244)) also converts `font-weight:700` → `<strong>`.
 3. Cleaned HTML is inserted into Tiptap; the editor normalizes it to canonical PM JSON.
-4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:108](../src/engine/useSyncEngine.ts#L108)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
-5. `onCanonicalChange` fires → `updateDerived` ([src/store/documentStore.ts:1579](../src/store/documentStore.ts#L1579)) computes the fidelity report and the word/character counts in one walk (`computeCanonicalStats`, [src/store/fidelity.ts:239](../src/store/fidelity.ts#L239)) and publishes them only when they change; if styling can't be represented in the chosen markdown mode, the report records the loss and the StatusBar shows a fidelity badge.
+4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:179](../src/engine/useSyncEngine.ts#L179)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.
+5. `onCanonicalChange` fires → `updateDerived` ([src/store/documentStore.ts:1812](../src/store/documentStore.ts#L1812)) computes the fidelity report and the word/character counts in one walk (`computeCanonicalStats`, [src/store/fidelity.ts:258](../src/store/fidelity.ts#L258)) and publishes them only when they change; if styling can't be represented in the chosen markdown mode, the report records the loss and the StatusBar shows a fidelity badge.
 6. Autosave (≤5s later) → `saveActiveDoc` (after its pre-save checks) → `serializeForStorage` → IndexedDB `documents` store; `__manifest` updated in the same transaction.
 
 That's the full life of one paste: untrusted HTML → sanitized → canonical → projected to markdown → fidelity-checked → persisted.

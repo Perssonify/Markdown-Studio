@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { cachedImport, isChunkLoadError } from "../utils/lazy-import";
+import { useT } from "../i18n";
 
 /**
  * Lazy-loaded live preview for fenced code blocks whose language is a diagram
@@ -52,6 +53,11 @@ export function mermaidConfig(dark: boolean) {
     securityLevel: "strict" as const,
     theme: dark ? ("dark" as const) : ("default" as const),
     secure: [...MERMAID_SECURE_KEYS],
+    // Mermaid 12 made ELK the default layout. Staying on dagre keeps every
+    // existing diagram laid out as it was, and keeps ELK (a 1.6 MB chunk,
+    // loaded on first use) off the path of every flowchart. A diagram can
+    // still ask for ELK itself (`config: layout: elk`).
+    layout: "dagre",
     // Mermaid's defaults, stated so an upgrade that raises them cannot quietly
     // let a pasted document spend longer laying out a hostile graph.
     maxTextSize: 50_000,
@@ -76,6 +82,7 @@ export function DiagramPreview({
   code: string;
   language: string;
 }) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -131,7 +138,7 @@ export function DiagramPreview({
           // module …" sent people looking for a typo that was never there.
           setError(
             isChunkLoadError(e)
-              ? `The ${language === "abc" ? "music" : "diagram"} renderer couldn't be loaded — you may be offline. It will load after a reload once you're back online.`
+              ? (language === "abc" ? t("panes.musicRendererCouldntLoad") : t("panes.diagramRendererCouldntLoad"))
               : e instanceof Error ? e.message : String(e),
           );
         }
@@ -143,7 +150,7 @@ export function DiagramPreview({
     return () => {
       cancelled = true;
     };
-  }, [code, language, themeVersion]);
+  }, [code, language, themeVersion, t]);
 
   return (
     <div
@@ -153,7 +160,7 @@ export function DiagramPreview({
     >
       {loading && !error ? (
         <div className="py-3 text-center text-xs text-muted-foreground" aria-live="polite">
-          Rendering {language === "abc" ? "score" : "diagram"}…
+          {language === "abc" ? t("panes.renderingScore") : t("panes.renderingDiagram")}
         </div>
       ) : null}
       {error ? (
@@ -161,7 +168,7 @@ export function DiagramPreview({
           role="alert"
           className="rounded border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive"
         >
-          <span className="font-medium">{language} error:</span> {error}
+          <span className="font-medium">{t("panes.languageError", { language })}</span> {error}
         </div>
       ) : null}
       <div ref={ref} className="flex justify-center overflow-x-auto" />

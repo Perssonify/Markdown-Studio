@@ -13,6 +13,7 @@
 
 - [Overview](#overview)
 - [Tech Stack](#tech-stack)
+- [Browser support](#browser-support)
 - [Getting Started](#getting-started)
 - [Architecture](#architecture)
 - [Features](#features)
@@ -47,20 +48,40 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 
 | Layer | Technology |
 |-------|-----------|
-| UI Framework | React 18 |
+| UI Framework | React 19 (the library also supports 18.3) |
 | Markdown editor | CodeMirror 6 |
 | Rich Text Editor | Tiptap 3.31 (ProseMirror) — every `@tiptap/*` package at one version |
-| Markdown Parser | marked 12 |
+| Markdown Parser | marked 18 |
 | HTML-to-Markdown | Turndown 7 |
 | State | Zustand 5 |
 | Persistence | IndexedDB in the browser (no account, no server copy) |
 | UI primitives | Base UI (menus, dialogs, popovers) |
 | Build Tool | Vite 8 (Rolldown) + vite-plugin-pwa (service worker) |
-| Test Framework | Vitest 4 + Testing Library; Playwright-driven Chromium for `e2e/` |
+| Test Framework | Vitest 5 (jsdom 30) + Testing Library; Playwright-driven Chromium, Firefox and WebKit for `e2e/` |
 | Lint | ESLint 10 + typescript-eslint + React hook rules |
 | Package Manager | Bun 1.4.0 (pinned by `packageManager`) |
 | Deployment | Vercel (static SPA + one serverless function, the import relay) |
 | Styling | Tailwind CSS v4 + shadcn/ui |
+
+---
+
+## Browser support
+
+**Safari 16.4** or later (on iPhone and iPad, **iOS / iPadOS 16.4** — every
+browser there uses Safari's engine), **Chrome or Edge 111** or later, and
+**Firefox 128** or later. That is what the stylesheet and the code already
+require: Tailwind v4 is built on `@property` and `color-mix()`, and the code
+uses regex lookbehind. The same floor applies to the npm library, where the host
+page decides what an older browser sees.
+
+Below the floor the app and the iframe embed show a plain message naming these
+versions instead of a blank page. It is decided by feature detection
+(`CSS.registerProperty`, `color-mix()`, lookbehind), never by user agent, and it
+stops the page before any app code runs: nothing stored in the browser is
+touched, so a user's documents are there after they update. The boot watchdog,
+which would otherwise read an old browser's errors as a broken deploy and clear
+the offline caches, never runs there. See
+[docs/gotchas.md](docs/gotchas.md#below-the-browser-floor-the-page-must-stop-itself--and-the-watchdog-must-stay-away).
 
 ---
 
@@ -71,7 +92,7 @@ The editor supports multi-document management with **nested folders**, wiki-styl
 - [Bun](https://bun.sh) (canonical — `bun.lock` is committed and Vercel builds with Bun),
   at the version pinned by `packageManager` in `package.json`. Install with
   `bun install --frozen-lockfile` to get exactly the locked tree.
-- Node.js 20+
+- Node.js `^22.22.2 || ^24.15.0 || >=26` (`engines.node`; CI runs the major in `.node-version`)
 
 ### Install and Run
 
@@ -418,7 +439,7 @@ npm install @perssonify/editor
 ```
 
 The package ships ES and CommonJS builds, TypeScript declarations and one
-stylesheet. React 18, Tiptap 3 (3.31 or later, as one matching set), CodeMirror 6,
+stylesheet. React 18.3 or 19, Tiptap 3 (3.31 or later, as one matching set), CodeMirror 6,
 lucide-react, next-themes and zustand are **peer dependencies**: npm 7+ installs
 them for you; with pnpm, Yarn or `--legacy-peer-deps`, add them yourself
 (`npm view @perssonify/editor peerDependencies` lists the exact ranges). The

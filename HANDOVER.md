@@ -243,21 +243,29 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   `useDocumentLifecycle.ts` + `useSyncEngine.ts`). Correct and well-tested, but intricate
   and timing-sensitive. Change it surgically, keep the four layers intact, re-run the
   hydration-guard tests.
-- **Multi-tab:** no live cross-tab refresh (tabs don't see each other's edits until reload);
-  after tab B saves, tab A parks a terminal `"conflict"` status by design, and a reload
-  keeps the other tab's work (A018). Live invalidation is the natural trigger for the
-  save-FSM work (§5).
-- **Large documents:** every edit still re-converts the whole document; the audit's cheap
-  fixes made it linear, not incremental (A083).
-- **Graph performance:** the force sim is O(n²) per tick while running (it freezes on
-  settle). Fine for typical libraries; untested at ~2,000 notes (A088).
-- **`PerssonifyEditor.tsx`** is a very large orchestrator. It works and is carefully
-  memoized, but it's the hardest file to onboard to. Splitting it is worthwhile but delicate
-  (many refs/effects with ordering constraints — read the comments first); the audit
-  recommends doing it as its own pull request (A110), and it is still thinly covered by
-  behavioural tests (A108).
-- **Browsers:** the e2e campaign runs Chromium only; Firefox and WebKit are unverified
-  (A100), and Safari before 16.4 cannot run the app (Tailwind v4 needs 16.4; A097).
+- **Multi-tab:** tabs sync live over a `BroadcastChannel` (a clean open document
+  reloads; one with unsaved work is told at once and chooses, with the other side kept
+  in Version history). The save-status machine was not rewritten (§5); read-check-write
+  is still not atomic across tabs.
+- **Large documents:** both directions project per block now (A083), so typing stays
+  responsive at 1.6–4 MB in either pane, and the markdown→rich model is prepared in idle
+  time after a load (first keystroke at 4 MB: 28 s → 2.7 s at 4× CPU), and an autosave
+  checks only the stored revision it knows (4 MB: longest task 1.0–1.9 s → 0–0.44 s). What
+  is left is not the projection: TipTap's code highlighter redoes every code block (under
+  Deferred in docs/audit-2026-09.md).
+- **Graph performance:** measured at 2,000 notes (A088): above 300 notes the layout is
+  Barnes–Hut, above 250 the drawing is batched and each frame either steps or paints.
+  First frame 1.0 s, settle 17–23 s under a 4× CPU slowdown. Folder maps up to 500 notes
+  get a folder-aware layout and larger ones a two-level layout (folders placed as regions,
+  notes inside them): no note is drawn under another at any size.
+- **`PerssonifyEditor.tsx`** was split into fifteen hooks under `src/editor/` (A110);
+  about 970 lines of orchestration remain. Hook call order is effect order — read
+  CLAUDE.md's parts map before moving anything. Sixteen behavioural suites now mount the
+  real editor (A108).
+- **Browsers:** Chromium runs every e2e suite; Firefox and WebKit run five of them (A100).
+  Desktop WebKit is not iOS Safari, so the iOS-only paths still lack on-device proof.
+  Below the declared floor (Safari/iOS 16.4, Chrome/Edge 111, Firefox 128) the app shows
+  a message instead of a blank page (A097).
 - **Bundle size:** the startup payload is ~680 KiB gzip; mermaid, abcjs and katex load
   lazily and are precached for offline use.
 
@@ -270,14 +278,10 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   origin's move banner — and the defects found while reconciling the docs, listed in
   the same file (the `/embed.html` framing gap and the broken first-run `[[Welcome]]`
   links first).
-- **Live multi-tab invalidation** (`BroadcastChannel`; the terminal `conflict` status
-  already exists) — closes the biggest deferred gap and is the FSM trigger.
 - **Full-document LaTeX / multi-file projects** — content/engine-layer if single-doc; a
   data-model change (and the right moment for the FSM extraction) if Overleaf-style projects.
 - **Backlog features** (`docs/backlog.md`): Markdown format detection + settings suggestion,
   multi-column / scientific writing (columns → cross-refs → citations).
-- **Auto-update heading-anchor wiki links on heading rename** (currently resolve by
-  normalized heading text — task backlog #122).
 
 ---
 

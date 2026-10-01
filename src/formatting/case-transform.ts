@@ -1,5 +1,7 @@
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
+import type { Editor } from "@tiptap/core";
+import type { Mark, Node as PMNode } from "@tiptap/pm/model";
 import { fencedLineMask } from "./select-scope";
 
 /**
@@ -33,28 +35,28 @@ interface TextEdit {
   from: number;
   to: number;
   text: string;
-  marks: readonly unknown[];
+  marks: readonly Mark[];
 }
 
 /** Collect case edits for the text between [from,to), honoring contentOnly. */
 function collectEdits(
-  doc: any,
+  doc: PMNode,
   from: number,
   to: number,
   mode: CaseMode,
   contentOnly: boolean
 ): TextEdit[] {
   const edits: TextEdit[] = [];
-  doc.nodesBetween(from, to, (node: any, pos: number, parent: any) => {
+  doc.nodesBetween(from, to, (node, pos, parent) => {
     if (!node.isText) return;
     if (contentOnly) {
       if (parent?.type?.name === "codeBlock") return;
-      if (node.marks?.some((m: any) => m.type.name === "code")) return;
+      if (node.marks.some((m) => m.type.name === "code")) return;
     }
     const segFrom = Math.max(pos, from);
     const segTo = Math.min(pos + node.nodeSize, to);
     if (segFrom >= segTo) return;
-    const original = node.text.slice(segFrom - pos, segTo - pos);
+    const original = (node.text ?? "").slice(segFrom - pos, segTo - pos);
     const transformed = applyCase(original, mode);
     if (transformed !== original) {
       edits.push({ from: segFrom, to: segTo, text: transformed, marks: node.marks });
@@ -63,21 +65,21 @@ function collectEdits(
   return edits;
 }
 
-function applyEdits(editor: any, edits: TextEdit[]): boolean {
+function applyEdits(editor: Editor, edits: TextEdit[]): boolean {
   if (!edits.length) return false;
   const { state } = editor;
   let tr = state.tr;
   // End-to-start so earlier positions stay valid.
   for (let i = edits.length - 1; i >= 0; i--) {
     const e = edits[i]!;
-    tr = tr.replaceWith(e.from, e.to, state.schema.text(e.text, e.marks as any));
+    tr = tr.replaceWith(e.from, e.to, state.schema.text(e.text, e.marks));
   }
   editor.view.dispatch(tr.scrollIntoView());
   return true;
 }
 
 /** Transform the case of the current selection in the rich pane. */
-export function transformCaseTiptap(editor: any, mode: CaseMode, contentOnly: boolean): void {
+export function transformCaseTiptap(editor: Editor, mode: CaseMode, contentOnly: boolean): void {
   const { from, to, empty } = editor.state.selection;
   if (empty) return;
   const edits = collectEdits(editor.state.doc, from, to, mode, contentOnly);
@@ -85,10 +87,10 @@ export function transformCaseTiptap(editor: any, mode: CaseMode, contentOnly: bo
 }
 
 /** Transform the case of the text of every heading in the rich pane. */
-export function headingsCaseTiptap(editor: any, mode: CaseMode, contentOnly: boolean): void {
+export function headingsCaseTiptap(editor: Editor, mode: CaseMode, contentOnly: boolean): void {
   const { doc } = editor.state;
   const all: TextEdit[] = [];
-  doc.descendants((node: any, pos: number) => {
+  doc.descendants((node, pos) => {
     if (node.type.name !== "heading") return;
     all.push(...collectEdits(doc, pos, pos + node.nodeSize, mode, contentOnly));
   });

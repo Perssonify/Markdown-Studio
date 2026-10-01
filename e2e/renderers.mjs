@@ -18,6 +18,17 @@ export const PROBE_MD = [
   "  B -->|yes| C[Done]",
   "```",
   "",
+  // The editor lays diagrams out with dagre; a diagram may opt into ELK, a
+  // separate 1.6 MB chunk loaded on first use (Mermaid 12's own default).
+  "```mermaid",
+  "---",
+  "config:",
+  "  layout: elk",
+  "---",
+  "flowchart LR",
+  "  E1[ELK] --> E2[Layout]",
+  "```",
+  "",
   "```abc",
   "X:1",
   "T:Scale",
@@ -49,13 +60,16 @@ export async function pasteMarkdown(pg, text) {
 export const renderers = (pg) =>
   pg.evaluate(() => ({
     katex: document.querySelectorAll(".ProseMirror .katex").length,
-    mermaid: !!document.querySelector('.diagram-preview[data-diagram="mermaid"] svg'),
+    // The probe's OWN diagrams, by their labels: the starter document carries
+    // a diagram of its own, so "some diagram drew" proves nothing about these.
+    mermaid: [...document.querySelectorAll('.diagram-preview[data-diagram="mermaid"] svg')].some((s) => s.textContent.includes("Choice")),
+    mermaidElk: [...document.querySelectorAll('.diagram-preview[data-diagram="mermaid"] svg')].some((s) => s.textContent.includes("Layout")),
     abc: !!document.querySelector('.diagram-preview[data-diagram="abc"] svg'),
     image: [...document.querySelectorAll(".ProseMirror img")].some((i) => i.src.startsWith("data:") && i.naturalWidth > 0),
     diagramErrors: [...document.querySelectorAll('.diagram-preview [role="alert"]')].map((e) => e.textContent),
   }));
 
-export const allRendered = (r) => r.katex >= 2 && r.mermaid && r.abc && r.image;
+export const allRendered = (r) => r.katex >= 2 && r.mermaid && r.mermaidElk && r.abc && r.image;
 
 /** File ▸ Export ▸ Word (.docx); resolves with the download's suggested name, or null. */
 export async function exportWord(pg) {

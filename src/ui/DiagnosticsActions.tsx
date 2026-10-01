@@ -2,6 +2,7 @@ import { ClipboardCopy } from "lucide-react";
 import { useState } from "react";
 import { useDocumentStore } from "../store/documentStore";
 import { buildDiagnosticsReport, copyText } from "../utils/diagnostics";
+import { useT } from "../i18n";
 
 /**
  * Copy the privacy-safe diagnostics report (utils/diagnostics.ts) to the
@@ -29,7 +30,8 @@ export async function copyDiagnosticsReport(): Promise<boolean> {
  * Used by the crash screens; exported so Help / About can offer the same thing
  * ("Report a problem" needs something to paste).
  */
-export function CopyDiagnosticsButton({ className, label = "Copy diagnostics" }: { className?: string; label?: string }) {
+export function CopyDiagnosticsButton({ className, label }: { className?: string; label?: string }) {
+  const t = useT();
   const [status, setStatus] = useState<string | null>(null);
   return (
     <span className="inline-flex flex-col gap-1">
@@ -38,11 +40,11 @@ export function CopyDiagnosticsButton({ className, label = "Copy diagnostics" }:
         className={className}
         onClick={async () => {
           const ok = await copyDiagnosticsReport();
-          setStatus(ok ? "Copied — it contains no document content." : "Couldn't reach the clipboard.");
+          setStatus(ok ? t("notices.copiedNoDocumentContent") : t("notices.couldNotReachClipboard"));
         }}
       >
         <ClipboardCopy className="h-4 w-4" />
-        {label}
+        {label ?? t("notices.copyDiagnostics")}
       </button>
       {status && (
         <span role="status" className="text-xs text-muted-foreground">

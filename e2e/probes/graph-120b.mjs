@@ -2,7 +2,7 @@ import { serve, open, boot, seed, APP_DIR } from "../lib.mjs";
 import { library } from "../docs.mjs";
 const N = Number(process.env.N || 120);
 const srv = await serve(APP_DIR);
-const { browser, page: pg, errors } = await open(srv.port);
+const { browser, page: pg } = await open(srv.port);
 pg.on("pageerror", (e) => console.log("[pageerror]", String(e).slice(0, 300)));
 pg.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") console.log("[c]", m.type(), m.text().slice(0, 200)); });
 await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });

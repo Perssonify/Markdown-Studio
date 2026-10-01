@@ -84,6 +84,15 @@ export interface StorageAdapter {
    *  editor's prefs (which hold folder names). Used by clearLocalData(); an
    *  adapter without it has its documents deleted one by one instead. */
   clear?(): Promise<void>;
+  /**
+   * The stored document's revision — its `updated`, exactly as `get` would
+   * return it — or null when no document has that id; rejects exactly where
+   * `get` rejects. Optional: a save that finds the revision it last wrote or
+   * read uses what it already holds instead of parsing the whole record again
+   * (A083 — a 4 MB note's autosave spent ~1.6 s at 4x CPU re-reading itself).
+   * Without it every save reads the record with `get`.
+   */
+  getRevision?(id: string): Promise<string | null>;
 }
 
 /**

@@ -12,11 +12,12 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PALETTE, getStoredPalette, PALETTES, setPalette } from "../theme/palette";
+import { t, useT } from "../i18n";
 
 export const THEME_OPTIONS = [
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
-  { id: "system", label: "System" },
+  { id: "light", get label() { return t("settings.themeLight"); } },
+  { id: "dark", get label() { return t("settings.themeDark"); } },
+  { id: "system", get label() { return t("settings.themeSystem"); } },
 ] as const;
 
 /** A small color circle previewing a theme: a light disc, a dark disc, or a
@@ -43,6 +44,7 @@ export function ThemeSwatch({ theme, className }: { theme: string; className?: s
 
 /** Compact theme picker (Light / Dark / System) as labeled circles. */
 export function ThemeCircleRow() {
+  useT(); // THEME_OPTIONS labels read the language: re-render on a switch
   const { theme, setTheme } = useTheme();
   // next-themes resolves `theme` only after mount; guard so the active pill is
   // correct on the client instead of flashing the wrong one.
@@ -77,6 +79,7 @@ export function ThemeCircleRow() {
 
 /** Compact accent-palette picker as color circles. */
 export function AccentCircleRow() {
+  const t = useT();
   const [palette, setPaletteState] = useState(DEFAULT_PALETTE);
   useEffect(() => setPaletteState(getStoredPalette()), []);
   const change = (id: string) => {
@@ -94,7 +97,7 @@ export function AccentCircleRow() {
             onClick={() => change(p.id)}
             aria-pressed={active}
             title={p.label}
-            aria-label={`Accent: ${p.label}`}
+            aria-label={t("settings.accentAria", { name: p.label })}
             className={cn(
               "relative size-7 rounded-full border transition-transform hover:scale-105",
               active ? "border-primary ring-2 ring-primary/40" : "border-border"

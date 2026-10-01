@@ -11,6 +11,7 @@ import {
   remoteImagesBlocked,
   setRemoteImagesBlocked,
 } from "../utils/remote-images";
+import { useT } from "../i18n";
 
 /**
  * Settings ▸ Privacy (A076): the two ways a document can reach the network
@@ -18,6 +19,7 @@ import {
  * remote images — each under the user's control.
  */
 export function PrivacySection({ open }: { open: boolean }) {
+  const t = useT();
   const [relay, setRelay] = useState<RelayConsent | null>(() => getRelayConsent());
   const [blockImages, setBlockImages] = useState(() => remoteImagesBlocked());
   const supported = remoteImagePolicySupported();
@@ -41,17 +43,16 @@ export function PrivacySection({ open }: { open: boolean }) {
   };
 
   return (
-    <section className="space-y-3" aria-label="Privacy">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Privacy</h3>
+    <section className="space-y-3" aria-label={t("settings.privacy")}>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("settings.privacy")}</h3>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <Label htmlFor="pref-import-relay" className="text-sm">Import relay</Label>
+          <Label htmlFor="pref-import-relay" className="text-sm">{t("settings.importRelay")}</Label>
           <p className="text-xs text-muted-foreground">
-            When a site blocks browsers from reading a link you import, fetch it through the {APP_NAME} server.
-            The server sees the address and passes the file back without keeping it.
+            {t("settings.importRelayDesc", { app: APP_NAME })}
           </p>
           {relay === null && (
-            <p className="mt-1 text-[11px] text-muted-foreground">Not decided yet — you'll be asked the first time a link needs it.</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{t("settings.importRelayUndecided")}</p>
           )}
         </div>
         <Switch id="pref-import-relay" checked={relay === "allow"} onCheckedChange={changeRelay} />
@@ -61,16 +62,15 @@ export function PrivacySection({ open }: { open: boolean }) {
       {supported && (
         <div className="flex items-start justify-between gap-3">
           <div>
-            <Label htmlFor="pref-block-remote-images" className="text-sm">Block remote images</Label>
+            <Label htmlFor="pref-block-remote-images" className="text-sm">{t("settings.blockRemoteImages")}</Label>
             <p className="text-xs text-muted-foreground">
-              Don't load images hosted on other sites — they can tell that site when you open a document.
-              Blocked images show as their description.
+              {t("settings.blockRemoteImagesDesc")}
             </p>
             {blockImages !== active && (
               <p className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                Takes effect when the app next loads.
+                {t("settings.takesEffectNextLoad")}
                 <Button size="sm" variant="ghost" className="h-6 gap-1 px-1.5 text-[11px] pointer-coarse:h-8" onClick={() => window.location.reload()}>
-                  <RefreshCw className="size-3" /> Reload now
+                  <RefreshCw className="size-3" /> {t("settings.reloadNow")}
                 </Button>
               </p>
             )}

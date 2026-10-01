@@ -1,5 +1,6 @@
 import type { PromptOptions } from "../ui/DialogProvider";
 import { mdLinkDestination } from "./md-format-utils";
+import { t } from "../i18n";
 
 /** What "Insert image" inserts: a source and its alternative text. */
 export interface ImageInsert {
@@ -18,16 +19,14 @@ type Prompt = (title: string, options?: PromptOptions) => Promise<string | null>
  * empty description is allowed and marks the image as decorative.
  */
 export async function promptImage(prompt: Prompt): Promise<ImageInsert | null> {
-  const src = (await prompt("Insert Image", {
-    placeholder: "https://example.com/image.png",
-    description: "Enter the URL of the image to insert.",
+  const src = (await prompt(t("dialogs.insertImage"), {
+    placeholder: t("dialogs.imageUrlPlaceholder"),
+    description: t("dialogs.enterTheUrlOfTheImage"),
   }))?.trim();
   if (!src) return null;
-  const alt = await prompt("Describe the image", {
-    placeholder: "e.g. Bar chart of sign-ups by month",
-    description:
-      "Screen readers read this aloud, and it shows if the image cannot load. " +
-      "Leave it empty only if the image is purely decorative.",
+  const alt = await prompt(t("dialogs.describeTheImage"), {
+    placeholder: t("dialogs.altTextPlaceholder"),
+    description: t("dialogs.altTextDescription"),
   });
   if (alt === null) return null;
   return { src, alt: alt.trim() };

@@ -180,10 +180,10 @@ history and the unload stash too; switching it takes a page load) and call
 
 ### 5. One editor per page
 
-The editor's stores are module singletons: two `PerssonifyEditorIntegration`
-panels in the same page share the active document and its unsaved drafts. For
-several editors in one scene, give each its own iframe (see
-[the iframe embed](#alternative-the-iframe-embed)).
+The editor's stores are module singletons, so a second
+`PerssonifyEditorIntegration` panel in the same page refuses to start and shows
+a message instead of an editor. For several editors in one scene, give each its
+own iframe (see [the iframe embed](#alternative-the-iframe-embed)).
 
 ---
 

@@ -71,7 +71,7 @@ export const FrontmatterBlock = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     const rawAttr = HTMLAttributes["data-frontmatter"];
-    let raw = "";
+    let raw: string;
     try {
       raw = typeof rawAttr === "string" ? JSON.parse(rawAttr) : String(rawAttr ?? "");
     } catch {

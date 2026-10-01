@@ -19,6 +19,31 @@ person — is listed in [`docs/audit-2026-09.md`](docs/audit-2026-09.md). The
 finding IDs (A001–A114) are cited below.
 
 ### Changed — what you will notice
+- **Tabs on the same library stay in step.** A save in one tab appears live in the
+  others — the library, Cards, the map, and an open document with no unsaved
+  changes. A tab with unsaved changes is told at once and can keep its version,
+  take the other tab's, or save its own as a copy; the version set aside is kept
+  in Version history. A document deleted in another tab is no longer saved back.
+- **Exported markdown keeps its line breaks in other apps.** A line break inside a
+  paragraph is written as a backslash at the end of the line in exported markdown
+  (File ▸ Export, the per-document export and ZIP exports), which every markdown
+  renderer honours; before, most renderers joined the lines. The editor's own
+  markdown pane is unchanged. (A051)
+- **Images are stored once.** A pasted, dropped or imported image is kept once in
+  this browser, however many documents or saved versions use it, instead of as
+  text inside every copy. Exports and backups still carry the image, and a Word
+  export now shows it as a picture instead of an `<img>` tag. Settings ▸ Storage
+  shows the space images use and can clean up unused ones; nothing is deleted
+  automatically. Documents saved before this keep their images as they are. (A086)
+- **The interface can be translated.** Every label, message and menu now comes
+  from a translation catalog (English is the only language shipped so far), and
+  the Help and About pages are per-language content. Exported HTML and printouts
+  no longer declare the document English. (A099)
+- **Older browsers get a message instead of a blank page.** The supported floor
+  is Safari/iOS 16.4, Chrome/Edge 111 and Firefox 128; below it the app says so
+  and touches nothing stored. (A097)
+- **A heading link inserted from the rich pane is written `[[#Heading]]`**, the
+  way the markdown pane writes it, instead of `[[#Heading|Heading]]`.
 - **Updates are offered, never forced.** A new version shows "Update ready —
   Reload" and waits for you. Every deploy used to reload every open tab,
   mid-sentence, losing undo history, dictation in progress and open dialogs. A
@@ -81,6 +106,17 @@ finding IDs (A001–A114) are cited below.
   rather than one page of the app's chrome. (A100)
 
 ### Fixed — content that was lost or changed
+- Footnotes no longer fail in a document that opens with a display formula, and
+  their numbers no longer drift between edits; the text `@@PFCODE0@@` no longer
+  appears where a code span wrapped a fenced block.
+- In a long document the footnotes section could come back as a literal
+  `## Footnotes` heading when the conversion split it from its definitions.
+- Tabs inside code blocks survive a round trip, text such as `<snake_case>` no
+  longer vanishes, Word export no longer shows HTML entities, and bold or italic
+  after a code span that ends in a backslash renders correctly (the markdown
+  parser, marked, is updated from 12 to 18).
+- A formula whose maths renderer could not be downloaded shows its LaTeX instead
+  of staying blank.
 - Hard line breaks — addresses, poems, verse — are kept (A037); anything nested
   under a checklist item is kept (A038); blank lines inside list items and inside
   code in a list are kept (A041).
@@ -150,6 +186,12 @@ finding IDs (A001–A114) are cited below.
   one-click backup (A004).
 
 ### Security and privacy
+- lodash-es is pinned to 4.18.1 (mermaid 12 pulled in a version with advisories);
+  `bun audit` reports none.
+- **Exporting, copying or sending a document to a host no longer fetches its
+  images.** The document's HTML was built in the live page, so every image in it
+  started loading: a remote image was requested on every export, and WebKit
+  reported a failed load for each stored image.
 - **The full app can no longer be framed at `/embed.html`.** The production
   deploy has no embed build, so that address served the full app under the
   embed's anti-framing exemption; it now returns 404 unless an embed build is
@@ -182,6 +224,9 @@ finding IDs (A001–A114) are cited below.
   names a security contact (A007).
 
 ### Accessibility
+- In Windows high-contrast (forced colours) mode the focus ring uses the system
+  highlight colour in every browser, on menu items, tabs, tree rows and options
+  too; before, only Chromium showed it correctly. (A095)
 - Both editors have accessible names (A089); a visible focus ring in every palette
   (A090); the editor stays usable at 400% zoom (A091); accent-coloured text meets
   contrast in every palette (A092).
@@ -196,6 +241,17 @@ finding IDs (A001–A114) are cited below.
   the keyboard navigation keys.
 
 ### Editor, links and search
+- **Renaming a heading no longer silently breaks the links to it.** Once the caret
+  leaves the heading, or you leave the note, you are offered to update every
+  `[[Note#Heading]]` and `[[#Heading]]` that pointed at the old name. The open
+  note is updated as one undoable step; other notes are updated with their
+  previous version kept in Version history. Dismiss leaves everything as it was.
+- A note deleted while a card save or a host update was writing it no longer
+  comes back.
+- **The word count counts every paragraph, heading, list item and table cell
+  separately.** It ran the last word of each block into the first word of the
+  next, so a four-item list counted as one word and every heading lost one.
+- Escape in the Find box closes the panel once (it closed it twice).
 - **Broken wiki links are marked** — the 1.76.0 marking never actually fired
   (A058). Links go to the right document, titles containing `#` can be linked
   (A059), and link clicks keep working after the editor remounts (A064).
@@ -216,13 +272,57 @@ finding IDs (A001–A114) are cited below.
 ### Performance
 - The library panel no longer freezes the editor on every autosave: at 2,000
   documents a save went from ~2.3 s to ~16 ms (measured in jsdom) (A082).
-- Large documents: rich→markdown conversion is linear instead of quadratic and
-  the maths scan is bounded. For a 1.6 MB document (jsdom) markdown→rich went from
-  ~0.4 s to ~0.1 s and rich→markdown from ~5 s to 1.6–3.5 s — but every edit still
-  converts the whole document (A083, partly done).
+- **Typing in a large document no longer stalls the markdown pane.** Only the
+  blocks you changed are re-converted: in a 1.6 MB document the markdown pane
+  follows a keystroke in 0.17 s instead of 2.5 s (0.6 s instead of 23 s with the
+  CPU slowed 4×), and in a 4 MB one in 0.4 s. The right-to-left handling and the
+  right-click menu no longer cost time on every keystroke, the maths scan is
+  bounded, and markdown→rich for a 1.6 MB document went from ~0.4 s to ~0.1 s.
+  Opening a very large document, and edits made in the markdown pane, still
+  convert the whole document (A083, partly done).
 - Startup download 915 → 680 KiB gzip (A084); the Cards board reloads only what
   changed (A087); snapshot pruning, batched backup export and a single KaTeX copy
   (A088).
+- **Images no longer weigh down saving.** With five ~880 KB images in a document,
+  the saved record went from 5.74 MB to 1.3 KB, one version-history copy from
+  11.5 MB to 2 KB, and a save from 42–50 ms to 19–32 ms; a document with images now
+  fits the crash-recovery stash, which it used to exceed. (A086)
+- **Typing in the markdown pane of a large document no longer re-parses the whole
+  document**: the rich pane re-parses only the blocks an edit touched — 1.6 MB:
+  ~23 s → 0.6 s per keystroke, 4 MB: ~116 s → 1.4 s (4× CPU). Formulas typeset as
+  they near the view, so typing in a formula-heavy note is twice as fast. (A083)
+- **The first markdown keystroke after opening a large document no longer
+  freezes.** The work it did — reading the whole document once — now happens in
+  small pieces while the document sits open, with no visible pause: 1.6 MB:
+  9.1 s → 0.7 s, 4 MB: 28 s → 2.7 s (4× CPU). Large documents also open about
+  twice as fast (4 MB: 15.9 s → 8.1 s), and right-to-left support no longer
+  slows down documents with many checklist items. (A083)
+- **Saving a large document no longer freezes the page.** Each autosave of a
+  4 MB note used to stop the editor for 1–2 s (4× CPU); now most saves cause no
+  pause at all and the longest is under half a second. A save no longer reads
+  the whole document back to check it, version history stores its copies far
+  more cheaply, and any update to the screen no longer makes the browser scan
+  the whole open document. (A083)
+- **Opening a document with many code blocks is no longer quadratic.** A 1.6 MB
+  document with a code block every 12 blocks opens in 5.4 s instead of 58.5 s,
+  and the mixed large-document fixture in 3.2 s instead of 13.1 s. The word
+  count, the export-fidelity check and broken-link marking now look only at the
+  blocks an edit touched. (A083)
+- **Notes in folders are no longer drawn on top of each other on the map.** A
+  map with folders piled notes onto the same spot — a 150-note map in 15 folders
+  hid about a quarter of its notes under others. Each folder now starts as its
+  own cluster in a space sized to the library, and folders move as units; every
+  note gets its own spot. A map over 500 notes in folders gives each folder its
+  own area, placed next to the folders it links to, with its notes laid out
+  inside it — no two folders overlap, no note sits in someone else's folder,
+  zooming in names the notes, and it settles faster (1–2 s instead of 12–24 s at
+  600 notes). Maps without folders look exactly as before. (A088)
+- **The relationship map at 2,000 notes** (measured with the CPU slowed 4×): the
+  first frame appears in 1.0 s instead of 8.9 s, the page is blocked for 6 s
+  instead of 64 s, the layout settles in 17–23 s instead of 65 s, and zooming
+  answers in under 0.1 s while it settles. Maps of 250 notes or fewer are drawn
+  exactly as before. (A088)
+- React 19 adds about 22 KiB gzip to the startup download.
 
 ### Reliability
 - A local, redacted error log behind **Copy diagnostics** (the crash screen and
@@ -233,25 +333,65 @@ finding IDs (A001–A114) are cited below.
   formula whose renderer failed to download says so, instead of showing the fetch
   error as a diagram error, and the app no longer caches the failure (Chromium
   itself still needs a reload to fetch a failed module again) (A085).
+- Leaving the page is no longer cancelled by the app reloading itself: Firefox
+  aborts a page's pending downloads as it navigates away, which the app took for
+  a failed update.
 
 ### npm library
+- **The published types compile for every consumer:** with `skipLibCheck: false`
+  and under node16/nodenext resolution (every extensionless import failed there,
+  so the entry points exported nothing), and `import "@perssonify/editor/styles.css"`
+  now has types. `createHostBridge` accepts the integration's handle ref, and the
+  bridge refuses an unknown mode or chrome level (and no longer answers success to
+  a thrown non-Error). (A113)
+- **Node `^22.22.2 || ^24.15.0 || >=26`** — the range every dependency accepts;
+  older Node versions now get an install warning. (A113)
+- `importFile` names a document by its first heading (it used the file name
+  until the host finished the import).
 - Every runtime import is declared (A101); the stylesheet no longer restyles the
   host page or its design tokens (A102); the tarball is 0.66 MB instead of 13 MB,
   the ES build mounts in browser bundles and the CommonJS build loads in Node
   (A104).
 - Public API that did nothing — `setFieldSchemas`, the `fieldSchemas` and
   `linkResolver` props, the `BlockId`/`FieldBlock`/`TransclusionBlock` exports —
-  is deprecated and warns once in development (A105). One editor per page is
-  documented (A106).
+  is deprecated and warns once in development (A105). A second editor on the
+  same page now refuses to start, with a message, instead of silently sharing the
+  first one's state; it takes over when the first unmounts (A106).
 - New: `clearLocalData()` and `setErrorReporter()`; `storageConfig` accepts
   `namespace`, `snapshots` and `crashRecovery`. **Consumers must import KaTeX's
   stylesheet themselves** (`katex/dist/katex.min.css`). Tiptap is 3.31.3 across
   every `@tiptap/*` package and the peer ranges are bounded (A113).
+- **React 19 is supported; the React floor rises to 18.3.** The peer range is
+  `^18.3.0 || ^19.0.0`, and CI runs the type check and unit suite on both. The
+  CommonJS build can be `require`d in Node — it threw on the Tiptap starter kit —
+  and marked is 18 (ESM-only since 16: CommonJS consumers need Node 20.19+/22.12+
+  or a bundler, and Jest users must transform it) (A113).
+- **Stored images are opt-in for hosts** (`storageConfig.assets: true`): without it
+  a host's content keeps its images inline, since a stored-image reference resolves
+  only in the browser that stored it (A086).
+- On the app's own hosts the embed keeps its documents in a database of its own
+  (`perssonify-embed-docs`), so a page framing it can never reach the app's
+  library; a self-hosted embed keeps `perssonify-docs` (A072).
+- The integration's handle always calls the host's latest callbacks: after the
+  host re-rendered, document updates kept calling the old graph-update callback
+  (A108).
 
 ### Developer
-- ESLint with the React hook rules (`bun run lint`, 0 errors) (A109); coverage
-  measured over all of `src` (A108); the unit suite no longer fails intermittently
-  (A107) — 196 files, 2,126 tests.
+- mermaid 12 (existing diagrams keep the dagre layout; a diagram can opt into
+  ELK), vitest 5, jsdom 30, lucide-react 1.x, nanoid 6 (with docx 9.7.2) and
+  undici 8 — the import relay now takes `fetch` from undici itself, without which
+  every relayed request failed. CI runs on Node 24 (`.node-version`). Two flaky
+  tests fixed at their cause (a WebKit caret race in the e2e harness, a seeding
+  race in the behavioural harness). Lint warnings 266 → 112. (A113, A100, A107)
+- ESLint with the React hook rules (`bun run lint`, 0 errors) and `noImplicitAny`
+  (A109); coverage measured over all of `src`, now 81.8% of lines after sixteen
+  behavioural suites that mount the real editor (A108); the unit suite no longer
+  fails intermittently (A107).
+- `PerssonifyEditor.tsx` is split from 2,992 lines into fifteen hooks under
+  `src/editor/` (A110). TypeScript 6.0 (7 waits for typescript-eslint, A113).
+- The browser campaign runs five suites on Firefox and WebKit as well as
+  Chromium (`E2E_BROWSER`, CI job `e2e-engines`, A100), plus `bun run e2e:floor`
+  for the unsupported-browser message (A097).
 - Bun pinned to 1.4.0 with `--frozen-lockfile`, actions pinned to commit SHAs,
   least-privilege CI and Dependabot (A014); npm publishing only from CI, with
   provenance (A006); an uptime check (A001); `bun audit` 34 → 0 (A114).

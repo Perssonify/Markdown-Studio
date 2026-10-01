@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { migrateReadingWidth } from "../store/uiStore";
+import { en } from "../i18n/en";
 
 /**
  * C5. "Reading width" offered Narrow / Medium / Wide as fixed pixel caps
@@ -56,9 +57,11 @@ describe("the measure reaches the panes as characters", () => {
   });
 
   it("offers character counts in the settings control", () => {
-    const block = settings.slice(settings.indexOf("Reading width"));
-    expect(block).toContain("{ v: 65, label: \"Narrow\" }");
-    expect(block).not.toContain("{ v: 640, label: \"Narrow\" }");
+    // The labels come from the catalog since A099; the VALUES are what matter.
+    const block = settings.slice(settings.indexOf('t("settings.readingWidth")'));
+    expect(block).toContain('{ v: 65, label: t("settings.readingWidthNarrow") }');
+    expect(block).not.toMatch(/\{ v: 640, label:/);
+    expect(en["settings.readingWidthNarrow"]).toBe("Narrow");
   });
 
   it("still caps the CONTENT column in both panes, not the flex pane", () => {
@@ -71,6 +74,7 @@ describe("the measure reaches the panes as characters", () => {
 
   it("admits when it cannot bind", () => {
     // The control used to claim it "caps the text column" unconditionally.
-    expect(settings).toContain("no visible effect");
+    expect(settings).toContain('{t("settings.readingWidthHint")}');
+    expect(en["settings.readingWidthHint"]).toContain("no visible effect");
   });
 });

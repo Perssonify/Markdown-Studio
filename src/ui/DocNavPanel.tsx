@@ -7,6 +7,7 @@ import {
   type OutlineHeading,
   type OutlineTreeNode,
 } from "@/store/doc-outline";
+import { useT } from "../i18n";
 
 /**
  * Outline primitives — `TocList` (a live, active-following table of contents) and
@@ -19,11 +20,12 @@ import {
 const ROW_H = 28; // px — must match the row min-height for correct sticky stacking
 
 export function EmptyOutline() {
+  const t = useT();
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center text-muted-foreground">
       <ListTree className="size-6 opacity-20" />
-      <p className="text-xs font-medium">No headings yet</p>
-      <p className="text-[11px] opacity-70">Add headings (# Title) to build the outline.</p>
+      <p className="text-xs font-medium">{t("library.noHeadingsYet")}</p>
+      <p className="text-[11px] opacity-70">{t("library.outlineEmptyHint")}</p>
     </div>
   );
 }
@@ -92,8 +94,9 @@ function TocNode({
   activeIndex: number | null;
   ancestors: Set<number>;
   onNavigate: (index: number) => void;
-  activeRowRef: React.RefObject<HTMLButtonElement>;
+  activeRowRef: React.Ref<HTMLButtonElement>;
 }) {
+  const t = useT();
   const isActive = node.index === activeIndex;
   const isAncestor = ancestors.has(node.index);
   const hasChildren = node.children.length > 0;
@@ -103,7 +106,7 @@ function TocNode({
       ref={isActive ? activeRowRef : undefined}
       type="button"
       onClick={() => onNavigate(node.index)}
-      title={node.text || "(untitled)"}
+      title={node.text || t("library.untitledHeading")}
       aria-current={isActive ? "location" : undefined}
       style={{ paddingLeft: 8 + depth * 12 }}
       className={cn(
@@ -123,7 +126,7 @@ function TocNode({
           isActive ? "size-1.5 bg-primary" : isAncestor ? "size-1 bg-primary/50" : "size-1 bg-muted-foreground/30"
         )}
       />
-      <span className="min-w-0 flex-1 truncate">{node.text || "(untitled)"}</span>
+      <span className="min-w-0 flex-1 truncate">{node.text || t("library.untitledHeading")}</span>
     </button>
   );
 

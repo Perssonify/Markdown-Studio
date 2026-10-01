@@ -8,7 +8,9 @@
 
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
+import type { Editor } from "@tiptap/core";
 import { cellSeparators, isSeparatorLine } from "./md-table-ops";
+import { t } from "../i18n/core";
 
 export interface ScopeType {
   id: string;
@@ -17,24 +19,26 @@ export interface ScopeType {
 }
 
 // The menu is built from this table (grouped, folder-style). Order = display order.
+// Labels are getters, read in the interface language when the menu renders;
+// `group` is an id (compared in code) — SelectMenuContent shows its name.
 export const SCOPE_TYPES: ScopeType[] = [
-  { id: "headings", label: "All headings", group: "Headings" },
-  { id: "h1", label: "Heading 1", group: "Headings" },
-  { id: "h2", label: "Heading 2", group: "Headings" },
-  { id: "h3", label: "Heading 3", group: "Headings" },
-  { id: "h4", label: "Heading 4", group: "Headings" },
-  { id: "h5", label: "Heading 5", group: "Headings" },
-  { id: "h6", label: "Heading 6", group: "Headings" },
-  { id: "paragraphs", label: "Paragraphs", group: "Paragraphs & lists" },
-  { id: "bulletList", label: "Bulleted list items", group: "Paragraphs & lists" },
-  { id: "orderedList", label: "Numbered list items", group: "Paragraphs & lists" },
-  { id: "taskList", label: "Task list items", group: "Paragraphs & lists" },
-  { id: "codeBlock", label: "Code blocks", group: "Blocks" },
-  { id: "blockquote", label: "Blockquotes", group: "Blocks" },
-  { id: "table", label: "Table rows", group: "Blocks" },
-  { id: "image", label: "Images", group: "Blocks" },
-  { id: "inlineCode", label: "Inline code", group: "Inline" },
-  { id: "link", label: "Links", group: "Inline" },
+  { id: "headings", get label() { return t("menu.allHeadings"); }, group: "Headings" },
+  { id: "h1", get label() { return t("menu.headingLevel", { level: 1 }); }, group: "Headings" },
+  { id: "h2", get label() { return t("menu.headingLevel", { level: 2 }); }, group: "Headings" },
+  { id: "h3", get label() { return t("menu.headingLevel", { level: 3 }); }, group: "Headings" },
+  { id: "h4", get label() { return t("menu.headingLevel", { level: 4 }); }, group: "Headings" },
+  { id: "h5", get label() { return t("menu.headingLevel", { level: 5 }); }, group: "Headings" },
+  { id: "h6", get label() { return t("menu.headingLevel", { level: 6 }); }, group: "Headings" },
+  { id: "paragraphs", get label() { return t("menu.selectParagraphs"); }, group: "Paragraphs & lists" },
+  { id: "bulletList", get label() { return t("menu.selectBulletedListItems"); }, group: "Paragraphs & lists" },
+  { id: "orderedList", get label() { return t("menu.selectNumberedListItems"); }, group: "Paragraphs & lists" },
+  { id: "taskList", get label() { return t("menu.selectTaskListItems"); }, group: "Paragraphs & lists" },
+  { id: "codeBlock", get label() { return t("menu.selectCodeBlocks"); }, group: "Blocks" },
+  { id: "blockquote", get label() { return t("menu.selectBlockquotes"); }, group: "Blocks" },
+  { id: "table", get label() { return t("menu.selectTableRows"); }, group: "Blocks" },
+  { id: "image", get label() { return t("menu.selectImages"); }, group: "Blocks" },
+  { id: "inlineCode", get label() { return t("menu.inlineCode"); }, group: "Inline" },
+  { id: "link", get label() { return t("menu.selectLinks"); }, group: "Inline" },
 ];
 
 export const SCOPE_GROUPS = ["Headings", "Paragraphs & lists", "Blocks", "Inline"] as const;
@@ -177,7 +181,7 @@ export function selectScopeCM(view: EditorView, scope: string): number {
 }
 
 /** Select the block/node containing the cursor in the rich editor (contiguous). */
-export function selectBlockRich(editor: any): boolean {
+export function selectBlockRich(editor: Editor): boolean {
   const { state } = editor;
   const $from = state.selection.$from;
   const depth = $from.depth;

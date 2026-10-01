@@ -7,8 +7,8 @@
 | Tool | Version | Why |
 |------|---------|-----|
 | [Bun](https://bun.sh) | 1.4.0 | Canonical package manager + runner, pinned by `packageManager` in [`package.json`](../package.json) and `BUN_VERSION` in CI. [`bun.lock`](../bun.lock) is the committed lockfile; CI and [`vercel.json`](../vercel.json) install with `bun install --frozen-lockfile`, so a dependency change that does not update `bun.lock` fails the build. |
-| Node.js | `^20.19.0` or `>=22.12.0` | The `engines` range in `package.json` — what Vite 8 and Vitest 4 need; the build scripts (`scripts/*.mjs`, `e2e/`) run on it. |
-| A Chromium/Firefox browser | current | The app relies on IndexedDB + DOMParser + (optionally) the RegExp `d`/`hasIndices` flag for find-and-replace capture coloring. The e2e campaign drives Chromium from `playwright-core` (`bunx playwright-core install chromium`). |
+| Node.js | `^22.22.2`, `^24.15.0` or `>=26` — 24 is what CI runs ([`.node-version`](../.node-version)) | The `engines` range in `package.json`: the Nodes EVERY direct dependency accepts (the narrowest are jsdom 30's `^22.22.2 \|\| ^24.15.0 \|\| >=26` and Vitest 5's, which skips 23 and 25; `ops-node-range.test.js` recomputes it from `node_modules`). The build scripts (`scripts/*.mjs`, `build/*.mjs`, `e2e/`) and the import relay run on it. |
+| A browser at or above the floor | Safari/iOS 16.4, Chrome/Edge 111, Firefox 128 (A097) | The app relies on IndexedDB + DOMParser + (optionally) the RegExp `d`/`hasIndices` flag for find-and-replace capture coloring. The e2e campaign drives Chromium from `playwright-core` (`bunx playwright-core install chromium`), and the cross-engine suites Firefox and WebKit too (`install firefox webkit`, then `E2E_BROWSER=firefox` or `webkit`). |
 
 > `npm install` also works (peer/dev deps are standard), but only Bun reads `bun.lock`, which is what CI and the deploy install from.
 
@@ -39,7 +39,7 @@ Everything else is decided by the build itself: `import.meta.env.DEV` ([src/util
 | Sync max-wait ceiling | `SYNC_MIN_MAX_WAIT_MS`…`SYNC_MAX_MAX_WAIT_MS` = 250…1200 ([src/constants.ts](../src/constants.ts)) | how far the other pane may lag while you keep typing |
 | Autosave interval | `AUTOSAVE_MS` = 5000 ([src/constants.ts:63](../src/constants.ts#L63)) | |
 | Toolbar compact breakpoint | `TOOLBAR_COMPACT_BP = 1080` ([src/constants.ts](../src/constants.ts)) | |
-| IndexedDB name / limit | `perssonify-docs` (`DEFAULT_DB_NAME`, [src/store/idb-storage-adapter.ts:126](../src/store/idb-storage-adapter.ts#L126)) | no cap of its own — the browser's quota, unless a host passes `storageConfig.maxBytes`; see [database.md](database.md) |
+| IndexedDB name / limit | `perssonify-docs` (`DEFAULT_DB_NAME`, [src/store/idb-storage-adapter.ts:159](../src/store/idb-storage-adapter.ts#L159)) | no cap of its own — the browser's quota, unless a host passes `storageConfig.maxBytes`; see [database.md](database.md) |
 | Theme storage key | `perssonify-theme` (next-themes `storageKey`, [src/main.tsx:61](../src/main.tsx#L61)) | localStorage |
 | Admin settings in a production build | `localStorage["pf:admin"] = "1"` | a per-browser opt-in that shows Settings ▸ Admin (console, context-menu switch); dev builds always show it |
 
@@ -94,7 +94,7 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 ### Add a storage field
 
 1. Extend `DocumentRecord` in [src/store/document.ts](../src/store/document.ts) and default it on read.
-2. `serializeForStorage` ([:418](../src/store/document.ts#L418)) writes an explicit list of fields: **add a field that must persist to it**, and leave a derived one out. If a backup should carry the field, add it to `toExportEnvelope` ([src/store/import-export.ts](../src/store/import-export.ts)) and forward it in the `pmjson` branch of `ingest()`.
+2. `serializeForStorage` ([:470](../src/store/document.ts#L470)) writes an explicit list of fields: **add a field that must persist to it**, and leave a derived one out. If a backup should carry the field, add it to `toExportEnvelope` ([src/store/import-export.ts](../src/store/import-export.ts)) and forward it in the `pmjson` branch of `ingest()`.
 3. Only bump `DB_VERSION` if you need a new object store or a data transform — see [database.md#migrations](database.md#migrations).
 
 ### Run one test file in watch mode

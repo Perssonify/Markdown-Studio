@@ -2,7 +2,14 @@
  * Help content model. Keeping copy as data (not JSX) makes the Help page a thin
  * renderer, keeps the table of contents in sync automatically, and lets tests
  * assert on coverage (e.g. "every section has an id and a title").
+ *
+ * This is CONTENT, not interface labels: it is not in the translation
+ * catalog (src/i18n). `HELP_SECTIONS` is the English version; a translation
+ * is another array of the same shape added to `HELP_CONTENT` under its locale
+ * (keep the section ids — the page links to them), and the Help page picks
+ * the version for the interface language, falling back to English.
  */
+import type { LocalizedContent } from "../../i18n";
 
 export interface HelpBlock {
   /** A short paragraph. */
@@ -83,7 +90,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         ],
       },
       {
-        p: "Link to a heading with a wiki-style anchor: [[Document#Heading]] jumps to a heading in another note, and [[#Heading]] to one in the current note. The right-click menu’s “Link to heading” builds these for you.",
+        p: "Link to a heading with a wiki-style anchor: [[Document#Heading]] jumps to a heading in another note, and [[#Heading]] to one in the current note. The right-click menu’s “Link to heading” builds these for you. Rename a heading and, once you move on, you’re offered to update the links that pointed at its old name.",
       },
       {
         p: "The “Styled” switch in the Markdown pane header controls whether decorative formatting is kept as inline HTML in your Markdown (Styled) or stripped back to plain Markdown (Clean).",
@@ -120,6 +127,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Code — fenced code blocks with syntax highlighting and a copy button.",
           "Emoji — type :shortcodes: like :rocket: :sparkles:.",
           "Images — Insert → Image with a URL; size one with an <img … width=\"120\" /> HTML tag.",
+          "Pasted and dropped images — paste a screenshot or drop an image file into either pane. The picture is stored once in this browser and the Markdown shows a short pf-asset: reference instead of a wall of base64; exports and backups carry the picture itself. Settings → Storage lists stored images and cleans up the ones nothing uses.",
           "Theme-aware images — follow the in-app Light/Dark theme via GitHub-style #gh-light-mode-only / #gh-dark-mode-only URL fragments, or a <picture> element with prefers-color-scheme sources.",
           "Tables — Insert → Table opens a grid picker; drag to choose the size.",
         ],
@@ -290,3 +298,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
 ];
+
+/** Help sections per interface language (English required). */
+export const HELP_CONTENT: LocalizedContent<HelpSection[]> = { en: HELP_SECTIONS };

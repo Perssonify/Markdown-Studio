@@ -49,6 +49,94 @@ describe("CI is reproducible (A014)", () => {
   });
 });
 
+describe("the browser campaign runs on Firefox and WebKit too (A100)", () => {
+  const ci = read(`${GH}/workflows/ci.yml`);
+  const run = read("e2e/run.mjs");
+  /** The suites e2e/run.mjs lists as run green on every engine. */
+  const crossEngine = [...run.matchAll(/^ {2}"?([a-z-]+)"?: \[".*", ALL\],$/gm)].map((m) => m[1]);
+  const enginesJob = ci.slice(ci.indexOf("\n  e2e-engines:"));
+  const chromiumJob = ci.slice(ci.indexOf("\n  e2e:"), ci.indexOf("\n  e2e-engines:"));
+
+  it("run.mjs names its cross-engine suites", () => {
+    expect(crossEngine).toEqual(expect.arrayContaining(["harness", "surfaces", "surfaces-deep", "dataloss", "floor"]));
+  });
+
+  it("a Firefox + WebKit matrix job installs its own engine and selects it", () => {
+    expect(ci).toMatch(/\n {2}e2e-engines:\n/);
+    expect(enginesJob).toMatch(/engine: \[firefox, webkit\]/);
+    // One engine's failure must not cancel the other's evidence.
+    expect(enginesJob).toMatch(/fail-fast: false/);
+    expect(enginesJob).toMatch(/E2E_BROWSER: \$\{\{ matrix\.engine \}\}/);
+    expect(enginesJob).toMatch(/bunx playwright-core install --with-deps \$\{\{ matrix\.engine \}\}/);
+    expect(enginesJob).toMatch(/timeout-minutes: \d+/);
+    expect(enginesJob).toMatch(/name: e2e-failure-\$\{\{ matrix\.engine \}\}/);
+  });
+
+  it("…and runs exactly the cross-engine suites, nothing it would only report as skipped", () => {
+    const ranThere = [...enginesJob.matchAll(/run: node e2e\/run\.mjs ([a-z-]+)\n/g)].map((m) => m[1]);
+    expect([...ranThere].sort()).toEqual([...crossEngine].sort());
+  });
+
+  it("the Chromium job runs the browser-floor suite as well", () => {
+    expect(chromiumJob).toMatch(/node e2e\/run\.mjs floor/);
+  });
+});
+
+describe("library consumers still on React 18 stay tested (A113)", () => {
+  const ci = read(`${GH}/workflows/ci.yml`);
+  const job = ci.slice(ci.indexOf("\n  react18:"), ci.indexOf("\n  e2e:"));
+  const pkg = JSON.parse(read("package.json"));
+  /** `name@version` pairs the job installs over the lockfile's React. */
+  const swapped = Object.fromEntries(
+    (job.match(/run: bun add -d (.+)\n/)?.[1] ?? "").trim().split(/\s+/).map((spec) => {
+      const at = spec.lastIndexOf("@");
+      return [spec.slice(0, at), spec.slice(at + 1)];
+    }),
+  );
+  /** Enough semver for the `^x.y.z || ^x.y.z` shape the peer ranges use. */
+  const inCaretRange = (version, range) => {
+    const [a, b, c] = version.split(".").map(Number);
+    return range.split("||").some((clause) => {
+      const m = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(clause.trim());
+      return !!m && a === +m[1] && (b > +m[2] || (b === +m[2] && c >= +m[3]));
+    });
+  };
+
+  it("a job installs React 18 AFTER the frozen install, then runs the type gate and the unit suite on it", () => {
+    expect(ci).toMatch(/\n {2}react18:\n/);
+    const at = (s) => job.indexOf(s);
+    expect(at("bun install --frozen-lockfile")).toBeGreaterThan(-1);
+    expect(at("bun add -d")).toBeGreaterThan(at("bun install --frozen-lockfile"));
+    expect(at("bunx tsc --noEmit")).toBeGreaterThan(at("bun add -d"));
+    expect(at("bun run test")).toBeGreaterThan(at("bun add -d"));
+    expect(job).toMatch(/timeout-minutes: \d+/);
+  });
+
+  it("installs an exact React 18 inside the published peer range, with types of the same major", () => {
+    for (const name of ["react", "react-dom", "@types/react", "@types/react-dom"]) {
+      expect(swapped[name], name).toMatch(/^18\.\d+\.\d+$/);
+    }
+    for (const name of ["react", "react-dom"]) {
+      expect(inCaretRange(swapped[name], pkg.peerDependencies[name]), `${name}@${swapped[name]} vs peer ${pkg.peerDependencies[name]}`).toBe(true);
+    }
+  });
+
+  it("the peer range also admits a newer major — the one the rest of CI runs on", () => {
+    // Read from the PEER range, not devDependencies: this file runs inside the
+    // react18 job too, where `bun add -d` has just rewritten devDependencies.
+    for (const name of ["react", "react-dom"]) {
+      const majors = pkg.peerDependencies[name].split("||").map((c) => Number(/\^(\d+)\./.exec(c)?.[1]));
+      expect(majors, name).toContain(18);
+      expect(Math.max(...majors), name).toBeGreaterThan(18);
+    }
+  });
+
+  it("no other job, and no publish, rewrites the manifest", () => {
+    expect(ci.replace(job, "")).not.toMatch(/bun add/);
+    expect(read(`${GH}/workflows/publish.yml`)).not.toMatch(/bun add/);
+  });
+});
+
 describe("npm publishing happens from CI, with provenance (A006)", () => {
   const pub = read(`${GH}/workflows/publish.yml`);
   it("runs on version tags only, behind a protected environment", () => {
@@ -66,6 +154,21 @@ describe("npm publishing happens from CI, with provenance (A006)", () => {
       expect(at(step), `${step} runs before publishing`).toBeLessThan(at("npm publish"));
     }
     expect(pub).toMatch(/does not match package\.json/);
+  });
+});
+
+describe("the built CommonJS entries and declarations are checked before they ship (A113)", () => {
+  // The unit run skips the built half of these files (no dist/ yet), so they
+  // only guard the build when they are re-run AFTER `bun run build`.
+  const CHECKS = ["src/__tests__/pkg-cjs-require.test.js", "src/__tests__/pkg-declarations.test.js"];
+  const STEP = `bunx vitest run ${CHECKS.join(" ")}`;
+  it.each([
+    ["ci.yml", read(`${GH}/workflows/ci.yml`), null],
+    ["publish.yml", read(`${GH}/workflows/publish.yml`), "npm publish"],
+  ])("%s re-runs the require and consumer type checks after the library build", (_f, text, before) => {
+    expect(text.indexOf(STEP), STEP).toBeGreaterThan(-1);
+    expect(text.indexOf(STEP)).toBeGreaterThan(text.indexOf("run: bun run build\n"));
+    if (before) expect(text.indexOf(STEP)).toBeLessThan(text.indexOf(before));
   });
 });
 
