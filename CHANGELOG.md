@@ -106,6 +106,9 @@ finding IDs (A001–A114) are cited below.
   rather than one page of the app's chrome. (A100)
 
 ### Fixed — content that was lost or changed
+- Footnotes no longer fail in a document that opens with a display formula, and
+  their numbers no longer drift between edits; the text `@@PFCODE0@@` no longer
+  appears where a code span wrapped a fenced block.
 - In a long document the footnotes section could come back as a literal
   `## Footnotes` heading when the conversion split it from its definitions.
 - Tabs inside code blocks survive a round trip, text such as `<snake_case>` no
@@ -284,6 +287,11 @@ finding IDs (A001–A114) are cited below.
   the saved record went from 5.74 MB to 1.3 KB, one version-history copy from
   11.5 MB to 2 KB, and a save from 42–50 ms to 19–32 ms; a document with images now
   fits the crash-recovery stash, which it used to exceed. (A086)
+- **Typing in the markdown pane of a large document no longer re-parses the whole
+  document**: the rich pane re-parses only the blocks an edit touched — 1.6 MB:
+  ~23 s → 0.6 s per keystroke, 4 MB: ~116 s → 1.4 s (4× CPU). The first keystroke
+  after opening still does one whole pass (6.4 s and 22 s). Formulas typeset as
+  they near the view, so typing in a formula-heavy note is twice as fast. (A083)
 - **Opening a document with many code blocks is no longer quadratic.** A 1.6 MB
   document with a code block every 12 blocks opens in 5.4 s instead of 58.5 s,
   and the mixed large-document fixture in 3.2 s instead of 13.1 s. The word

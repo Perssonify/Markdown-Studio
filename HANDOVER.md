@@ -247,9 +247,9 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   reloads; one with unsaved work is told at once and chooses, with the other side kept
   in Version history). The save-status machine was not rewritten (§5); read-check-write
   is still not atomic across tabs.
-- **Large documents:** rich→markdown projects per block now (A083), so typing stays
-  responsive at 1.6–4 MB. Still whole-document: markdown→rich, opening a large document
-  (quadratic with many code blocks) and the fidelity/word-count and broken-link walks.
+- **Large documents:** both directions project per block now (A083), so typing stays
+  responsive at 1.6–4 MB in either pane. The first markdown keystroke after opening still
+  builds the incremental model with a whole parse (4 MB: 22 s at 4× CPU).
 - **Graph performance:** measured at 2,000 notes (A088): above 300 notes the layout is
   Barnes–Hut, above 250 the drawing is batched and each frame either steps or paints.
   First frame 1.0 s, settle 17–23 s under a 4× CPU slowdown. Folder maps up to 500 notes
