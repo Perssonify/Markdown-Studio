@@ -86,16 +86,17 @@ flowchart TD
   those nodes, in one transaction that, like setContent's, fires no update and
   is one step in the rich pane's history. The document is `Node.eq` to the
   whole-document parse (`incremental-rich.test.js` checks it after every step of
-  seeded random walks). CI runs 40 walks, which is not enough to trust a change
-  to the cut rules: runs of 600 and 2,000 seeds each found defects the 40 did
-  not (`RICH_SEEDS`, `RICH_SEED_FROM` and `RICH_LONG_SEEDS` run more — split
-  across processes, since the jsdom oracle slows as one process goes on).
-  Link definitions, footnotes, the curly syntax, alias wiki links, marked
-  hooks, a raw `<pre>` or white-space style (ProseMirror can then keep
+  seeded random walks). CI runs 40 random walks plus the 30 seeds that have
+  found defects, which is not enough to trust a change to the cut rules: runs
+  of 600 to 4,000 seeds each found defects the 40 did not (`RICH_SEEDS`,
+  `RICH_SEED_FROM` and `RICH_LONG_SEEDS` run more — split across processes,
+  since the jsdom oracle slows and grows as one process goes on).
+  Link definitions (and a block one could still grow out of), footnotes, the
+  curly syntax, alias wiki links, marked hooks, raw HTML holding a `<pre>` with
+  more than text in it or a white-space style (ProseMirror can then keep
   whitespace for the rest of the document) and edits at the front matter take
-  the whole path,
-  which also rebuilds the model; the first markdown keystroke after a load is
-  such a build. The projection sets `preventAutolink`: TipTap's autolink plugin
+  the whole path, which also rebuilds the model; the first markdown keystroke
+  after a load is such a build. The projection sets `preventAutolink`: TipTap's autolink plugin
   otherwise linked a bare domain ending the document's first paragraph on every
   markdown keystroke.
   The preprocessor only rewrites what must change before marked tokenizes the source: the front-matter block, the `|` of a wiki-link alias (written `\|`, so a GFM table does not split the link across cells), and the opt-in `{key=val}` syntax — off by default, and when on, a group renders only if every key is known and every value validates; anything else stays exactly as written (A039). Code is masked first, with the one fence scanner (`findFencedCodeRanges`) that `normalizeMarkdown` also uses (A046). Wiki links and heading anchors, maths, footnotes, task lists and callouts are marked extensions or renderer overrides in `build-marked.ts`; wiki links are an inline extension ([src/engine/wiki-link-marked.ts](../src/engine/wiki-link-marked.ts)), so they never fire inside code of any kind (A045, A048).
