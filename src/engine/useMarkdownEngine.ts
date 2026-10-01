@@ -6,7 +6,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import type { EditorState } from '@tiptap/pm/state';
 import TurndownService from 'turndown';
 import { preprocessMarkdown, normalizeMarkdown, type PreprocessFeatures } from './preprocessor';
-import { createRichProjector, type RichPath, type RichPlan } from './incremental-rich';
+import { createRichProjector, type RichPath, type RichPlan, type RichPrebuild } from './incremental-rich';
 import { cleanHtmlForTurndown } from './html-cleaner';
 import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
 import { holdsBreakMark, portableBreaksActive, stripBreakMarks, withoutPortableBreaks } from './portable-breaks';
@@ -173,6 +173,13 @@ export interface MarkdownEngine {
   planRich?: (md: string, state: EditorState) => RichPlan;
   /** Drop what planRich knows about the document (another one was loaded). */
   forgetRich?: () => void;
+  /**
+   * Begin preparing planRich's model for a document just loaded — `md` as the
+   * markdown pane holds it, over the editor's state — to be advanced in idle
+   * time (`step`), so the first markdown keystroke does not parse the whole
+   * document. Null when there is nothing worth preparing.
+   */
+  prepareRich?: (md: string, state: EditorState) => RichPrebuild | null;
   /** How the last planRich was made, and why — for tests and diagnostics. */
   lastRichPath?: () => RichPath;
 }
@@ -227,8 +234,9 @@ function styleLists(html: string): string {
 export function createMarkdownEngine(
   getFeatures: () => MarkdownFeatureSettings,
   getMarked?: () => Marked,
-  /** `richRunLength`: see RichProjectorOptions.runLength (tests cut as finely as they can). */
-  engineOptions: { richRunLength?: number } = {},
+  /** `richRunLength`, `richPrebuildMin`, `richPrebuildChunk`: see RichProjectorOptions
+   *  (tests cut and prepare as finely as they can). */
+  engineOptions: { richRunLength?: number; richPrebuildMin?: number; richPrebuildChunk?: number } = {},
 ): MarkdownEngine {
   let cachedFor: MarkdownFeatureSettings | null = null;
   let cached: Marked | null = null;
@@ -301,6 +309,8 @@ export function createMarkdownEngine(
     mdToHtml,
     style: styleLists,
     runLength: engineOptions.richRunLength,
+    prebuildMin: engineOptions.richPrebuildMin,
+    prebuildChunk: engineOptions.richPrebuildChunk,
   });
 
   return {
@@ -314,6 +324,7 @@ export function createMarkdownEngine(
     docMdHash: (md: string) => incremental.markdownHash(md),
     planRich: (md: string, state: EditorState) => rich.plan(md, state),
     forgetRich: () => rich.forget(),
+    prepareRich: (md: string, state: EditorState) => rich.prepare(md, state),
     lastRichPath: () => rich.last,
   };
 }

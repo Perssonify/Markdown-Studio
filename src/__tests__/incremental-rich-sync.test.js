@@ -19,10 +19,10 @@ const LOREM = "Perssonify builds custom technology for teams that move fast.";
 const paras = (n) => Array.from({ length: n }, (_, i) => `P${i} ${LOREM}`).join("\n\n");
 
 /** useSyncEngine over a real TipTap editor and a plain-text markdown pane. */
-function rig({ incremental = true } = {}) {
-  const base = createMarkdownEngine(() => DEFAULT_MARKDOWN_FEATURES, undefined, { richRunLength: 0 });
+function rig({ incremental = true, engineOptions = {} } = {}) {
+  const base = createMarkdownEngine(() => DEFAULT_MARKDOWN_FEATURES, undefined, { richRunLength: 0, ...engineOptions });
   // The whole-document path: the same engine without the planner.
-  const engine = incremental ? base : { ...base, planRich: undefined, forgetRich: undefined };
+  const engine = incremental ? base : { ...base, planRich: undefined, forgetRich: undefined, prepareRich: undefined };
   const ed = new Editor({ extensions: SERIALIZE_EXTENSIONS, content: "" });
   let md = "";
   let composing = false;
@@ -47,6 +47,8 @@ function rig({ incremental = true } = {}) {
     toRich() { let r; act(() => { r = sync.current.syncMdToHtml(); }); return r; },
     toMd() { let r; act(() => { r = sync.current.syncHtmlToMd(); }); return r; },
     setCanonical(json) { act(() => { sync.current.setCanonical(json); }); },
+    setFromHtml(html) { act(() => { sync.current.setFromHtml(html); }); },
+    unmount() { hook.unmount(); },
     load(text) {
       md = text;
       act(() => { sync.current.forceSyncMdToHtml(); });
@@ -161,5 +163,117 @@ describe("the incremental projection in the sync engine", () => {
       r.toRich();
       expect(r.engine.lastRichPath()).toEqual({ path: "build", reason: "no model" });
     } finally { r.destroy(); }
+  });
+});
+
+/**
+ * requestIdleCallback, run by hand: each queued callback gets a deadline that
+ * never runs out, so one flush finishes what is scheduled.
+ */
+function idleQueue() {
+  const queue = new Map();
+  const cancelled = [];
+  let next = 1;
+  window.requestIdleCallback = (cb) => { const id = next++; queue.set(id, cb); return id; };
+  window.cancelIdleCallback = (id) => { cancelled.push(id); queue.delete(id); };
+  return {
+    queue,
+    cancelled,
+    flush() {
+      let n = 0;
+      while (queue.size) {
+        const [id, cb] = queue.entries().next().value;
+        queue.delete(id);
+        cb({ timeRemaining: () => 50, didTimeout: false });
+        n++;
+      }
+      return n;
+    },
+    restore() {
+      delete window.requestIdleCallback;
+      delete window.cancelIdleCallback;
+    },
+  };
+}
+
+describe("the model is prepared in idle time after a load", () => {
+  // Every document is prepared here (the app waits for 64 KB), in slices.
+  const prepared = { engineOptions: { richPrebuildMin: 0, richPrebuildChunk: 256 } };
+
+  it("prepares after setCanonical, and the first markdown keystroke uses it", () => {
+    const q = idleQueue();
+    const r = rig(prepared);
+    try {
+      r.load(paras(100));
+      r.setCanonical(r.ed.getJSON());
+      expect(q.queue.size).toBe(1);
+      expect(q.flush()).toBe(1);
+      r.type(r.md.replace("P50 ", "P50 edited "));
+      expect(r.toRich()).toBe(true);
+      expect(r.engine.lastRichPath().path).toBe("prebuilt");
+      expect(r.engine.lastRichPath().reason).toMatch(/^ready; 1 of \d+ runs$/);
+      expect(r.ed.state.doc.child(50).textContent).toContain("P50 edited");
+    } finally { r.destroy(); q.restore(); }
+  });
+
+  it("prepares after setFromHtml too", () => {
+    const q = idleQueue();
+    const r = rig(prepared);
+    try {
+      r.setFromHtml(r.engine.mdToHtml(paras(100)));
+      expect(q.flush()).toBe(1);
+      r.type(r.md.replace("P50 ", "P50 edited "));
+      r.toRich();
+      expect(r.engine.lastRichPath().reason).toMatch(/^ready; /);
+    } finally { r.destroy(); q.restore(); }
+  });
+
+  it("a keystroke before idle time finishes the preparation itself", () => {
+    const q = idleQueue();
+    const r = rig(prepared);
+    try {
+      r.load(paras(100));
+      r.setCanonical(r.ed.getJSON());
+      r.type(r.md.replace("P99 ", "P99 edited "));
+      r.toRich();
+      expect(r.engine.lastRichPath().reason).toMatch(/^finished on demand; /);
+      // The slice still queued finds nothing to do, and queues no other.
+      expect(q.flush()).toBe(1);
+      expect(q.queue.size).toBe(0);
+    } finally { r.destroy(); q.restore(); }
+  });
+
+  it("the next load cancels the slices, and so does unmounting", () => {
+    const q = idleQueue();
+    const r = rig(prepared);
+    try {
+      r.load(paras(100));
+      r.setCanonical(r.ed.getJSON());
+      const [first] = q.queue.keys();
+      r.setCanonical(r.ed.getJSON());
+      expect(q.cancelled).toEqual([first]);
+      const [second] = q.queue.keys();
+      r.unmount();
+      expect(q.cancelled).toEqual([first, second]);
+      expect(q.queue.size).toBe(0);
+    } finally { r.destroy(); q.restore(); }
+  });
+
+  it("schedules nothing for a small document, or without a planner", () => {
+    const q = idleQueue();
+    try {
+      const small = rig(); // the app's 64 KB threshold
+      try {
+        small.load(paras(100));
+        small.setCanonical(small.ed.getJSON());
+        expect(q.queue.size).toBe(0);
+      } finally { small.destroy(); }
+      const whole = rig({ ...prepared, incremental: false });
+      try {
+        whole.load(paras(100));
+        whole.setCanonical(whole.ed.getJSON());
+        expect(q.queue.size).toBe(0);
+      } finally { whole.destroy(); }
+    } finally { q.restore(); }
   });
 });

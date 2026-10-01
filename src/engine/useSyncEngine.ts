@@ -1,6 +1,7 @@
-import { useRef, useCallback, RefObject } from "react";
+import { useRef, useCallback, useEffect, RefObject } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { quickHash } from "../utils/index";
+import { runWhenIdle } from "../utils/idle";
 import { MarkdownEngine } from "./useMarkdownEngine";
 
 interface SyncEngineParams {
@@ -97,6 +98,28 @@ export function useSyncEngine({
   /** The live PM doc node, or null when the editor is not mounted. */
   const currentHtmlDoc = (): unknown =>
     tiptapRef.current?.getEditor?.()?.state?.doc ?? null;
+
+  /**
+   * After a document is loaded, the markdown→rich projection's model is
+   * prepared in idle time (A083, incremental-rich.ts `prepare`): without it the
+   * FIRST markdown keystroke parsed the whole document — 22 s at 4 MB under a
+   * 4x CPU slowdown. A keystroke that comes before the slices finish finishes
+   * them; the next load cancels them.
+   */
+  const cancelPrebuild = useRef<(() => void) | null>(null);
+  const stopPrebuild = useCallback(() => {
+    cancelPrebuild.current?.();
+    cancelPrebuild.current = null;
+  }, []);
+  const startPrebuild = useCallback((md: string) => {
+    stopPrebuild();
+    const editor = tiptapRef.current?.getEditor?.();
+    const state = editor && !editor.isDestroyed ? editor.view?.state : null;
+    if (!engine?.prepareRich || !state?.doc) return;
+    const job = engine.prepareRich(md, state);
+    if (job) cancelPrebuild.current = runWhenIdle((timeUp) => job.step(timeUp));
+  }, [engine, tiptapRef, stopPrebuild]);
+  useEffect(() => stopPrebuild, [stopPrebuild]);
 
   const syncMdToHtmlRef = useRef<(() => boolean) | null>(null);
   const syncHtmlToMdRef = useRef<(() => boolean) | null>(null);
@@ -309,7 +332,8 @@ export function useSyncEngine({
 
     syncing.current = true;
     try {
-      // Another document: what the markdown→rich projection knew is of no use.
+      // Another document: what the markdown→rich projection knew is of no use
+      // (forgetting also retires a preparation still in progress).
       engine.forgetRich?.();
       const editor = tiptapRef.current.getEditor?.();
       if (editor) {
@@ -327,7 +351,8 @@ export function useSyncEngine({
         lastHtmlHash.current = rich.hash;
         lastHtmlDoc.current = doc;
 
-        cmRef.current.setValue(md);
+        const settled = cmRef.current.setValue(md);
+        startPrebuild(typeof settled === "string" ? settled : md);
       }
 
       if (opts?.resetHistory !== false) {
@@ -337,7 +362,7 @@ export function useSyncEngine({
     } finally {
       syncing.current = false;
     }
-  }, [engine, cmRef, tiptapRef, syncMode]);
+  }, [engine, cmRef, tiptapRef, syncMode, startPrebuild]);
 
   /** Set content from HTML string (e.g., after ingest). */
   const setFromHtml = useCallback((html: string) => {
@@ -360,7 +385,8 @@ export function useSyncEngine({
         lastHtmlHash.current = rich.hash;
         lastHtmlDoc.current = doc;
 
-        cmRef.current.setValue(md);
+        const settled = cmRef.current.setValue(md);
+        startPrebuild(typeof settled === "string" ? settled : md);
       }
 
       // setFromHtml loads a document's content wholesale — always drop stale
@@ -375,7 +401,7 @@ export function useSyncEngine({
     } finally {
       syncing.current = false;
     }
-  }, [engine, cmRef, tiptapRef, syncMode, onCanonicalChange]);
+  }, [engine, cmRef, tiptapRef, syncMode, onCanonicalChange, startPrebuild]);
 
   return {
     syncMdToHtml,
