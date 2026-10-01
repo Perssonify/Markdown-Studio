@@ -133,6 +133,27 @@ export function parseStoredDocument(id: string, raw: string): DocumentRecord {
   return doc;
 }
 
+/** How serializeForStorage ends a record: `"updated":"…","schemaVersion":N}`. */
+const REVISION_TAIL = /"updated":("(?:[^"\\]|\\.)*"),"schemaVersion":\d+\}$/;
+
+/**
+ * A stored record's `updated`, read off its END — where serializeForStorage
+ * writes it, after everything a nested `"updated"` could hide in — without
+ * parsing (and re-sanitizing) the rest. A record that does not end that way
+ * (an older layout, a missing stamp) is parsed whole, as `get` would; one
+ * that will not parse is corrupt. Exported for tests.
+ */
+export function readRevision(id: string, raw: string): string {
+  const m = REVISION_TAIL.exec(raw.slice(-256));
+  if (m) {
+    try {
+      const value = JSON.parse(m[1]!) as unknown;
+      if (typeof value === "string") return value;
+    } catch { /* parse it whole, below */ }
+  }
+  return parseStoredDocument(id, raw).updated;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_DB_NAME = "perssonify-docs";
@@ -158,9 +179,18 @@ function formatBytes(n: number): string {
  * ASCII-heavy note, which is most of them, so the cap was hit at about half the
  * data it claimed to allow.
  */
+const NON_ASCII = /[^\x00-\x7f]/;
+
 export function utf8Bytes(str: string): number {
-  let n = 0;
-  for (let i = 0; i < str.length; i++) {
+  // Everything before the first non-ASCII character is one byte a character,
+  // found by the regex engine rather than this loop (~115 ms per 6 MB record
+  // at 4x CPU, on every save of a large note). (TextEncoder().encode(str)
+  // .length was measured SLOWER still — it builds the whole encoded copy. And
+  // the save does not measure the record it replaces at all: `_recordBytes`.)
+  const first = str.search(NON_ASCII);
+  if (first < 0) return str.length;
+  let n = first;
+  for (let i = first; i < str.length; i++) {
     const c = str.charCodeAt(i);
     if (c < 0x80) n += 1;
     else if (c < 0x800) n += 2;
@@ -255,6 +285,15 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
   /** The documents' own UTF-8 bytes and count (the store, not the origin). */
   private _docBytes = 0;
   private _docCount = 0;
+  /**
+   * Each record this tab wrote: its length in UTF-16 units and in UTF-8 bytes.
+   * A save needs the size of the record it replaces, and measuring a 6 MB
+   * record again costs ~115 ms at 4x CPU; one of the length it was written at
+   * is taken to be it (another tab rewriting it to the very same length can
+   * leave the usage gauge a little off until the next full count — the gauge
+   * only, never a cap: a host cap walks the store inside the write).
+   */
+  private _recordBytes = new Map<string, { chars: number; bytes: number }>();
   /** The browser's last answer to navigator.storage.estimate(), if any. */
   private _estimate: { usage: number; quota: number } | null = null;
   private _estimateAt = 0;
@@ -535,6 +574,21 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
     return parseStoredDocument(id, raw);
   }
 
+  /** The stored revision without parsing the record (StorageAdapter.getRevision). */
+  async getRevision(id: string): Promise<string | null> {
+    await this._readyPromise;
+    let raw: string | undefined;
+    try {
+      const tx = this._db_().transaction(STORE_DOCS, "readonly");
+      raw = await idbRequest<string | undefined>(tx.objectStore(STORE_DOCS).get(id));
+    } catch (e) {
+      console.warn(`[IDBStorage] Failed to read the revision of doc ${id}:`, e);
+      throw new StorageReadError(`Could not read document ${id}`, { cause: e });
+    }
+    if (raw === undefined || raw === null) return null;
+    return readRevision(id, raw);
+  }
+
   /**
    * Many documents in ONE read transaction (library export). Each slot is the
    * record, null for an id that is not stored, or a StorageReadError for a
@@ -623,7 +677,8 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
             // library on every autosave.
             const prev = await idbRequest<string | undefined>(store.get(doc.id));
             found = prev !== undefined && prev !== null;
-            existing = typeof prev === "string" ? utf8Bytes(prev) : 0;
+            const known = this._recordBytes.get(doc.id);
+            existing = typeof prev !== "string" ? 0 : known && known.chars === prev.length ? known.bytes : utf8Bytes(prev);
           }
 
           await idbRequest(store.put(serialized, doc.id));
@@ -651,6 +706,8 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
       throw e;
     }
 
+    // Committed (an aborted write threw above): this is the record stored now.
+    this._recordBytes.set(doc.id, { chars: serialized.length, bytes: newDocBytes });
     if (docBytesAfter >= 0) {
       this._docBytes = Math.max(0, docBytesAfter);
       this._docCount = docCountAfter;
@@ -676,6 +733,7 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
         await this._setManifest(manifest, tx);
       }
     );
+    this._recordBytes.delete(id);
 
     await this._recomputeMetrics();
     await this._refreshEstimate(true);
@@ -689,6 +747,7 @@ export class IndexedDBStorageAdapter implements StorageAdapter {
       await idbRequest(tx.objectStore(STORE_DOCS).clear());
       await idbRequest(tx.objectStore(STORE_META).clear());
     });
+    this._recordBytes.clear();
     await this._recomputeMetrics();
     await this._refreshEstimate(true);
   }

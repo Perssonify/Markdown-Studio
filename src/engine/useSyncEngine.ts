@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, RefObject } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { canonicalOf } from "../store/canonical-json";
 import { quickHash } from "../utils/index";
 import { runWhenIdle } from "../utils/idle";
 import { MarkdownEngine } from "./useMarkdownEngine";
@@ -12,42 +13,8 @@ interface SyncEngineParams {
   onCanonicalChange?: (pmJson: any) => void;
 }
 
-/**
- * The canonical JSON handed to onCanonicalChange — `editor.getJSON()`, with
- * each top-level block's JSON cached on its node (A083). PM nodes are
- * immutable, so an unchanged block's JSON is the one built last time;
- * getJSON() rebuilt every block of the document on every projection.
- * Deep-equal to getJSON() (it follows Node.toJSON: type, attrs, content,
- * marks, in that order). Like getJSON()'s — which already shares each node's
- * attrs object with the live document — it is for reading, not mutating. A
- * node's JSON depends on nothing but the node, so one cache serves every editor.
- */
-const blockJSON = new WeakMap<PMNode, unknown>();
-function canonicalOf(editor: { state?: { doc?: PMNode }; getJSON(): unknown }): unknown {
-  const doc = editor.state?.doc;
-  if (!doc || typeof doc.forEach !== "function") return editor.getJSON();
-  const json: { type: string; attrs?: unknown; content?: unknown[]; marks?: unknown[] } = { type: doc.type.name };
-  // (The editor's document has no attributes today, so this cannot be
-  // observed; it keeps the JSON Node.toJSON's for any schema.)
-  for (const _ in doc.attrs) {
-    json.attrs = doc.attrs;
-    break;
-  }
-  if (doc.content.size) {
-    const content: unknown[] = [];
-    doc.forEach((child) => {
-      let j = blockJSON.get(child);
-      if (j === undefined) {
-        j = child.toJSON();
-        blockJSON.set(child, j);
-      }
-      content.push(j);
-    });
-    json.content = content;
-  }
-  if (doc.marks.length) json.marks = doc.marks.map((m) => m.toJSON());
-  return json;
-}
+// The canonical handed to onCanonicalChange is canonicalOf's (store/canonical-json.ts):
+// getJSON(), with each top-level block's JSON cached on its node (A083).
 
 /**
  * The rich pane as the sync engine sees it: `quickHash(getHTML())` for the

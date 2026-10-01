@@ -22,8 +22,16 @@
  *  - Fails soft: if IndexedDB is unavailable (SSR, private mode, tests) it keeps
  *    an in-memory ring so the API still works within the session.
  *  - Content-hash dedup so identical consecutive saves don't fill the ring.
+ *  - A database record keeps the content as JSON TEXT (`json`), not as an
+ *    object (`canonical`, as records written before A083 do — both are read).
+ *    IndexedDB deep-copies an object graph field by field on every write and
+ *    read; a 4 MB note's snapshot spent ~1 s at 4x CPU in that copy alone, and
+ *    the dedup and pruning reads paid it again for every version kept. A build
+ *    from before the change lists the new records but cannot restore them
+ *    (`canonical` is absent, so it reports the version unreadable).
  */
 
+import { canonicalJsonText } from "./canonical-json";
 import { computeCounts, type PMNode } from "./document";
 import { quickHash } from "../utils";
 
@@ -54,7 +62,23 @@ export interface SnapshotMeta {
 }
 
 interface SnapshotRecord extends SnapshotMeta {
-  canonical: unknown;
+  /** The content as an object: the memory ring, and database records written
+   *  before A083. */
+  canonical?: unknown;
+  /** The content as JSON text: database records written since. */
+  json?: string;
+}
+
+/** A record's content, whichever form it was kept in (null if unreadable). */
+function payloadOf(r: SnapshotRecord | undefined | null): unknown {
+  if (!r) return null;
+  if (r.canonical !== undefined) return r.canonical;
+  if (typeof r.json !== "string") return null;
+  try {
+    return JSON.parse(r.json) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Tuning ──────────────────────────────────────────────────────────────────
@@ -82,8 +106,10 @@ function isBlank(canonical: unknown): boolean {
   return false;
 }
 
+/** JSON.stringify — from each block's cached text for content the editor
+ *  handed over (canonicalJsonText): a save's old content usually is. */
 function serialize(canonical: unknown): string {
-  try { return JSON.stringify(canonical) ?? ""; } catch { return ""; }
+  try { return canonicalJsonText(canonical) ?? ""; } catch { return ""; }
 }
 
 /**
@@ -241,11 +267,14 @@ class SnapshotStore {
     docId: string,
     title: string,
     oldCanonical: unknown,
-    newCanonical: unknown
+    newCanonical: unknown,
+    /** Their character counts, when the caller already knows them (A083): an
+     *  autosave of a large note walked both documents just to decide. */
+    known: { oldChars?: number; newChars?: number } = {}
   ): Promise<void> {
     if (!this.enabled || !docId || isBlank(oldCanonical)) return Promise.resolve();
-    const oldChars = (computeCounts(oldCanonical as PMNode).chars) || 0;
-    const newChars = isBlank(newCanonical) ? 0 : (computeCounts(newCanonical as PMNode).chars || 0);
+    const oldChars = known.oldChars ?? (computeCounts(oldCanonical as PMNode).chars || 0);
+    const newChars = isBlank(newCanonical) ? 0 : known.newChars ?? (computeCounts(newCanonical as PMNode).chars || 0);
     const shrink = oldChars > 0 && newChars <= oldChars * SHRINK_TRIGGER_RATIO;
     const now = Date.now();
     const last = this.lastAutoAt.get(docId) ?? 0;
@@ -271,7 +300,7 @@ class SnapshotStore {
     await this.open();
     const serialized = serialize(canonical);
     const hash = quickHash(serialized);
-    const meta: Omit<SnapshotRecord, "id"> = {
+    const meta: Omit<SnapshotRecord, "id" | "canonical" | "json"> = {
       docId,
       ts: Date.now(),
       reason,
@@ -280,26 +309,50 @@ class SnapshotStore {
       words: computeCounts(canonical as PMNode).words || 0,
       hash,
       seq: ++this.insertSeq,
-      canonical,
     };
 
     // Dedup vs the latest existing snapshot for this doc.
-    const latest = (await this.listForDoc(docId))[0];
+    const latest = await this.latestForDoc(docId);
     if (latest && latest.hash === hash) return;
 
     if (!this.usable || !this.db) {
-      this.mem.push({ ...meta, id: this.memSeq-- });
+      this.mem.push({ ...meta, canonical, id: this.memSeq-- });
     } else {
       try {
         const tx = this.db.transaction(STORE, "readwrite");
-        await idbRequest(tx.objectStore(STORE).add(meta as SnapshotRecord));
+        await idbRequest(tx.objectStore(STORE).add({ ...meta, json: serialized } as SnapshotRecord));
       } catch {
         // Fall back to memory on any write error (e.g. quota).
-        this.mem.push({ ...meta, id: this.memSeq-- });
+        this.mem.push({ ...meta, canonical, id: this.memSeq-- });
       }
     }
     await this.prune(docId);
     this.emit();
+  }
+
+  /**
+   * The doc's newest snapshot (no payload) — what a new one is deduped
+   * against. The database's is the one with the highest key (autoIncrement
+   * keys follow insertion, across tabs too), read alone: reading every version
+   * kept, content and all, to compare one hash was most of a large note's
+   * snapshot cost.
+   */
+  private async latestForDoc(docId: string): Promise<SnapshotMeta | null> {
+    const candidates: SnapshotMeta[] = this.mem.filter((r) => r.docId === docId).map(stripCanonical);
+    if (this.usable && this.db) {
+      try {
+        const tx = this.db.transaction(STORE, "readonly");
+        const store = tx.objectStore(STORE);
+        const keys = (await idbRequest<IDBValidKey[]>(store.index(IDX_DOC).getAllKeys(docId))) ?? [];
+        if (keys.length) {
+          let newest = keys[0] as number;
+          for (const k of keys) if ((k as number) > newest) newest = k as number;
+          const rec = await idbRequest<SnapshotRecord | undefined>(store.get(newest));
+          if (rec) candidates.push(stripCanonical(rec));
+        }
+      } catch { /* the memory ring's answer, as the full list would give */ }
+    }
+    return candidates.sort(byRecentDesc)[0] ?? null;
   }
 
   // ── Reading ────────────────────────────────────────────────────────────────
@@ -332,12 +385,12 @@ class SnapshotStore {
     await this.open();
     // Negative id ⇒ memory ring; positive ⇒ IndexedDB. Dispatch on origin, never
     // on a bare number that both stores could have issued.
-    if (id < 0) return this.mem.find((r) => r.id === id)?.canonical ?? null;
+    if (id < 0) return payloadOf(this.mem.find((r) => r.id === id));
     if (!this.usable || !this.db) return null;
     try {
       const tx = this.db.transaction(STORE, "readonly");
       const rec = await idbRequest<SnapshotRecord | undefined>(tx.objectStore(STORE).get(id));
-      return rec?.canonical ?? null;
+      return payloadOf(rec);
     } catch {
       return null;
     }
@@ -352,7 +405,7 @@ class SnapshotStore {
    */
   async scanCanonicals(): Promise<unknown[]> {
     await this.open();
-    const mem = this.mem.map((r) => r.canonical);
+    const mem = this.mem.map(payloadOf);
     if (!this.enabled) return mem; // version history is off: nothing was kept
     if (!this.usable || !this.db) {
       // No database at all: the ring is everything there is. A database this
@@ -363,7 +416,7 @@ class SnapshotStore {
     }
     const tx = this.db.transaction(STORE, "readonly");
     const stored = (await idbRequest<SnapshotRecord[]>(tx.objectStore(STORE).getAll())) ?? [];
-    return [...stored.map((r) => r.canonical), ...mem];
+    return [...stored.map(payloadOf), ...mem];
   }
 
   // ── Deletion / pruning ───────────────────────────────────────────────────────
@@ -540,8 +593,9 @@ class SnapshotStore {
 }
 
 function stripCanonical(r: SnapshotRecord): SnapshotMeta {
-  const { canonical, ...meta } = r;
+  const { canonical, json, ...meta } = r;
   void canonical;
+  void json;
   return meta;
 }
 

@@ -30,6 +30,7 @@ import {
 } from "./storage-adapter";
 import type { StorageMetrics } from "./idb-storage-adapter";
 import { snapshotStore } from "./snapshot-store";
+import { canonicalOf } from "./canonical-json";
 import { assetStore } from "./asset-store";
 import { clearStash, configureRecovery, takeStashed, type RecoveryEntry } from "./crash-recovery";
 import { historyCache } from "./history-cache";
@@ -231,6 +232,9 @@ export interface DocumentWithIngestHtml extends DocumentRecord {
 
 export interface TiptapEditorLike {
   getJSON(): DocumentRecord["canonical"];
+  /** The live editor's state: when present, a save reads each block's cached
+   *  JSON (canonicalOf) instead of getJSON()'s fresh copy of everything. */
+  state?: { doc?: unknown } | null;
 }
 
 export interface MarkdownEngine {
@@ -496,6 +500,49 @@ const deletedAtSeq = new Map<string, number>();
 const deletedSince = (docId: string, since: number) =>
   deletingDocs.has(docId) || (deletedAtSeq.get(docId) ?? 0) > since;
 
+/**
+ * What this tab knows is stored for a document — its revision, content and
+ * title, from its own last write of it or its last read of it (A083). A save
+ * whose pre-write read finds that SAME revision (StorageAdapter.getRevision)
+ * judges against these instead of parsing the stored record again: a 4 MB
+ * note's autosave spent ~1.6 s at 4x CPU re-reading and re-sanitizing itself.
+ * Keyed on the revision: every write of new content stamps a new `updated`, so
+ * another tab's write, a rename or a host's patch simply misses and the save
+ * reads the record whole. A BLANK editor always reads it whole too: the blank
+ * backstop judges against what storage says, never against a memory of it.
+ * `chars` is filled in when first needed. A few documents only.
+ */
+interface KnownStored {
+  updated: string;
+  canonical: DocumentRecord["canonical"];
+  title: string;
+  chars?: number;
+}
+const knownStored = new Map<string, KnownStored>();
+const KNOWN_STORED_MAX = 3;
+function rememberStored(doc: Pick<DocumentRecord, "id" | "updated" | "canonical" | "title">, chars?: number): void {
+  if (typeof doc.updated !== "string") return;
+  knownStored.delete(doc.id);
+  knownStored.set(doc.id, { updated: doc.updated, canonical: doc.canonical, title: doc.title, chars });
+  while (knownStored.size > KNOWN_STORED_MAX) knownStored.delete(knownStored.keys().next().value as string);
+}
+/** For tests: what the store remembers of a document's stored revision. */
+export const _knownStoredRevision = (id: string): string | undefined => knownStored.get(id)?.updated;
+
+/**
+ * The open document's record when it is EXACTLY what storage holds at
+ * revision `updated` — this tab wrote or read it at that revision, and no
+ * unsaved draft has been grafted onto it — else null. A reader that only
+ * needs the stored record can skip parsing it again: the link index re-read
+ * every document an autosave touched, ~0.6 s for a 4 MB note at 4x CPU (A083).
+ */
+export function storedRecordIfCurrent(id: string, updated: string | undefined): DocumentRecord | null {
+  const known = knownStored.get(id);
+  const active = useDocumentStore.getState().activeDoc;
+  if (!known || !active || active.id !== id || known.updated !== updated || active.updated !== updated) return null;
+  return active.canonical === known.canonical ? active : null;
+}
+
 // Documents locked read-only because their content does not fit this build
 // (see `schemaLock`). Module scope, like `deletingDocs`: the save path consults
 // it synchronously.
@@ -674,6 +721,7 @@ export async function clearLocalData(opts: { preferences?: boolean } = {}): Prom
   ++switchSeq;
   cancelReadyReset();
   incompatibleDocs.clear();
+  knownStored.clear();
   blankSaveAllowedFor = null;
   useDocumentStore.setState({
     documents: [], activeDoc: null, activeDocId: null, hydratedDocId: null, openTabs: [],
@@ -994,7 +1042,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     for (const id of candidates) {
       try {
         const doc = await storage.get(id);
-        if (doc) return activate(doc);
+        if (doc) {
+          rememberStored(doc);
+          return activate(doc);
+        }
       } catch (e) {
         console.warn(`[documentStore] Could not open ${id} at startup:`, e);
         readError ??= e;
@@ -1128,11 +1179,29 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // a blind write here would overwrite that tab's work (classic last-writer-
     // wins data loss). Refuse and tell the user. The 2s tolerance absorbs
     // same-tab timestamp wobble from adapters stamping `updated` on save.
-    let stored: DocumentRecord | null | undefined;
+    //
+    // The read is a revision check when this tab knows what is stored at that
+    // revision (see knownStored) — not for a blank editor, which the blank
+    // backstop must judge against storage itself.
+    let stored: Pick<DocumentRecord, "updated" | "title" | "canonical"> | null | undefined;
+    let known: KnownStored | undefined;
     let storedReadFailed = false;
     let storedCorrupt = false;
     try {
-      stored = await storage.get(activeDoc.id);
+      const remembered = knownStored.get(activeDoc.id);
+      if (remembered && storage.getRevision && !isBlankCanonical(canonicalOf(tiptapEditor))) {
+        const revision = await storage.getRevision(activeDoc.id);
+        if (revision === null) {
+          stored = null;
+        } else if (revision === remembered.updated) {
+          stored = remembered;
+          known = remembered;
+        } else {
+          stored = await storage.get(activeDoc.id);
+        }
+      } else {
+        stored = await storage.get(activeDoc.id);
+      }
       if (isOvertaken(activeDoc.id, stored?.updated, activeDoc.updated)) {
         // Park a TERMINAL "conflict" status so the UI can surface it
         // persistently (the status bar) instead of it flickering through the
@@ -1201,7 +1270,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     set({ saveStatus: "saving" });
     try {
-      const canonical = tiptapEditor.getJSON();
+      // getJSON(), from each unchanged block's cached JSON (canonical-json.ts) —
+      // which also lets the record's text and its counts reuse each block's.
+      const canonical = canonicalOf(tiptapEditor) as DocumentRecord["canonical"];
+      const counts = computeCounts(canonical);
 
       // DATA-LOSS BACKSTOP: never let a BLANK editor overwrite a stored document
       // that has real content. A blank canonical over real content is never a
@@ -1233,7 +1305,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // ordinary autosaves; a large shrink (the "got wiped" signature) always
       // snapshots. Fire-and-forget so it never blocks or fails the save.
       if (stored) {
-        snapshotStore.maybeRecordOnSave(activeDoc.id, stored.title || activeDoc.title, stored.canonical, canonical);
+        // Counts already known are not walked again (a 4 MB document twice, on
+        // every autosave, for a check that usually ends in "not yet").
+        if (known) known.chars ??= computeCounts(known.canonical).chars;
+        snapshotStore.maybeRecordOnSave(activeDoc.id, stored.title || activeDoc.title, stored.canonical, canonical, {
+          oldChars: known?.chars,
+          newChars: counts.chars,
+        });
       }
 
       // Re-read the FRESHEST active doc: a rename/patch (renameDoc / patchDocById)
@@ -1262,6 +1340,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       await storage.save(updatedDoc);
       // The write has COMMITTED — tell the other tabs (ids and revision only).
       announce({ type: "doc", id: updatedDoc.id, updated: updatedDoc.updated });
+      // …and remember it: the adapter has stamped the revision it stored.
+      rememberStored(updatedDoc, counts.chars);
       // A listing that fails now must not turn it
       // into a reported failure (and a retry loop) — keep the last listing.
       let list = get().documents;
@@ -1285,7 +1365,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         openTabs: s.openTabs.map((t) =>
           t.id === updatedDoc.id ? { ...t, title: updatedDoc.title } : t
         ),
-        counts: computeCounts(canonical),
+        counts,
         // Keystrokes typed DURING the async write set saveStatus back to
         // "editing" — that content is NOT in the snapshot we just persisted,
         // so we must not overwrite the dirty flag (doing so disarmed the
@@ -1369,6 +1449,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     let doc: DocumentRecord | null = null;
     try {
       doc = await storage.get(docId);
+      if (doc) rememberStored(doc);
     } catch (e) {
       // Unreadable is handled like missing: the revert below keeps the user on
       // the document the editor still shows. (The adapter REJECTS rather than
@@ -1461,6 +1542,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       } catch { /* best effort — never block a delete on the snapshot net */ }
     }
     await storage.delete(docId);
+    knownStored.delete(docId);
     deletedAtSeq.set(docId, ++deletionSeq);
     announce({ type: "deleted", id: docId });
     if (opts?.purgeHistory) {
