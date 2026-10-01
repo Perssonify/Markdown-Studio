@@ -248,8 +248,11 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   in Version history). The save-status machine was not rewritten (§5); read-check-write
   is still not atomic across tabs.
 - **Large documents:** both directions project per block now (A083), so typing stays
-  responsive at 1.6–4 MB in either pane. The first markdown keystroke after opening still
-  builds the incremental model with a whole parse (4 MB: 22 s at 4× CPU).
+  responsive at 1.6–4 MB in either pane, and the markdown→rich model is prepared in idle
+  time after a load (first keystroke at 4 MB: 28 s → 2.7 s at 4× CPU). What is left is
+  not the projection: each autosave of a 4 MB note re-reads and re-sanitizes the stored
+  copy (~4 s at 4× CPU), and TipTap's code highlighter redoes every code block — both
+  under Deferred in docs/audit-2026-09.md.
 - **Graph performance:** measured at 2,000 notes (A088): above 300 notes the layout is
   Barnes–Hut, above 250 the drawing is batched and each frame either steps or paints.
   First frame 1.0 s, settle 17–23 s under a 4× CPU slowdown. Folder maps up to 500 notes
