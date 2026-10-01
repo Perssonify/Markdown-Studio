@@ -1643,9 +1643,44 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (pinned). Blocks are serialised into an INERT document only — a live one loads
   each `<img>`, which the CSP and dataloss suites caught with stored images.
   Measured at 1.6 MB: keystroke → markdown pane 23 s → 0.6 s at 4× CPU, 2.5 s →
-  0.17 s at 1×. Still whole-document: markdown→rich (`setContent`), opening a
-  large document (each code-block node view forces a layout), and `updateDerived`'s
-  fidelity/word-count walk and `UnresolvedWikiLinks`' rescan on every change.
+  0.17 s at 1×. markdown→rich is incremental too (next bullet).
+- **Markdown→rich is INCREMENTAL** (`engine/incremental-rich.ts`, A083).
+  `syncMdToHtml` dispatches `engine.planRich(md, view.state)`; `setCanonical` and
+  `setFromHtml` call `forgetRich()`. A MODEL (each run of top-level blocks: its
+  source length and node count) lets an edit re-lex, render and parse only the runs
+  it touched, plus runs whose nodes the rich pane changed (found by identity). The
+  result MUST be `Node.eq` to `setContent(mdToHtml(md))` with `preventAutolink`;
+  the transaction sets `preventUpdate` and `preventAutolink` and is one history step.
+  A CUT needs all four: a blank line after a block that cannot run on; marked's
+  inline state clear; the HTML leaving the browser parser clean
+  (`selfContainedHtml`, else the `leavesParserClean` probe); and ProseMirror with no
+  node open (position check plus a sentinel text node). **Anything uncertain falls
+  back to the whole path** — a wrong partial update is data corruption, a fallback
+  only a slow keystroke. Whole document while present: the curly-brace syntax,
+  marked hooks, a `\r`, link reference definitions (or a block one could still grow
+  out of), footnote definitions, a bare-pipe alias wiki link, raw HTML holding a
+  `<pre>` with more than text or a `white-space`/CSS-escape style, ANY raw-HTML
+  `<table>` (three defects came from them), a raw-length mismatch, the
+  preprocessor rewriting the text. **CI's 40 random walks are not enough to trust a
+  change to the cut rules**: deep runs of 600–4,000 seeds each found new defects —
+  run deep, split across processes (`RICH_SEEDS`/`RICH_SEED_FROM`/`RICH_LONG_SEEDS`;
+  jsdom's `setContent` grows ~3.5 MB per 30 projections, so one process crawls).
+  The FIRST markdown keystroke after opening builds the model with a whole parse —
+  1.6 MB: 6.4 s, 4 MB: 22 s at 4× CPU (building it in idle time after load is the
+  next step); later keystrokes 0.6 s and 1.4 s (were ~23 s and ~116 s). Tokens are
+  walked with `walkTokensLinear` — marked's `walkTokens` rebuilds its result array
+  with `concat` at every token (1 MB: 54 s against 13 ms) — and not at all without a
+  "<" or an extension `walkTokens` (`incremental-rich-walk.test.js`).
+- **marked-footnote is registered AFTER maths**, and every parse calls
+  `resetFootnoteNumbering(m)` first: registered first, a document opening with `$$`
+  that held a `[^1]` threw, and the extension then stayed stuck for every later
+  parse. Its section token must be `tokens[0]`; its reference counter is shared
+  between parses. **`TableCellFast`/`TableHeaderFast`** (`engine/table-colwidth.ts`)
+  replace the stock cells in BOTH schemas (no per-cell `querySelectorAll`), and
+  `TiptapPane.setHTML` parses through `parseHtmlDoc`, whose whitespace pass is
+  linear. **Formulas typeset only near the view** (`MathNodes`, IntersectionObserver;
+  `beforeprint` typesets all) — React's commit walks the whole contenteditable
+  (`getSelectionInformation`) and KaTeX DOM made that walk expensive.
 - **Exported markdown writes hard breaks as `\` + newline** (A051,
   `engine/portable-breaks.ts`): the app's `breaks: true` dialect draws a line
   break for a bare newline, which stock markdown renderers drop, so File ▸ Export,
