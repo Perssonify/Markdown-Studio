@@ -13,16 +13,30 @@
 // 1600 and 4000 KB. Per size: the median and worst keystroke -> markdown pane
 // updated over isolated samples, and the longest main-thread task while typing.
 //   DIR=<dist> REPS=1 THROTTLE=4 PANE=rich node e2e/cases/perf.mjs <label> [sizeKb...]
+// PANE=md is the same procedure in the other direction: typing at the end of
+// the MARKDOWN pane of the large document, timed until the rich pane shows it
+// (A083 — the markdown→rich projection). Same sizes, knobs and columns.
+//   DIR=<dist> REPS=1 THROTTLE=4 PANE=md node e2e/cases/perf.mjs <label> [sizeKb...]
+// Both large modes also report firstMs (the first sample: in the markdown
+// pane, the keystroke that parses the whole document once to build the
+// incremental projection's model) and laterMedianMs (the rest), and print
+// every sample in order. SAMPLES=<n> takes more than the default 5.
 // CODE_EVERY=12 puts a code block in every cycle of the mixed document (the
 // default, 48, one in four) — to measure OPENING a code-heavy document.
 // DOC=math opens a formula-heavy document instead (mathDoc).
+// PROFILE=<file> records a CPU profile of the typing samples (PANE=rich|md)
+// into <file>-<kb>.cpuprofile, for DevTools' Performance panel.
 import { serve, open, boot, seed, APP_DIR } from "../lib.mjs";
 import { mathDoc, mixedDoc, proseDoc } from "../docs.mjs";
 import fs from "node:fs"; import path from "node:path";
 const DIR = process.env.DIR || APP_DIR;
 const RICH = process.env.PANE === "rich";
+// Typing in the markdown pane of a LARGE document (PANE=md). Without PANE it is
+// the small-prose procedure in once() below.
+const MD_LARGE = process.env.PANE === "md";
+const LARGE = RICH || MD_LARGE;
 const LABEL = process.argv[2] || "run";
-const SIZES = (process.argv[3] ? process.argv.slice(3) : RICH ? ["1600", "4000"] : ["1", "10", "50"]).map(Number);
+const SIZES = (process.argv[3] ? process.argv.slice(3) : LARGE ? ["1600", "4000"] : ["1", "10", "50"]).map(Number);
 const REPS = Number(process.env.REPS || 1);
 const srv = await serve(DIR);
 
@@ -78,11 +92,15 @@ async function once(kb) {
   return { timeToMirrorMs: mirrorMs == null ? 99999 : Math.round(mirrorMs), ...r, errors: errors.length };
 }
 
-// The rich pane of a large document -> the markdown pane (PANE=rich).
+// The rich pane of a large document -> the markdown pane (PANE=rich), or the
+// markdown pane -> the rich pane (PANE=md).
 //
 // CodeMirror renders only its viewport, so the markdown pane is scrolled to its
 // END and the typing happens at the END of the rich pane: the projection then
 // changes the lines CodeMirror is showing, and a MutationObserver sees it.
+// Typing in the markdown pane goes at its end too, and the observer reads the
+// rich pane's LAST blocks only: the textContent of a whole 4 MB ProseMirror on
+// every mutation would be a cost of the measurement itself.
 // Samples are ISOLATED (a pause after each) so each one is a single projection
 // rather than a debounce race, and both timestamps are taken in the page.
 async function richOnce(kb) {
@@ -140,7 +158,7 @@ async function richOnce(kb) {
   await pg.waitForTimeout(3000);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.THROTTLE || 4) });
 
-  await pg.locator(".ProseMirror").first().click();
+  await pg.locator(MD_LARGE ? ".cm-content" : ".ProseMirror").first().click();
   await pg.keyboard.press("Control+End");
   await pg.waitForTimeout(3000);
   // Long tasks from here on only: the click and the jump to the end lay out
@@ -150,19 +168,32 @@ async function richOnce(kb) {
     try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push(e.duration); }).observe({ entryTypes: ["longtask"] }); } catch {}
   });
 
+  if (process.env.PROFILE) {
+    await cdp.send("Profiler.enable");
+    await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
+    await cdp.send("Profiler.start");
+  }
   const samples = [];
   for (let i = 0; i < Number(process.env.SAMPLES || 5); i++) {
     const TOKEN = `Q${i}W`; // short: at 4x each keystroke of the old build took seconds
-    await pg.evaluate((tok) => {
+    await pg.evaluate(({ tok, md }) => {
       const sc = document.querySelector(".cm-scroller");
       if (sc) sc.scrollTop = sc.scrollHeight;
       window.__m = { last: 0, seen: null, lt0: window.__lt.length };
-      document.querySelector(".ProseMirror").addEventListener("input", () => { window.__m.last = performance.now(); }, true);
-      const cm = document.querySelector(".cm-content");
+      const from = document.querySelector(md ? ".cm-content" : ".ProseMirror");
+      from.addEventListener("input", () => { window.__m.last = performance.now(); }, true);
+      const to = document.querySelector(md ? ".ProseMirror" : ".cm-content");
+      const holds = md
+        ? () => {
+            let el = to.lastElementChild;
+            for (let k = 0; el && k < 3; k++, el = el.previousElementSibling) if (el.textContent.includes(tok)) return true;
+            return false;
+          }
+        : () => to.textContent.includes(tok);
       new MutationObserver((_, obs) => {
-        if (window.__m.seen == null && cm.textContent.includes(tok)) { window.__m.seen = performance.now(); obs.disconnect(); }
-      }).observe(cm, { subtree: true, childList: true, characterData: true });
-    }, TOKEN);
+        if (window.__m.seen == null && holds()) { window.__m.seen = performance.now(); obs.disconnect(); }
+      }).observe(to, { subtree: true, childList: true, characterData: true });
+    }, { tok: TOKEN, md: MD_LARGE });
     await pg.keyboard.type(TOKEN, { delay: 0 });
     let mirror = null;
     // Generous: a build without the per-block projection took tens of seconds
@@ -176,13 +207,24 @@ async function richOnce(kb) {
     samples.push(mirror == null ? 99999 : Math.round(mirror));
     await pg.waitForTimeout(2500); // quiet: the next sample starts from rest
   }
+  if (process.env.PROFILE) {
+    const { profile } = await cdp.send("Profiler.stop");
+    fs.writeFileSync(`${process.env.PROFILE}-${kb}.cpuprofile`, JSON.stringify(profile));
+  }
   const lt = await pg.evaluate(() => window.__lt);
   await browser.close();
   const sorted = [...samples].sort((a, b) => a - b);
+  // The FIRST markdown keystroke after opening a document parses all of it
+  // once (the incremental projection's model, A083); the rest do not. Both are
+  // reported: the first, and the median of the others.
+  const rest = samples.slice(1).sort((a, b) => a - b);
   return {
     loadMs,
     mirrorMedianMs: sorted[Math.floor((sorted.length - 1) / 2)],
     mirrorMaxMs: sorted[sorted.length - 1],
+    firstMs: samples[0],
+    laterMedianMs: rest.length ? rest[Math.floor((rest.length - 1) / 2)] : 0,
+    samples: samples.join(" "),
     longestTaskMs: Math.round(Math.max(0, ...lt)),
     blockingMs: Math.round(lt.reduce((a, d) => a + Math.max(0, d - 50), 0)),
     errors: errors.length,
@@ -192,20 +234,23 @@ async function richOnce(kb) {
 // Repetitions matter: the same build varied by more than 50% between single
 // runs on this container, wider than most differences being judged.
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return Math.round(s[Math.floor((s.length - 1) / 2)]); };
-if (RICH) {
+if (LARGE) {
   const rows = [];
   for (const kb of SIZES) {
     const runs = [];
     for (let i = 0; i < REPS; i++) runs.push(await richOnce(kb));
     const pick = (k) => median(runs.map((r) => r[k]));
     rows.push({ kb, loadMs: pick("loadMs"), mirrorMedianMs: pick("mirrorMedianMs"), mirrorMaxMs: pick("mirrorMaxMs"),
-      longestTaskMs: pick("longestTaskMs"), blockingMs: pick("blockingMs"), errors: runs.reduce((n, r) => n + r.errors, 0) });
+      firstMs: pick("firstMs"), laterMedianMs: pick("laterMedianMs"),
+      longestTaskMs: pick("longestTaskMs"), blockingMs: pick("blockingMs"), errors: runs.reduce((n, r) => n + r.errors, 0),
+      samples: runs.map((r) => r.samples).join(" | ") });
   }
   srv.close();
-  const H = ["docKB", "loadMs", "mirrorMedianMs", "mirrorMaxMs", "longestTaskMs", "blockingMs", "errors"];
-  console.log(`\n=== ${LABEL} (rich pane -> markdown pane) ===`);
+  const H = ["docKB", "loadMs", "mirrorMedianMs", "mirrorMaxMs", "firstMs", "laterMedianMs", "longestTaskMs", "blockingMs", "errors"];
+  console.log(`\n=== ${LABEL} (${MD_LARGE ? "markdown pane -> rich pane" : "rich pane -> markdown pane"}) ===`);
   console.log(H.map((h) => h.padStart(15)).join(""));
   for (const r of rows) console.log(H.map((h) => String(r[h === "docKB" ? "kb" : h]).padStart(15)).join(""));
+  for (const r of rows) console.log(`  ${r.kb} KB samples (ms, in order): ${r.samples}`);
   fs.writeFileSync(path.join(process.env.OUT || ".", `${LABEL}.json`), JSON.stringify(rows, null, 1));
   process.exit(0);
 }
