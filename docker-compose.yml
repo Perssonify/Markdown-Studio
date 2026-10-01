@@ -1,0 +1,29 @@
+# Local Postgres for the API — the same major version as production (RDS
+# PostgreSQL 17). `bun run db:up` starts it and waits until it is healthy;
+# `bun run db:migrate` creates the tables; `bun run db:down` stops it (the
+# data volume survives — `docker compose down -v` deletes it).
+#
+# The credentials are for this local container only and match
+# apps/api/.env.example. Port 5440, not 5432, so it never collides with a Postgres already
+# installed on the machine; set POSTGRES_PORT to change it.
+name: markdown-studio
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: markdown_studio
+      POSTGRES_PASSWORD: markdown_studio
+      POSTGRES_DB: markdown_studio
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5440}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U markdown_studio -d markdown_studio"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

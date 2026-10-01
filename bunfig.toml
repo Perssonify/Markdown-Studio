@@ -1,0 +1,7 @@
+[install]
+# One node_modules at the root, laid out exactly as it was before the frontend
+# moved into apps/web. Bun's isolated linker (its default for NEW workspace
+# projects) would give each package its own symlinked tree, which changes how
+# Vite chunks node_modules and where the frontend's tests find installed
+# packages. Hoisted keeps the frontend's build byte-identical.
+linker = "hoisted"

@@ -1,0 +1,58 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "ui": "stream",
+  "envMode": "loose",
+  "globalDependencies": [
+    ".node-version",
+    "bunfig.toml",
+    "apps/web/api/import.js"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "env": [
+        "VITE_*"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
+    "build:app": {
+      "dependsOn": [
+        "^build"
+      ],
+      "env": [
+        "VITE_*"
+      ],
+      "outputs": [
+        "dist-app/**"
+      ]
+    },
+    "build:embed": {
+      "dependsOn": [
+        "^build"
+      ],
+      "env": [
+        "VITE_*"
+      ],
+      "outputs": [
+        "dist-embed/**"
+      ]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "typecheck": {
+      "outputs": []
+    },
+    "test": {
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

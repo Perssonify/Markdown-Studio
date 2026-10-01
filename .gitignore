@@ -1,22 +1,23 @@
+# Monorepo-level ignores. Each app keeps its own .gitignore for its outputs
+# (apps/web/.gitignore is the frontend's, moved in unchanged).
 node_modules/
-dist/
-dist-app/
-# The app's sourcemaps, moved out of the deploy by vite.app.config.ts.
-dist-app-sourcemaps/
-dist-embed/
-.vercel/
-*.tar.gz
-.DS_Store
+.turbo/
 coverage/
-# Regenerated from marketing/ — see docs/migration-markdown-studio.md
-*-marketing-kit.zip
+# Build output of every package (the API bundle, …); apps/web/.gitignore
+# lists the editor's own.
+dist/
+.DS_Store
+*.tsbuildinfo
 
-# e2e reporter output (E2E_JSON=…)
-e2e/*.json
+# Local secrets. Every app ships a .env.example; the real files never leave
+# the machine.
+.env
+.env.*
+!.env.example
 
-# Temporary host-page directories built by the library / bridge e2e suites.
-.e2e-host-*/
-.e2e-bridge-*/
+# AWS CDK output.
+infra/cdk.out/
+infra/cdk.context.local.json
 
-# Git worktrees created by Claude Code agents (never part of the project).
+# Local tooling worktrees (never part of the project).
 .claude/worktrees/

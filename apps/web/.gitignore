@@ -1,0 +1,22 @@
+node_modules/
+dist/
+dist-app/
+# The app's sourcemaps, moved out of the deploy by vite.app.config.ts.
+dist-app-sourcemaps/
+dist-embed/
+.vercel/
+*.tar.gz
+.DS_Store
+coverage/
+# Regenerated from marketing/ — see docs/migration-markdown-studio.md
+*-marketing-kit.zip
+
+# e2e reporter output (E2E_JSON=…)
+e2e/*.json
+
+# Temporary host-page directories built by the library / bridge e2e suites.
+.e2e-host-*/
+.e2e-bridge-*/
+
+# Git worktrees created by Claude Code agents (never part of the project).
+.claude/worktrees/
