@@ -1,0 +1,35 @@
+{
+  "name": "@markdown-studio/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch-path=src --watch-path=../../packages/db/src --watch-path=../web/api --env-file-if-exists=.env src/server.ts",
+    "build": "tsc --noEmit && rolldown -c rolldown.config.ts && node scripts/smoke-bundle.mjs",
+    "start": "node --env-file-if-exists=.env dist/server.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.3",
+    "@markdown-studio/db": "workspace:*",
+    "better-auth": "1.7.7",
+    "hono": "4.13.12",
+    "undici": "^8.11.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-secrets-manager": "3.1144.0",
+    "@aws-sdk/client-ssm": "3.1144.0",
+    "@eslint/js": "^10.0.1",
+    "@types/aws-lambda": "8.10.164",
+    "@types/node": "^25.5.0",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "rolldown": "1.1.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "5.0.3"
+  }
+}
