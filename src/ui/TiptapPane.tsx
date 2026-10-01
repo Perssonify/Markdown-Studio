@@ -25,6 +25,7 @@ import { useT } from "../i18n";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";
 import { BidiAuto, TaskItemAutoDir } from "../extensions/BidiAuto";
+import { ReactSelectionShield } from "../extensions/ReactSelectionShield";
 import { EmojiNode } from "../extensions/EmojiNode";
 import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
 import { Callout } from "../extensions/Callout";
@@ -245,6 +246,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         TableRow, TableCell, TableHeader, TableCellAlign,
         SearchHighlightExtension,
         BidiAuto, // dir="auto" per text block — view-only, not in the schema
+        ReactSelectionShield, // a large document: React reads the caret, never walks the editor
         UnresolvedWikiLinks, // broken-link marking (a plugin: no schema change)
         AltGraphPassthrough, // AltGr types; it never triggers a Mod-Alt keymap
         AssetImages, // images as binary assets: paste/drop/copy (A086) — a plugin, no schema
