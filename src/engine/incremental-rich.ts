@@ -344,6 +344,44 @@ interface Lexed {
 }
 
 /**
+ * marked's `walkTokens` traversal, without its result array. marked builds that
+ * array with `concat` at EVERY token — quadratic in the token count: at 4 MB it
+ * was 53.7 s of a 73.5 s lex (1× CPU), so the first markdown keystroke after
+ * opening a large document took as long as an old whole-document keystroke. A
+ * synchronous parse discards the array, so this is the same walk: the token,
+ * then a table's header cells and rows, a list's items, an extension's declared
+ * `childTokens` (flattened), or `tokens` — and the callback gets the Marked
+ * instance as `this`, as marked passes it. `incremental-rich-walk.test.js`
+ * holds it to marked's own order.
+ */
+export function walkTokensLinear(m: Marked, tokens: readonly Token[], fn: (this: Marked, t: Token) => unknown): void {
+  const childTokens = (m.defaults.extensions as { childTokens?: Record<string, string[]> } | null | undefined)?.childTokens;
+  for (const t of tokens) {
+    fn.call(m, t);
+    switch (t.type) {
+      case "table": {
+        const table = t as Token & { header: { tokens: Token[] }[]; rows: { tokens: Token[] }[][] };
+        for (const cell of table.header) walkTokensLinear(m, cell.tokens, fn);
+        for (const row of table.rows) for (const cell of row) walkTokensLinear(m, cell.tokens, fn);
+        break;
+      }
+      case "list":
+        walkTokensLinear(m, (t as Token & { items: Token[] }).items, fn);
+        break;
+      default: {
+        const names = childTokens?.[t.type];
+        const bag = t as unknown as Record<string, unknown>;
+        if (names) {
+          for (const name of names) walkTokensLinear(m, (bag[name] as unknown[]).flat(Infinity) as Token[], fn);
+        } else if (Array.isArray(bag["tokens"])) {
+          walkTokensLinear(m, bag["tokens"] as Token[], fn);
+        }
+      }
+    }
+  }
+}
+
+/**
  * `marked.parse`'s lexing half, exactly as its synchronous branch runs it
  * (the configuration installs no hooks — checked by the caller).
  */
@@ -355,13 +393,18 @@ function lex(m: Marked, src: string): Lexed {
   let preserves = false;
   let rawTable = false;
   const walk = opt.walkTokens;
-  m.walkTokens(tokens, function (this: Marked, t: Token) {
-    if (t.type === "html") {
-      if (preservesWhitespace(t.raw)) preserves = true;
-      if (RAW_TABLE.test(t.raw)) rawTable = true;
-    }
-    return walk ? walk.call(this as never, t) : undefined;
-  });
+  // The walk has two jobs: run an extension's walkTokens (as marked.parse
+  // does), and find raw HTML — which needs a "<" in the text. Without either
+  // there is nothing to walk for.
+  if (walk || src.includes("<")) {
+    walkTokensLinear(m, tokens, function (this: Marked, t: Token) {
+      if (t.type === "html") {
+        if (preservesWhitespace(t.raw)) preserves = true;
+        if (RAW_TABLE.test(t.raw)) rawTable = true;
+      }
+      return walk ? walk.call(this as never, t) : undefined;
+    });
+  }
   const no = (why: string): Lexed => ({ opt, tokens, top: null, clear: [], clearAtEnd: false, why });
   // Link reference definitions: every reference anywhere reads them.
   if (Object.keys(tokens.links).length) return no("link definitions");
