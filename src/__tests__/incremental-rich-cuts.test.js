@@ -371,6 +371,19 @@ describe("the cut rules", () => {
     } finally { r.destroy(); }
   });
 
+  it("text foster-parented out of a table joins the text the piece before ends with", () => {
+    // `</div>tail text` renders with no newline after it, and the raw table
+    // after it foster-parents "foster" into that very Text node.
+    const r = rig(`${paras(2)}\n\n</div>tail text\n\n<table>\nfoster\n\n${paras(2, "Q")}`);
+    try {
+      r.same();
+      r.project(r.md.replace("Q1 ", "Q1 x "));
+      r.same();
+      r.project(r.md.replace("tail text", "tail texts"));
+      r.same();
+    } finally { r.destroy(); }
+  });
+
   it("a markup comment that spells the cut marker is only text to the cuts", () => {
     const r = rig(`${paras(3)}\n\n<!--pf-a083-cut-->\n\n${paras(3, "Q")}`);
     try {
