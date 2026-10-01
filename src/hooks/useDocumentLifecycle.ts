@@ -11,6 +11,7 @@ import { createDocument } from "../store/document";
 import { snapshotStore, type SnapshotMeta } from "../store/snapshot-store";
 import { canonicalMisfit, coerceToSchema, isNewerSchema } from "../store/schema-version";
 import type { UnsavedChangesResult } from "../ui/ConfirmDialog";
+import { t } from "../i18n";
 
 interface DocumentLifecycleParams {
   tiptapRef: RefObject<any>;
@@ -48,6 +49,10 @@ interface DocumentLifecycleParams {
    *  "Deleted" toast — the editor uses it to offer erasing the document's
    *  version history too (a recoverable copy is otherwise kept). */
   onDocDeleted?: (docId: string, title: string) => void;
+  /** A document is being LEFT (switch, new, close, import…) while the editor
+   *  still holds it, its pending projection flushed. Renamed headings are
+   *  checked here (editor/useHeadingRenameLinks). */
+  onLeavingDoc?: (docId: string) => void;
 }
 
 
@@ -79,6 +84,7 @@ export function useDocumentLifecycle({
   confirm,
   confirmUnsaved,
   onDocDeleted,
+  onLeavingDoc,
 }: DocumentLifecycleParams) {
   const mdDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const htmlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,6 +107,9 @@ export function useDocumentLifecycle({
   // onCanonicalChange → store → re-render chain — an infinite loop).
   const syncMdToHtmlRef = useRef(syncMdToHtml);
   useEffect(() => { syncMdToHtmlRef.current = syncMdToHtml; }, [syncMdToHtml]);
+  // Read through a ref so no leaving path's dependencies change for it.
+  const onLeavingDocRef = useRef(onLeavingDoc);
+  useEffect(() => { onLeavingDocRef.current = onLeavingDoc; }, [onLeavingDoc]);
 
   /**
    * End any live IME / voice-dictation composition in either pane.
@@ -327,7 +336,7 @@ export function useDocumentLifecycle({
         setDirty();
       }, 100);
     }
-    toast.show(styled ? "Pasted with styles" : "Pasted — styles stripped", "info");
+    toast.show(styled ? t("editor.pastedWithStyles") : t("editor.pastedStylesStripped"), "info");
     // No auto-reset: this is a persisted PREFERENCE now, not a one-shot arm. It
     // used to disarm itself after every styled paste, which was coherent only
     // while the default was "strip styles".
@@ -377,8 +386,8 @@ export function useDocumentLifecycle({
     setSyncMode(newMode);
     toast.show(
       newMode === "styled"
-        ? "Styled — inline styles visible in markdown"
-        : "Clean — styles hidden in markdown",
+        ? t("editor.syncModeStyled")
+        : t("editor.syncModeClean"),
       "info"
     );
   }, [setSyncMode, toast]);
@@ -475,7 +484,7 @@ export function useDocumentLifecycle({
       if (!forcedReadOnlyRef.current) forcedReadOnlyRef.current = { prev: ui.readOnly };
       useUIStore.setState({ readOnly: true }); // session-only, never the persisted pref
       toast.show(
-        `“${record?.title || "This document"}” was made by a newer version of the app, or holds content this version cannot show. It is open read-only so nothing is lost.`,
+        record?.title ? t("editor.newerVersionReadOnly", { title: record.title }) : t("editor.newerVersionReadOnlyUntitled"),
         "warning"
       );
     } else {
@@ -522,6 +531,7 @@ export function useDocumentLifecycle({
     // the doc we're leaving is truly saved (word counts / links / graph stay
     // honest). History capture must happen before hydrating the next doc.
     flushAndCacheIfDirty();
+    if (activeDocId) onLeavingDocRef.current?.(activeDocId);
     captureHistoryFor(activeDocId);
     await autosaveOnLeave();
     // Superseded during the leave-autosave: don't even touch the store — the
@@ -537,7 +547,7 @@ export function useDocumentLifecycle({
       // The store stayed where it was: the document is gone (deleted in
       // another tab) or could not be read. Say so — a click that silently
       // does nothing reads as a broken library.
-      toast.show("That document could not be opened", "error");
+      toast.show(t("editor.documentCouldNotBeOpened"), "error");
       return;
     }
     if (doc?.canonical) {
@@ -580,6 +590,9 @@ export function useDocumentLifecycle({
     const hasUnsavedContent = saveStatus === "editing" || saveStatus === "saving" ||
       saveStatus === "error" || saveStatus === "conflict" || saveStatus === "blocked" ||
       saveStatus === "full";
+    // Whether the document leaves with its current content (not discarded) —
+    // only then can a heading renamed in it break links.
+    let keptContent = docId === activeDocId;
     if (docId === activeDocId && hasUnsavedContent) {
       const result = await confirmUnsaved();
       if (result === "cancel") return;
@@ -591,14 +604,14 @@ export function useDocumentLifecycle({
         flushAndCacheIfDirty();
         const editor = tiptapRef.current?.getEditor?.();
         if (!editor) {
-          toast.show("Save unavailable — the document was not closed", "error");
+          toast.show(t("editor.saveUnavailableNotClosed"), "error");
           return;
         }
         try {
           await saveActiveDoc(editor);
         } catch (e) {
           console.warn("[handleCloseTab] Save failed — keeping the tab open:", e);
-          toast.show("Save failed — the document was not closed", "error");
+          toast.show(t("editor.saveFailedNotClosed"), "error");
           return;
         }
         const afterSave = useDocumentStore.getState();
@@ -607,7 +620,7 @@ export function useDocumentLifecycle({
         // resolution alone is not a commit. Typing during the write likewise
         // leaves "editing", so keep the live document rather than closing it.
         if (afterSave.saveStatus !== "saved" && afterSave.saveStatus !== "ready") {
-          toast.show("Document still has unsaved changes — it was not closed", "warning");
+          toast.show(t("editor.stillUnsavedNotClosed"), "warning");
           return;
         }
       } else if (result === "discard") {
@@ -620,6 +633,7 @@ export function useDocumentLifecycle({
         if (mdDebounceRef.current) { clearTimeout(mdDebounceRef.current); mdDebounceRef.current = null; }
         if (htmlDebounceRef.current) { clearTimeout(htmlDebounceRef.current); htmlDebounceRef.current = null; }
         clearUnsavedEdit(docId);
+        keptContent = false;
       }
     } else {
       // If closing a non-active tab, check if it has cached unsaved edits
@@ -651,10 +665,10 @@ export function useDocumentLifecycle({
               // Resolution is not a commit (see saveActiveDoc) — only say
               // "Saved" when the write landed.
               const committed = await saveActiveDoc(freshEditor);
-              toast.show(committed ? "Saved" : "Not saved — the draft is still open", committed ? "success" : "warning");
+              toast.show(committed ? t("editor.saved") : t("editor.notSavedDraftStillOpen"), committed ? "success" : "warning");
             } catch (e) {
               console.warn("[handleCloseTab] Background save failed:", e);
-              toast.show("Save failed", "error");
+              toast.show(t("editor.saveFailed"), "error");
             }
           }
           // Don't close the tab after saving - let the user decide
@@ -675,6 +689,7 @@ export function useDocumentLifecycle({
     // Closing a tab discards its editing context — including cached history
     // (matches VS Code: reopening a closed file starts with fresh undo).
     historyCache.drop(docId);
+    if (keptContent && useDocumentStore.getState().activeDocId === docId) onLeavingDocRef.current?.(docId);
 
     const editor = tiptapRef.current?.getEditor?.();
     const switchedDoc = await closeTab(docId, editor);
@@ -699,9 +714,9 @@ export function useDocumentLifecycle({
     if (saveStatus === "editing" || saveStatus === "error" || saveStatus === "saving" ||
         saveStatus === "conflict" || saveStatus === "blocked" || saveStatus === "full") {
       const ok = await confirm({
-        title: "Revert to last saved version?",
-        description: "Your unsaved changes will be discarded. This cannot be undone.",
-        confirmLabel: "Revert",
+        title: t("editor.revertTitle"),
+        description: t("editor.revertDescription"),
+        confirmLabel: t("editor.revert"),
         destructive: true,
       });
       if (!ok) return;
@@ -712,7 +727,7 @@ export function useDocumentLifecycle({
     } catch {
       // The saved copy could not be READ (not merely absent): keep what is on
       // screen rather than replacing it with nothing.
-      toast.show("The saved version could not be read — nothing was reverted", "error");
+      toast.show(t("editor.savedVersionUnreadable"), "error");
       return;
     }
     if (switchGenRef.current !== myGen) return;
@@ -727,7 +742,7 @@ export function useDocumentLifecycle({
       const md = engine.htmlToMd(doc._ingestHtml);
       cmRef.current.setValue(md);
     }
-    toast.show("Reverted to last saved version", "info");
+    toast.show(t("editor.reverted"), "info");
   }, [revertActiveDoc, resetHashes, setCanonical, handleCanonicalChange, engine, cmRef, toast, confirm]);
 
   const handleNewDoc = useCallback(async () => {
@@ -739,7 +754,9 @@ export function useDocumentLifecycle({
     // doc's undo history so switching back to it restores ⌘Z; then persist the
     // departing doc so it doesn't linger as a stale draft.
     flushAndCacheIfDirty();
-    captureHistoryFor(useDocumentStore.getState().activeDocId);
+    const leaving = useDocumentStore.getState().activeDocId;
+    if (leaving) onLeavingDocRef.current?.(leaving);
+    captureHistoryFor(leaving);
     await autosaveOnLeave();
     if (switchGenRef.current !== myGen) return;
 
@@ -797,7 +814,7 @@ export function useDocumentLifecycle({
       try {
         await finalizeDoc(doc, null, false);
       } catch {
-        toast.show(`"${title}" could not be saved — storage may be full.`, "error");
+        toast.show(t("editor.newDocNotSaved", { title }), "error");
       }
       return;
     }
@@ -808,9 +825,9 @@ export function useDocumentLifecycle({
     handleCanonicalChange(editor.getJSON());
     try {
       await finalizeDoc(doc, editor, false);
-      toast.show(`Created: ${title}`, "info");
+      toast.show(t("editor.created", { title }), "info");
     } catch {
-      toast.show(`"${title}" could not be saved — storage may be full. It exists only in this session.`, "error");
+      toast.show(t("editor.newDocSessionOnly", { title }), "error");
     }
   }, [flushAndCacheIfDirty, autosaveOnLeave, createDoc, engine, setFromHtml, finalizeDoc, handleCanonicalChange, toast, tiptapRef]);
 
@@ -821,19 +838,19 @@ export function useDocumentLifecycle({
     if (!skipConfirm) {
       // Recoverable, so no "no undo" warning: deleteDoc records a pre-delete
       // snapshot first, and Version history restores it as a new document.
-      const ok = await confirm({ title: "Delete document?", description: "It will be removed from your library. Its last saved version stays in Tools ▸ Version history, where you can restore it as a new document.", confirmLabel: "Delete", destructive: true });
+      const ok = await confirm({ title: t("editor.deleteDocumentTitle"), description: t("editor.deleteDocumentDescription"), confirmLabel: t("common.delete"), destructive: true });
       if (!ok) return;
     }
     endCompositions(); // the document is going away — see handleCloseTab
     if (mdDebounceRef.current) { clearTimeout(mdDebounceRef.current); mdDebounceRef.current = null; }
     if (htmlDebounceRef.current) { clearTimeout(htmlDebounceRef.current); htmlDebounceRef.current = null; }
     historyCache.drop(docId); // deleted docs must not linger in the history cache
-    const title = useDocumentStore.getState().documents.find((d) => d.id === docId)?.title ?? "Untitled";
+    const title = useDocumentStore.getState().documents.find((d) => d.id === docId)?.title ?? t("common.untitled");
     const editor = tiptapRef.current?.getEditor?.();
     const switchedDoc = await deleteDoc(docId, editor);
     // The delete happened whichever path owns the editor now — say so.
     if (onDocDeleted) onDocDeleted(docId, title);
-    else toast.show("Deleted", "info");
+    else toast.show(t("editor.deleted"), "info");
     if (switchGenRef.current !== myGen) return;
     if (switchedDoc?.canonical) {
       hydrateEditorWithDoc(switchedDoc.id, switchedDoc.canonical);
@@ -854,7 +871,7 @@ export function useDocumentLifecycle({
     // loads.
     const refuseReadOnly = () => {
       if (!useUIStore.getState().readOnly) return false;
-      toast.show("Read-only is on — turn it off to restore a version", "warning");
+      toast.show(t("editor.readOnlyCannotRestore"), "warning");
       return true;
     };
     if (refuseReadOnly()) return;
@@ -864,7 +881,7 @@ export function useDocumentLifecycle({
     if (!activeDocId) return;
     const canonical = await snapshotStore.getCanonical(snapshotId);
     if (switchGenRef.current !== myGen) return;
-    if (!canonical) { toast.show("That version could not be loaded", "error"); return; }
+    if (!canonical) { toast.show(t("editor.versionNotLoaded"), "error"); return; }
     if (refuseReadOnly()) return;
 
     const editor = tiptapRef.current?.getEditor?.();
@@ -884,7 +901,7 @@ export function useDocumentLifecycle({
     setDirty();
     const ed = tiptapRef.current?.getEditor?.();
     if (ed) { try { await saveActiveDoc(ed); } catch { /* stays as a dirty draft */ } }
-    toast.show("Version restored", "success");
+    toast.show(t("editor.versionRestored"), "success");
   }, [hydrateEditorWithDoc, setDirty, saveActiveDoc, toast, tiptapRef]);
 
   /**
@@ -894,7 +911,7 @@ export function useDocumentLifecycle({
    */
   const restoreSnapshotAsNew = useCallback(async (meta: SnapshotMeta) => {
     const canonical = await snapshotStore.getCanonical(meta.id);
-    if (!canonical) { toast.show("That version could not be loaded", "error"); return; }
+    if (!canonical) { toast.show(t("editor.versionNotLoaded"), "error"); return; }
 
     // Claim a new switch generation: this creates + activates a new doc, so any
     // in-flight handleSwitchDoc must not later clobber it (mirrors the switch guard).
@@ -944,7 +961,7 @@ export function useDocumentLifecycle({
       return;
     }
     if (editor) hydrateEditorWithDoc(doc.id, canonical);
-    toast.show(`Restored as "${title}"`, "success");
+    toast.show(t("editor.restoredAs", { title }), "success");
   }, [flushAndCacheIfDirty, captureHistoryFor, autosaveOnLeave, finalizeDoc, hydrateEditorWithDoc, claimEditorGeneration, toast, tiptapRef]);
 
   const cancelPendingSync = useCallback(() => {
@@ -994,6 +1011,7 @@ export function useDocumentLifecycle({
     const { activeDocId } = useDocumentStore.getState();
     if (!activeDocId) return;
     flushAndCacheIfDirty();
+    onLeavingDocRef.current?.(activeDocId);
     captureHistoryFor(activeDocId);
     await autosaveOnLeave();
   }, [flushAndCacheIfDirty, captureHistoryFor, autosaveOnLeave]);
@@ -1038,6 +1056,18 @@ export function useDocumentLifecycle({
     }
   }, [flushAndCacheIfDirty]);
 
+  /**
+   * For live sync between tabs (editor/useTabSync), which reloads the open
+   * document when another tab changed it and nothing here is unsaved. It must
+   * not hydrate over a projection still on its way — that is typing about to
+   * land — nor after a newer path took the editor while it read storage.
+   */
+  const hasPendingProjection = useCallback(
+    () => mdDebounceRef.current != null || htmlDebounceRef.current != null || pasteSyncRef.current != null,
+    []
+  );
+  const isEditorGeneration = useCallback((gen: number) => switchGenRef.current === gen, []);
+
   return {
     handleMdChange,
     handleHtmlChange,
@@ -1055,5 +1085,9 @@ export function useDocumentLifecycle({
     cancelPendingSync,
     flushPendingSync,
     releaseEditor,
+    endCompositions,
+    claimEditorGeneration,
+    isEditorGeneration,
+    hasPendingProjection,
   };
 }

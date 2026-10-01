@@ -6,6 +6,12 @@ import { EXPORT_CONTENT_CSS } from "./import-export";
  * it isn't blocked by popup blockers. Fully client-side — no network. Fidelity
  * matches the HTML export (same content stylesheet; rendered math/diagrams follow
  * the same serialization path as the editor's getHTML()).
+ *
+ * The page declares no `lang` (A099), exactly like the HTML export: what is
+ * printed is the DOCUMENT, whose language the app does not know. `lang="en"`
+ * told screen readers, hyphenation and the PDF's metadata that every document
+ * was English, and the interface language would be just as wrong for a French
+ * note written in an English UI. Right-to-left blocks carry their own `dir`.
  */
 export function printHtmlDocument(title: string, bodyHtml: string): void {
   const esc = (s: string) =>
@@ -25,7 +31,7 @@ export function printHtmlDocument(title: string, bodyHtml: string): void {
 
   doc.open();
   doc.write(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}</title>
+<html><head><meta charset="UTF-8"><title>${esc(title)}</title>
 <style>
   @page { margin: 2cm; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a2e; max-width: 100%; }

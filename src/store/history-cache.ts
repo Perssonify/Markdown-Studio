@@ -21,6 +21,7 @@
  */
 
 import { quickHash } from "../utils";
+import { t } from "../i18n/core";
 
 export interface HistoryCacheConfig {
   /** Master switch. Off = pre-feature behavior (fresh history per switch). */
@@ -271,7 +272,8 @@ export const historyCache = new HistoryCache();
 
 /** Human formatting for estimated byte counts. */
 export function formatEstBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  // Units are words to a translator ("Ko", "Мб"): the same messages as Settings'.
+  if (bytes < 1024) return t("settings.sizeBytes", { count: bytes });
+  if (bytes < 1024 * 1024) return t("settings.sizeKb", { count: (bytes / 1024).toFixed(0) });
+  return t("settings.sizeMb", { count: (bytes / (1024 * 1024)).toFixed(1) });
 }

@@ -42,7 +42,7 @@ jobs:
       - name: Set up Node (npm CLI with provenance support)
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version-file: .node-version
           registry-url: "https://registry.npmjs.org"
 
       - name: The tag matches package.json
@@ -66,6 +66,11 @@ jobs:
 
       - name: Build (library)
         run: bun run build
+
+      # The unit run above skips these checks (no dist/ yet); against the build
+      # about to be published they must pass (A113).
+      - name: The built CommonJS entries load; a consumer type-checks against the declarations
+        run: bunx vitest run src/__tests__/pkg-cjs-require.test.js src/__tests__/pkg-declarations.test.js
 
       - name: What will be published
         run: npm pack --dry-run

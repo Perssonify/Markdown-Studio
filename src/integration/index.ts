@@ -2,6 +2,7 @@
 
 export { createAssociationStore, mergeGraphWithAssociations } from "./associations";
 export { createEditorClient, createHostBridge } from "./host-bridge";
+export type { EditorChromeLevel, EditorViewMode } from "./host-bridge";
 export { PerssonifyEditorIntegration } from "./PerssonifyEditorIntegration";
 export type {
   EditorHandle,

@@ -2,8 +2,9 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-// See the note in input.tsx: forwardRef is required on React 18, where `ref` is not
-// forwarded to function components. Preserve it when regenerating.
+// See the note in input.tsx: forwardRef is required on React 18 — still in the
+// library's peer range — where `ref` is not forwarded to function components.
+// Preserve it when regenerating.
 const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<"textarea">>(
   function Textarea({ className, ...props }, ref) {
   return (

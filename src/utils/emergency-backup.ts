@@ -12,6 +12,8 @@
  * That lived in the editor instance the crash destroyed.
  */
 import { buildZip } from "../store/archive";
+import { extForMime } from "../store/asset-refs";
+import { collectAssetsFor } from "../store/assets";
 import { resolveDocTitle, type DocumentRecord } from "../store/document";
 import { isBlankCanonical, useDocumentStore } from "../store/documentStore";
 import { useFolderStore } from "../store/folders";
@@ -56,7 +58,7 @@ export async function buildBackupFiles(src: BackupSources): Promise<Record<strin
   const files: Record<string, string> = {};
   const used = new Set<string>();
   for (const { id } of await src.storage.list()) {
-    let rec: DocumentRecord | null = null;
+    let rec: DocumentRecord | null;
     try {
       rec = await src.storage.get(id);
     } catch {
@@ -98,7 +100,16 @@ export async function exportEmergencyBackup(
   const files = await buildBackupFiles(src);
   const count = Object.keys(files).length;
   if (!count) return 0;
-  const zip = buildZip(files);
+  // The images those documents keep as assets (A086) go in beside them, as
+  // the ordinary backup writes them, so Import restores the pictures too.
+  // Best effort: an asset store that cannot be read must not cost the user
+  // the documents themselves.
+  const archive: Record<string, string | Uint8Array> = { ...files };
+  try {
+    const { assets } = await collectAssetsFor(Object.values(files));
+    for (const [hash, a] of assets) archive[`assets/${hash}.${extForMime(a.mime)}`] = a.bytes;
+  } catch { /* documents only */ }
+  const zip = buildZip(archive);
   download(new Blob([zip as BlobPart], { type: "application/zip" }), `perssonify-backup-${exportTimestamp()}.zip`);
   return count;
 }

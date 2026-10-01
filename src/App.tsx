@@ -1,22 +1,42 @@
 import { useTheme } from "next-themes";
-import React, { Suspense, useCallback, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
 import { useUIStore } from "./store/uiStore";
 import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
+import { localeDir, setLocale, useLocale, useT } from "./i18n";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
 import { SkipToEditor } from "./ui/SkipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
+import { assetStore } from "./store/asset-store";
 
 // Settings ▸ Privacy ▸ "Block remote images" is enforced as an img-src policy
 // for THIS page, and must be in force before any document renders — hence
 // module scope, not an effect. The app shell owns its document; the library
 // never does this (it must not restrict its host page).
 installRemoteImagePolicy();
+
+// `?lang=<locale>` shows the interface in that language for THIS page load
+// only — like `readonly`, it must not overwrite the visitor's saved choice
+// (A099). Module scope, so the very first render is already in it; the param
+// effect below strips it from the address bar with the others. Only a
+// language this build can show is honoured: the `en-XA` pseudo-locale exists
+// in development builds alone, and a production build reads it as English.
+try {
+    const lang = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("lang");
+    if (lang) setLocale(lang, { persist: false });
+} catch { /* no URL: nothing to apply */ }
+
+// Pasted and imported images are stored ONCE, as binary assets, instead of as
+// base64 inside every document, snapshot, stash and projection (A086). The app
+// shell turns this on for itself; a library host or the iframe embed opts in
+// through `storageConfig.assets`, because the content a host reads back out
+// would otherwise refer to images it cannot resolve (see configureLocalStores).
+assetStore.configure({ enabled: true });
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
 const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
@@ -25,6 +45,16 @@ const Walkthrough = React.lazy(() => import("./ui/Walkthrough").then((m) => ({ d
 const TOUR_SEEN_KEY = "pf:tour-seen-v1";
 
 export function App() {
+    const t = useT();
+    const locale = useLocale();
+    // The page speaks the interface language (A099): `lang` for screen readers,
+    // hyphenation and fonts, `dir` for a right-to-left catalog. Before paint,
+    // so a right-to-left interface never flashes left-to-right. The app shell
+    // owns its document; the library and the embed never touch their host's.
+    useLayoutEffect(() => {
+        document.documentElement.lang = locale;
+        document.documentElement.dir = localeDir(locale);
+    }, [locale]);
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark" || resolvedTheme === undefined;
     const { route, navigate } = useAppRouter();
@@ -51,7 +81,7 @@ export function App() {
     useEffect(() => {
         let params: URLSearchParams;
         try { params = new URLSearchParams(window.location.search); } catch { return; }
-        if (![...params.keys()].some((k) => k === "ads" || k === "readonly" || k === "view_mode" || k === "import_url")) return;
+        if (![...params.keys()].some((k) => k === "ads" || k === "readonly" || k === "view_mode" || k === "import_url" || k === "lang")) return;
         const store = useUIStore.getState();
         const ads = sessionAdsFromParam(params.get("ads"));
         if (ads !== null) useUIStore.setState({ showAds: ads });
@@ -74,7 +104,7 @@ export function App() {
         // than inside the editor because URL params are the shell's job — a
         // library consumer must not have their own page's query string silently
         // open dialogs inside an embedded editor.
-        params.delete("ads"); params.delete("readonly"); params.delete("view_mode"); params.delete("import_url");
+        params.delete("ads"); params.delete("readonly"); params.delete("view_mode"); params.delete("import_url"); params.delete("lang");
         const qs = params.toString();
         try {
             window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
@@ -139,11 +169,11 @@ export function App() {
     useEffect(() => {
         const base = APP_NAME;
         document.title =
-            route === "about" ? `About · ${base}`
-            : route === "help" ? `Help · ${base}`
-            : route === "graph" ? `Relationship map · ${base}`
+            route === "about" ? t("app.aboutTitle", { app: base })
+            : route === "help" ? t("app.helpTitle", { app: base })
+            : route === "graph" ? t("app.relationshipMapTitle", { app: base })
             : base;
-    }, [route]);
+    }, [route, t]);
 
     return (
         <ErrorBoundary isDark={isDark}>
@@ -157,7 +187,7 @@ export function App() {
               EXCEPT below ~450px of viewport height (400% zoom, a landscape
               phone), where the lock left the editor zero pixels: `pf-shell`
               lets the page scroll there instead (A091, styles.css). */}
-          <div className="pf-shell pf-safe-x flex h-dvh flex-col overflow-hidden">
+          <div className="pf-shell pf-safe-x flex h-dvh flex-col overflow-hidden" lang={locale} dir={localeDir(locale)}>
             <div className="shrink-0" data-print-hide>
                 <EditorHeader />
             </div>

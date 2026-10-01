@@ -1,5 +1,6 @@
-import { generateHTML, getSchema } from "@tiptap/core";
-import type { Schema } from "@tiptap/pm/model";
+import { getSchema } from "@tiptap/core";
+import { Node as PMNode, type Schema } from "@tiptap/pm/model";
+import { fragmentToHtml } from "./inert-html";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
@@ -7,13 +8,12 @@ import { WikiLink as Link } from "../extensions/WikiLink";
 import { Subscript } from "@tiptap/extension-subscript";
 import { Superscript } from "@tiptap/extension-superscript";
 import { Table } from "@tiptap/extension-table";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TableHeader } from "@tiptap/extension-table-header";
+import { TableCellFast as TableCell, TableHeaderFast as TableHeader } from "./table-colwidth";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Underline } from "@tiptap/extension-underline";
-import StarterKit from "@tiptap/starter-kit";
+import { StarterKit } from "@tiptap/starter-kit";
 import { BackgroundColor } from "../extensions/BackgroundColor";
 import { EmojiNode } from "../extensions/EmojiNode";
 import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
@@ -23,6 +23,7 @@ import { MathBlock, MathInline } from "../extensions/MathNodes";
 import { SizedImage } from "../extensions/SizedImage";
 import { TableCellAlign } from "../extensions/TableCellAlign";
 import { ThemeImage } from "../extensions/ThemeImage";
+import { withPortableBreaks } from "./portable-breaks";
 
 /**
  * Headless serialization of canonical ProseMirror JSON → HTML, mirroring the
@@ -66,7 +67,10 @@ export const SERIALIZE_EXTENSIONS = [
 ];
 
 export function canonicalToHtml(canonical: unknown): string {
-  return generateHTML(canonical as any, SERIALIZE_EXTENSIONS as any);
+  // generateHTML's output, built in an inert document (engine/inert-html.ts):
+  // generateHTML itself creates every <img> in the live page, which fetches it.
+  const schema = headlessSchema();
+  return fragmentToHtml(PMNode.fromJSON(schema, canonical as any).content, schema);
 }
 
 let _headlessSchema: Schema | null = null;
@@ -94,4 +98,18 @@ export function canonicalToMarkdown(
   } catch {
     return null;
   }
+}
+
+/**
+ * `canonicalToMarkdown` for a `.md` file that leaves the app — the ZIP export:
+ * hard breaks written `\` + newline, which renderers without the app's
+ * `breaks: true` dialect still draw (A051, portable-breaks.ts). Markdown that
+ * goes back INTO the app (a card's source, the append API) keeps the editor's
+ * own form and uses canonicalToMarkdown.
+ */
+export function canonicalToPortableMarkdown(
+  canonical: unknown,
+  htmlToMd: (html: string) => string
+): string | null {
+  return withPortableBreaks(() => canonicalToMarkdown(canonical, htmlToMd));
 }

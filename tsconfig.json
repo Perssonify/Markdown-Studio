@@ -13,7 +13,7 @@
     "noEmit": false,
     "strict": true,
     "jsx": "react-jsx",
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "importHelpers": true,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
@@ -31,7 +31,6 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
     },

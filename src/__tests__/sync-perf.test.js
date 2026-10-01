@@ -414,11 +414,19 @@ const CORPUS = {
   ),
 };
 
-/** The implementation this replaced: build the whole text, then split it. */
-const countsByString = (canonical) => {
-  const t = extractText(canonical);
-  return { chars: t.length, words: t.trim().split(/\s+/).filter(Boolean).length };
-};
+/**
+ * A string-building reference: adjacent text nodes join (they differ only in
+ * marks), and every other node boundary — a block, a list item, a hard break —
+ * separates words. It used to split `extractText`, which joins blocks with
+ * nothing, so it agreed with the counter's old bug of running the last word of
+ * each block into the first word of the next.
+ */
+const withBoundaries = (node) =>
+  !node ? "" : node.type === "text" ? node.text ?? "" : " " + (node.content ?? []).map(withBoundaries).join("") + " ";
+const countsByString = (canonical) => ({
+  chars: extractText(canonical).length,
+  words: withBoundaries(canonical).trim().split(/\s+/).filter(Boolean).length,
+});
 
 describe("word and character counts", () => {
   for (const [name, canonical] of Object.entries(CORPUS)) {
@@ -600,13 +608,18 @@ describe("the editor shell does not re-render its whole tree per keystroke", () 
     // It is useSyncEngine's onCanonicalChange, and it is in that hook's dep
     // array: a new function per projection re-creates syncMdToHtml, then
     // handleMdChange, then every pane prop — on every sync.
-    const src = read("src/PerssonifyEditor.tsx");
+    // The handler lives in src/editor/useChangeNotifications.ts…
+    const src = read("src/editor/useChangeNotifications.ts");
     expect(src).toMatch(
       /const handleCanonicalChange = useCallback\(\(pmJson: any\) => \{\s*canonicalChangeRef\.current\(pmJson\);\s*\}, \[\]\);/
     );
     // ...and the latest body is published from an effect, not during render,
     // so a render React never commits cannot leave the ref pointing at it.
     expect(src).toMatch(/useEffect\(\(\) => \{ canonicalChangeRef\.current = latestCanonicalChange; \}\);/);
+    // …and it is the very handler the editor gives the sync engine.
+    const pe = read("src/PerssonifyEditor.tsx");
+    expect(pe).toMatch(/const handleCanonicalChange = useCanonicalChangeHandler\(/);
+    expect(pe).toMatch(/onCanonicalChange: handleCanonicalChange,/);
   });
 
   it("the link index gets a stable toast adapter", () => {

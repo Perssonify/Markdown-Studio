@@ -39,18 +39,37 @@ async function freshDb() {
 describe("A088: one read per prune", () => {
   beforeEach(async () => { await freshDb(); snapshotStore._resetForTests({ useIndexedDB: true }); });
 
-  it("a snapshot reads the ring once for its prune (plus the dedup read of its own document)", async () => {
+  it("a snapshot reads the ring once for its prune, and ONE record for its dedup", async () => {
     await snapshotStore.record("d", "Doc", doc("first"), "manual");
+    await snapshotStore.record("d", "Doc", doc("second"), "manual");
     const storeGetAll = vi.spyOn(IDBObjectStore.prototype, "getAll");
     const indexGetAll = vi.spyOn(IDBIndex.prototype, "getAll");
+    const indexKeys = vi.spyOn(IDBIndex.prototype, "getAllKeys");
+    const storeGet = vi.spyOn(IDBObjectStore.prototype, "get");
     try {
-      await snapshotStore.record("d", "Doc", doc("second"), "manual");
+      await snapshotStore.record("d", "Doc", doc("third"), "manual");
       expect(storeGetAll).toHaveBeenCalledTimes(1);   // the prune — was 2
-      expect(indexGetAll).toHaveBeenCalledTimes(1);   // the dedup — was 2
+      // The dedup reads the document's KEYS and its newest record — not every
+      // version kept, content and all (A083: most of a large note's snapshot).
+      expect(indexGetAll).not.toHaveBeenCalled();     // was 1, before that 2
+      expect(indexKeys).toHaveBeenCalledTimes(1);
+      expect(storeGet).toHaveBeenCalledTimes(1);
     } finally {
       storeGetAll.mockRestore();
       indexGetAll.mockRestore();
+      indexKeys.mockRestore();
+      storeGet.mockRestore();
     }
+  });
+
+  it("dedups against the newest version, and still records a change back to an older one", async () => {
+    await snapshotStore.record("d", "Doc", doc("one"), "manual");
+    await snapshotStore.record("d", "Doc", doc("two"), "manual");
+    await snapshotStore.record("d", "Doc", doc("two"), "manual");   // the same again: skipped
+    await snapshotStore.record("d", "Doc", doc("one"), "manual");   // back to "one": recorded
+    const hashes = (await snapshotStore.listForDoc("d")).map((m) => m.hash);
+    expect(hashes).toHaveLength(3);
+    expect(hashes[0]).toBe(hashes[2]);
   });
 });
 

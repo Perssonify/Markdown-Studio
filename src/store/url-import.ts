@@ -18,9 +18,10 @@
  */
 
 import type { IngestFormat } from "./ingest";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError, extractArchive, isArchiveName, type ArchiveEntry } from "./archive";
+import { ArchiveEncryptedError, ArchiveWrongPasswordError, extractArchive, isArchiveName, type ArchiveAsset, type ArchiveEntry, type ExtractedArchive } from "./archive";
 import { normalizeImportUrl } from "./import-url-normalize";
 import { safeStorage } from "../utils/safe-storage";
+import { t } from "../i18n/core";
 
 /** Same 5 MB ceiling used for file imports (import-export.ts). */
 export const MAX_URL_BYTES = 5_000_000;
@@ -46,10 +47,10 @@ export function validateImportUrl(raw: string): URL {
   try {
     url = new URL(raw.trim());
   } catch {
-    throw new UrlImportError("That doesn't look like a valid URL.");
+    throw new UrlImportError(t("editor.urlInvalid"));
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new UrlImportError("Only http and https URLs can be imported.");
+    throw new UrlImportError(t("editor.urlOnlyHttp"));
   }
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, ""); // strip IPv6 brackets
   if (
@@ -59,7 +60,7 @@ export function validateImportUrl(raw: string): URL {
     host.endsWith(".internal") ||
     isPrivateHost(host)
   ) {
-    throw new UrlImportError("Local and internal addresses can't be imported.");
+    throw new UrlImportError(t("editor.urlLocalAddress"));
   }
   return url;
 }
@@ -156,6 +157,8 @@ export type ImportResource =
       kind: "archive";
       name: string;
       entries: ArchiveEntry[];
+      /** Image assets the archive carried (A086) — restored with the documents. */
+      assets?: ArchiveAsset[];
       sourceUrl: string;
       provider: string;
       viaProxy: boolean;
@@ -235,15 +238,10 @@ export function relayConsentPrompt(host: string): {
   cancelLabel: string;
 } {
   return {
-    title: "Fetch this link through our server?",
-    description:
-      `${host || "This site"} doesn't let browsers read its files directly. Markdown Studio can fetch ` +
-      "it through its own server instead: the server receives the address you entered, downloads " +
-      "the file and passes it straight back to you without keeping a copy. Like any web request, " +
-      "the address may appear in our hosting provider's logs, so avoid links that carry secrets. " +
-      "Your answer is remembered — change it any time in Settings ▸ Privacy.",
-    confirmLabel: "Fetch via our server",
-    cancelLabel: "Don't use the server",
+    title: t("editor.relayConsentTitle"),
+    description: host ? t("editor.relayConsentDescription", { host }) : t("editor.relayConsentDescriptionNoHost"),
+    confirmLabel: t("editor.relayConsentConfirm"),
+    cancelLabel: t("editor.relayConsentCancel"),
   };
 }
 
@@ -259,7 +257,7 @@ async function relayPermitted(target: URL, confirmRelay?: ConfirmRelay): Promise
   const stored = getRelayConsent();
   if (stored) return stored === "allow";
   if (!confirmRelay) return false;
-  let allowed = false;
+  let allowed: boolean;
   try {
     allowed = await confirmRelay(target);
   } catch {
@@ -318,7 +316,7 @@ async function fetchDirectOrProxy(
     // for a site that simply had not answered yet.
     const name = (e as { name?: unknown } | null)?.name;
     if (name === "AbortError" || name === "TimeoutError") {
-      throw new UrlImportError("The request timed out.");
+      throw new UrlImportError(t("editor.urlTimedOut"));
     }
     // Direct cross-origin fetch blocked (CORS) or a network error. Retry through
     // the app's own same-origin relay (reliable + first-party) — IF the visitor
@@ -326,10 +324,7 @@ async function fetchDirectOrProxy(
     // deployed) or any non-2xx just falls through to the guidance below.
     if (!(await relayPermitted(url, confirmRelay))) {
       throw new UrlImportError(
-        "This site blocks direct browser access, and fetching it through the " +
-          "Markdown Studio server is turned off. Download the file and drag it in " +
-          '(or use "Import file"), paste its content below, or allow the import ' +
-          "relay in Settings ▸ Privacy.",
+        t("editor.relayTurnedOff"),
         true,
       );
     }
@@ -341,16 +336,14 @@ async function fetchDirectOrProxy(
       // relay says so; "the relay is unavailable" below would be untrue.
       if (res.status === 413) {
         const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
-        relayTooLarge = typeof body?.error === "string" ? body.error : "That file is too large for the import relay.";
+        relayTooLarge = typeof body?.error === "string" ? body.error : t("editor.relayTooLarge");
       }
     } catch {
       /* relay unavailable — fall through */
     }
     if (relayTooLarge) throw new UrlImportError(relayTooLarge);
     throw new UrlImportError(
-      "Couldn't fetch that URL. The host blocks direct browser access and the import " +
-        'relay is unavailable. Download the file and drag it in (or use "Import file"), ' +
-        "or paste its content below.",
+      t("editor.relayUnavailable"),
       true,
     );
   }
@@ -385,7 +378,7 @@ export async function fetchImportResource(
   // browser blocks the direct request AND the visitor has agreed to it.
   const { res, viaProxy } = await fetchDirectOrProxy(url, doFetch, timeoutMs, opts.confirmRelay);
   if (!res.ok) {
-    throw new UrlImportError(`The server responded with ${res.status} ${res.statusText}.`);
+    throw new UrlImportError(t("editor.serverResponded", { status: res.status, statusText: res.statusText }));
   }
 
   // The proxy neutralizes its own Content-Type to application/octet-stream (so a
@@ -409,7 +402,7 @@ export async function fetchImportResource(
   if (isArchiveName(archiveName) || looksLikeArchiveBytes(bytes)) {
     const zipName = isArchiveName(archiveName) ? archiveName : `${name || "archive"}.zip`;
     const file = new File([bytes as BlobPart], zipName);
-    let entries: ArchiveEntry[];
+    let entries: ExtractedArchive;
     try {
       // Match the fetch ceiling so archives up to MAX_ARCHIVE_BYTES actually
       // extract (extractArchive's own default compressed cap is smaller).
@@ -419,17 +412,17 @@ export async function fetchImportResource(
       // for a password and retry; wrap anything else as a friendly message.
       if (e instanceof ArchiveEncryptedError || e instanceof ArchiveWrongPasswordError) throw e;
       throw new UrlImportError(
-        e instanceof Error && e.message ? `Couldn't read that archive: ${e.message}` : "Couldn't read that archive.",
+        e instanceof Error && e.message ? t("editor.archiveUnreadableWithError", { error: e.message }) : t("editor.archiveUnreadable"),
       );
     }
     if (!entries.length) {
-      throw new UrlImportError("That archive has no importable text documents in it.");
+      throw new UrlImportError(t("editor.archiveEmpty"));
     }
-    return { kind: "archive", name: zipName, entries, sourceUrl: rawUrl, provider, viaProxy };
+    return { kind: "archive", name: zipName, entries, assets: entries.assets, sourceUrl: rawUrl, provider, viaProxy };
   }
 
   if (bytes.length > MAX_URL_BYTES) {
-    throw new UrlImportError("That file is too large to import (over 5 MB).");
+    throw new UrlImportError(t("editor.fileTooLargeOver5Mb"));
   }
   const text = new TextDecoder().decode(bytes);
   const format = detectUrlFormat(contentType || null, url.href, text);
@@ -442,8 +435,7 @@ export async function fetchImportResource(
     (contentType.includes("text/html") || /^\s*<(?:!doctype\s+html|html[\s>])/i.test(text.slice(0, 200)))
   ) {
     throw new UrlImportError(
-      "Google returned a sign-in or confirmation page instead of the file. Make sure the " +
-        'file\'s sharing is set to "Anyone with the link", and that it\'s a single file (not a folder).',
+      t("editor.googleSignInPage"),
     );
   }
 
@@ -451,7 +443,7 @@ export async function fetchImportResource(
   // obvious login page: nudge to the paste fallback rather than import chrome.
   if (bestEffort && /<title>[^<]*sign in[^<]*<\/title>/i.test(text.slice(0, 4000))) {
     throw new UrlImportError(
-      "That link returned a sign-in page, not the document. Open it, copy the content, and paste it below.",
+      t("editor.signInPage"),
       true,
     );
   }
@@ -463,12 +455,12 @@ export async function fetchImportResource(
 async function readCappedBytes(res: Response, maxBytes: number): Promise<Uint8Array> {
   const declared = Number(res.headers.get("content-length") ?? "");
   if (Number.isFinite(declared) && declared > maxBytes) {
-    throw new UrlImportError("That file is too large to import.");
+    throw new UrlImportError(t("editor.fileTooLarge"));
   }
   const body = res.body;
   if (!body || typeof body.getReader !== "function") {
     const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.length > maxBytes) throw new UrlImportError("That file is too large to import.");
+    if (buf.length > maxBytes) throw new UrlImportError(t("editor.fileTooLarge"));
     return buf;
   }
   const reader = body.getReader();
@@ -482,7 +474,7 @@ async function readCappedBytes(res: Response, maxBytes: number): Promise<Uint8Ar
         total += value.length;
         if (total > maxBytes) {
           await reader.cancel();
-          throw new UrlImportError("That file is too large to import.");
+          throw new UrlImportError(t("editor.fileTooLarge"));
         }
         chunks.push(value);
       }

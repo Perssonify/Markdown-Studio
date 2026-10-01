@@ -70,10 +70,11 @@ Inject an adapter so the editor persists *through you* instead of IndexedDB:
 | `namespace` | your `dbName`, if you set one | keeps the version-history database and the unload stash apart per user or app, instead of shared by the whole origin |
 | `snapshots` | `true` | `false` turns version history off |
 | `crashRecovery` | `true` | `false` turns the unload stash off |
+| `assets` | `false` | `true` stores pasted and imported images ONCE, as binary assets in a browser database (`perssonify-assets`, namespaced like version history), instead of as base64 inside every document. The markdown, HTML and canonical you read back (`onContentChange`, `onSave`, `getMarkdown`/`getHTML`, the bridge) then refer to those images as `pf-asset:<sha256>`, which resolves only in that browser — leave it off if you mirror content anywhere else. Exports and backups are self-contained either way. |
 | `maxBytes` | none | an optional hard cap on document bytes; without it the browser's quota is the limit |
 
 With a custom `storageAdapter`, `storageConfig` still decides where (or whether)
-version history and the unload stash are kept. An adapter's `get()` must return
+version history, the unload stash and image assets are kept. An adapter's `get()` must return
 `null` only for a document that genuinely does not exist and throw for a read
 that failed — the save path fails closed on a thrown read, and a failure
 reported as `null` walks straight past its data-loss guards.
@@ -87,13 +88,15 @@ embeds relied on manual save.
 
 ### One editor per page, and logging out
 
-- **One editor per page.** The editor's stores are module singletons: two
-  instances in one page share the active document, parked drafts and whichever
-  storage was injected first, so typing in one can be saved as the other's
-  document. Mount one editor per page, or give each its own iframe (the embed
-  build). Unmounting and remounting a single instance is supported — unmounting
-  flushes and stashes what was typed, and the remount re-opens the same
-  document.
+- **One editor per page.** The editor's stores are module singletons, so a
+  second instance mounted while one is running refuses to start: it renders
+  "Only one Markdown Studio editor can be open on a page" instead of an editor,
+  logs a console error saying why, and touches no store, and the first editor
+  carries on (A106). If the first one unmounts, the waiting one takes over as
+  an ordinary remount. Mount one editor per page, or give each its own iframe
+  (the embed build). Unmounting and remounting a single instance is supported —
+  unmounting flushes and stashes what was typed, and the remount re-opens the
+  same document; so is React StrictMode's mount-unmount-mount in development.
 - **Switching storage needs a page load.** A different `storageAdapter` or
   `storageConfig` on a remount is ignored (with a warning).
 - **Logout on a shared device:** call `clearLocalData()` (exported from the
@@ -373,11 +376,14 @@ drive it:
 Before v1.74.0 the embed passed its *own* origin here, so a host's messages were
 never accepted at all. If you were working around that, remove the workaround.
 
-The embed stores its documents in the default database, `perssonify-docs` — on
-the same origin as a standalone copy of the app, the two share one library.
-Renaming it would have orphaned every existing embed user's documents
-([decisions.md](decisions.md)); serve the embed from its own origin if its
-library must stay separate.
+A self-hosted embed stores its documents in the default database,
+`perssonify-docs`, the name existing embed users' documents are already in
+([decisions.md](decisions.md)). On the same origin as a standalone copy of the
+app, the two share one library; serve the embed from its own origin if its
+library must stay separate. The exception is the app's own hosts (`APP_HOSTS`
+in `src/constants.ts` — markdownstudio.com and its aliases, and localhost in
+development): there the embed keeps `perssonify-embed-docs`, so a page that
+frames it cannot reach the app's library.
 
 The host talks to the iframe with `createEditorClient(iframe, editorOrigin)`. The
 second argument is optional — the client derives the editor's origin from the

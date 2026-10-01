@@ -21,6 +21,7 @@ import {
 } from "@/store/cards";
 import { safeStorage } from "../utils/safe-storage";
 import { overlayShouldHandleEscape } from "./overlay-escape";
+import { neutralizeAssetSrcs, useResolvedAssetImages } from "./asset-dom";
 import {
   ArrowLeft,
   Check,
@@ -36,6 +37,7 @@ import {
 } from "lucide-react";
 import { useIsDarkTheme } from "../theme/useThemeMode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { t, useT } from "../i18n";
 
 /**
  * Cards — a Google-Keep-style board over the whole library.
@@ -117,17 +119,17 @@ const RENDER_STEP = 60;
 
 /** Compact relative time ("just now", "5m", "3h", "2d", else a date). */
 function relTime(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return "";
-  const diff = Date.now() - t;
-  if (diff < 60_000) return "just now";
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return t("cards.justNow");
   const m = Math.floor(diff / 60_000);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return t("cards.minutesAgo", { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("cards.hoursAgo", { count: h });
   const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(t).toLocaleDateString();
+  if (d < 7) return t("cards.daysAgo", { count: d });
+  return new Date(ts).toLocaleDateString();
 }
 
 /**
@@ -171,7 +173,7 @@ interface CardModel {
 }
 
 function buildCardModel(d: CardDocSummary, rec: LoadedDoc): CardModel {
-  const title = rec.title || d.title || "Untitled";
+  const title = rec.title || d.title || t("common.untitled");
   // Search must still match text the preview trimmed or truncated.
   const haystack = cardPreview(rec.canonical, title, 2000);
   return {
@@ -243,6 +245,7 @@ export function CardsView({
   onClose,
   folderNameFor,
 }: CardsViewProps) {
+  const t = useT();
   const isDark = useIsDarkTheme();
   const [loaded, setLoaded] = useState<Map<string, LoadedDoc>>(new Map());
   // Skeletons are for the FIRST load only. Afterwards the board is updated in
@@ -532,7 +535,7 @@ export function CardsView({
           type="button"
           onClick={() => setEditingId(c.id)}
           className="block w-full cursor-pointer rounded-xl p-3 text-left"
-          aria-label={`Edit note: ${c.title}`}
+          aria-label={t("cards.editNote", { title: c.title })}
         >
           <h3 className="mb-1 line-clamp-2 text-sm font-semibold wrap-anywhere text-foreground">
             {c.title}
@@ -566,7 +569,7 @@ export function CardsView({
                 </li>
               ))}
               {c.checklist.overflow > 0 && (
-                <li className="pl-5 text-xs opacity-85">+{c.checklist.overflow} more</li>
+                <li className="pl-5 text-xs opacity-85">{t("cards.more", { count: c.checklist.overflow })}</li>
               )}
               </ul>
             </>
@@ -578,14 +581,14 @@ export function CardsView({
               dangerouslySetInnerHTML={{ __html: c.previewHtml }}
             />
           ) : (
-            <p className="text-xs italic opacity-85">Empty note</p>
+            <p className="text-xs italic opacity-85">{t("cards.emptyNote")}</p>
           )}
 
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] opacity-85">
             {folder && <span className="rounded bg-foreground/10 px-1.5 py-0.5">{folder}</span>}
             {c.checklist.total > 0 && (
               <span>
-                {c.checklist.done}/{c.checklist.total} done
+                {t("cards.checklistDone", { count: c.checklist.done, total: c.checklist.total })}
               </span>
             )}
             <span>{relTime(c.updated)}</span>
@@ -605,8 +608,8 @@ export function CardsView({
             variant="ghost"
             size="icon"
             className="size-7 pointer-coarse:size-8"
-            title={pinnedNow ? "Unpin" : "Pin to top"}
-            aria-label={pinnedNow ? "Unpin note" : "Pin note to top"}
+            title={pinnedNow ? t("cards.unpin") : t("cards.pinToTop")}
+            aria-label={pinnedNow ? t("cards.unpinNote") : t("cards.pinNoteToTop")}
             aria-pressed={pinnedNow}
             disabled={readOnly}
             onClick={() => togglePin(c.id, !pinnedNow)}
@@ -619,8 +622,8 @@ export function CardsView({
               variant="ghost"
               size="icon"
               className="size-7 pointer-coarse:size-8"
-              title="Colour"
-              aria-label="Change note colour"
+              title={t("cards.colour")}
+              aria-label={t("cards.changeNoteColour")}
               aria-haspopup="menu"
               aria-expanded={colorMenuFor === c.id}
               disabled={readOnly}
@@ -631,7 +634,7 @@ export function CardsView({
             {colorMenuFor === c.id && (
               <div
                 role="menu"
-                aria-label="Note colour"
+                aria-label={t("cards.noteColour")}
                 className="absolute bottom-full left-0 z-10 mb-1 grid w-max grid-cols-5 gap-1 rounded-lg border border-border bg-popover p-1.5 shadow-lg"
               >
                 {CARD_COLORS.map((col) => {
@@ -663,8 +666,8 @@ export function CardsView({
             variant="ghost"
             size="icon"
             className="size-7 pointer-coarse:size-8"
-            title="Open in editor"
-            aria-label="Open note in the editor"
+            title={t("cards.openInEditor")}
+            aria-label={t("cards.openNoteInTheEditor")}
             onClick={() => onOpenInEditor(c.id)}
           >
             <ExternalLink className="size-3.5" />
@@ -674,8 +677,8 @@ export function CardsView({
             variant="ghost"
             size="icon"
             className="ml-auto size-7 text-destructive pointer-coarse:size-8"
-            title="Delete"
-            aria-label="Delete note"
+            title={t("common.delete")}
+            aria-label={t("cards.deleteNote")}
             disabled={readOnly}
             onClick={() => onDelete(c.id)}
           >
@@ -691,7 +694,7 @@ export function CardsView({
       {/* Header */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <StickyNote className="size-4 shrink-0 text-primary" aria-hidden />
-        <h2 className="shrink-0 text-sm font-semibold">Cards</h2>
+        <h2 className="shrink-0 text-sm font-semibold">{t("cards.boardTitle")}</h2>
         <div className="relative ml-2 min-w-0 flex-1">
           <Search
             className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 opacity-50"
@@ -700,15 +703,15 @@ export function CardsView({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search notes…"
-            aria-label="Search notes"
+            placeholder={t("cards.searchNotes")}
+            aria-label={t("cards.searchNotesLabel")}
             className="h-8 w-full pl-7 text-base md:text-xs"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
-              aria-label="Clear search"
+              aria-label={t("cards.clearSearch")}
               className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 opacity-60 hover:opacity-100"
             >
               <X className="size-3.5" />
@@ -723,10 +726,10 @@ export function CardsView({
           size="sm"
           className="shrink-0 gap-1.5"
           onClick={onClose}
-          title="Back to editor (Esc)"
-          aria-label="Back to the editor"
+          title={t("cards.backToEditorEsc")}
+          aria-label={t("cards.backToTheEditor")}
         >
-          <ArrowLeft className="size-4" /> <span className="hidden sm:inline">Back to editor</span>
+          <ArrowLeft className="size-4" /> <span className="hidden sm:inline">{t("cards.backToEditor")}</span>
         </Button>
       </div>
 
@@ -748,7 +751,7 @@ export function CardsView({
                 <button
                   type="button"
                   onClick={openComposer}
-                  aria-label={hasDraft ? "Continue your draft note" : undefined}
+                  aria-label={hasDraft ? t("cards.continueYourDraftNote") : undefined}
                   className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
                 >
                   <StickyNote className="size-4 shrink-0 opacity-60" aria-hidden />
@@ -756,17 +759,17 @@ export function CardsView({
                       discarding it) shows here, so it is not invisible state. */}
                   {hasDraft ? (
                     <span className="min-w-0 flex-1 truncate">
-                      <span className="mr-1.5 rounded bg-primary/15 px-1 py-0.5 text-[10px] font-semibold uppercase text-primary-strong">Draft</span>
+                      <span className="mr-1.5 rounded bg-primary/15 px-1 py-0.5 text-[10px] font-semibold uppercase text-primary-strong">{t("cards.draft")}</span>
                       {draftTitle.trim() || draftBody.trim().split("\n")[0]}
                     </span>
                   ) : (
-                    <span className="min-w-0 flex-1 truncate">Take a note…</span>
+                    <span className="min-w-0 flex-1 truncate">{t("cards.takeANote")}</span>
                   )}
                 </button>
                 <button
                   type="button"
-                  aria-label="Take a checklist note"
-                  title="Take a checklist note"
+                  aria-label={t("cards.takeAChecklistNote")}
+                  title={t("cards.takeAChecklistNote")}
                   className="flex shrink-0 items-center justify-center rounded p-1 opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pointer-coarse:size-8"
                   onClick={() => {
                     setDraftList(true);
@@ -781,8 +784,8 @@ export function CardsView({
                 <Input
                   value={draftTitle}
                   onChange={(e) => setDraftTitle(e.target.value)}
-                  placeholder="Title"
-                  aria-label="Note title"
+                  placeholder={t("cards.titlePlaceholder")}
+                  aria-label={t("cards.noteTitle")}
                   className="mb-2 h-8 border-0 px-0 text-sm font-semibold shadow-none focus-visible:ring-0"
                   onKeyDown={(e) => {
                     // Enter moves to the body rather than submitting — a title-only
@@ -800,8 +803,8 @@ export function CardsView({
                   autoFocus
                   value={draftBody}
                   onChange={(e) => setDraftBody(e.target.value)}
-                  placeholder={draftList ? "One item per line…" : "Take a note…"}
-                  aria-label="Note body"
+                  placeholder={draftList ? t("cards.oneItemPerLine") : t("cards.takeANote")}
+                  aria-label={t("cards.noteBody")}
                   rows={draftList ? 4 : 3}
                   className="w-full resize-y bg-transparent text-sm outline-none placeholder:opacity-50"
                   onKeyDown={(e) => {
@@ -818,19 +821,19 @@ export function CardsView({
                     className="h-7 gap-1.5 text-xs"
                     aria-pressed={draftList}
                     onClick={() => setDraftList((v) => !v)}
-                    title="Turn the body into a checklist"
+                    title={t("cards.checklistTitle")}
                   >
                     <ListTodo className="size-3.5" />
-                    Checklist
+                    {t("cards.checklist")}
                   </Button>
                   <span className="ml-auto hidden text-[10px] opacity-85 sm:inline">
-                    ⌘↵ to save
+                    {t("cards.saveHint", { keys: "⌘↵" })}
                   </span>
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelComposer}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button size="sm" className="h-7 text-xs" onClick={() => void commitComposer()}>
-                    Add note
+                    {t("cards.addNote")}
                   </Button>
                 </div>
               </div>
@@ -839,7 +842,7 @@ export function CardsView({
         )}
 
         {hydrating ? (
-          <div className="flex items-start gap-3" aria-busy="true" aria-label="Loading notes">
+          <div className="flex items-start gap-3" aria-busy="true" aria-label={t("cards.loadingNotes")}>
             {Array.from({ length: colCount }).map((_, col) => (
               <div key={col} className="flex min-w-0 flex-1 flex-col gap-3">
                 {Array.from({ length: Math.max(1, Math.ceil(Math.min(8, Math.max(docs.length, 3)) / colCount)) }).map((_, i) => (
@@ -852,14 +855,14 @@ export function CardsView({
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <StickyNote className="size-8 opacity-40" aria-hidden />
             <p className="text-sm font-medium opacity-85">
-              {query ? "No notes match your search" : "No notes yet"}
+              {query ? t("cards.noNotesMatchYourSearch") : t("cards.noNotesYet")}
             </p>
             <p className="text-xs opacity-85">
-              {query ? "Try a different word." : "Use “Take a note…” above to capture your first one."}
+              {query ? t("cards.tryADifferentWord") : t("cards.emptyHint", { action: t("cards.takeANote") })}
             </p>
             {query && (
               <Button variant="ghost" size="sm" className="mt-1 text-xs" onClick={() => setQuery("")}>
-                Clear search
+                {t("cards.clearSearch")}
               </Button>
             )}
           </div>
@@ -868,12 +871,12 @@ export function CardsView({
             {shownPinned.length > 0 && (
               <>
                 <h3 className="mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-85">
-                  Pinned
+                  {t("cards.pinned")}
                 </h3>
                 <Masonry items={shownPinned} cols={colCount} render={renderCard} />
                 {shownOthers.length > 0 && (
                   <h3 className="mt-4 mb-1.5 px-0.5 text-[10px] font-semibold tracking-wider uppercase opacity-85">
-                    Others
+                    {t("cards.others")}
                   </h3>
                 )}
               </>
@@ -970,6 +973,7 @@ function CardEditor({
    *  before the full editor opens it. */
   onOpenInEditor: (nextMarkdown: string | null) => void;
 }) {
+  const t = useT();
   const [text, setText] = useState(markdown);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
   const originalRef = useRef(markdown);
@@ -988,10 +992,15 @@ function CardEditor({
   // Rendered HTML for the current draft (live — reflects unsaved edits, and is
   // what makes split useful). Memoised on the text so typing doesn't re-render
   // the whole document tree every keystroke beyond the one changed value.
+  // Images stored as assets (A086) are moved off `src` before the HTML reaches
+  // the page — a `pf-asset:` source is unloadable, and a CSP violation — and
+  // resolved to object URLs once it is there.
   const html = useMemo(
-    () => (renderMarkdown ? renderMarkdown(text) : ""),
+    () => (renderMarkdown ? neutralizeAssetSrcs(renderMarkdown(text)) : ""),
     [renderMarkdown, text]
   );
+  const renderedRef = useRef<HTMLDivElement | null>(null);
+  useResolvedAssetImages(renderedRef, html);
 
   const showWrite = effectiveView !== "preview";
   const showRender = canRender && effectiveView !== "write";
@@ -1035,8 +1044,8 @@ function CardEditor({
       className="pf-card-render min-h-[40dvh] flex-1 overflow-y-auto p-3 text-sm leading-relaxed"
     >
       {text.trim()
-        ? <div dangerouslySetInnerHTML={{ __html: html }} />
-        : <p className="text-sm italic opacity-85">Empty note</p>}
+        ? <div ref={renderedRef} dangerouslySetInnerHTML={{ __html: html }} />
+        : <p className="text-sm italic opacity-85">{t("cards.emptyNote")}</p>}
     </div>
   );
 
@@ -1046,7 +1055,7 @@ function CardEditor({
       value={text}
       readOnly={readOnly}
       onChange={(e) => setText(e.target.value)}
-      aria-label="Note content (markdown)"
+      aria-label={t("cards.noteContentMarkdown")}
       spellCheck
       className={cn(
         "min-h-[40dvh] flex-1 resize-none bg-transparent p-3 font-mono text-[13px] leading-relaxed outline-none",
@@ -1082,7 +1091,7 @@ function CardEditor({
       className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label={`Edit note: ${title}`}
+      aria-label={t("cards.editNote", { title })}
       onPointerDown={(e) => {
         // Backdrop click saves and closes (Keep behaviour).
         if (e.target === e.currentTarget) finish();
@@ -1099,13 +1108,13 @@ function CardEditor({
           {canRender && (
             <div
               role="group"
-              aria-label="Note view"
+              aria-label={t("cards.noteView")}
               className="hidden shrink-0 overflow-hidden rounded-md border border-border xs:flex"
             >
-              <ViewButton v="preview" label="Preview" />
+              <ViewButton v="preview" label={t("cards.viewPreview")} />
               {/* Split needs two columns — offer it on wider viewports only. */}
-              <span className="hidden sm:contents"><ViewButton v="split" label="Split" /></span>
-              <ViewButton v="write" label={readOnly ? "Source" : "Write"} />
+              <span className="hidden sm:contents"><ViewButton v="split" label={t("cards.viewSplit")} /></span>
+              <ViewButton v="write" label={readOnly ? t("cards.viewSource") : t("cards.viewWrite")} />
             </div>
           )}
           <Button
@@ -1113,18 +1122,18 @@ function CardEditor({
             size="sm"
             className="h-7 shrink-0 gap-1.5 text-xs"
             onClick={() => onOpenInEditor(pending())}
-            title="Open this note in the full editor"
+            title={t("cards.openInFullEditor")}
           >
             <ExternalLink className="size-3.5" />
-            <span className="hidden sm:inline">Open in editor</span>
+            <span className="hidden sm:inline">{t("cards.openInEditor")}</span>
           </Button>
           <Button
             variant="ghost"
             size="icon"
             className="size-7 shrink-0"
             onClick={finish}
-            aria-label="Close note"
-            title="Close (Esc)"
+            aria-label={t("cards.closeNote")}
+            title={t("cards.closeEsc")}
           >
             <X className="size-4" />
           </Button>
@@ -1138,10 +1147,10 @@ function CardEditor({
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/10 px-3 py-2">
           <span className="mr-auto hidden text-[10px] opacity-85 sm:inline">
-            {effectiveView === "preview" ? "Rendered" : "Markdown"} · ⌘↵ or Esc to close
+            {effectiveView === "preview" ? t("cards.footerRendered", { keys: "⌘↵" }) : t("cards.footerMarkdown", { keys: "⌘↵" })}
           </span>
           <Button size="sm" className="h-7 text-xs" onClick={finish}>
-            {readOnly ? "Close" : "Done"}
+            {readOnly ? t("common.close") : t("common.done")}
           </Button>
         </div>
       </div>

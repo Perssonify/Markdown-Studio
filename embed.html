@@ -40,6 +40,45 @@
         })();
     </script>
 <title>Markdown Studio (embed)</title>
+    <script>
+        // Browser floor (A097). The stylesheet is built on @property and
+        // color-mix() (Tailwind v4) and the code on regex lookbehind, so the
+        // oldest browsers that can run the editor are Safari/iOS 16.4, Chrome
+        // and Edge 111 and Firefox 128. Below that the page was blank (the CSS
+        // does not apply) or the bundle died on a SyntaxError, which the app's
+        // boot watchdog took for a broken deploy and "repaired" by deleting the
+        // offline caches and reloading into the same blank page.
+        // Detected by feature, never by user agent. Below the floor this
+        // writes a self-contained message followed by <plaintext>, which turns
+        // the REST of the page into inert text: nothing after this script is
+        // parsed (the boot watchdog, the stylesheet, the module script), so no
+        // editor code runs and nothing stored in this browser is touched.
+        // index.html and embed.html carry this script byte for byte.
+        // ES5 on purpose: it has to parse in the browsers it turns away.
+        (function () {
+            var ok = false;
+            try {
+                ok = typeof CSS !== "undefined" && typeof CSS.registerProperty === "function" &&
+                    CSS.supports("color", "color-mix(in srgb, red, red)") &&
+                    new RegExp("(?<=a)b").test("ab");
+            } catch (e) { }
+            if (ok) return;
+            window.__PF_UNSUPPORTED = true;
+            document.write(
+                '<main style="display:block;box-sizing:border-box;max-width:36rem;margin:12vh auto 0;padding:0 24px;' +
+                'font:16px/1.55 -apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,system-ui,sans-serif">' +
+                '<h1 style="font-size:22px;line-height:1.3;margin:0 0 12px">Markdown Studio needs a newer browser</h1>' +
+                '<p style="margin:0 0 8px">This browser is missing features the editor is built on. It runs in:</p>' +
+                '<ul style="margin:0 0 16px;padding-left:22px">' +
+                '<li>Safari 16.4 or later, and on iPhone and iPad iOS or iPadOS 16.4 or later (every browser there uses Safari\'s engine)</li>' +
+                '<li>Chrome or Microsoft Edge 111 or later</li>' +
+                '<li>Firefox 128 or later</li>' +
+                '</ul>' +
+                '<p style="margin:0">Nothing has been deleted. Documents you saved in this browser are untouched and stay on this device; they will be there when you open Markdown Studio again after updating.</p>' +
+                '</main><plaintext style="display:none">'
+            );
+        })();
+    </script>
 </head>
 
 <body class="pf-app">

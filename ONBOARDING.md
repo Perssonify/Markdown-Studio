@@ -51,11 +51,11 @@ On top of editing, it provides:
 
 | Area | Technology | Declared (`package.json`) | Resolved (`bun.lock`) | Notes |
 |---|---|---|---|---|
-| Language | TypeScript, strict mode | `^5.9.3` | 5.9.3 | Only `src/` is type-checked (`tsconfig.json:39`). Tests, e2e, `api/`, `build/` and `scripts/` are plain JS. `noImplicitAny` is off. |
-| UI runtime | React, React DOM | dev `^18.3.1`, peer `^18.0.0` | 18.3.1 | `@types/react` / `@types/react-dom` are `^18.3.0` (18.3.31 / 18.3.7), matching the runtime. |
+| Language | TypeScript, strict mode | `^6.0.3` | 6.0.3 | 6.0 is the newest release every tool here can use; TypeScript 7 type-checks the project but has no JavaScript API for typescript-eslint yet ([workflows.md ▸ TypeScript 7](docs/workflows.md#typescript-7)). Only `src/` is type-checked (`tsconfig.json:38`). Tests, e2e, `api/`, `build/` and `scripts/` are plain JS. `noImplicitAny` is on; `src/types/` holds declarations for untyped packages (turndown). |
+| UI runtime | React, React DOM | dev `^19.3.0`, peer `^18.3.0 \|\| ^19.0.0` | 19.3.0 | `@types/react` / `@types/react-dom` are `^19.3.0` (19.3.0 / 19.3.0), matching the runtime. CI's `react18` job re-runs the type gate and the unit suite on React 18.3.1 and its types, for library consumers still on 18. |
 | Rich-text engine | TipTap 3 (ProseMirror via `@tiptap/pm`) | every `@tiptap/*` package at `3.31.3` (dev), peer `^3.31.3` | 3.31.3 | One version across the set, pinned by `pkg-lockfile.test.js`. `@tiptap/extension-list` is declared. |
 | Markdown pane | CodeMirror 6, `@lezer/highlight` | view `^6.39.14`, state `^6.5.4`, lang-markdown `^6.5.0`, commands, search, language | 6.39.14, 6.5.4, 6.5.0 | Peers of the library. |
-| Markdown → HTML | marked, marked-emoji, marked-footnote | `^12.0.2`, `^2.0.3`, `^1.4.0` | 12.0.2, 2.0.3, 1.4.0 | Configured per instance in `src/engine/build-marked.ts`. Wiki links are a marked inline extension (`src/engine/wiki-link-marked.ts`). `breaks: true` is always on. |
+| Markdown → HTML | marked, marked-emoji, marked-footnote | `^18.0.14`, `^2.0.3`, `^1.4.0` | 18.0.14, 2.0.3, 1.4.0 | Configured per instance in `src/engine/build-marked.ts`. Wiki links are a marked inline extension (`src/engine/wiki-link-marked.ts`). `breaks: true` is always on. |
 | HTML → Markdown | Turndown | `7.2.4` | 7.2.4 | GFM rules are hand-written in `src/engine/turndown-rules.ts`; `turndown-plugin-gfm` is not used. The engine adds an escaper and a linear-time top-level conversion (`turndownLinear`). |
 | State | Zustand | peer `^5.0.0`, dev `^5.0.12` | 5.0.12 | |
 | UI kit | Tailwind CSS v4, shadcn/ui (`base-mira`) on Base UI, lucide-react, sonner, next-themes, cva, clsx, tailwind-merge, tw-animate-css | tailwind `4.3.3`, base-ui `^1.3.0`, lucide `^0.577.0` (peer `^0.577.0 \|\| ^1.0.0`), sonner `^2.0.7`, next-themes `^0.4.6` (peer `^0.4.0`) | 4.3.3, 1.3.0, 0.577.0, 2.0.7, 0.4.6 | Generated primitives live in `src/components/ui/`. The library bundles Base UI and sonner on purpose. |
@@ -65,7 +65,7 @@ On top of editing, it provides:
 | Build | Vite 8 (Rolldown), @vitejs/plugin-react, @tailwindcss/vite, vite-plugin-pwa (Workbox), custom PostCSS plugins | vite `8.1.5`, plugin-react `6.0.4`, pwa `^1.3.0` | vite 8.1.5 (rolldown 1.1.5), pwa 1.3.0 (workbox-build 7.4.1) | Three configs: `vite.config.ts` (library; externals derived from `package.json` by `build/externals.mjs`, minified with oxc), `vite.app.config.ts`, `vite.embed.config.ts`. |
 | Unit tests | Vitest, jsdom, Testing Library, jest-dom, fake-indexeddb | `4.1.11`, `29.1.1`, `^16.3.2`, `^6.9.1`, `^6.2.5` | same | Only `src/__tests__/*.test.{js,jsx}` is collected. |
 | Lint | ESLint (flat config), typescript-eslint, eslint-plugin-react-hooks | `^10.11.0`, `^8.71.0`, `^7.1.1` | 10.11.0 | `bun run lint`: zero errors required, warnings allowed. |
-| Browser tests | Custom Node runner, playwright-core (Chromium) | `1.62.1` | 1.62.1 | In `e2e/`. |
+| Browser tests | Custom Node runner, playwright-core (Chromium; Firefox and WebKit for five suites) | `1.62.1` | 1.62.1 | In `e2e/`. |
 | Server code | One Vercel Node function using `undici` | `^7.30.0` (a dependency) | 7.30.0 | `api/import.js` |
 | Tooling | Bun 1.4.0 as package manager (`packageManager`; CI pins the same); Node | engines: `^20.19.0` or `>=22.12.0` | — | `bun.lock` is committed and installed with `--frozen-lockfile` in CI and on Vercel. `bun run` executes Vite with Node. |
 | Hosting and CI | Vercel (static SPA plus one function), GitHub Actions | — | — | `vercel.json`; `.github/workflows/ci.yml`, `publish.yml`, `uptime.yml` |
@@ -477,7 +477,7 @@ A few fixes are applied as records and prefs are read:
 
 - **Bun 1.4.0**, the version that produced `bun.lock` (`packageManager` in `package.json`; CI pins the same).
 - **Node `^20.19.0` or `>=22.12.0`.** Vite 8 runs on Node even when started with `bun run`, and the e2e runner is plain Node.
-- **Chromium**, for e2e only. Install it through playwright-core (below) or point `E2E_CHROME` at an existing binary.
+- **Chromium**, for e2e only. Install it through playwright-core (below) or point `E2E_CHROME` at an existing binary. Firefox and WebKit are needed only to run the engine suites locally (`E2E_BROWSER=firefox|webkit`).
 
 ### 7.2 Commands
 
@@ -502,7 +502,7 @@ bun run preview              # serve dist-app/
 
 ```bash
 bun run build:app && bun run build:embed && bun run build
-bunx playwright-core install chromium        # CI (Linux) adds --with-deps
+bunx playwright-core install chromium        # CI (Linux) adds --with-deps; add firefox webkit for E2E_BROWSER
 bun run e2e                                  # every suite except perf
 bun run e2e:harness   # also: e2e:smoke, e2e:deep, e2e:dataloss, e2e:library, e2e:bridge,
                       #       e2e:journeys, e2e:faults, e2e:stress, e2e:csp, e2e:pwa, e2e:perf
@@ -802,14 +802,14 @@ This revision re-checked every item from the 1.77.0 pass:
   - the CSP-hash test against the built `index.html`
   - the sourcemap strip
   - `build` and `build:embed`
-- The `e2e` job builds all three outputs, installs Chromium and runs the suites one after another.
+- The `e2e` job builds all three outputs, installs Chromium and runs the suites one after another. The `e2e-engines` job runs harness, surfaces, surfaces-deep, dataloss and floor on Firefox and WebKit (A100).
 
 **Findings:**
 
 - **TST-1: The orchestrator is thinly tested.** `Medium` · `Confirmed`
   - Better than at 1.77.0: `PerssonifyEditor` is now rendered in six test files. Those cover boot seeding, remount, ⌘S, the import loop, `importContent`, a feature toggle and the card save path. The real `initialize()` runs in two store tests.
-  - Still missing: `onContentChange` has no behavioural test. Several store tests still stub `initialize()`.
-  - Coverage is now measured over all of `src/`. When the scope was widened it read 38.5% of lines, lowest in `ui/` (A108, partial).
+  - `onContentChange` is covered (`behave-editor-commands.test.jsx`). Several store tests still stub `initialize()`.
+  - Since A108, sixteen behavioural suites (`behave-*.test.jsx`) mount the real editor and judge outcomes by storage, both panes, toasts and downloads. Coverage over all of `src/` is 81.8% of lines (71.2% before them); `PerssonifyEditor` with `src/editor/` went from 46% to 85%.
   - Evidence: `src/__tests__/persistence-remount.test.jsx`, `persistence-import-content.test.jsx`, `hydration-guard.test.js:91`.
 - **TST-2: Two e2e suites can pass without testing anything.** `Medium` · `Confirmed`
   - The `library` and `bridge` suites exit green with zero checks when their build output is missing. CI builds both first, so the false green happens only locally.
@@ -884,7 +884,6 @@ Drift in the Markdown docs themselves (README, `docs/`, `CLAUDE.md` and the rest
 - No live cross-tab sync. Another tab's save leaves this tab on a terminal `conflict`, and a reload keeps it there.
 - Heading-anchor links resolve by heading text (NFKC-normalised, keeping letters, numbers and marks).
 - Footnotes round-trip, but the rich pane has no footnote node: it shows the rendered reference, heading and list.
-- marked expands tabs inside fenced code; this is pinned as current behaviour (`src/__tests__/fenced-code-roundtrip.test.js:84-87`).
 - Very large documents are still converted in full on every projection. Rich→Markdown is linear-time now, but a 1.6 MB document takes seconds (A083).
 - Browser storage eviction. Persistent storage is now requested, backups are nudged and a wiped library is detected (`docs/runbooks/documents-disappeared.md`).
 
@@ -935,7 +934,7 @@ Drift in the Markdown docs themselves (README, `docs/`, `CLAUDE.md` and the rest
 5. **Hidden settings.** `docs/deployment.md` lists branch protection, Vercel Deployment Checks and Vercel's Bun version as owner settings (A005, A014); `docs/import-relay.md` adds the function's Node version. Whether any of them is set cannot be seen from the repo.
 6. **History claims.** This repository's history starts at the 1.77.0 import (`0fed016`). The commits the docs cite (`84d7099` auth removal, `41e831e…` import point, `2e29275`) belong to the predecessor repository and can't be checked here.
 7. **Missing doc.** Where did `docs/migration-markdown-studio.md` go (`.gitignore:11-12`), and how is the marketing-kit zip regenerated?
-8. **Browser support.** The entry chunk no longer contains a regex lookbehind (A097), but the lazily loaded Find & Replace chunk still does (`src/ui/FindReplace.tsx:132`), so Find fails to load on Safari below 16.4. What is the supported floor? Tailwind v4 already needs Safari 16.4.
+8. **Browser support.** Answered (A097): the floor is Safari/iOS 16.4, Chrome/Edge 111 and Firefox 128, which is what Tailwind v4 needed anyway. Below it `index.html` and `embed.html` show a message instead of loading the app, so the lookbehind still in the lazily loaded Find & Replace chunk (`src/ui/FindReplace.tsx:132`) is above the floor.
 9. **Editor settings.** Is the `js/ts.tsdk.path` key in `.vscode/settings.json` intended? The long-standing key is `typescript.tsdk`.
 
 Answered since 1.77.0:

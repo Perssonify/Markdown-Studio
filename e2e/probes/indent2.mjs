@@ -2,7 +2,7 @@
 import { serve, open, boot, APP_DIR } from "../lib.mjs";
 
 const srv = await serve(APP_DIR);
-const { browser, page: pg, errors } = await open(srv.port);
+const { browser, page: pg } = await open(srv.port);
 await boot(pg, srv.port, { mode: "Split", settle: 7000 });
 
 await pg.locator(".cm-content").first().click();

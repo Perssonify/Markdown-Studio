@@ -32,6 +32,20 @@ describe("measured projection cost", () => {
     expect(c).toBeGreaterThan(20);
   });
 
+  it("recovers from one outlier within a few projections (A083)", () => {
+    // The first markdown keystroke in a large document parses all of it once:
+    // seconds, where every later projection costs a few hundred ms. Counted in
+    // full, that one sample held the idle delay at its ceiling for the next
+    // dozen keystrokes; counted as "at least enough to saturate both waits"
+    // it changes no decision it did not already make, and fades in a few.
+    const outlier = nextSyncCost(0, 30000);
+    expect(syncDelayFor(outlier)).toBe(SYNC_MAX_DELAY_MS);
+    expect(syncMaxWaitFor(outlier)).toBe(SYNC_MAX_MAX_WAIT_MS);
+    let c = outlier;
+    for (let i = 0; i < 4; i++) c = nextSyncCost(c, 150);
+    expect(syncDelayFor(c)).toBeLessThan(SYNC_MAX_DELAY_MS * 0.6);
+  });
+
   it("ignores nonsense samples", () => {
     expect(nextSyncCost(50, NaN)).toBe(50 * 0.7);
     expect(nextSyncCost(50, -5)).toBe(50 * 0.7);

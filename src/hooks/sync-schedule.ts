@@ -51,9 +51,18 @@ const MAX_WAIT_FACTOR = 8;
 
 const clamp = (lo: number, v: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/**
+ * The cost at which both waits are already at their ceilings. A dearer sample
+ * cannot lengthen either, so it is counted as this much: otherwise one
+ * outlier — the first markdown keystroke in a large document parses all of it
+ * once (A083), seconds where every later one takes a few hundred ms — held the
+ * average, and so the delay, at the ceiling for the next dozen projections.
+ */
+const COST_SATURATION = Math.max(SYNC_MAX_DELAY_MS / DELAY_FACTOR, SYNC_MAX_MAX_WAIT_MS / MAX_WAIT_FACTOR);
+
 /** Fold a new measurement into the moving average. 0 means "nothing measured". */
 export function nextSyncCost(prev: number, sampleMs: number): number {
-  const sample = Number.isFinite(sampleMs) && sampleMs > 0 ? sampleMs : 0;
+  const sample = Number.isFinite(sampleMs) && sampleMs > 0 ? Math.min(sampleMs, COST_SATURATION) : 0;
   if (prev <= 0) return sample;
   return prev * (1 - COST_ALPHA) + sample * COST_ALPHA;
 }

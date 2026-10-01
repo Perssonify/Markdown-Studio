@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DialogProvider } from "../ui/DialogProvider";
 import { UrlImportDialog } from "../ui/UrlImportDialog";
@@ -56,6 +56,10 @@ describe("no absolute 'nothing ever leaves' claims", () => {
     "src/data/starter-documents.ts",
     "src/ui/MenuBar.tsx",
     "vite.app.config.ts", // the install prompt's description (PWA manifest)
+    // Since A099 the copy itself lives in the About content module and the
+    // interface catalog, so the claims are checked where they are written.
+    "src/ui/pages/about-content.ts",
+    ...readdirSync(join(process.cwd(), "src/i18n/en")).map((f) => `src/i18n/en/${f}`),
   ];
   const ABSOLUTE = [
     /never leave your device/i,

@@ -78,7 +78,8 @@ describe("the unload stash", () => {
 
 describe("the unload handler stashes what it cannot write", () => {
   const read = (p) => require("fs").readFileSync(require("path").join(process.cwd(), p), "utf8");
-  const src = read("src/PerssonifyEditor.tsx");
+  // The handler lives in the editor's saving hook (src/editor/useAutosave.ts).
+  const src = read("src/editor/useAutosave.ts");
   const handler = src.slice(
     src.indexOf("const handleBeforeUnload"),
     src.indexOf('window.addEventListener("beforeunload"')
@@ -102,5 +103,10 @@ describe("the unload handler stashes what it cannot write", () => {
 
   it("also runs on pagehide (iOS never fires beforeunload)", () => {
     expect(src).toContain('window.addEventListener("pagehide"');
+  });
+
+  it("is installed by the editor", () => {
+    // A handler in a hook nobody calls protects nothing.
+    expect(read("src/PerssonifyEditor.tsx")).toMatch(/= useAutosave\(\{/);
   });
 });

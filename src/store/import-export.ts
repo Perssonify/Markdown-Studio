@@ -11,6 +11,7 @@ import { computeFidelity, type FidelityReport } from "./fidelity";
 import type { DocumentRecord } from "./document";
 import { APP_NAME } from "../constants";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version";
+import { withPortableBreaks } from "../engine/portable-breaks";
 
 // --- Types ---
 
@@ -127,11 +128,25 @@ export async function importFile(
   });
 
   if (result.doc.title === "Untitled" || !result.doc.title) {
-    const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
-    result.doc.title = nameWithoutExt;
+    // A heading the file already has names it — the title the app derives
+    // once the content is converted — and the file name stands in otherwise.
+    // It used to be the file name always, so `# Real title` in notes.md came
+    // back titled "notes" until the host completed the import.
+    result.doc.title = headingTitle(result.html) ?? file.name.replace(/\.[^.]+$/, "");
   }
 
   return result;
+}
+
+/** The text of converted HTML's first top-level heading, as
+ *  `deriveTitleFromCanonical` would take it; null without one. Parsed inert. */
+function headingTitle(html: string | null): string | null {
+  if (!html || typeof DOMParser === "undefined") return null;
+  const body = new DOMParser().parseFromString(html, "text/html").body;
+  for (const el of Array.from(body.children)) {
+    if (/^H[1-6]$/.test(el.tagName)) return el.textContent?.trim() || null;
+  }
+  return null;
 }
 
 /**
@@ -203,6 +218,15 @@ export function downloadBlob(blob: Blob, filename: string): void {
 }
 
 /**
+ * The markdown of a `.md` file that leaves the app: the converter's output with
+ * hard breaks written `\` + newline, which renderers without the app's
+ * `breaks: true` dialect still draw (A051, engine/portable-breaks.ts).
+ */
+export function exportMarkdown(html: string, convert: (html: string) => string): string {
+  return withPortableBreaks(() => convert(html));
+}
+
+/**
  * Export document as Markdown.
  */
 export function exportAsMarkdown(
@@ -212,15 +236,16 @@ export function exportAsMarkdown(
   const { htmlToMd, htmlToCleanMd, getHtml, syncMode = "clean" } = opts;
 
   let md: string;
-  if (doc.markdownCache) {
-    md = doc.markdownCache;
-  } else if (getHtml && (htmlToMd || htmlToCleanMd)) {
-    const html = getHtml();
+  // The converter first: `markdownCache` would be the editor's own dialect,
+  // without portable hard breaks (and storage never keeps one).
+  if (getHtml && (htmlToMd || htmlToCleanMd)) {
     const convert =
       syncMode === "styled"
         ? htmlToMd ?? htmlToCleanMd
         : htmlToCleanMd ?? htmlToMd;
-    md = convert!(html);
+    md = exportMarkdown(getHtml(), convert!);
+  } else if (doc.markdownCache) {
+    md = doc.markdownCache;
   } else {
     throw new Error("Markdown converter not available — please try again.");
   }
@@ -287,7 +312,14 @@ function withoutIngestPayload(report: unknown): unknown {
   return { ...(report as Record<string, unknown>), preIngestHtml: null };
 }
 
-export function toExportEnvelope(doc: DocumentRecord, title: string = doc.title) {
+export function toExportEnvelope(
+  doc: DocumentRecord,
+  title: string = doc.title,
+  /** The images the document refers to, for a file that must stand on its own
+   *  (the single-document JSON export, A086). A backup ZIP carries them as
+   *  files instead and leaves this out. */
+  assets?: Record<string, { mime: string; data: string }>
+) {
   return {
     _format: "perssonify-document",
     _version: "1.1.0",
@@ -304,14 +336,20 @@ export function toExportEnvelope(doc: DocumentRecord, title: string = doc.title)
     tags: doc.tags,
     created: doc.created,
     updated: doc.updated,
+    ...(assets && Object.keys(assets).length ? { assets } : {}),
   };
 }
 
 /**
  * Export document as canonical JSON (ProseMirror JSON + origin + residuals).
+ * `opts.assets` embeds the images its `pf-asset:` references point at, so
+ * importing the file anywhere restores them (A086).
  */
-export function exportAsJson(doc: DocumentRecord): { filename: string } {
-  const exported = toExportEnvelope(doc);
+export function exportAsJson(
+  doc: DocumentRecord,
+  opts: { assets?: Record<string, { mime: string; data: string }> } = {}
+): { filename: string } {
+  const exported = toExportEnvelope(doc, doc.title, opts.assets);
 
   const filename = sanitizeFilename(doc.title) + ".json";
   const json = JSON.stringify(exported, null, 2);

@@ -2,16 +2,17 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/inter";
 import "katex/dist/katex.min.css";
 import { ThemeProvider } from "next-themes";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { PerssonifyEditorIntegration, type EditorHandle } from "./integration/PerssonifyEditorIntegration";
-import { resolveEmbedAllowedOrigins } from "./integration/embed-origins";
+import { embedStorageConfig, resolveEmbedAllowedOrigins } from "./integration/embed-origins";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { useUIStore } from "./store/uiStore";
 import { sanitizeCssColor } from "./theme/palette";
 import "./styles.css";
 import { initPalette } from "./theme/palette";
 import { installGlobalErrorCapture } from "./utils/diagnostics";
+import { localeDir, useLocale } from "./i18n";
 
 // The embed owns its document (it is its own iframe), so it may capture that
 // document's uncaught errors — locally, like the standalone app. Never done by
@@ -45,6 +46,14 @@ function resolveAllowedOrigins(params: URLSearchParams): string[] {
 }
 
 /**
+ * Where this embed keeps its documents (A072): a database of its own when it is
+ * served from one of the app's hosts, so a page framing it there can never
+ * reach the app's library; the name it has always had anywhere else, so no
+ * self-hosted embed opens on an empty library. See embedStorageConfig.
+ */
+const embedStorage = embedStorageConfig(window.location.hostname);
+
+/**
  * Iframe embed shell. Host apps configure the editor declaratively through the
  * iframe `src` query string, so no post-ready round-trip is needed for the
  * common cases:
@@ -76,6 +85,14 @@ function resolveAllowedOrigins(params: URLSearchParams): string[] {
 
 function EmbedApp() {
   const ref = useRef<EditorHandle>(null);
+  // The iframe is its own document, so — like the app shell, and unlike the
+  // library, which never touches its host's page — it declares the interface
+  // language (A099).
+  const locale = useLocale();
+  useLayoutEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = localeDir(locale);
+  }, [locale]);
   const params = new URLSearchParams(window.location.search);
 
   // `view_mode` is a synonym for `mode` (md|html|split); the URL builder emits it.
@@ -135,6 +152,7 @@ function EmbedApp() {
   return (
     <PerssonifyEditorIntegration
       ref={ref}
+      storageConfig={embedStorage}
       allowedOrigins={allowedOrigins}
       isDark={isDark}
       initialMode={initialMode}

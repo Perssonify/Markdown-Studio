@@ -5,12 +5,13 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { Editor } from "@tiptap/core";
+import { Placeholder } from "@tiptap/extension-placeholder";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import { sanitizePastedHtml } from "../engine/html-cleaner";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
-import { BidiAuto } from "../extensions/BidiAuto";
+import { BidiAuto, TaskItemAutoDir } from "../extensions/BidiAuto";
 import { perLineTextDirection } from "../extensions/cm-bidi";
 
 let editor;
@@ -19,8 +20,10 @@ afterEach(() => {
   editor = null;
 });
 
+/** The live editor's arrangement: BidiAuto, and the task item that carries the attribute itself. */
+const LIVE = [...SERIALIZE_EXTENSIONS.map((e) => (e.name === "taskItem" ? TaskItemAutoDir.configure({ nested: true }) : e)), BidiAuto];
 const mount = (content) => {
-  editor = new Editor({ element: document.createElement("div"), extensions: [...SERIALIZE_EXTENSIONS, BidiAuto], content });
+  editor = new Editor({ element: document.createElement("div"), extensions: LIVE, content });
   return editor;
 };
 const autoDirTags = (ed) => Array.from(ed.view.dom.querySelectorAll('[dir="auto"]')).map((n) => n.tagName);
@@ -59,27 +62,106 @@ describe("rich pane: dir=auto on text blocks", () => {
     expect(autoDirTags(ed)).toHaveLength(blocks.length);
   });
 
-  it("does not accumulate decorations as you type (one per block, always)", () => {
-    // An ancestor that straddles the edited range must be re-derived, not
-    // re-added: duplicates render identically, so only the plugin's own state
-    // shows them — growing by one per keystroke in a list item.
-    const ed = mount("<ul><li><p>item</p></li></ul><blockquote><p>q</p></blockquote>");
-    const plugin = ed.state.plugins.find((p) => p.key.startsWith("bidiAuto"));
-    const blocks = () => {
-      let n = 0;
-      ed.state.doc.descendants((node) => { if (["listItem", "paragraph", "blockquote"].includes(node.type.name)) n++; });
-      return n;
-    };
+  it("marks task items through TipTap's own node view, and keeps them marked as you type", () => {
+    // TipTap draws a task item with its own node view, which a plugin's cannot
+    // replace; TaskItemAutoDir adds the attribute to it. (Task items were the
+    // one block left on a decoration, and building a decoration set is
+    // quadratic in top-level blocks — A083.)
+    const ed = mount(
+      '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>item</p>' +
+        '<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>sub</p></li></ul></li></ul>'
+    );
+    const items = () => Array.from(ed.view.dom.querySelectorAll("li[data-checked]"));
+    expect(items()).toHaveLength(2);
     for (const ch of "typing more text") {
-      ed.commands.setTextSelection(7); // inside "item"
+      ed.commands.setTextSelection(4); // inside "item"
       ed.commands.insertContent(ch);
     }
-    expect(plugin.getState(ed.state).find().length).toBe(blocks());
+    // Checking an item updates its view in place; the attribute stays.
+    ed.view.dispatch(ed.state.tr.setNodeMarkup(0 + 1, undefined, { checked: true }));
+    expect(items()[0].getAttribute("data-checked")).toBe("true");
+    for (const li of items()) expect(li.getAttribute("dir")).toBe("auto");
+    // View-only: neither the document nor its HTML carries it.
+    expect(ed.getHTML()).not.toContain("dir=");
+    expect(JSON.stringify(ed.getJSON())).not.toContain("dir");
+  });
+
+  it("keeps every task item marked through a transaction of many steps (A083)", () => {
+    // The first markdown projection after a load can replace hundreds of
+    // blocks in one transaction, from the end of the document backwards.
+    const ed = mount(
+      Array.from({ length: 40 }, (_, i) =>
+        `<p>p${i}</p><ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>t${i}</p></li></ul>`).join("")
+    );
+    const { schema } = ed.state;
+    const item = (t) => schema.nodes.taskItem.create({ checked: false }, schema.nodes.paragraph.create(null, schema.text(t)));
+    const lists = [];
+    ed.state.doc.forEach((node, offset) => { if (node.type.name === "taskList") lists.push([offset, offset + node.nodeSize]); });
+    const tr = ed.state.tr;
+    for (const [from, to] of lists.reverse()) tr.replaceWith(from, to, schema.nodes.taskList.create(null, [item("a"), item("b")]));
+    expect(tr.steps).toHaveLength(40);
+    ed.view.dispatch(tr);
+    const items = ed.view.dom.querySelectorAll("li[data-checked]");
+    expect(items).toHaveLength(80);
+    for (const li of items) expect(li.getAttribute("dir")).toBe("auto");
+  });
+
+  it("marks ordinary blocks through their node views — no decorations at all", () => {
+    // A decoration on every block made each transaction quadratic in the
+    // number of blocks (A083): 714 ms per keystroke in a 1.6 MB document.
+    const ed = mount("<h2>h</h2><p>a</p><p>b</p><ul><li><p>c</p></li></ul><blockquote><p>d</p></blockquote>");
+    const plugin = ed.state.plugins.find((p) => p.key.startsWith("bidiAuto"));
+    // No state and no decorations: nothing to map, rebuild or hand down.
+    expect(plugin.spec.state).toBeUndefined();
+    expect(plugin.props.decorations).toBeUndefined();
+    ed.commands.setTextSelection(2);
+    ed.commands.insertContent("typed");
+    // Every block is marked (StarterKit may append an empty paragraph after
+    // the final blockquote; it is marked too), and nothing else.
+    const blocks = ed.view.dom.querySelectorAll("h2, p, li, blockquote");
+    for (const b of blocks) expect(b.getAttribute("dir")).toBe("auto");
+    expect(autoDirTags(ed)).toHaveLength(blocks.length);
+  });
+
+  it("still carries other plugins' node decorations (the empty-editor placeholder)", () => {
+    editor = new Editor({
+      element: document.createElement("div"),
+      extensions: [...LIVE, Placeholder.configure({ placeholder: "Start typing" })],
+      content: "",
+    });
+    const p = editor.view.dom.querySelector("p");
+    expect(p.getAttribute("dir")).toBe("auto");
+    expect(p.getAttribute("data-placeholder")).toBe("Start typing");
+    expect(p.classList.contains("is-empty")).toBe(true);
+  });
+
+  it("renders each block as its own toDOM would, attributes and all", () => {
+    // The node view is the node's own rendering plus the attribute: a
+    // paragraph's alignment, a cell's alignment, a callout's type survive, and
+    // a change to them redraws the block.
+    const ed = mount(
+      '<p style="text-align: center">mid</p><div data-type="callout" data-callout="tip"><p>t</p></div>' +
+        '<table><tbody><tr><td style="text-align: right"><p>r</p></td></tr></tbody></table>'
+    );
+    const p = ed.view.dom.querySelector("p");
+    expect(p.getAttribute("style")).toContain("text-align: center");
+    expect(p.getAttribute("dir")).toBe("auto");
+    const callout = ed.view.dom.querySelector('div[data-type="callout"]');
+    expect(callout.getAttribute("data-callout")).toBe("tip");
+    expect(callout.getAttribute("dir")).toBe("auto");
+    expect(ed.view.dom.querySelector("td").getAttribute("dir")).toBe("auto");
+    ed.commands.setTextSelection(2);
+    ed.commands.setTextAlign("right");
+    const redrawn = ed.view.dom.querySelector("p");
+    expect(redrawn.getAttribute("style")).toContain("text-align: right");
+    expect(redrawn.getAttribute("dir")).toBe("auto");
   });
 
   it("is registered in the live editor", () => {
     const pane = readFileSync(join(process.cwd(), "src/ui/TiptapPane.tsx"), "utf8");
     expect(pane).toMatch(/\bBidiAuto\b.*dir="auto"/);
+    expect(pane).toMatch(/TaskItemAutoDir\.configure\(\{ nested: true \}\)/);
+    expect(pane).not.toMatch(/\bTaskItem\.configure/);
   });
 });
 

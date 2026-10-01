@@ -90,8 +90,44 @@ export const pageActions = {
   },
 };
 
+/**
+ * The page is being left (a navigation, a close). Firefox rejects the old
+ * page's in-flight dynamic imports as it goes — measured: 6 of 12 navigations
+ * away in the first ~0.7s after load — and the resulting "chunk failed" reload
+ * CANCELLED the user's navigation and reloaded the app instead. `beforeunload`
+ * and `pagehide` fire first (by ~3ms), so a failure after them is the
+ * navigation's doing, never a reason to reload.
+ */
+let leavingAt = 0;
+
+/** A page still alive this long after `beforeunload` was not left after all
+ *  (a cancelled "Leave site?" prompt); chunk failures may reload again. */
+const LEAVING_WINDOW_MS = 10_000;
+
+/** Call once at startup (the app shell). Idempotent. */
+export function trackPageLeaving(): void {
+  if (typeof window === "undefined" || (trackPageLeaving as { done?: boolean }).done) return;
+  (trackPageLeaving as { done?: boolean }).done = true;
+  const leaving = () => { leavingAt = Date.now(); };
+  window.addEventListener("beforeunload", leaving);
+  window.addEventListener("pagehide", leaving);
+  // Restored from the back/forward cache: the page is live again.
+  window.addEventListener("pageshow", () => { leavingAt = 0; });
+}
+
+/** Whether the page is being left (see trackPageLeaving). */
+export function isPageLeaving(now: number = Date.now()): boolean {
+  return leavingAt > 0 && now - leavingAt < LEAVING_WINDOW_MS;
+}
+
+/** Test hook. */
+export function _setPageLeavingForTests(at: number): void {
+  leavingAt = at;
+}
+
 /** Reload for a chunk failure if (and only if) the policy allows it. */
 export function reloadForChunkErrorIfSafe(): boolean {
+  if (isPageLeaving()) return false; // the user is navigating away: let them
   let last = 0;
   try {
     last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || "0");

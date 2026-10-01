@@ -43,8 +43,9 @@ export interface WikiGraph {
 }
 
 export interface AssociationStore {
-  setAll: (newAssociations: Association[]) => void;
-  add: (newAssociations: Association[]) => void;
+  /** Replaces every association. Input is normalised (see normalizeAssociation), so partial records are accepted. */
+  setAll: (newAssociations: Partial<Association>[]) => void;
+  add: (newAssociations: Partial<Association>[]) => void;
   remove: (predicate: (assoc: Association) => boolean) => void;
   removeByOrigin: (origin: string) => void;
   getIncoming: (docId: string) => Association[];
@@ -93,12 +94,12 @@ export function createAssociationStore(): AssociationStore {
   }
 
   return {
-    setAll(newAssociations: Association[]) {
+    setAll(newAssociations: Partial<Association>[]) {
       associations = (newAssociations ?? []).map(normalizeAssociation);
       rebuildIndices();
     },
 
-    add(newAssociations: Association[]) {
+    add(newAssociations: Partial<Association>[]) {
       for (const a of newAssociations) {
         const norm = normalizeAssociation(a);
         const exists = associations.some(
@@ -168,17 +169,20 @@ export function createAssociationStore(): AssociationStore {
 /**
  * Merge wiki-link graph with external associations for unified export.
  */
-export function mergeGraphWithAssociations(
-  wikiGraph: WikiGraph,
+export function mergeGraphWithAssociations<
+  N extends { id: string } = GraphNode,
+  E extends { source: string; target: string } = GraphEdge,
+>(
+  // Any node with an id and any edge with ends: the editor's own export
+  // (store/link-index) carries richer shapes than WikiGraph declares.
+  wikiGraph: { nodes: readonly N[]; edges: readonly E[] },
   associationStore: AssociationStore
-): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const nodes = [...(wikiGraph.nodes ?? [])];
-  const edges = [...(wikiGraph.edges ?? [])];
+): { nodes: Array<N | GraphNode>; edges: Array<E | GraphEdge> } {
+  const nodes: Array<N | GraphNode> = [...(wikiGraph.nodes ?? [])];
+  const edges: Array<E | GraphEdge> = [...(wikiGraph.edges ?? [])];
 
-  for (const edge of edges) {
-    (edge as GraphEdge).external = false;
-    (edge as GraphEdge).origin = "wiki-link";
-  }
+  // Marks the wiki edges in place, as it always has.
+  for (const edge of edges) Object.assign(edge, { external: false, origin: "wiki-link" });
 
   const externalEdges = associationStore.toGraphEdges();
   edges.push(...externalEdges);

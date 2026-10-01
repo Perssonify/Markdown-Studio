@@ -36,21 +36,21 @@ export interface TransclusionAttrs {
 
 export interface ProseMirrorJSONNode {
   type: string;
-  attrs?: Record<string, any>;
+  attrs?: Record<string, unknown>;
   content?: ProseMirrorJSONNode[];
   text?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface CanonicalDocument {
   content?: ProseMirrorJSONNode[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface DocumentRecord {
   id: string;
   canonical?: CanonicalDocument;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 declare module "@tiptap/core" {
@@ -173,8 +173,8 @@ export function resolveTransclusions(
     content: canonical.content.map((node) => {
       if (node.type !== "transclusionBlock") return node;
 
-      const { target, section, blockId } = (node.attrs || {}) as TransclusionAttrs;
-      const docId = resolveTarget(target, allDocs);
+      const { target, section, blockId } = (node.attrs || {}) as Partial<TransclusionAttrs>;
+      const docId = resolveTarget(target as string, allDocs);
 
       if (!docId) {
         return { ...node, attrs: { ...node.attrs, error: "not-found" } };
@@ -241,11 +241,11 @@ function extractSection(canonical: CanonicalDocument, headingText: string): Pros
       const text = extractNodeText(node).trim().toLowerCase();
       if (!collecting && text === headingText.toLowerCase()) {
         collecting = true;
-        level = node.attrs?.["level"] || 1;
+        level = Number(node.attrs?.["level"]) || 1;
         result.push(node);
         continue;
       }
-      if (collecting && (node.attrs?.["level"] || 1) <= level) {
+      if (collecting && (Number(node.attrs?.["level"]) || 1) <= level) {
         break; // hit a same-level or higher heading — stop
       }
     }

@@ -11,10 +11,11 @@ import {
   type LinkIndex,
   type DocRecord,
 } from "../store/link-index";
-import { useDocumentStore } from "../store/documentStore";
+import { storedRecordIfCurrent, useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 import { useUIStore } from "../store/uiStore";
 import { isDangerousUrl, isExternalHref } from "../utils/url-safety";
+import { t } from "../i18n";
 
 /** Discriminated payload for a link activation inside the rich editor. */
 export type LinkClickPayload =
@@ -130,7 +131,10 @@ export function useLinkIndex({
       // had just typed did not match, and a word you had just deleted still did,
       // until some document was added, deleted or renamed.
       for (const id of ids) {
-        const doc = await storage.get(id);
+        // The document just saved is the store's own record, when that is
+        // exactly what is stored — no need to parse it back (A083).
+        const listed = useDocumentStore.getState().documents.find((d) => d.id === id);
+        const doc = storedRecordIfCurrent(id, listed?.updated) ?? await storage.get(id);
         const next = fullDocsRef.current.filter((d) => d.id !== id);
         if (doc) {
           const i = fullDocsRef.current.findIndex((d) => d.id === id);
@@ -264,8 +268,8 @@ export function useLinkIndex({
     navigator.clipboard
       .writeText(JSON.stringify(data, null, 2))
       .then(
-        () => toast.show("Graph JSON copied!", "success"),
-        () => toast.show("Copy failed", "error")
+        () => toast.show(t("editor.graphJsonCopied"), "success"),
+        () => toast.show(t("editor.copyFailed"), "error")
       );
   }, [documents, linkIndex, toast]);
 
@@ -314,7 +318,7 @@ export function useLinkIndex({
           }
         } else {
           const handled = onLinkClick?.({ kind: "doc", targetId: null, targetTitle: linkTarget, notFound: true });
-          if (handled !== true) toast.show(`Document not found: "${linkTarget}"`, "info");
+          if (handled !== true) toast.show(t("editor.documentNotFoundNamed", { title: linkTarget }), "info");
         }
         return;
       }

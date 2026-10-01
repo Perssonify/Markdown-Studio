@@ -261,9 +261,11 @@ function analyzeHtml(html: string): AnalysisResult {
   let match;
 
   while ((match = tagRegex.exec(html)) !== null) {
-    const [, isClose, tag, attrStr] = match;
+    // All three groups take part in every match (group 3's `?` is inside it),
+    // so neither `tag` nor `attrStr` is ever really undefined.
+    const [, isClose, tag, attrStr = ""] = match;
     if (isClose) continue;
-    const tagLower = tag.toLowerCase();
+    const tagLower = tag!.toLowerCase();
     totalElements++;
 
     processed[tagLower] = (processed[tagLower] ?? 0) + 1;
@@ -283,7 +285,7 @@ function analyzeHtml(html: string): AnalysisResult {
       const attrRegex = /(\w[\w-]*)=(?:"([^"]*)"|'([^']*)')/g;
       let a;
       while ((a = attrRegex.exec(attrStr)) !== null) {
-        attrs[a[1]] = a[2] ?? a[3] ?? "";
+        attrs[a[1]!] = a[2] ?? a[3] ?? "";
       }
       residuals.push({
         type: "unknown-element",
@@ -575,6 +577,13 @@ export function ingest(
         if (envelopeTitle) {
           doc.userTitle = envelopeTitle;
           doc.titlePinnedByUser = true;
+        }
+        // A JSON export carries the images it refers to (A086). Handed on,
+        // untouched, for the import pipeline to put back into the asset store
+        // (prepareImportedDocAssets); never persisted — serializeForStorage
+        // writes a fixed list of fields.
+        if (isEnvelope && parsed.assets && typeof parsed.assets === "object") {
+          (doc as DocumentRecord & { _importAssets?: unknown })._importAssets = parsed.assets;
         }
         return { doc, html: null, needsTiptap: false };
       } catch {

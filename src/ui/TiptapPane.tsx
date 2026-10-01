@@ -1,14 +1,13 @@
 import { ChainedCommands, Editor, Extension } from "@tiptap/core";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { TaskList } from "@tiptap/extension-list";
 import { WikiLink as Link } from "../extensions/WikiLink";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { Subscript } from "@tiptap/extension-subscript";
 import { Superscript } from "@tiptap/extension-superscript";
 import { Table } from "@tiptap/extension-table";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TableHeader } from "@tiptap/extension-table-header";
+import { TableCellFast as TableCell, TableHeaderFast as TableHeader } from "../engine/table-colwidth";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -18,13 +17,15 @@ import { undoDepth } from "@tiptap/pm/history";
 import { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, JSONContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import { StarterKit } from "@tiptap/starter-kit";
 import { COMPOSITION_STALL_MS } from "../constants";
 import type { HighlightSpec } from "../formatting/find-engine";
 import { useUIStore } from "../store/uiStore";
+import { useT } from "../i18n";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";
-import { BidiAuto } from "../extensions/BidiAuto";
+import { BidiAuto, TaskItemAutoDir } from "../extensions/BidiAuto";
+import { ReactSelectionShield } from "../extensions/ReactSelectionShield";
 import { EmojiNode } from "../extensions/EmojiNode";
 import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
 import { Callout } from "../extensions/Callout";
@@ -36,6 +37,9 @@ import { ThemeImage } from "../extensions/ThemeImage";
 import { UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
 import { ListKeymapNoTab } from "../extensions/ListKeymapNoTab";
 import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
+import { AssetImages } from "../extensions/AssetImages";
+import { fragmentToHtml } from "../engine/inert-html";
+import { parseHtmlDoc } from "../engine/incremental-rich";
 import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
 import { LinkBubbleMenu } from "./LinkBubbleMenu";
 import { TableBubbleMenu } from "./TableBubbleMenu";
@@ -209,6 +213,7 @@ export interface TiptapPaneHandle {
 
 const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
   ({ isDark, defaultValue, onChange, onPaste, onEditLink, className, style }, ref) => {
+    const t = useT();
     const onChangeRef = useRef(onChange);
     // When this pane last produced input while composing (COMPOSITION_STALL_MS).
     const composeStampRef = useRef(0);
@@ -227,21 +232,24 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         }),
         ListKeymapNoTab,
         CodeBlockWithCopy, // Use our custom code block with copy button
-        TaskList, TaskItem.configure({ nested: true }),
+        // TaskItem, with dir="auto" on each rendered item (see BidiAuto)
+        TaskList, TaskItemAutoDir.configure({ nested: true }),
         Callout, Details, Summary,
         MathInline, MathBlock, EmojiNode, FrontmatterBlock,
         Underline, TextStyle, Color, BackgroundColor, FontFamily, Subscript, Superscript,
         Link.configure({ openOnClick: false, HTMLAttributes: { class: "perssonify-link" } }),
         ThemeImage,
         SizedImage,
-        Placeholder.configure({ placeholder: "Start typing rich text..." }),
+        Placeholder.configure({ placeholder: t("panes.startTypingRichText") }),
         TextAlign.configure({ types: ["heading", "paragraph"], alignments: ["left", "center", "right", "justify"] }),
         Table.configure({ resizable: false }),
         TableRow, TableCell, TableHeader, TableCellAlign,
         SearchHighlightExtension,
         BidiAuto, // dir="auto" per text block — view-only, not in the schema
+        ReactSelectionShield, // a large document: React reads the caret, never walks the editor
         UnresolvedWikiLinks, // broken-link marking (a plugin: no schema change)
         AltGraphPassthrough, // AltGr types; it never triggers a Mod-Alt keymap
+        AssetImages, // images as binary assets: paste/drop/copy (A086) — a plugin, no schema
       ],
       content: defaultValue || "",
       editorProps: {
@@ -251,7 +259,7 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
           spellcheck: String(spellcheck),
           // A089: a bare contenteditable has no role or name. Repeated in the
           // theme effect below, which REPLACES this object.
-          role: "textbox", "aria-multiline": "true", "aria-label": "Rich text",
+          role: "textbox", "aria-multiline": "true", "aria-label": t("panes.richText"),
         },
         // See CodeMirrorPane: the composition's own begin/end events own the
         // liveness stamp, so it can never be stale when the next one starts.
@@ -291,11 +299,11 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
             "data-md-preview": "",
             "data-theme": isDark ? "dark" : "light",
             spellcheck: String(spellcheck),
-            role: "textbox", "aria-multiline": "true", "aria-label": "Rich text",
+            role: "textbox", "aria-multiline": "true", "aria-label": t("panes.richText"),
           },
         },
       });
-    }, [isDark, editor, spellcheck]);
+    }, [isDark, editor, spellcheck, t]);
 
     // Read-only mode disables editing (node views already honor editor.isEditable).
     useEffect(() => {
@@ -321,12 +329,17 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         // interface for why this is required after cross-document hydration.
         editor.view.updateState(EditorState.create({ doc: st.doc, plugins: st.plugins }));
       },
-      getHTML: () => editor?.getHTML() || "",
+      // editor.getHTML() builds every <img> in the LIVE document, which starts
+      // loading it — a stored image's pf-asset: reference included (A086).
+      getHTML: () => (editor && !editor.isDestroyed ? fragmentToHtml(editor.state.doc.content, editor.schema) : ""),
       getText: () => editor?.getText() || "",
       getJSON: () => editor?.getJSON(),
       setHTML: (html) => {
         if (!editor || editor.isDestroyed) return;
-        editor.commands.setContent(html, {
+        // The document setContent(html) would build, parsed without TipTap's
+        // elementFromString: its whitespace pass is quadratic in top-level
+        // blocks (A083, incremental-rich.ts). Same markup, same parser.
+        editor.commands.setContent(parseHtmlDoc(html, editor.schema), {
           emitUpdate: false,
           errorOnInvalidContent: false,
         });

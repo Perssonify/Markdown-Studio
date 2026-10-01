@@ -23,24 +23,32 @@ import { describe, expect, it } from "vitest";
  * Static source assertions, like integration-parity.test.js: the regression is
  * "someone adds a second independent visibility flag / a second overlay block",
  * which a render test of the current, correct behavior would not catch.
+ *
+ * The selection and its handlers live in src/editor/useWorkspaceViews.ts; the
+ * overlay shell and the wiring of those handlers into the chrome live in
+ * PerssonifyEditor. Each assertion reads the file that holds its subject.
  */
 
 const read = (p) => readFileSync(resolve(process.cwd(), p), "utf8");
 
 const PE = read("src/PerssonifyEditor.tsx");
+const VIEWS = read("src/editor/useWorkspaceViews.ts");
 const STATUS_BAR = read("src/ui/StatusBar.tsx");
 const MENU_BAR = read("src/ui/MenuBar.tsx");
 
 describe("workspace views are mutually exclusive", () => {
   it("derives a single exclusive `workspaceView` selection", () => {
-    expect(PE).toMatch(/workspaceView:\s*"editor"\s*\|\s*"map"\s*\|\s*"cards"/);
+    expect(VIEWS).toMatch(/workspaceView:\s*"editor"\s*\|\s*"map"\s*\|\s*"cards"/);
+    // …and the editor takes it from there rather than keeping its own copy.
+    expect(PE).toMatch(/workspaceView,[\s\S]*?\} = useWorkspaceViews\(/);
+    expect(PE).not.toMatch(/useState[^\n]*[cC]ardsVisible/);
   });
 
   it("routes every open/close through the one setter, which clears the other view", () => {
     // setWorkspaceView assigns BOTH flags from the same argument, so no caller
     // can raise one without lowering the other.
-    expect(PE).toMatch(/setCardsVisible\(view === "cards"\)/);
-    expect(PE).toMatch(/setGraphVisible\(view === "map"\)/);
+    expect(VIEWS).toMatch(/setCardsVisible\(view === "cards"\)/);
+    expect(VIEWS).toMatch(/setGraphVisible\(view === "map"\)/);
   });
 
   it("renders exactly one overlay shell, keyed off that selection", () => {
@@ -51,9 +59,9 @@ describe("workspace views are mutually exclusive", () => {
     // grepping for an attribute STRING cannot tell markup from a comment that
     // merely mentions it (this file's own accessibility rework changed the
     // overlay from a dialog to a labelled region while such a comment stood).
-    const shells = PE.match(/data-workspace-overlay=/g) || [];
+    const shells = (PE + VIEWS).match(/data-workspace-overlay=/g) || [];
     expect(shells).toHaveLength(1);
-    expect(PE).toMatch(/aria-label=\{workspaceView === "map" \? "Relationship map" : "Cards"\}/);
+    expect(PE).toMatch(/aria-label=\{workspaceView === "map" \? t\("app\.overlayMap"\) : t\("app\.overlayCards"\)\}/);
   });
 
   it("does not claim to be a modal — the surface switcher stays usable beside it", () => {
@@ -64,14 +72,16 @@ describe("workspace views are mutually exclusive", () => {
       PE.indexOf("data-workspace-overlay=") + 400
     );
     expect(overlayBlock).not.toMatch(/aria-modal/);
-    // …and the covered editor is made genuinely unreachable instead.
-    expect(PE).toMatch(/setAttribute\("inert", ""\)/);
+    // …and the covered editor is made genuinely unreachable instead — by the
+    // overlay effect, which the editor runs for that shell.
+    expect(VIEWS).toMatch(/setAttribute\("inert", ""\)/);
+    expect(PE).toMatch(/useOverlayInert\(overlayRef, anyOverlayOpen\)/);
   });
 
   it("keeps the graph on the controlled setter so the /graph route still drives it", () => {
     // setShowGraph writes uiStore directly and would desync the standalone
     // app's URL-controlled graph; setGraphVisible honors onGraphOpenChange.
-    expect(PE).not.toMatch(/setShowGraph\(view === "map"\)/);
+    expect(PE + VIEWS).not.toMatch(/setShowGraph\(view === "map"\)/);
   });
 });
 
@@ -97,9 +107,9 @@ describe("one control per surface, in one place", () => {
     // The button says "go here", so it must not un-toggle back to the editor.
     // The handlers are hoisted into stable useCallbacks (they are props of a
     // memoized MenuBar), so pin the definition and the wiring separately.
-    expect(PE).toMatch(/const showMapView = useCallback\(\(\) => setWorkspaceView\("map"\)/);
-    expect(PE).toMatch(/const showCardsView = useCallback\(\(\) => setWorkspaceView\("cards"\)/);
-    expect(PE).toMatch(/const showEditorView = useCallback\(\(\) => setWorkspaceView\("editor"\)/);
+    expect(VIEWS).toMatch(/const showMapView = useCallback\(\(\) => setWorkspaceView\("map"\)/);
+    expect(VIEWS).toMatch(/const showCardsView = useCallback\(\(\) => setWorkspaceView\("cards"\)/);
+    expect(VIEWS).toMatch(/const showEditorView = useCallback\(\(\) => setWorkspaceView\("editor"\)/);
     expect(PE).toMatch(/onGraph=\{showMapView\}/);
     expect(PE).toMatch(/onCards=\{showCardsView\}/);
     expect(PE).toMatch(/onEditor=\{showEditorView\}/);
@@ -107,8 +117,8 @@ describe("one control per surface, in one place", () => {
     // reason as the switcher handlers: these are dependencies of the shortcut
     // hook's effect, which registers a capture-phase keydown listener on
     // `document` — as inline arrows it re-subscribed on every render.
-    expect(PE).toMatch(/const toggleGraphCb = useCallback\(\(\) => toggleWorkspaceView\("map"\)/);
-    expect(PE).toMatch(/const toggleCardsCb = useCallback\(\(\) => toggleWorkspaceView\("cards"\)/);
+    expect(VIEWS).toMatch(/const toggleGraphCb = useCallback\(\(\) => toggleWorkspaceView\("map"\)/);
+    expect(VIEWS).toMatch(/const toggleCardsCb = useCallback\(\(\) => toggleWorkspaceView\("cards"\)/);
     expect(PE).toMatch(/toggleGraph: toggleGraphCb/);
     expect(PE).toMatch(/toggleCards: toggleCardsCb/);
   });
@@ -116,7 +126,7 @@ describe("one control per surface, in one place", () => {
   it("treats picking a layout as picking the editor", () => {
     // MD/Rich/Split are invisible under an overlay; changing one there would be
     // a control that silently does nothing.
-    expect(PE).toMatch(/const handleSetMode = useCallback\(\(m: string\) => \{\s*setMode\(m\);\s*setWorkspaceView\("editor"\);/);
+    expect(VIEWS).toMatch(/const handleSetMode = useCallback\(\(m: string\) => \{\s*setMode\(m\);\s*setWorkspaceView\("editor"\);/);
     expect(PE).toMatch(/setMode=\{handleSetMode\}/);
   });
 

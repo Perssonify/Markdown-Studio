@@ -51,20 +51,31 @@ describe("trayFits", () => {
 });
 
 describe("the tray toggles consult it", () => {
+  // The toggles live in src/editor/useBottomTray.tsx; the editor wires them.
+  const tray = readFileSync(join(process.cwd(), "src/editor/useBottomTray.tsx"), "utf8");
   const pe = readFileSync(join(process.cwd(), "src/PerssonifyEditor.tsx"), "utf8");
 
   it("guards both ways of opening the tray", () => {
     // The status-bar chevron and the links chip are separate toggles; guarding
     // only one leaves the defect reachable by the other.
-    expect(pe).toContain("refuseTrayIfCramped");
-    const uses = pe.match(/refuseTrayIfCramped\(\)/g) ?? [];
+    expect(tray).toContain("refuseTrayIfCramped");
+    const uses = tray.match(/refuseTrayIfCramped\(\)/g) ?? [];
     expect(uses.length).toBeGreaterThanOrEqual(2);
+    // …and those two toggles are the ones the status bar is given.
+    expect(pe).toContain("onToggleTray={toggleTray}");
+    expect(pe).toContain("onToggleLinks={toggleLinksTray}");
+  });
+
+  it("measures the region the tray shares with the editor", () => {
+    // With the ref detached the height reads 0, which trayFits treats as
+    // "unmeasurable, allow" — the guard would silently never refuse.
+    expect(pe).toMatch(/<div ref=\{trayRegionRef\} className="pf-tray-region /);
   });
 
   it("never blocks CLOSING the tray", () => {
     // Whatever the height, collapsing must always work — that is the escape
     // hatch from a cramped layout.
-    const toggle = pe.slice(pe.indexOf("const toggleTray = useCallback"));
+    const toggle = tray.slice(tray.indexOf("const toggleTray = useCallback"));
     const body = toggle.slice(0, toggle.indexOf("}, ["));
     expect(body).toContain("if (v) return false;");
   });

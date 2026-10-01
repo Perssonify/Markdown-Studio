@@ -59,9 +59,27 @@ runCase("csp", async (rep, onClose) => {
   rep.check("the app boots under the enforced policy", (await pg.locator(".ProseMirror").count()) > 0);
 
   await pasteMarkdown(pg, PROBE_MD);
-  rep.check("KaTeX, Mermaid, abcjs and a data: image all render",
+  rep.check("KaTeX, Mermaid (dagre and ELK layouts), abcjs and a data: image all render",
     await until(async () => allRendered(await renderers(pg)), { timeout: 30000 }),
     JSON.stringify(await renderers(pg)));
+
+  // An image stored as an asset (A086): the document holds `pf-asset:<hash>`,
+  // a scheme img-src does not allow, so the editor must only ever show it
+  // through an object URL (blob:, which it does allow) — any <img> handed the
+  // reference itself is a violation, even one never attached to the page.
+  await pg.locator(".ProseMirror").first().click();
+  await pg.evaluate(async () => {
+    const c = document.createElement("canvas");
+    c.width = 40; c.height = 30;
+    c.getContext("2d").fillRect(0, 0, 40, 30);
+    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], "shot.png", { type: "image/png" }));
+    document.querySelector(".ProseMirror").dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  rep.check("a pasted image stored as an asset renders (through blob:)",
+    await until(() => pg.evaluate(() => [...document.querySelectorAll(".ProseMirror img")]
+      .some((i) => i.src.startsWith("blob:") && i.naturalWidth === 40)), { timeout: 15000 }));
 
   const lazy = await openLazySurfaces(pg, until);
   rep.check("Find & Replace, the map and Cards (lazy chunks) all open", lazy.find && lazy.map && lazy.cards, JSON.stringify(lazy));

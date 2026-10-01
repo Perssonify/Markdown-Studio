@@ -4,9 +4,10 @@ import { PerssonifyEditor } from "../PerssonifyEditor";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter";
 import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
-import { createAssociationStore, mergeGraphWithAssociations } from "./associations";
-import { createHostBridge } from "./host-bridge";
-import { formatDocumentsForPrompt, linkedPromptItems, PromptFormat } from "./prompt-builder";
+import type { InternalEditorHandle } from "../editor/props";
+import { type AssociationStore, createAssociationStore, mergeGraphWithAssociations } from "./associations";
+import { createHostBridge, type EditorChromeLevel, type EditorViewMode, type HostBridge } from "./host-bridge";
+import { formatDocumentsForPrompt, linkedPromptItems, type PromptFormat, type PromptItem } from "./prompt-builder";
 import { sanitizeCssColor } from "../theme/palette";
 import { warnDeprecated } from "./deprecation";
 import { clearLocalData } from "../store/documentStore";
@@ -39,7 +40,7 @@ export interface PerssonifyEditorIntegrationProps {
   /** @deprecated Accepted for API compatibility and NEVER consumed. Seed the
    *  library with the imperative `addDocuments` handle instead. Logs a
    *  one-time warning in development. */
-  documents?: any[];
+  documents?: unknown[];
   /** @deprecated Accepted for API compatibility and NEVER consumed: the editor
    *  has no field-schema feature to configure. Logs a one-time warning in
    *  development. */
@@ -121,14 +122,14 @@ export interface EditorHandle {
   getDocuments: () => any[];
   getActiveDocument: () => any;
   importContent: (content: string, format: string) => Promise<any>;
-  setDocuments: (docs: any[]) => Promise<any>;
+  setDocuments: (docs: unknown[]) => Promise<any>;
   /** @deprecated Has no effect — nothing in the editor reads field schemas.
    *  Logs a one-time warning in development. */
   setFieldSchemas: (schemas: FieldSchema[]) => void;
   setAssociations: (assocs: Association[]) => void;
   setTheme: (theme: string | boolean) => void;
   /** Switch the view mode at runtime ("md" | "html" | "split"). */
-  setMode: (mode: "md" | "html" | "split") => void;
+  setMode: (mode: EditorViewMode) => void;
   /** Switch the accent palette at runtime (preset id or "" to clear). */
   setAccent: (accent: string) => void;
   /** Open (activate) a document by id; resolves when the switch settles. */
@@ -137,7 +138,7 @@ export interface EditorHandle {
    *  markdown (or canonical) docs; dedupes by id, returns the created ids, and
    *  emits onGraphUpdate so the host can re-pull getGraph(). */
   addDocuments: (
-    docs: Array<{ id?: string; title?: string; markdown?: string; canonical?: any }>
+    docs: Array<{ id?: string; title?: string; markdown?: string; canonical?: unknown }>
   ) => Promise<{ ids: string[] }>;
   /** Update an existing document by id (persisted). Title-only edits are
    *  churn-free; a markdown/canonical body edit replaces content. Non-active docs
@@ -145,13 +146,13 @@ export interface EditorHandle {
    *  when the id is unknown (never creates). */
   updateDocument: (
     id: string,
-    patch: { title?: string; markdown?: string; canonical?: any }
+    patch: { title?: string; markdown?: string; canonical?: unknown }
   ) => Promise<{ id: string; updated: boolean }>;
   /** Append markdown to the end of an existing document by id (persisted),
    *  churn-free — without switching the visible editor. */
   appendToDocument: (id: string, markdown: string) => Promise<{ id: string; updated: boolean }>;
   /** Set the chrome level at runtime: "full" | "minimal" | "none". */
-  setChrome: (level: "full" | "minimal" | "none") => void;
+  setChrome: (level: EditorChromeLevel) => void;
   getAssociations: (docId?: string) => any;
   copyAsPrompt: (opts?: CopyPromptOptions) => Promise<string>;
   exportAs: (format: string) => Promise<any>;
@@ -204,15 +205,15 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
 
     const [isDark, setIsDark] = useState<boolean>(isDarkProp);
     const [accentState, setAccentState] = useState<string | undefined>(accent);
-    const internalRef = useRef<any>(null);
+    const internalRef = useRef<InternalEditorHandle | null>(null);
     // The public EditorHandle lives here regardless of whether the consumer
     // forwarded a `ref`. The host bridge and onReady read from this ref, so an
     // iframe embed that renders <PerssonifyEditorIntegration/> without a ref still
     // gets a live handle (previously createHostBridge dereferenced a null ref and
     // every request — getGraph, getDocuments, … — silently failed).
     const handleRef = useRef<EditorHandle | null>(null);
-    const associationStoreRef = useRef<any>(createAssociationStore());
-    const hostBridgeRef = useRef<any>(null);
+    const associationStoreRef = useRef<AssociationStore>(createAssociationStore());
+    const hostBridgeRef = useRef<HostBridge | null>(null);
     const callbacksRef = useRef<Partial<PerssonifyEditorIntegrationProps>>({});
 
     callbacksRef.current = {
@@ -257,13 +258,11 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
         },
 
         getMarkdown() {
+          // The core handle returns the markdown pane's text; the report
+          // comes from its own getter. (An `{ md, fidelityReport }` branch
+          // here handled a shape the core handle never returned.)
           const md = internalRef.current?.getMarkdown?.();
           const fidelity = internalRef.current?.getFidelityReport?.();
-          
-          if (typeof md === 'object' && md !== null && 'md' in md) {
-             return { md: md.md || "", fidelityReport: md.fidelityReport || fidelity || null };
-          }
-          
           return { md: md || "", fidelityReport: fidelity || null };
         },
 
@@ -288,7 +287,7 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
           return internalRef.current?.importContent?.(content, format);
         },
 
-        async setDocuments(docs: any[]) {
+        async setDocuments(docs: unknown[]) {
           return internalRef.current?.setDocuments?.(docs);
         },
 
@@ -309,7 +308,7 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
           else if (theme === "light") setIsDark(false);
         },
 
-        setMode(mode: "md" | "html" | "split") {
+        setMode(mode: EditorViewMode) {
           internalRef.current?.setMode?.(mode);
         },
 
@@ -328,7 +327,7 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
           const activeDoc = handle.getActiveDocument();
           if (!activeDoc) return "";
 
-          const items: any[] = [{ doc: activeDoc, markdown: handle.getMarkdown().md }];
+          const items: PromptItem[] = [{ doc: activeDoc, markdown: handle.getMarkdown().md }];
 
           if (includeLinked) {
             const graph = handle.getGraph();
@@ -390,7 +389,8 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
       // Secure by default: deny all cross-origin host messages unless the
       // embedder explicitly passes an allowlist. (Previously defaulted to
       // ["*"], which let any framing page read/overwrite all documents.)
-      hostBridgeRef.current = createHostBridge(handleRef as any, {
+      // No cast: the integration's handle type must satisfy the bridge's.
+      hostBridgeRef.current = createHostBridge(handleRef, {
         allowedOrigins: allowedOrigins ?? [],
       });
 
@@ -400,7 +400,7 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
       };
     }, [allowedOrigins]);
 
-    const emitToHost = useCallback((event: string, payload: any) => {
+    const emitToHost = useCallback((event: string, payload: unknown) => {
       hostBridgeRef.current?.emit(event, payload);
     }, []);
 
@@ -485,15 +485,15 @@ export const PerssonifyEditorIntegration = forwardRef<EditorHandle, PerssonifyEd
             initialDocument={initialDocument}
             fitParent={fitParent}
             readOnly={readOnly}
-            _onIntegrationChange={(data: any) => {
+            _onIntegrationChange={(data) => {
               callbacksRef.current.onChange?.(data);
               emitToHost("onChange", data);
             }}
-            _onIntegrationLinkClick={(data: any) => {
+            _onIntegrationLinkClick={(data) => {
               emitToHost("onLinkClick", data);
               return callbacksRef.current.onLinkClick?.(data);
             }}
-            _onIntegrationGraphUpdate={(data: any) => {
+            _onIntegrationGraphUpdate={(data) => {
               callbacksRef.current.onGraphUpdate?.(data);
               emitToHost("onGraphUpdate", data);
             }}

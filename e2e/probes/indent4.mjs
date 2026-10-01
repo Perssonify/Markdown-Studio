@@ -1,7 +1,7 @@
 // Indent / Outdent against a REAL list, seeded as canonical PM JSON.
 // (Typing "- a\n- b\n" into CodeMirror triggers list auto-continuation and
 //  yields three SEPARATE one-item lists — a broken fixture, not a broken app.)
-import { serve, open, boot, seed, until, APP_DIR } from "../lib.mjs";
+import { serve, open, boot, seed, APP_DIR } from "../lib.mjs";
 
 const P = (t) => ({ type: "paragraph", content: [{ type: "text", text: t }] });
 const li = (t) => ({ type: "listItem", content: [P(t)] });

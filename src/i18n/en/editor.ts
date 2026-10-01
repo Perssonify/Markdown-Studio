@@ -1,0 +1,199 @@
+import type { Message } from "../types";
+
+/** Editor actions, toasts and prompts: src/editor/*, hooks/useDocumentLifecycle.ts, hooks/useLinkIndex.ts and the store messages that reach the screen. */
+export const editor = {
+  // Saving (useAutosave, documentStore)
+  "editor.storageFullNotSaved": "Storage is full — your latest changes are NOT saved. Free space by deleting documents or old versions (Tools ▸ Version history), then keep typing to retry.",
+  "editor.saveFailed": "Save failed",
+  "editor.saveFailedWithError": "Save failed — {error}",
+  "editor.autosaveFailed": "Autosave failed — your latest changes are not saved yet",
+  "editor.conflictMessage": "This document was changed in another tab or window. To avoid overwriting that work, this tab won't save — choose Keep mine, Use theirs or Save mine as a copy below.",
+  "editor.deletedElsewhereMessage": "This document was deleted in another tab or window. This tab won't save it back — keep it as a new document or close it.",
+  "editor.deletedInAnotherTab": "Deleted in another tab",
+  "editor.notSavedNewerVersion": "Not saved — this document was made by a newer version of the app, so it is open read-only. Open it in the newer version to edit it.",
+  "editor.notSavedEditorEmpty": "Not saved — the editor is empty but the stored document is not. Undo to restore it, or use Clear document if you meant to empty it.",
+  "editor.notSavedStorageFull": "Not saved — storage is full. Delete documents or old versions to free space.",
+  "editor.saveDidNotComplete": "Save did not complete — try again",
+  "editor.changedInAnotherTab": "Changed in another tab",
+  "editor.couldNotReadSavedCopy": "Couldn't read the saved copy to check it is safe to overwrite",
+  "editor.refusedBlankOverwrite": "Refused to overwrite this document with an empty one",
+
+  // Live sync between tabs (useTabSync)
+  "editor.updatedFromAnotherTab": "Updated from another tab",
+  "editor.tabKeptMine": "Saved your version. The other tab's version is in Version history.",
+  "editor.tabUsedTheirs": "Showing the other tab's version. Yours is in Version history.",
+  "editor.tabSavedCopy": "Saved your version as “{title}”. Showing the other tab's version here.",
+  "editor.tabCopyTitle": "{title} (my copy)",
+  "editor.tabKeptAsNew": "Kept as a new document.",
+  "editor.tabClosedDeleted": "Closed. Your unsaved text is in Version history.",
+  "editor.tabHistoryFailed": "Couldn't keep a copy in Version history, so nothing was changed.",
+  "editor.tabActionFailed": "That didn't complete — nothing was changed. Try again.",
+  "editor.tabStillTyping": "Still typing — try again in a moment.",
+
+  // Cards board (useCardHandlers)
+  "editor.couldNotCreateNote": "Could not create the note",
+  "editor.editorNotReadyNoteNotSaved": "Editor not ready — note not saved",
+  "editor.cardNewerVersion": "This note was made by a newer version of the app and can't be edited as a card — your typing is kept in Version history.",
+  "editor.cardConflict": "This note was changed in another tab — your card edit was not saved over it. It is kept in Version history.",
+  "editor.cardSaveFailed": "The note could not be saved — your card edit is kept in Version history.",
+  "editor.cardAlignmentLost": "Alignment on the paragraphs you changed can't be kept in a card edit — the previous version is in Version history.",
+  "editor.cardChangeNotSaved": "That change to the card could not be saved",
+
+  // Menu actions (useEditorActions)
+  "editor.formatCopied": "{format} copied!",
+  "editor.clearDocumentTitle": "Clear document?",
+  "editor.clearDocumentDescription": "All content will be removed. This cannot be undone.",
+  "editor.contentCleared": "Content cleared",
+  "editor.promptCopied": "Prompt copied to clipboard",
+  "editor.promptBuildFailed": "Failed to build prompt",
+  "editor.skippedFiles": { other: "Skipped {count} file(s): {files}" },
+  "editor.filesNotSaved": { other: "{count} file(s) could not be saved — storage may be full" },
+  "editor.importedFiles": { other: "Imported {count} file(s)" },
+  "editor.noSupportedFiles": "No supported files found",
+  "editor.importFailed": "Import failed",
+
+  // Boot (useEditorBoot)
+  "editor.initializingEditor": "Initializing editor…",
+  "editor.restored": "Restored: {title}",
+  "editor.ready": "Ready",
+  "editor.failedToInitialize": "Failed to initialize",
+
+  // Export (useExportActions)
+  "editor.documentsUnreadableNotExported": { other: "{count} document(s) could not be read and are NOT in this export" },
+  "editor.folderHasNoDocuments": "Folder has no documents",
+  "editor.exportedDocuments": { other: "Exported {count} document(s)" },
+  "editor.folderExportFailed": "Folder export failed",
+  "editor.documentNotFound": "Document not found",
+  "editor.documentExported": "Document exported",
+  "editor.exportFailed": "Export failed",
+  "editor.noDocumentsSelected": "No documents selected",
+  "editor.markdownExported": "Markdown exported",
+  "editor.htmlExported": "HTML exported",
+  "editor.jsonExported": "JSON exported",
+  "editor.wordExported": "Word document exported",
+  "editor.wordExportFailed": "Word export failed",
+
+  // Heading and link navigation (useHeadingNavigation, useLinkIndex)
+  "editor.headingNotFound": "Heading not found: \"{heading}\"",
+  "editor.graphJsonCopied": "Graph JSON copied!",
+  "editor.copyFailed": "Copy failed",
+  "editor.documentNotFoundNamed": "Document not found: \"{title}\"",
+
+  // Renamed headings keep their links (useHeadingRenameLinks). `{notes}` is
+  // editor.headingRenameNotes, so each count gets its own plural form.
+  "editor.headingRenameNotes": { one: "{count} note", other: "{count} notes" },
+  "editor.headingRenamedOffer": {
+    one: "Heading renamed — update {count} link in {notes} to “{heading}”?",
+    other: "Heading renamed — update {count} links in {notes} to “{heading}”?",
+  },
+  /** The same offer for the document just left (a switch, a new document…). */
+  "editor.headingRenamedOfferIn": {
+    one: "Heading renamed in “{title}” — update {count} link in {notes} to “{heading}”?",
+    other: "Heading renamed in “{title}” — update {count} links in {notes} to “{heading}”?",
+  },
+  "editor.headingsRenamedOffer": {
+    one: "Headings renamed — update {count} link in {notes} to the new headings?",
+    other: "Headings renamed — update {count} links in {notes} to the new headings?",
+  },
+  "editor.headingsRenamedOfferIn": {
+    one: "Headings renamed in “{title}” — update {count} link in {notes} to the new headings?",
+    other: "Headings renamed in “{title}” — update {count} links in {notes} to the new headings?",
+  },
+  "editor.headingLinksUpdate": "Update",
+  "editor.headingLinksDismiss": "Dismiss",
+  "editor.headingLinksUpdated": { one: "Updated {count} link", other: "Updated {count} links" },
+  /** `{titles}`: the notes that were left alone, as a list. */
+  "editor.headingLinksPartlyUpdated": {
+    zero: "No links updated — could not change {titles} (changed elsewhere, locked or unreadable)",
+    one: "Updated {count} link — could not change {titles} (changed elsewhere, locked or unreadable)",
+    other: "Updated {count} links — could not change {titles} (changed elsewhere, locked or unreadable)",
+  },
+  "editor.headingLinksReadOnly": "Read-only is on — no links were updated",
+  /** One note's name in the list `{titles}` above. */
+  "editor.headingLinksNoteName": "“{title}”",
+
+  // Import (useImportPipeline)
+  "editor.nothingSelectedToImport": "Nothing selected to import",
+  "editor.documentsNotSaved": { other: "{count} document(s) could not be saved — storage may be full" },
+  /** Shown only for more than one document; a single one reads "Imported from URL". */
+  "editor.importedDocuments": { other: "Imported {count} documents" },
+  "editor.importedFromUrl": "Imported from URL",
+  "editor.incorrectPassword": "Incorrect password — try again",
+  "editor.enterPassword": "Enter password",
+  "editor.passwordProtected": "\"{name}\" is password-protected.",
+  "editor.passwordPlaceholder": "Password",
+
+  // Pane commands and shortcuts (usePaneCommands, useKeyboardShortcuts)
+  "editor.clipboardBlocked": "Clipboard access was blocked by the browser",
+  "editor.insertLink": "Insert Link",
+  "editor.insertLinkDescription": "Enter the URL for the link.",
+  "editor.linkUrlPlaceholder": "https://example.com",
+  "editor.editLink": "Edit link",
+  "editor.editLinkDescription": "Enter the URL for this link. Leave it empty to remove the link.",
+  "editor.insertFormulaBlock": "Insert Formula (block)",
+  "editor.insertInlineFormula": "Insert inline formula",
+  "editor.formulaBlockDescription": "LaTeX rendered with KaTeX ($$…$$).",
+  "editor.inlineFormulaDescription": "Inline LaTeX ($…$).",
+  "editor.enterUrl": "Enter URL:",
+
+  // Document lifecycle (useDocumentLifecycle)
+  "editor.pastedWithStyles": "Pasted with styles",
+  "editor.pastedStylesStripped": "Pasted — styles stripped",
+  "editor.syncModeStyled": "Styled — inline styles visible in markdown",
+  "editor.syncModeClean": "Clean — styles hidden in markdown",
+  "editor.newerVersionReadOnly": "“{title}” was made by a newer version of the app, or holds content this version cannot show. It is open read-only so nothing is lost.",
+  "editor.newerVersionReadOnlyUntitled": "“This document” was made by a newer version of the app, or holds content this version cannot show. It is open read-only so nothing is lost.",
+  "editor.documentCouldNotBeOpened": "That document could not be opened",
+  "editor.saveUnavailableNotClosed": "Save unavailable — the document was not closed",
+  "editor.saveFailedNotClosed": "Save failed — the document was not closed",
+  "editor.stillUnsavedNotClosed": "Document still has unsaved changes — it was not closed",
+  "editor.saved": "Saved",
+  "editor.notSavedDraftStillOpen": "Not saved — the draft is still open",
+  "editor.revertTitle": "Revert to last saved version?",
+  "editor.revertDescription": "Your unsaved changes will be discarded. This cannot be undone.",
+  "editor.revert": "Revert",
+  "editor.savedVersionUnreadable": "The saved version could not be read — nothing was reverted",
+  "editor.reverted": "Reverted to last saved version",
+  "editor.newDocNotSaved": "\"{title}\" could not be saved — storage may be full.",
+  "editor.created": "Created: {title}",
+  "editor.newDocSessionOnly": "\"{title}\" could not be saved — storage may be full. It exists only in this session.",
+  "editor.deleted": "Deleted",
+  "editor.readOnlyCannotRestore": "Read-only is on — turn it off to restore a version",
+  "editor.versionNotLoaded": "That version could not be loaded",
+  "editor.versionRestored": "Version restored",
+  "editor.restoredAs": "Restored as \"{title}\"",
+
+  // Import from URL (store/url-import.ts — the error line in the importer)
+  "editor.urlInvalid": "That doesn't look like a valid URL.",
+  "editor.urlOnlyHttp": "Only http and https URLs can be imported.",
+  "editor.urlLocalAddress": "Local and internal addresses can't be imported.",
+  "editor.relayConsentTitle": "Fetch this link through our server?",
+  "editor.relayConsentDescription": "{host} doesn't let browsers read its files directly. Markdown Studio can fetch it through its own server instead: the server receives the address you entered, downloads the file and passes it straight back to you without keeping a copy. Like any web request, the address may appear in our hosting provider's logs, so avoid links that carry secrets. Your answer is remembered — change it any time in Settings ▸ Privacy.",
+  "editor.relayConsentDescriptionNoHost": "This site doesn't let browsers read its files directly. Markdown Studio can fetch it through its own server instead: the server receives the address you entered, downloads the file and passes it straight back to you without keeping a copy. Like any web request, the address may appear in our hosting provider's logs, so avoid links that carry secrets. Your answer is remembered — change it any time in Settings ▸ Privacy.",
+  "editor.relayConsentConfirm": "Fetch via our server",
+  "editor.relayConsentCancel": "Don't use the server",
+  "editor.urlTimedOut": "The request timed out.",
+  "editor.relayTurnedOff": "This site blocks direct browser access, and fetching it through the Markdown Studio server is turned off. Download the file and drag it in (or use \"Import file\"), paste its content below, or allow the import relay in Settings ▸ Privacy.",
+  "editor.relayTooLarge": "That file is too large for the import relay.",
+  "editor.relayUnavailable": "Couldn't fetch that URL. The host blocks direct browser access and the import relay is unavailable. Download the file and drag it in (or use \"Import file\"), or paste its content below.",
+  "editor.serverResponded": "The server responded with {status} {statusText}.",
+  "editor.archiveUnreadableWithError": "Couldn't read that archive: {error}",
+  "editor.archiveUnreadable": "Couldn't read that archive.",
+  "editor.archiveEmpty": "That archive has no importable text documents in it.",
+  "editor.fileTooLargeOver5Mb": "That file is too large to import (over 5 MB).",
+  "editor.fileTooLarge": "That file is too large to import.",
+  "editor.googleSignInPage": "Google returned a sign-in or confirmation page instead of the file. Make sure the file's sharing is set to \"Anyone with the link\", and that it's a single file (not a folder).",
+  "editor.signInPage": "That link returned a sign-in page, not the document. Open it, copy the content, and paste it below.",
+  "editor.changesSaved": "Changes saved",
+  "editor.deleteDocumentTitle": "Delete document?",
+  "editor.deleteDocumentDescription": "It will be removed from your library. Its last saved version stays in Tools ▸ Version history, where you can restore it as a new document.",
+  /** After an export that could not include every stored image (A086). */
+  "editor.missingImages": {
+    one: "{count} image is not stored in this browser and could not be included",
+    other: "{count} images are not stored in this browser and could not be included",
+  },
+  "editor.missingImagesInExport": {
+    one: "{count} image is not stored in this browser and could not be included in this export",
+    other: "{count} images are not stored in this browser and could not be included in this export",
+  },
+} satisfies Record<`editor.${string}`, Message>;

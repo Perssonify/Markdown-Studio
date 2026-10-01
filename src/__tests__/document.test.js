@@ -227,8 +227,11 @@ describe('computeCounts', () => {
   it('handles multiple paragraphs', () => {
     const canonical = pmDoc(pmParagraph('one two'), pmParagraph('three'));
     const counts = computeCounts(canonical);
-    // extractText concatenates without separators: "one twothree" = 2 words
-    expect(counts.words).toBe(2);
+    // A block boundary ends a word. This case used to expect 2 — "two" and
+    // "three" run together as "twothree" — pinning a bug that made a
+    // four-item list count as one word.
+    expect(counts.words).toBe(3);
+    expect(counts.chars).toBe(12);
   });
 });
 

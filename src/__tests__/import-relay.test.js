@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import handler, { isBlockedIp, isGlobalUnicast, assertPublicUrl, MAX_BYTES, TOO_LARGE_MESSAGE } from "../../api/import.js";
 
+// The relay takes `fetch` from undici (paired with its Agent). These cases
+// judge the relay's DECISIONS, so its fetch is routed to the global one each
+// case stubs; import-relay-dispatcher.test.js drives the real pairing over a
+// socket.
+vi.mock("undici", async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetch: (...args) => globalThis.fetch(...args),
+}));
+
 // The handler writes one JSON log line per request; keep the test output clean.
 // Cases that assert on the line install their own spy.
 beforeEach(() => {

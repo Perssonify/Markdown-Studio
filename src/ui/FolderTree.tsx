@@ -65,6 +65,7 @@ import {
 } from "./folder-dnd";
 import { timeAgo } from "./relative-time";
 import { useFocusRowAfterRender, useWindowedList } from "./use-windowed-list";
+import { useT } from "../i18n";
 
 export type ExportDocFormat = "md" | "html" | "docx" | "json";
 
@@ -300,20 +301,21 @@ function MoveToMenu({
   onMove: (folderId: string | null) => void;
   onNewFolderHere: () => void;
 }) {
+  const t = useT();
   const folders = useFolderStore((s) => s.folders);
   return (
     <F.Sub>
       <F.SubTrigger>
         <FolderIcon className="mr-2 size-3.5" />
-        Move to
+        {t("library.moveTo")}
       </F.SubTrigger>
       <F.SubContent className="max-h-64 overflow-y-auto">
         <F.Item onClick={onNewFolderHere}>
           <FolderPlusIcon className="mr-2 size-3.5" />
-          New folder here…
+          {t("library.newFolderHere")}
         </F.Item>
         <F.Separator />
-        <F.Item onClick={() => onMove(null)}>Root</F.Item>
+        <F.Item onClick={() => onMove(null)}>{t("library.root")}</F.Item>
         {folders.length > 0 && <F.Separator />}
         {folders.map((f: FolderRecord) => (
           <F.Item key={f.id} onClick={() => onMove(f.id)}>
@@ -337,17 +339,18 @@ function ExportDocSubmenu({
   docId: string;
   onExportDoc: (docId: string, format: ExportDocFormat) => void;
 }) {
+  const t = useT();
   return (
     <F.Sub>
       <F.SubTrigger>
         <DownloadIcon className="mr-2 size-3.5" />
-        Export
+        {t("common.export")}
       </F.SubTrigger>
       <F.SubContent>
-        <F.Item onClick={() => onExportDoc(docId, "md")}>Markdown (.md)</F.Item>
-        <F.Item onClick={() => onExportDoc(docId, "html")}>HTML (.html)</F.Item>
-        <F.Item onClick={() => onExportDoc(docId, "docx")}>Word (.docx)</F.Item>
-        <F.Item onClick={() => onExportDoc(docId, "json")}>Backup (.json)</F.Item>
+        <F.Item onClick={() => onExportDoc(docId, "md")}>{t("library.exportMarkdown")}</F.Item>
+        <F.Item onClick={() => onExportDoc(docId, "html")}>{t("library.exportHtml")}</F.Item>
+        <F.Item onClick={() => onExportDoc(docId, "docx")}>{t("library.exportWord")}</F.Item>
+        <F.Item onClick={() => onExportDoc(docId, "json")}>{t("library.exportBackupJson")}</F.Item>
       </F.SubContent>
     </F.Sub>
   );
@@ -371,15 +374,16 @@ function DocMenuBody({
   onDelete: (id: string) => void;
   onExportDoc?: (docId: string, format: ExportDocFormat) => void;
 }) {
+  const t = useT();
   const moveDoc = useFolderStore((s) => s.moveDoc);
   const createFolder = useFolderStore((s) => s.createFolder);
   return (
     <>
       <F.Item onClick={startRename}>
         <Edit2Icon className="mr-2 size-3.5" />
-        Rename
+        {t("common.rename")}
       </F.Item>
-      <F.Item onClick={() => onDuplicate(docId)}>Duplicate</F.Item>
+      <F.Item onClick={() => onDuplicate(docId)}>{t("library.duplicate")}</F.Item>
       <MoveToMenu
         F={F}
         onMove={(fid) => moveDoc(docId, fid)}
@@ -392,7 +396,7 @@ function DocMenuBody({
       <F.Separator />
       <F.Item className="text-destructive focus:text-destructive" onClick={() => onDelete(docId)}>
         <Trash2Icon className="mr-2 size-3.5" />
-        Delete
+        {t("common.delete")}
       </F.Item>
     </>
   );
@@ -414,6 +418,7 @@ function FolderMenuBody({
   onExportFolder?: (folderId: string, opts?: { canonical?: boolean }) => void;
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
 }) {
+  const t = useT();
   const createFolder = useFolderStore((s) => s.createFolder);
   const moveFolder = useFolderStore((s) => s.moveFolder);
   const deleteFolder = useFolderStore((s) => s.deleteFolder);
@@ -421,11 +426,11 @@ function FolderMenuBody({
     <>
       <F.Item onClick={() => createFolder("New Folder", folder.id, { startNaming: true })}>
         <FolderPlusIcon className="mr-2 size-3.5" />
-        New subfolder
+        {t("library.newSubfolder")}
       </F.Item>
       <F.Item onClick={startRename}>
         <Edit2Icon className="mr-2 size-3.5" />
-        Rename
+        {t("common.rename")}
       </F.Item>
       <MoveToMenu
         F={F}
@@ -439,11 +444,11 @@ function FolderMenuBody({
         <>
           <F.Item onClick={() => onExportFolder(folder.id)}>
             <FolderDownIcon className="mr-2 size-3.5" />
-            Export as ZIP
+            {t("library.exportAsZip")}
           </F.Item>
           <F.Item onClick={() => onExportFolder(folder.id, { canonical: true })}>
             <ArchiveIcon className="mr-2 size-3.5" />
-            Full backup (.zip)
+            {t("library.fullBackupZip")}
           </F.Item>
         </>
       )}
@@ -456,7 +461,7 @@ function FolderMenuBody({
         }}
       >
         <Trash2Icon className="mr-2 size-3.5" />
-        Delete folder
+        {t("library.deleteFolder")}
       </F.Item>
     </>
   );
@@ -534,6 +539,7 @@ interface FolderRowProps {
 const FolderRow = React.memo(function FolderRow({
   rowKey, id, name, depth, expanded, count, posinset, setsize, tabbable, editing, handlers,
 }: FolderRowProps) {
+  const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(name);
   useEffect(() => { if (editing) setDraft(name); }, [editing, name]);
@@ -584,7 +590,7 @@ const FolderRow = React.memo(function FolderRow({
       {editing ? (
         <Input
           autoFocus
-          aria-label="Folder name"
+          aria-label={t("library.folderName")}
           onFocus={(e) => e.target.select()}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -617,8 +623,8 @@ const FolderRow = React.memo(function FolderRow({
         id={`pf-row-menu-${rowKey}`}
         tabIndex={-1}
         onPointerDown={() => handlers.menuOpened(rowKey)}
-        title="Folder options"
-        aria-label={`Options for ${name}`}
+        title={t("library.folderOptions")}
+        aria-label={t("library.optionsFor", { name })}
         className="flex size-5 items-center justify-center rounded p-0 text-muted-foreground opacity-0 hover:bg-sidebar-accent group-hover/folder:opacity-100 group-focus-within/folder:opacity-100 aria-expanded:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
       >
         <MoreVerticalIcon className="size-3.5" />
@@ -655,6 +661,7 @@ const DocRow = React.memo(function DocRow({
   rowKey, id, title, updated, wordCount, folderId, depth, posinset, setsize,
   isActive, tabbable, editing, handlers,
 }: DocRowProps) {
+  const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(title);
   useEffect(() => { if (editing) setDraft(title); }, [editing, title]);
@@ -678,7 +685,7 @@ const DocRow = React.memo(function DocRow({
     else setDraft(title);
     handlers.endRename(rowKey);
   };
-  const shown = title || "Untitled";
+  const shown = title || t("common.untitled");
 
   return (
     <div
@@ -724,7 +731,7 @@ const DocRow = React.memo(function DocRow({
       {editing ? (
         <Input
           autoFocus
-          aria-label="Document title"
+          aria-label={t("library.documentTitle")}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
@@ -757,10 +764,10 @@ const DocRow = React.memo(function DocRow({
             {wordCount != null && wordCount > 0 && (
               <span
                 className="flex items-center gap-1 text-[10px]"
-                title={`${wordCount.toLocaleString()} words (last saved)`}
+                title={t("library.wordCountLastSaved", { count: wordCount, formatted: wordCount.toLocaleString() })}
               >
                 <HashIcon className="size-2.5!" />
-                {wordCount.toLocaleString()} words
+                {t("library.wordCount", { count: wordCount, formatted: wordCount.toLocaleString() })}
               </span>
             )}
           </span>
@@ -772,8 +779,8 @@ const DocRow = React.memo(function DocRow({
         id={`pf-row-menu-${rowKey}`}
         tabIndex={-1}
         onPointerDown={() => handlers.menuOpened(rowKey)}
-        title="Document options"
-        aria-label={`Options for ${shown}`}
+        title={t("library.documentOptions")}
+        aria-label={t("library.optionsFor", { name: shown })}
         className="flex size-5 items-center justify-center rounded p-0 text-muted-foreground opacity-0 hover:bg-sidebar-accent group-hover/doc:opacity-100 group-focus-within/doc:opacity-100 aria-expanded:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
       >
         <MoreVerticalIcon className="size-3.5" />
@@ -783,6 +790,7 @@ const DocRow = React.memo(function DocRow({
 });
 
 export function FolderTree(props: FolderTreeProps) {
+  const t = useT();
   const folders = useFolderStore((s) => s.folders);
   const docParents = useFolderStore((s) => s.docParents);
   const docOrder = useFolderStore((s) => s.docOrder);
@@ -1007,7 +1015,7 @@ export function FolderTree(props: FolderTreeProps) {
   const treeProps = {
     ref: listRef,
     role: "tree",
-    "aria-label": "Document folders",
+    "aria-label": t("library.documentFolders"),
     onKeyDown: onTreeKeyDown,
     onFocus: onTreeFocus,
     className: "relative shrink-0",
@@ -1121,7 +1129,7 @@ export function FolderTree(props: FolderTreeProps) {
           rootOver && "border-primary/50 bg-primary/5"
         )}
       >
-        {rootOver ? "Drop here to move to top level" : " "}
+        {rootOver ? t("library.dropToTopLevel") : " "}
       </div>
     </div>
   );

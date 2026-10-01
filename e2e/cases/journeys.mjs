@@ -58,7 +58,7 @@ runCase("journeys", async (rep, onClose) => {
   // never blurs, so the composition stays live), and the dictated text was gone
   // from both panes AND from disk when you came back.
   {
-    const { page: pg, cdp, errors } = await session(onClose);
+    const { page: pg, cdp } = await session(onClose);
     await caretAtEnd(pg, "md");
     await dictate(cdp, pg, MARK);
     await pg.keyboard.press("Control+n");          // new document — no blur
@@ -201,7 +201,7 @@ runCase("journeys", async (rep, onClose) => {
   // handleHtmlPaste arms an uncancelled 100ms forceSyncHtmlToMd; a document
   // switch inside that window used to be able to land it on the wrong document.
   {
-    const { page: pg, errors } = await session(onClose);
+    const { page: pg } = await session(onClose);
     await caretAtEnd(pg, "rich");
     await pg.evaluate(() => {
       const dt = new DataTransfer();
@@ -267,5 +267,65 @@ runCase("journeys", async (rep, onClose) => {
       (await pg.url()).endsWith("/"), await pg.url());
     rep.check("the editor is still mounted after a drop",
       (await pg.locator(".ProseMirror").count()) > 0);
+  }
+
+  // ── R1: renaming a heading keeps the links to it working ────────────────
+  // The offer is driven by the browser's own caret reports (`selectionchange`,
+  // key-up) in whichever pane has the caret — jsdom sees neither a real caret
+  // nor the markdown pane's parse tree. Typed a key at a time: while the caret
+  // stays in the heading nothing is offered; the arrow key that leaves it is.
+  {
+    const srv = await serve(APP_DIR);
+    const rig = await open(srv.port, {});
+    onClose(async () => { await rig.browser.close(); srv.close(); });
+    const pg = rig.page;
+    await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
+    const H = (level, text) => ({ type: "heading", attrs: { level }, content: [{ type: "text", text }] });
+    const P = (text) => ({ type: "paragraph", content: [{ type: "text", text }] });
+    await seed(pg, [
+      { id: "guide", title: "Guide", canonical: { type: "doc", content: [H(1, "Guide"), H(2, "Setup"), P("setup body"), H(2, "Usage"), P("usage body")] } },
+      { id: "notes", title: "Notes", canonical: { type: "doc", content: [H(1, "Notes"), P("See [[Guide#Setup]] and [[Guide#Usage]].")] } },
+    ]);
+    await boot(pg, srv.port, { mode: "Split", settle: 6000 });
+    await openDoc(pg, "Guide");
+    const offered = () => pg.evaluate(() =>
+      [...document.querySelectorAll("[data-sonner-toast]")].map((t) => t.textContent).join(" | "));
+    const update = (heading) => pg.locator("[data-sonner-toast]", { hasText: heading }).locator("button", { hasText: "Update" }).click();
+    const notesOnDisk = async () => canonicalText(await storedDoc(pg, "notes"));
+
+    // In the rich pane.
+    await pg.locator(".ProseMirror h2", { hasText: "Setup" }).first().click();
+    await pg.keyboard.press("End");
+    // ProseMirror reads a click's caret from the browser's selectionchange,
+    // which arrives asynchronously; a Backspace sent the same millisecond acts
+    // on the caret it had before the click.
+    await pg.waitForTimeout(250);
+    for (let i = 0; i < 5; i++) await pg.keyboard.press("Backspace");
+    await pg.keyboard.type("Installation", { delay: 40 });
+    await pg.waitForTimeout(2500); // a NEGATIVE assertion: nothing to poll for
+    rep.check("R1 no offer while the caret is still in the heading (rich pane)",
+      !/renamed/.test(await offered()), await offered());
+    await pg.keyboard.press("ArrowDown");
+    const richOffer = await until(async () => /update 1 link in 1 note to “Installation”/.test(await offered()));
+    rep.check("R1 leaving the heading offers to update the link (rich pane)", richOffer, await offered());
+    if (richOffer) await update("Installation");
+    rep.check("R1 Update rewrote the other note on disk",
+      await until(async () => (await notesOnDisk()).includes("[[Guide#Installation]]")), await notesOnDisk());
+
+    // In the markdown pane — its caret is judged by CodeMirror's parse tree.
+    await pg.locator(".cm-line", { hasText: "## Usage" }).first().click();
+    await pg.keyboard.press("End");
+    await pg.waitForTimeout(250);
+    for (let i = 0; i < 5; i++) await pg.keyboard.press("Backspace");
+    await pg.keyboard.type("How to use it", { delay: 40 });
+    await pg.waitForTimeout(2500);
+    rep.check("R1 no offer while the caret is still in the heading (markdown pane)",
+      !/“How to use it”/.test(await offered()), await offered());
+    await pg.keyboard.press("ArrowDown");
+    const mdOffer = await until(async () => /update 1 link in 1 note to “How to use it”/.test(await offered()));
+    rep.check("R1 leaving the heading offers to update the link (markdown pane)", mdOffer, await offered());
+    if (mdOffer) await update("How to use it");
+    rep.check("R1 Update rewrote it too",
+      await until(async () => (await notesOnDisk()).includes("[[Guide#How to use it]]")), await notesOnDisk());
   }
 });

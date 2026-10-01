@@ -10,11 +10,21 @@ import {
   placeLabels,
   rankByDegree,
   folderRects,
+  folderBounds,
   folderChipLabel,
   labelBoxAt,
   labelWidth,
   stepsPerFrame,
+  isLargeMap,
+  planFrame,
+  PAINT_EVERY_MS,
+  SLICE_MS,
+  CAMERA_HOLD_MS,
+  LARGE_MAP_MIN,
+  BoxGrid,
+  crossesForeignContainer,
 } from "../store/graph-metrics";
+import { legacyFolderRects, legacyPlaceLabels } from "./graph-legacy";
 
 const nodes = [
   { id: "a", title: "Alpha", backlinks: 0, forwardLinks: 0 },
@@ -133,6 +143,62 @@ describe("rankByDegree", () => {
   it("honours the limit, and returns everything for a negative one", () => {
     expect(rankByDegree(ranked, 2)).toHaveLength(2);
     expect(rankByDegree(ranked, -1)).toHaveLength(3);
+  });
+});
+
+describe("crossesForeignContainer (the map's label veto)", () => {
+  const labelAt = (x0, x1) => ({ x0, y0: 50, x1, y1: 60 });
+  // SEPARATED folders — the layout's normal outcome: A 0..100 holds "a", B 150..300 holds "b".
+  const apart = [
+    { docs: new Set(["a"]), box: { x0: 0, y0: 0, x1: 100, y1: 200 } },
+    { docs: new Set(["b"]), box: { x0: 150, y0: 0, x1: 300, y1: 200 } },
+  ];
+  // OVERLAPPING folders — what 60 folders at 2,000 notes produce: A 0..200, B 100..300.
+  const overlapping = [
+    { docs: new Set(["a"]), box: { x0: 0, y0: 0, x1: 200, y1: 200 } },
+    { docs: new Set(["b"]), box: { x0: 100, y0: 0, x1: 300, y1: 200 } },
+  ];
+
+  it("vetoes a label that reaches out of its folder into another", () => {
+    expect(crossesForeignContainer("a", { x: 50, y: 55 }, labelAt(40, 170), apart)).toBe(true);
+  });
+
+  it("allows a label that stays clear of foreign folders", () => {
+    expect(crossesForeignContainer("a", { x: 50, y: 55 }, labelAt(10, 90), apart)).toBe(false);
+  });
+
+  it("a note's own folder never blocks its label", () => {
+    expect(crossesForeignContainer("b", { x: 250, y: 55 }, labelAt(210, 290), apart)).toBe(false);
+  });
+
+  it("a note in no folder may not put its name into a folder", () => {
+    expect(crossesForeignContainer("z", { x: 120, y: 55 }, labelAt(110, 170), apart)).toBe(true);
+  });
+
+  it("does not count a foreign folder the DOT already sits in", () => {
+    // A note in no folder whose dot the layout could not keep out of B: the dot
+    // already reads as inside B, so a name beside it says nothing new…
+    expect(crossesForeignContainer("z", { x: 200, y: 55 }, labelAt(190, 260), apart)).toBe(false);
+    // …but a folder the dot is NOT in still vetoes.
+    const three = [...apart, { docs: new Set(["c"]), box: { x0: 250, y0: 0, x1: 400, y1: 200 } }];
+    expect(crossesForeignContainer("z", { x: 200, y: 55 }, labelAt(190, 260), three)).toBe(true);
+  });
+
+  it("a name wholly inside the note's OWN folder may touch an overlapping foreign one", () => {
+    // The dot at x 60 is not in B, but the label 60..150 lies inside A — only
+    // the overlap of the two boxes puts it in B.
+    expect(crossesForeignContainer("a", { x: 60, y: 55 }, labelAt(60, 150), overlapping)).toBe(false);
+    // Sticking OUT of its own box into B is still a veto.
+    expect(crossesForeignContainer("a", { x: 60, y: 55 }, labelAt(60, 250), overlapping)).toBe(true);
+  });
+
+  it("through placeLabels: overlapping folders no longer leave a note nameless", () => {
+    // The note is in no folder and its dot sits inside B: every candidate overlaps B.
+    const positions = new Map([["z", { x: 150, y: 100 }]]);
+    const wide = [{ docs: new Set(["b"]), box: { x0: 20, y0: 20, x1: 280, y1: 280 } }];
+    const reject = (id, box) => crossesForeignContainer(id, positions.get(id), box, wide);
+    const out = placeLabels({ order: ["z"], positions, radius: () => 8, label: (id) => id, cam: { k: 1, tx: 0, ty: 0 }, reject });
+    expect(out.size).toBe(1);
   });
 });
 
@@ -363,5 +429,232 @@ describe("map paint order", () => {
     expect(box).toBeGreaterThan(-1);
     expect(dot).toBeGreaterThan(-1);
     expect(box).toBeLessThan(dot);
+  });
+});
+
+// ── Scale (A088): the indexed placer and chip scorer give the scan's answers ──
+
+/** mulberry32: the same sequence on every machine. */
+function prng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const overlapsBox = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+const areaOf = (c, o) =>
+  Math.max(0, Math.min(c.x1, o.x1) - Math.max(c.x0, o.x0)) * Math.max(0, Math.min(c.y1, o.y1) - Math.max(c.y0, o.y0));
+
+function randomBox(r, span = 1200) {
+  const x = (r() - 0.2) * span, y = (r() - 0.2) * span;
+  return { x0: x, y0: y, x1: x + r() * 90, y1: y + r() * 40 };
+}
+
+describe("BoxGrid", () => {
+  it("answers exactly what scanning every box answers — including boxes it cannot index", () => {
+    const r = prng(1);
+    const boxes = Array.from({ length: 600 }, () => randomBox(r));
+    // Degenerate boxes the index must still treat exactly like the scan does.
+    boxes.push({ x0: NaN, y0: 0, x1: 10, y1: 10 });                  // not a number
+    boxes.push({ x0: 500, y0: 500, x1: 400, y1: 600 });              // inverted
+    boxes.push({ x0: -1e7, y0: -1e7, x1: 1e7, y1: 1e7 });            // enormous
+    boxes.push({ x0: 1e9, y0: 1e9, x1: 1e9 + 5, y1: 1e9 + 5 });      // far outside any cell range
+    const grid = new BoxGrid(40);
+    for (const b of boxes) grid.add(b);
+    const queries = [
+      ...Array.from({ length: 400 }, () => randomBox(r)),
+      { x0: 20, y0: 20, x1: 20, y1: 60 },                             // zero width
+      { x0: NaN, y0: 1, x1: 2, y1: 3 },
+      { x0: -5e6, y0: -5e6, x1: 5e6, y1: 5e6 },
+    ];
+    for (const q of queries) {
+      expect(grid.hits(q)).toBe(boxes.some((o) => overlapsBox(q, o)));
+      let scan = 0;
+      for (const o of boxes) scan += areaOf(q, o);
+      expect(grid.sum(q, (o) => areaOf(q, o))).toBe(scan); // bit for bit
+    }
+  });
+
+  it("sums in insertion order, so a float sum is identical, not just close", () => {
+    // Twelve slivers of area 1e-17 then one box of area 1: in that order the
+    // slivers add up to more than half an ulp of 1 and survive (1 + 2⁻⁵²);
+    // summed the other way round each one vanishes (exactly 1). The unit box
+    // is too wide to index, so an unsorted walk would visit it FIRST.
+    const grid = new BoxGrid(10);
+    const boxes = [];
+    for (let i = 0; i < 12; i++) boxes.push({ x0: 0, y0: 0, x1: 1e-17, y1: 1 });
+    boxes.push({ x0: 0, y0: 0, x1: 1e9, y1: 1 });
+    for (const b of boxes) grid.add(b);
+    const q = { x0: 0, y0: 0, x1: 1, y1: 1 };
+    let scan = 0;
+    for (const o of boxes) scan += areaOf(q, o);
+    expect(scan).toBeGreaterThan(1);
+    expect(grid.sum(q, (o) => areaOf(q, o))).toBe(scan);
+  });
+});
+
+/** A crowded map scene in screen space: dots, chips, a canvas, a folder veto. */
+function labelScene(seed) {
+  const r = prng(seed);
+  const n = 40 + Math.floor(r() * 400);
+  const positions = new Map();
+  const names = new Map();
+  const ids = [];
+  for (let i = 0; i < n; i++) {
+    const id = `n${i}`;
+    ids.push(id);
+    positions.set(id, { x: r() * 2600, y: r() * 1870 });
+    names.set(id, "x".repeat(1 + Math.floor(r() * 24)));
+  }
+  const k = 0.3 + r() * 2.7;
+  const cam = { k, tx: (r() - 0.5) * 400, ty: (r() - 0.5) * 300 };
+  const radius = (id) => 7 + (id.length % 5) * 2;
+  const obstacles = [];
+  for (const id of ids) {
+    const p = positions.get(id);
+    const s = { x: p.x * k + cam.tx, y: p.y * k + cam.ty };
+    const rr = radius(id) + 3;
+    obstacles.push({ x0: s.x - rr, y0: s.y - rr, x1: s.x + rr, y1: s.y + rr });
+  }
+  for (let c = 0; c < 8; c++) obstacles.push(randomBox(r, 1000));
+  const foreign = randomBox(r, 800);
+  const inFolder = new Set(ids.filter(() => r() < 0.3));
+  const forced = new Set(ids.slice(0, Math.floor(r() * 3)));
+  return {
+    order: ids,
+    forced,
+    positions,
+    radius,
+    label: (id) => names.get(id),
+    cam,
+    obstacles,
+    bounds: r() < 0.8 ? { x0: 3, y0: 3, x1: 1100, y1: 800 } : undefined,
+    reject: (id, box) => !inFolder.has(id) && overlapsBox(box, foreign),
+    limit: r() < 0.5 ? 200 : undefined,
+  };
+}
+
+describe("placeLabels at scale", () => {
+  it("places every label exactly where the unindexed placer did", () => {
+    // The placer now tests each candidate against an index of what is near it
+    // instead of every box on the map. Same first-fit order, same answers —
+    // across crowded and sparse scenes, zoomed in and out, with and without a
+    // canvas bound, a folder veto and a candidate limit.
+    let placed = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const scene = labelScene(seed);
+      const now = placeLabels(scene);
+      expect([...now]).toEqual([...legacyPlaceLabels(scene)]);
+      placed += now.size;
+    }
+    expect(placed).toBeGreaterThan(1000); // the scenes really do place labels
+  });
+});
+
+/** Folders over scattered notes, with dot boxes to steer chips around. */
+function folderScene(seed, avoidCount) {
+  const r = prng(seed);
+  const positions = new Map();
+  const folders = [];
+  let id = 0;
+  for (let f = 0; f < 1 + Math.floor(r() * 12); f++) {
+    const cx = r() * 2400, cy = r() * 1700;
+    const docIds = [];
+    for (let m = 0; m < 1 + Math.floor(r() * 10); m++) {
+      const doc = `d${id++}`;
+      positions.set(doc, { x: cx + (r() - 0.5) * 300, y: cy + (r() - 0.5) * 200 });
+      docIds.push(doc);
+    }
+    folders.push({ id: `f${f}`, name: r() < 0.5 ? `Folder ${f}` : `A rather long folder name ${f}`, docIds });
+  }
+  const k = [0.3, 0.45, 1, 1.7, 3][seed % 5];
+  const avoid = Array.from({ length: avoidCount }, () => {
+    const x = r() * 2600, y = r() * 1900, s = (10 + r() * 20) / k;
+    return { x0: x - s, y0: y - s, x1: x + s, y1: y + s };
+  });
+  return { folders, positions, radius: () => 9, label: (d) => `note ${d}`, k, avoid };
+}
+
+describe("folderRects at scale", () => {
+  it("resolves every container and chip exactly as the unindexed scorer did", () => {
+    // Below 33 dots the scorer scans; above, it sums over an index — with the
+    // same terms in the same order, so even ties between two slots break the
+    // same way.
+    for (const avoidCount of [0, 12, 40, 900]) {
+      for (let seed = 1; seed <= 25; seed++) {
+        const scene = folderScene(seed, avoidCount);
+        expect(folderRects(scene)).toEqual(legacyFolderRects(scene));
+      }
+    }
+  });
+
+  it("gives the layout the same containers, without the chip search", () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const scene = folderScene(seed, 0);
+      const withChips = folderRects(scene).map(({ chip: _chip, ...rest }) => rest);
+      expect(folderBounds(scene)).toEqual(withChips);
+    }
+  });
+});
+
+describe("large-map frame plan", () => {
+  const plan = (o) => planFrame({ large: true, running: true, now: 10000, holdUntil: 0, lastPaint: 0, ...o });
+
+  it("never changes a small map: every frame steps (and paints)", () => {
+    for (const o of [{ holdUntil: 20000 }, { lastPaint: 0 }, { lastPaint: 9999 }]) {
+      expect(plan({ ...o, large: false })).toBe("step");
+    }
+  });
+
+  it("holds the layout while the user moves the camera or points", () => {
+    expect(plan({ holdUntil: 10000 + 1 })).toBe("hold");
+    // Even when a paint is overdue: the user's own render comes first.
+    expect(plan({ holdUntil: 10000 + 1, lastPaint: 0 })).toBe("hold");
+    expect(plan({ holdUntil: 10000, lastPaint: 10000 - 10 })).toBe("step");
+  });
+
+  it("paints a few times a second, in a frame with no step", () => {
+    // A frame carrying a step AND the paint measured 300-440ms at 2,000 notes
+    // under 4× throttling; either alone stayed under 200ms.
+    expect(plan({ lastPaint: 10000 - PAINT_EVERY_MS })).toBe("paint");
+    expect(plan({ lastPaint: 10000 - PAINT_EVERY_MS + 1 })).toBe("step");
+    expect(PAINT_EVERY_MS).toBeGreaterThanOrEqual(100);
+  });
+
+  it("takes no step in the frame that shows a paint", () => {
+    // That frame restyles and paints the new paths; with a step in it too its
+    // task measured 170-190ms, and a zoom arriving then waited for all of it.
+    expect(plan({ afterPaint: true, lastPaint: 10000 - 16 })).toBe("hold");
+    // Not even when another paint would be due.
+    expect(plan({ afterPaint: true, lastPaint: 0 })).toBe("hold");
+    expect(plan({ afterPaint: false, lastPaint: 10000 - 16 })).toBe("step");
+    expect(plan({ afterPaint: true, large: false })).toBe("step");
+  });
+
+  it("does nothing special once the loop has stopped", () => {
+    expect(plan({ running: false, holdUntil: 20000 })).toBe("step");
+  });
+
+  it("keeps the step budget and the hold short enough to stay responsive", () => {
+    // One step always runs, so SLICE_MS bounds the EXTRA steps a frame may
+    // take; the hold must end soon after the user stops.
+    expect(SLICE_MS).toBeLessThanOrEqual(16);
+    expect(CAMERA_HOLD_MS).toBeGreaterThanOrEqual(PAINT_EVERY_MS);
+    expect(CAMERA_HOLD_MS).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("large-map threshold", () => {
+  it("keeps every workspace up to LARGE_MAP_MIN on the small-map renderer", () => {
+    // CLAUDE.md: 3–150 notes must look and behave exactly as before.
+    expect(LARGE_MAP_MIN).toBeGreaterThanOrEqual(150);
+    for (const n of [0, 3, 150, LARGE_MAP_MIN]) expect(isLargeMap(n)).toBe(false);
+    expect(isLargeMap(LARGE_MAP_MIN + 1)).toBe(true);
+    expect(isLargeMap(2000)).toBe(true);
   });
 });

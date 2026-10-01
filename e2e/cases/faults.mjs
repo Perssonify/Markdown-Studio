@@ -1,7 +1,7 @@
 // Tier 4 — fault injection. Break the environment underneath a working app and
 // assert the two things that must always hold: the document on screen is never
 // destroyed, and a failure the user needs to know about is visible.
-import { serve, open, boot, seed, mdText, richText, storedDoc, canonicalText, runCase, until, APP_DIR } from "../lib.mjs";
+import { serve, open, boot, seed, mdText, richText, storedDoc, canonicalText, runCase, until, requireChromium, APP_DIR } from "../lib.mjs";
 import { proseDoc } from "../docs.mjs";
 
 const SENT = "FAULTMARK typed under duress. ";
@@ -127,10 +127,13 @@ runCase("faults", async (rep, onClose) => {
       (await richText(pg)).includes("UNSAVEDONCLOSE"));
   }
 
-  // ── multi-tab conflict ──────────────────────────────────────────────────
-  // Two tabs editing the same document: the second must park a terminal
-  // "conflict" status rather than spin an autosave loop, and must not silently
-  // overwrite the other tab's version.
+  // ── multi-tab: one after the other ──────────────────────────────────────
+  // Two tabs editing the same document in turn. This used to end in a
+  // conflict: the second tab still held the revision it loaded, so its own
+  // edit was refused. With live sync (tab-sync.ts) the second tab takes the
+  // first's edit as it lands, and its own edit is then saved ON TOP of it —
+  // both survive and nothing is refused. Two tabs typing AT ONCE, the case
+  // that must still refuse and ask, is dataloss.mjs's.
   {
     const srv = await serve(APP_DIR);
     const a = await open(srv.port, { label: "multi-tab" });
@@ -150,20 +153,24 @@ runCase("faults", async (rep, onClose) => {
     await until(async () => canonicalText(await storedDoc(a.page, "aaa")).includes("TAB-A-EDIT"),
       { timeout: 30000 });
 
+    rep.check("multi-tab: the second tab shows the first tab's edit without a reload",
+      await until(async () => (await richText(b)).includes("TAB-A-EDIT"), { timeout: 20000 }),
+      (await richText(b)).slice(-160));
+
     await b.bringToFront();
     await b.locator(".ProseMirror").first().click();
     await b.keyboard.press("Control+End");
     await b.keyboard.type("TAB-B-EDIT", { delay: 10 });
-    await until(async () => {
-      const t = await b.evaluate(() => document.querySelector("footer")?.innerText ?? "");
-      return /another tab|conflict|not saving/i.test(t);
+    const disk = await until(async () => {
+      const t = canonicalText(await storedDoc(b, "aaa"));
+      return t.includes("TAB-B-EDIT") ? t : null;
     }, { timeout: 30000 });
 
     const status = await b.evaluate(() => document.querySelector("footer")?.innerText ?? "");
-    const disk = canonicalText(await storedDoc(b, "aaa"));
-    rep.check("multi-tab: tab A's edit is still on disk", disk.includes("TAB-A-EDIT"), disk.slice(-160));
-    rep.check("multi-tab: the second tab reports it is not saving",
-      /another tab|conflict|not sav/i.test(status), JSON.stringify(status.slice(0, 200)));
+    rep.check("multi-tab: the second tab's edit is saved", !!disk, String(disk).slice(-160));
+    rep.check("multi-tab: tab A's edit is still on disk", String(disk).includes("TAB-A-EDIT"), String(disk).slice(-160));
+    rep.check("multi-tab: the second tab is not refused",
+      !/another tab|conflict|not sav/i.test(status), JSON.stringify(status.slice(0, 200)));
     rep.check("multi-tab: the second tab still shows its own text",
       (await richText(b)).includes("TAB-B-EDIT"));
   }
@@ -171,6 +178,8 @@ runCase("faults", async (rep, onClose) => {
   // ── a slow device ───────────────────────────────────────────────────────
   // The scheduler adapts to what a projection COSTS here. On a 6× throttled
   // CPU it must still converge — degrading to slower, never to never.
+  // (The last block: on an engine without CPU throttling it ends the case.)
+  if (!requireChromium(rep, "6× CPU throttle: the panes still converge", "CPU throttling")) return;
   {
     const srv = await serve(APP_DIR);
     const { browser, page: pg } = await open(srv.port, { label: "6x CPU throttle", throttle: 6 });

@@ -1,8 +1,10 @@
 // Tier 2 — scale and duration. Where the scheduler's assumptions live: it
 // derives its delays from what a projection actually COSTS on this device, so
 // the shapes that cost the most are the ones that can break it.
-import { serve, open, boot, seed, mdText, richText, runCase, APP_DIR } from "../lib.mjs";
+import { serve, open, boot, seed, mdText, richText, runCase, until, untilValue, APP_DIR } from "../lib.mjs";
 import { proseDoc, sectionedDoc, tableDoc, fenceDoc, nestedListDoc, linkDoc, library } from "../docs.mjs";
+import { mapLibrary, seedFresh } from "../map-library.mjs";
+import { measureMap } from "../map-measure.mjs";
 
 const MARK = "STRESSMARK";
 
@@ -34,7 +36,7 @@ runCase("stress", async (rep, onClose) => {
   ];
   for (const [label, doc] of shapes) {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, [doc]);
@@ -54,7 +56,7 @@ runCase("stress", async (rep, onClose) => {
   // trailing: while you kept typing, the other pane NEVER updated.
   {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, [proseDoc("t1", "Typing doc", 10)]);
@@ -93,7 +95,7 @@ runCase("stress", async (rep, onClose) => {
   // ── a large library ─────────────────────────────────────────────────────
   {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, library(120, { kb: 1 }));
@@ -141,11 +143,159 @@ runCase("stress", async (rep, onClose) => {
     await browser.close(); srv.close();
   }
 
+  // ── the relationship map at library scale (A088) ────────────────────────
+  // Above LARGE_MAP_MIN notes the map batches its ordinary dots, links and
+  // arrowheads into a few paths and hit-tests the pointer in code. What must
+  // survive that: every note drawn exactly once and still measurable, nothing
+  // drawn over a label, and the pointer and the wheel still reaching the note
+  // under them. Content, not timing — cases/perf-map.mjs measures the timing.
+  //
+  // This library has NO folders: a large folderless map keeps the single-level
+  // layout (Barnes–Hut). The next block opens the same size WITH folders, which
+  // is laid out on two levels.
+  {
+    const srv = await serve(APP_DIR);
+    const { browser, page: pg } = await open(srv.port);
+    onClose(async () => { await browser.close(); srv.close(); });
+    const { docs, folderTree } = mapLibrary(2000, { folders: false });
+    await seedFresh(pg, srv.port, docs, folderTree);
+    await boot(pg, srv.port, { mode: "Split", settle: 14000 });
+    await pg.keyboard.press("Control+Shift+G");
+    // At rest when the batched layer's layout version stops moving (it is
+    // bumped by every step, and repainted at most every 250ms).
+    let last = null, still = 0;
+    for (let i = 0; i < 180 && still < 3; i++) {
+      await pg.waitForTimeout(500);
+      const v = await pg.evaluate(() => document.querySelector('[data-map-layer="notes"]')?.getAttribute("data-layout-version") ?? null);
+      still = v != null && v === last ? still + 1 : 0;
+      last = v;
+    }
+    rep.check("2,000 notes: the map comes to rest", still >= 3, `layout version still moving at ${last}`);
+
+    const m = await pg.evaluate(measureMap);
+    rep.check("2,000 notes: every note is drawn, exactly once",
+      !!m && m.documents === 2000 && m.drawn === m.documents && m.batched === m.documents && m.batchedUnique === m.batched,
+      JSON.stringify(m && { documents: m.documents, drawn: m.drawn, batched: m.batched, unique: m.batchedUnique, error: m.error }));
+    // (At the overview a 2,000-note map is too dense to name anything; the
+    // label checks are made zoomed in, below, where names are actually placed.)
+    const noLabelCovered = (c) => !!c && c.labelLabel === 0 && c.labelDot === 0 && c.labelChip === 0
+      && c.labelEdge === 0 && c.strangerLabel === 0;
+
+    // A dot in the middle of the canvas that is drawn in the batch, not in full.
+    const target = await pg.evaluate(() => {
+      const svg = document.querySelector('svg[aria-label^="Relationship map"]');
+      const S = svg.getBoundingClientRect();
+      const full = new Set([...svg.querySelectorAll("[data-doc-id]")].map((g) => g.getAttribute("data-doc-id")));
+      for (const p of svg.querySelectorAll(".pf-node-dots")) {
+        const ids = (p.getAttribute("data-doc-ids") || "").split(" ").filter(Boolean);
+        const k = p.getScreenCTM();
+        const d = p.getAttribute("d") || "";
+        const re = /M(-?\d+),(-?\d+)a(\d+),\d+ 0 1 1 (-?\d+),0/g;
+        let i = 0;
+        for (let g = re.exec(d); g; g = re.exec(d), i++) {
+          if (full.has(ids[i])) continue;
+          const cx = Number(g[1]) + Number(g[4]) / 2, cy = Number(g[2]);
+          const x = k.a * cx + k.c * cy + k.e, y = k.b * cx + k.d * cy + k.f;
+          if (x > S.left + 80 && x < S.right - 80 && y > S.top + 80 && y < S.bottom - 80) return { id: ids[i], x, y };
+        }
+      }
+      return null;
+    });
+    rep.check("2,000 notes: a batched dot is on the canvas to point at", !!target);
+    if (target) {
+      await pg.mouse.move(target.x, target.y);
+      const hovered = await until(() => pg.evaluate((id) => !!document.querySelector(`[data-doc-id="${id}"]`), target.id), { timeout: 5000 });
+      rep.check("2,000 notes: hovering a batched dot finds its note", hovered, target.id);
+      const title = await pg.evaluate((id) => document.querySelector(`[data-doc-id="${id}"]`)?.getAttribute("aria-label")?.split(" — ")[0], target.id);
+      await pg.mouse.down();
+      await pg.mouse.up();
+      const shown = await untilValue(
+        () => pg.evaluate(() => document.querySelector('aside[aria-label="Map details"] h3')?.textContent ?? null),
+        (t) => !!title && t === title, { timeout: 5000 });
+      rep.check("2,000 notes: clicking a batched dot selects its note", !!title && shown === title, `${shown} vs ${title}`);
+    }
+
+    const zoomLabel = () => pg.evaluate(() => document.querySelector('span.tabular-nums[aria-live="off"]')?.textContent ?? null);
+    const before = await zoomLabel();
+    await pg.mouse.wheel(0, -480);
+    const after = await untilValue(zoomLabel, (t) => !!t && t !== before, { timeout: 5000 });
+    rep.check("2,000 notes: the wheel zooms the map", !!after && after !== before, `${before} → ${after}`);
+    // Close in, where there is room for names — and the placer has to find it.
+    for (let i = 0; i < 6; i++) {
+      await pg.locator('button[aria-label="Zoom in"]').first().click();
+      await pg.waitForTimeout(150);
+    }
+    await pg.waitForTimeout(800);
+    const zoomed = await pg.evaluate(measureMap);
+    rep.check("2,000 notes, zoomed in: names are placed, and none is drawn over anything",
+      (zoomed?.labels ?? 0) > 0 && noLabelCovered(zoomed?.count), JSON.stringify({ labels: zoomed?.labels, ...zoomed?.count }));
+    await browser.close(); srv.close();
+  }
+
+  // ── …and WITH folders: 2,000 notes in 60 (A088) ─────────────────────────
+  // Above FOLDER_LAYOUT_MAX (500) a folder map is laid out on two levels: the
+  // folders' regions are packed apart first, then each note is held inside its
+  // own. The single-level layout brought this library to rest with ~790
+  // distinct positions (stacks of up to 89 notes), ~400 overlapping containers
+  // and thousands of dots inside a stranger's container, and named almost
+  // nothing at any zoom. What must hold now: every note on its own spot,
+  // containers apart, no stranger in one, and names placed zoomed in with
+  // nothing drawn over them.
+  {
+    const srv = await serve(APP_DIR);
+    const { browser, page: pg } = await open(srv.port);
+    onClose(async () => { await browser.close(); srv.close(); });
+    const { docs, folderTree } = mapLibrary(2000);
+    await seedFresh(pg, srv.port, docs, folderTree);
+    await boot(pg, srv.port, { mode: "Split", settle: 14000 });
+    await pg.keyboard.press("Control+Shift+G");
+    let last = null, still = 0;
+    for (let i = 0; i < 180 && still < 3; i++) {
+      await pg.waitForTimeout(500);
+      const v = await pg.evaluate(() => document.querySelector('[data-map-layer="notes"]')?.getAttribute("data-layout-version") ?? null);
+      still = v != null && v === last ? still + 1 : 0;
+      last = v;
+    }
+    rep.check("2,000 notes in 60 folders: the map comes to rest", still >= 3, `layout version still moving at ${last}`);
+    // Nothing over a name, and no container over another or over a stranger.
+    const noFolderFault = (c) => !!c && ["labelLabel", "labelDot", "labelChip", "labelEdge", "strangerLabel",
+      "strangerLabelOwnDot", "boxBox", "strangerDot", "chipChip"].every((x) => c[x] === 0);
+
+    // Opened on the open note's folder: every note there is named.
+    const opened = await pg.evaluate(measureMap);
+    rep.check("2,000 notes in 60 folders: opened on a folder, its notes are named and nothing is drawn over a name",
+      (opened?.labels ?? 0) >= 5 && noFolderFault(opened?.count), JSON.stringify({ labels: opened?.labels, ...opened?.count }));
+
+    await pg.locator('button[aria-label="Fit map to view"]').first().click();
+    await pg.waitForTimeout(1500);
+    const fit = await pg.evaluate(measureMap);
+    const k = Number(((await pg.evaluate(() => document.querySelector('span.tabular-nums[aria-live="off"]')?.textContent)) ?? "").replace("%", "")) / 100;
+    // Distinct in WORLD terms (screen px over the zoom, to a unit), as
+    // probes/map-stacks.mjs counts them.
+    const spots = fit && k ? new Set(JSON.parse(fit.print).dots.map((d) => `${Math.round(d[1] / k)},${Math.round(d[2] / k)}`)).size : 0;
+    rep.check("2,000 notes in 60 folders: every note is drawn on its own spot",
+      fit?.drawn === 2000 && spots === 2000, JSON.stringify({ drawn: fit?.drawn, spots, zoom: k }));
+    rep.check("2,000 notes in 60 folders: no two containers overlap and no note sits in a stranger's",
+      fit?.boxes === 60 && fit.count.boxBox === 0 && fit.count.strangerDot === 0,
+      JSON.stringify({ boxes: fit?.boxes, boxBox: fit?.count.boxBox, strangerDot: fit?.count.strangerDot }));
+
+    // In from the whole map, about the canvas centre, to where names fit.
+    for (let i = 0; i < 6; i++) {
+      await pg.locator('button[aria-label="Zoom in"]').first().click();
+      await pg.waitForTimeout(150);
+    }
+    await pg.waitForTimeout(800);
+    const zoomed = await pg.evaluate(measureMap);
+    rep.check("2,000 notes in 60 folders, zoomed in: dozens of names, none drawn over anything",
+      (zoomed?.labels ?? 0) >= 20 && noFolderFault(zoomed?.count), JSON.stringify({ labels: zoomed?.labels, ...zoomed?.count }));
+    await browser.close(); srv.close();
+  }
+
   // ── a long session ──────────────────────────────────────────────────────
   // Where per-render listener churn and uncancelled timers would show up.
   {
     const srv = await serve(APP_DIR);
-    const { browser, page: pg, errors } = await open(srv.port);
+    const { browser, page: pg } = await open(srv.port);
     onClose(async () => { await browser.close(); srv.close(); });
     await pg.goto(`http://127.0.0.1:${srv.port}/`, { waitUntil: "domcontentloaded" });
     await seed(pg, library(8, { kb: 2 }));

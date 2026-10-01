@@ -437,3 +437,86 @@ describe("saveActiveDoc post-await race guards", () => {
     expect(JSON.stringify(last.canonical)).toContain("live edits");
   });
 });
+
+/**
+ * patchDocById (card saves, host updates, retargeted heading links) reads a
+ * document, awaits, then writes it. A delete landing in that await used to be
+ * undone by the write: nothing told the patch the record was gone. It now
+ * refuses a document deleted — or being deleted — since its read began.
+ */
+describe("patchDocById never writes back a deleted document", () => {
+  const content = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
+  const gated = (docs, saved, deleted, { onDelete } = {}) => {
+    let open;
+    const gate = new Promise((r) => { open = r; });
+    let firstGet = true;
+    useDocumentStore.getState().initStorage({
+      initialize: async () => {},
+      list: async () => Object.values(docs).map((d) => ({ id: d.id, title: d.title })),
+      get: async (id) => {
+        const snap = docs[id] ? { ...docs[id] } : null;
+        if (firstGet) { firstGet = false; await gate; }
+        return snap;
+      },
+      save: async (d) => { saved.push({ ...d }); docs[d.id] = { ...d }; },
+      delete: async (id) => { deleted.push(id); delete docs[id]; if (onDelete) await onDelete(id); },
+      getPrefs: async () => ({}),
+      setPrefs: async () => {},
+    });
+    return () => open();
+  };
+  beforeEach(() => {
+    useDocumentStore.getState().registerLiveCanonical(null);
+    // The patched document is NOT the open one.
+    useDocumentStore.setState({ activeDoc: null, activeDocId: null, hydratedDocId: null, saveStatus: "saved" });
+  });
+
+  it("a delete that COMPLETES while the patch is reading", async () => {
+    const docs = { "doc-b": fakeDoc("doc-b") };
+    const saved = [], deleted = [];
+    const open = gated(docs, saved, deleted);
+    const patch = useDocumentStore.getState().patchDocById("doc-b", { canonical: content("retargeted") });
+    await useDocumentStore.getState().deleteDoc("doc-b", null);
+    open();
+    expect(await patch).toBeNull();
+    expect(deleted).toEqual(["doc-b"]);
+    expect(saved).toHaveLength(0);
+    expect(docs["doc-b"]).toBeUndefined();
+  });
+
+  it("a delete still IN FLIGHT when the read returns", async () => {
+    const docs = { "doc-b": fakeDoc("doc-b") };
+    const saved = [], deleted = [];
+    let patch = null;
+    const open = gated(docs, saved, deleted, {
+      // The record is gone; deleteDoc has not finished. Let the patch run now.
+      onDelete: async () => { open(); await patch; },
+    });
+    patch = useDocumentStore.getState().patchDocById("doc-b", { canonical: content("retargeted") });
+    await useDocumentStore.getState().deleteDoc("doc-b", null);
+    expect(await patch).toBeNull();
+    expect(saved).toHaveLength(0);
+  });
+
+  it("metadata-only patches (card colour, pin) are guarded too", async () => {
+    const docs = { "doc-b": fakeDoc("doc-b") };
+    const saved = [], deleted = [];
+    const open = gated(docs, saved, deleted);
+    const patch = useDocumentStore.getState().patchDocById("doc-b", { metadata: { cardPinned: true }, touchUpdated: false });
+    await useDocumentStore.getState().deleteDoc("doc-b", null);
+    open();
+    expect(await patch).toBeNull();
+    expect(saved).toHaveLength(0);
+  });
+
+  it("control: with no delete the same patch writes", async () => {
+    const docs = { "doc-b": fakeDoc("doc-b") };
+    const saved = [], deleted = [];
+    const open = gated(docs, saved, deleted);
+    const patch = useDocumentStore.getState().patchDocById("doc-b", { canonical: content("retargeted") });
+    open();
+    expect(await patch).not.toBeNull();
+    expect(saved).toHaveLength(1);
+    expect(JSON.stringify(saved[0].canonical)).toContain("retargeted");
+  });
+});

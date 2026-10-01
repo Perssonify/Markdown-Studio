@@ -115,7 +115,7 @@ export function stashUnsaved(entries: RecoveryEntry[]): number {
   const kept: RecoveryEntry[] = [];
   let bytes = 0;
   for (const entry of sorted) {
-    let size = 0;
+    let size: number;
     try {
       size = JSON.stringify(entry).length;
     } catch {

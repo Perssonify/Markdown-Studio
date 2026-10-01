@@ -2,6 +2,7 @@ import { mergeAttributes, Node } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 import { cachedImport } from "../utils/lazy-import";
+import { useT } from "../i18n";
 
 /**
  * TipTap nodes that render LaTeX with KaTeX (lazy-loaded). The LaTeX source is
@@ -21,6 +22,61 @@ import { cachedImport } from "../utils/lazy-import";
 // rest of the session (A085; utils/lazy-import.ts explains what a retry can do).
 export const getKatex = cachedImport(() => import("katex").then((m) => m.default)); // exported for its test
 
+/**
+ * KaTeX markup is heavy — a formula is dozens of elements — and a formula-heavy
+ * note carries thousands of formulas (A083). Every one of them is work for
+ * layout, paint and hit-testing on each keystroke, and for React: before every
+ * commit, React DOM walks the WHOLE focused contenteditable to record the
+ * selection (getSelectionInformation), and with the rich pane focused that is
+ * every element of every rendered formula. So a formula is typeset only once
+ * it comes within a screen of the rich pane's viewport; until then it holds its
+ * LaTeX as one text node. Where there is no IntersectionObserver (jsdom, an old
+ * WebView) it is typeset at once, as before, and printing typesets them all.
+ */
+const waiting = new Map<Element, () => void>();
+const observers = new WeakMap<Element, IntersectionObserver>();
+let printHook = false;
+
+function typesetNearView(el: HTMLElement, typeset: () => void): () => void {
+  if (typeof IntersectionObserver === "undefined") {
+    typeset();
+    return () => {};
+  }
+  // The rich pane's scroller (EditorPanes): its margin reaches a screen ahead.
+  const root = el.closest(".tiptap-editor-content")?.parentElement ?? null;
+  const key = root ?? document.documentElement;
+  let io = observers.get(key);
+  if (!io) {
+    const observer: IntersectionObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const run = waiting.get(entry.target);
+        waiting.delete(entry.target);
+        observer.unobserve(entry.target);
+        run?.();
+      }
+    }, { root, rootMargin: "100% 0px" });
+    io = observer;
+    observers.set(key, io);
+  }
+  if (!printHook && typeof window !== "undefined") {
+    printHook = true;
+    // Print what is on paper, not what was near the screen.
+    window.addEventListener("beforeprint", () => {
+      const all = [...waiting.values()];
+      waiting.clear();
+      for (const run of all) run();
+    });
+  }
+  waiting.set(el, typeset);
+  io.observe(el);
+  const observer = io;
+  return () => {
+    waiting.delete(el);
+    observer.unobserve(el);
+  };
+}
+
 function MathView({
   latex,
   inline,
@@ -32,16 +88,28 @@ function MathView({
   updateAttributes?: (attrs: Record<string, unknown>) => void;
   editable?: boolean;
 }) {
+  const t = useT();
   const ref = useRef<HTMLSpanElement>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(latex);
 
   useEffect(() => {
     if (editing) return; // don't re-render KaTeX while the source input is open
+    const el = ref.current;
+    if (!el) return;
     let cancelled = false;
-    (async () => {
-      const katex = await getKatex();
+    // The source until the formula is typeset (see typesetNearView).
+    if (!el.firstChild) el.textContent = latex;
+    const typeset = async () => {
+      // A failed chunk load (offline, a purged deploy) shows the LaTeX source
+      // instead of surfacing as an unhandled rejection; the memo forgets the
+      // failure, so the next render tries again.
+      const katex = await getKatex().catch(() => null);
       if (cancelled || !ref.current) return;
+      if (!katex) {
+        ref.current.textContent = latex;
+        return;
+      }
       try {
         katex.render(latex || "", ref.current, {
           throwOnError: false,
@@ -50,9 +118,11 @@ function MathView({
       } catch {
         if (ref.current) ref.current.textContent = latex;
       }
-    })();
+    };
+    const stop = typesetNearView(el, () => { void typeset(); });
     return () => {
       cancelled = true;
+      stop();
     };
   }, [latex, inline, editing]);
 
@@ -95,7 +165,7 @@ function MathView({
           spellCheck={false}
           rows={inline ? undefined : 2}
           className="math-source-input"
-          placeholder={inline ? "LaTeX…" : "LaTeX (Shift+Enter for newline)"}
+          placeholder={inline ? t("panes.latex") : t("panes.latexShiftEnterForNewline")}
         />
       </NodeViewWrapper>
     );
@@ -120,8 +190,8 @@ function MathView({
       }
       tabIndex={editable ? 0 : undefined}
       role={editable ? "button" : undefined}
-      aria-label={editable ? `Math: ${latex || "empty"} (Enter to edit)` : undefined}
-      title={editable ? "Double-click or press Enter to edit" : undefined}
+      aria-label={editable ? (latex ? t("panes.mathLabel", { latex }) : t("panes.mathLabelEmpty")) : undefined}
+      title={editable ? t("panes.doubleClickOrPressEnter") : undefined}
       style={editable ? { cursor: "pointer" } : undefined}
     >
       <span ref={ref} />
