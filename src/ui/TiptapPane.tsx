@@ -1,7 +1,7 @@
 import { ChainedCommands, Editor, Extension } from "@tiptap/core";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { TaskList } from "@tiptap/extension-list";
 import { WikiLink as Link } from "../extensions/WikiLink";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { Subscript } from "@tiptap/extension-subscript";
@@ -24,7 +24,7 @@ import { useUIStore } from "../store/uiStore";
 import { useT } from "../i18n";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";
-import { BidiAuto } from "../extensions/BidiAuto";
+import { BidiAuto, TaskItemAutoDir } from "../extensions/BidiAuto";
 import { EmojiNode } from "../extensions/EmojiNode";
 import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
 import { Callout } from "../extensions/Callout";
@@ -231,7 +231,8 @@ const TiptapPane = forwardRef<TiptapPaneHandle, TiptapPaneProps>(
         }),
         ListKeymapNoTab,
         CodeBlockWithCopy, // Use our custom code block with copy button
-        TaskList, TaskItem.configure({ nested: true }),
+        // TaskItem, with dir="auto" on each rendered item (see BidiAuto)
+        TaskList, TaskItemAutoDir.configure({ nested: true }),
         Callout, Details, Summary,
         MathInline, MathBlock, EmojiNode, FrontmatterBlock,
         Underline, TextStyle, Color, BackgroundColor, FontFamily, Subscript, Superscript,
