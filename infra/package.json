@@ -25,7 +25,7 @@
     "aws-cdk": "2.1143.0",
     "eslint": "^10.11.0",
     "globals": "^17.12.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.71.0",
     "vitest": "5.0.3"
   }
