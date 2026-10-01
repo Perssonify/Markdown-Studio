@@ -101,5 +101,7 @@ describe("imports persist references, not base64", () => {
     expect(srcs).toHaveLength(1);
     expect(srcs[0]).toMatch(/^pf-asset:[0-9a-f]{64}$/);
     expect(JSON.stringify(saved[0])).not.toContain("base64,");
-  });
+    // Builds a .docx and reads it back through mammoth, both loaded cold: on a
+    // loaded full-suite run that exceeded the 5 s default.
+  }, 30000);
 });
