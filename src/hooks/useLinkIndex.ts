@@ -11,7 +11,7 @@ import {
   type LinkIndex,
   type DocRecord,
 } from "../store/link-index";
-import { useDocumentStore } from "../store/documentStore";
+import { storedRecordIfCurrent, useDocumentStore } from "../store/documentStore";
 import { useEditorStore } from "../store/editorStore";
 import { useUIStore } from "../store/uiStore";
 import { isDangerousUrl, isExternalHref } from "../utils/url-safety";
@@ -131,7 +131,10 @@ export function useLinkIndex({
       // had just typed did not match, and a word you had just deleted still did,
       // until some document was added, deleted or renamed.
       for (const id of ids) {
-        const doc = await storage.get(id);
+        // The document just saved is the store's own record, when that is
+        // exactly what is stored — no need to parse it back (A083).
+        const listed = useDocumentStore.getState().documents.find((d) => d.id === id);
+        const doc = storedRecordIfCurrent(id, listed?.updated) ?? await storage.get(id);
         const next = fullDocsRef.current.filter((d) => d.id !== id);
         if (doc) {
           const i = fullDocsRef.current.findIndex((d) => d.id === id);

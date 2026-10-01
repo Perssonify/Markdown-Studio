@@ -275,7 +275,7 @@ export function computeCanonicalStats(
   // Per top-level block, from a cache (A083). Every node boundary ends a word
   // (endWordRun), so a block's counts and losses depend on nothing but the
   // block — and the sync engine hands over the SAME JSON object for every block
-  // an edit did not touch (canonicalOf, useSyncEngine.ts). A keystroke therefore
+  // an edit did not touch (canonicalOf, store/canonical-json.ts). A keystroke therefore
   // walks one block, not the whole document: the full walk cost ~160 ms per
   // keystroke at 1.6 MB under a 4× CPU slowdown. Merging in block order keeps
   // the first-seen order (and the first value of an attribute loss) that one

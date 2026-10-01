@@ -100,7 +100,10 @@ const historyWith = (pg, needle) => pg.evaluate((needle) => new Promise((res) =>
     const q = db.transaction("snapshots").objectStore("snapshots").getAll();
     q.onsuccess = () => {
       db.close();
-      res(q.result.filter((s) => JSON.stringify(s.canonical).includes(needle)).map((s) => `${s.docId}:${s.reason}`));
+      // A record keeps its content as JSON text (`json`) since A083, as an
+      // object (`canonical`) before.
+      const text = (s) => (typeof s.json === "string" ? s.json : JSON.stringify(s.canonical ?? null));
+      res(q.result.filter((s) => text(s).includes(needle)).map((s) => `${s.docId}:${s.reason}`));
     };
     q.onerror = () => { db.close(); res([]); };
   };

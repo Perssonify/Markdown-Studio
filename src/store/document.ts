@@ -8,6 +8,7 @@
  * Plus: ingest report, fidelity report, derived caches.
  */
 
+import { canonicalJsonText } from "./canonical-json";
 import { sanitizeCanonicalNode } from "./canonical-sanitize";
 import type { ResidualItem } from "./ingest";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version";
@@ -417,12 +418,40 @@ function countInto(node: PMNode | null | undefined, acc: CountAcc): void {
   endWordRun(acc);
 }
 
+/** Each top-level block's counts, keyed on the block's JSON object (see computeCounts). */
+const blockCounts = new WeakMap<object, { chars: number; words: number }>();
+
 /**
  * Compute word and character counts from canonical PM JSON.
+ *
+ * Per top-level block, from a cache (A083): every node boundary ends a word
+ * (endWordRun), so a block's counts depend on nothing but the block, and the
+ * canonical the editor hands over (canonicalOf) is made of the SAME object for
+ * every block an edit did not touch. A save of a 4 MB document walked all of
+ * it two or three times (its own counts, the snapshot check, the library
+ * summary). Read, never mutate: a block edited in place would keep its old
+ * counts. Top-level text — which no schema here produces — takes the walk.
  */
 export function computeCounts(
   canonical: PMNode | null | undefined
 ): { chars: number; words: number } {
+  const content = canonical && canonical.type !== "text" ? canonical.content : undefined;
+  if (Array.isArray(content) && content.every((b) => b && typeof b === "object" && b.type !== "text")) {
+    let chars = 0;
+    let words = 0;
+    for (const block of content) {
+      let c = blockCounts.get(block);
+      if (!c) {
+        const acc = newCountAcc();
+        countInto(block, acc);
+        c = { chars: acc.chars, words: acc.words };
+        blockCounts.set(block, c);
+      }
+      chars += c.chars;
+      words += c.words;
+    }
+    return { chars, words };
+  }
   const acc = newCountAcc();
   countInto(canonical, acc);
   return { chars: acc.chars, words: acc.words };
@@ -430,27 +459,41 @@ export function computeCounts(
 
 /**
  * Serialize a document for storage (strips derived caches to save space).
+ *
+ * Byte for byte `JSON.stringify` of the record's stored fields, in this order
+ * (`updated` and `schemaVersion` LAST — the IndexedDB adapter reads a save's
+ * revision off the end, see `readRevision`), a field with no JSON form left
+ * out, as JSON.stringify leaves it out. The canonical's text comes from
+ * `canonicalJsonText`, which reuses each unchanged block's text (A083).
+ * `document-serialize.test.js` holds it to the plain stringify.
  */
 export function serializeForStorage(doc: DocumentRecord): string {
-  return JSON.stringify({
-    id: doc.id,
-    userTitle: doc.userTitle ?? null,
-    titlePinnedByUser: doc.titlePinnedByUser,
-    title: doc.title,
-    origin: doc.origin,
-    canonical: doc.canonical,
-    residuals: doc.residuals,
-    ingestReport: doc.ingestReport,
-    metadata: doc.metadata,
-    tags: doc.tags,
-    created: doc.created,
-    updated: doc.updated,
+  const fields: Array<[string, unknown]> = [
+    ["id", doc.id],
+    ["userTitle", doc.userTitle ?? null],
+    ["titlePinnedByUser", doc.titlePinnedByUser],
+    ["title", doc.title],
+    ["origin", doc.origin],
+    ["canonical", doc.canonical],
+    ["residuals", doc.residuals],
+    ["ingestReport", doc.ingestReport],
+    ["metadata", doc.metadata],
+    ["tags", doc.tags],
+    ["created", doc.created],
+    ["updated", doc.updated],
     // Never DOWNGRADE the stamp: a record written by a newer build is only
     // ever re-serialized here for a rename or a metadata change (its content
     // is locked read-only), and its content is still the newer format.
-    schemaVersion: Math.max(doc.schemaVersion ?? 0, CURRENT_SCHEMA_VERSION),
+    ["schemaVersion", Math.max(doc.schemaVersion ?? 0, CURRENT_SCHEMA_VERSION)],
     // Caches are excluded — regenerated on load
-  });
+  ];
+  let out = "";
+  for (const [key, value] of fields) {
+    const text = key === "canonical" && value !== undefined ? canonicalJsonText(value) : JSON.stringify(value);
+    if (text === undefined) continue;
+    out += `${out ? "," : "{"}"${key}":${text}`;
+  }
+  return out ? `${out}}` : "{}";
 }
 
 /**
