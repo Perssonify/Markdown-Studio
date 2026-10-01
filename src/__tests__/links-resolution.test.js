@@ -317,6 +317,34 @@ describe("broken-link marking is incremental and exact", () => {
     expect(marked).toBeGreaterThan(20);
   });
 
+  it("matches a full rescan after a transaction of many steps, each shifting the ones before it (A083)", () => {
+    // Above MANY_STEPS the touched region is one range carried forward through
+    // each step's map (one range per step, each mapped through every later
+    // step, was quadratic). Steps go from the end backwards, as the markdown
+    // projection's do, so an early step's range only lands right if it is
+    // carried through every later step.
+    editor = new Editor({
+      extensions: [StarterKit.configure({ link: false }), WikiLink, UnresolvedWikiLinks],
+      content: Array.from({ length: 60 }, (_, i) => `<p>plain ${i}</p>`).join(""),
+    });
+    setWikiLinkLibrary(LIBRARY, editor);
+    const { state } = editor;
+    const link = state.schema.marks.link;
+    const blocks = [];
+    state.doc.forEach((node, offset) => blocks.push([offset, offset + node.nodeSize]));
+    const tr = state.tr;
+    blocks.reverse().forEach(([from, to], k) => {
+      const target = k % 2 ? "Ghost" : "Real";
+      tr.replaceWith(from, to, state.schema.nodes.paragraph.create(null, [
+        state.schema.text("see "), state.schema.text(`${target} note`, [link.create({ docLink: target, href: "#" })]),
+      ]));
+    });
+    expect(tr.steps.length).toBeGreaterThan(32);
+    editor.view.dispatch(tr);
+    expect(fullSpans()).toHaveLength(30);
+    expect(pluginSpans()).toEqual(fullSpans());
+  });
+
   it("a mark-only step is seen: making text a link to a missing note marks it", () => {
     editor = new Editor({
       extensions: [StarterKit.configure({ link: false }), WikiLink, UnresolvedWikiLinks],
