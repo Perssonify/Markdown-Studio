@@ -479,6 +479,9 @@ function joinPieces(html: string[], marker: string): string {
   return out + (html[html.length - 1] ?? "");
 }
 
+/** A piece whose markup opens with a table (see the foster-parenting check in parsePieces). */
+const TABLE_FIRST = /^[\t\n\f\r ]*<table(?![\w-])/i;
+
 /** Text that follows each run in its parse, to find out whether it ends clean (see parsePieces). */
 const SENTINEL = "pf-a083-end";
 
@@ -563,6 +566,13 @@ function parsePieces(html: string[], schema: Schema, placement: Placement): Pars
     const mk = markers[k]!;
     const prev = mk.previousSibling;
     const next = mk.nextSibling;
+    // A piece that ends in TEXT, with no whitespace after it for the marker to
+    // go before, followed by one that opens with a table: text that table
+    // foster-parents belongs in that Text node (the whole document merges it
+    // there), but with the marker in between jsdom appends it to the end of
+    // the parent instead (its insertTextBefore ignores the reference node;
+    // browsers do not). No marker can stand there in both: decline.
+    if (prev?.nodeType === 3 && trailingWs(html[k]!) === 0 && TABLE_FIRST.test(html[k + 1]!)) return null;
     body.removeChild(mk);
     if (prev && next && prev.nodeType === 3 && next.nodeType === 3) {
       (prev as Text).appendData((next as Text).data);
