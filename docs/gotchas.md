@@ -244,6 +244,38 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts),
   [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
 
+## A transaction's step count, and a decoration set's size, are costs of their own
+
+- **Symptom:** After the projection stopped re-parsing the whole document
+  (above), the first markdown keystroke in a 4 MB document still took seconds
+  at 4x CPU, though the parse was now a fraction of a second.
+- **Cause:** Three things that are linear for an ordinary edit turn quadratic
+  when a transaction holds hundreds of steps or a plugin holds thousands of
+  decorations. (1) Each `ReplaceStep` rebuilds the document's top-level node
+  list, so a step per changed stretch costs steps × blocks — about 900 code
+  blocks changed by the first projection after a load (marked writes the
+  trailing newline a rich-pane code block lacks): 6 s. (2) A plugin that maps
+  each step's range through every LATER step is steps²: `BidiAuto` and
+  `UnresolvedWikiLinks` both did, 1.6 s and 0.8 s. (3) Building or adding to a
+  `DecorationSet` scans every decoration once per top-level block
+  (`takeSpansForNode`): `BidiAuto`'s one decoration per task item cost 1.5 s
+  each time a large range changed — and at every document open.
+- **What works:** above `STEP_LIMIT` stretches, `replaceRange`
+  (incremental-rich.ts) takes ONE step carrying the unchanged nodes as the same
+  objects — the view matches children by node equality, so their DOM stays —
+  and maps the selection itself as the per-stretch steps would have. A plugin
+  carries the changed range FORWARD through each step's map instead. And a
+  per-block view attribute belongs in a node view, never a decoration:
+  `BidiAuto` has no decorations at all now; task items get `dir="auto"` from
+  `TaskItemAutoDir`, TipTap's own node view with the attribute added.
+- **Still there:** TipTap's code-block highlighter re-highlights EVERY code
+  block and rebuilds its whole decoration set whenever a code block changes or
+  the caret is in one — the same quadratic build, with one decoration per
+  highlighted token.
+- **Related:** [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts),
+  [src/extensions/BidiAuto.ts](../src/extensions/BidiAuto.ts),
+  [src/extensions/UnresolvedWikiLinks.ts](../src/extensions/UnresolvedWikiLinks.ts).
+
 ## Folder chips are painted LAST on purpose — don't "fix" the draw order
 
 - **Symptom:** A folder's chip visually overlaps a note's dot when zoomed far out.

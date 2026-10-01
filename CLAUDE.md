@@ -1146,7 +1146,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - `src/ui/` — view components (panes, toolbar, sidebar, settings, dialogs, graph).
 - `src/utils/` — `build-gates.ts` (dev-only surfaces), `diagnostics.ts` (the local
   error ring), `app-health.ts` (when a reload is safe), `remote-images.ts`,
-  `safe-storage.ts`, `alt-graph.ts`, `lazy-import.ts`. `src/pwa/sw-updates.ts` —
+  `safe-storage.ts`, `alt-graph.ts`, `lazy-import.ts`, `idle.ts` (`runWhenIdle`:
+  idle-time slices, a timer where Safari has no `requestIdleCallback`). `src/pwa/sw-updates.ts` —
   service-worker update prompts.
 - `src/extensions/` — custom TipTap nodes and plugins (BackgroundColor,
   MathInline/MathBlock, Callout, Details, ThemeImage, SizedImage, WikiLink,
@@ -1663,14 +1664,44 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `<table>` (three defects came from them), a raw-length mismatch, the
   preprocessor rewriting the text. **CI's 40 random walks are not enough to trust a
   change to the cut rules**: deep runs of 600–4,000 seeds each found new defects —
-  run deep, split across processes (`RICH_SEEDS`/`RICH_SEED_FROM`/`RICH_LONG_SEEDS`;
-  jsdom's `setContent` grows ~3.5 MB per 30 projections, so one process crawls).
-  The FIRST markdown keystroke after opening builds the model with a whole parse —
-  1.6 MB: 6.4 s, 4 MB: 22 s at 4× CPU (building it in idle time after load is the
-  next step); later keystrokes 0.6 s and 1.4 s (were ~23 s and ~116 s). Tokens are
-  walked with `walkTokensLinear` — marked's `walkTokens` rebuilds its result array
+  run deep, split across processes (`RICH_SEEDS`/`RICH_SEED_FROM`/`RICH_LONG_SEEDS`,
+  and `RICH_PREBUILD_SEEDS` for the prepared-model walks; the corpora and edits live
+  in `incremental-rich-harness.js`; jsdom's `setContent` grows ~3.5 MB per 30
+  projections, so one process crawls).
+  **The model is PREPARED after a load** (`prepare` → `RichPrebuild`; `useSyncEngine`'s
+  `startPrebuild` runs it in `runWhenIdle` slices, `utils/idle.ts`, for documents of
+  64 KB and up — the first keystroke used to parse the whole document to build it).
+  Windows of ~16 KB from the start, each lexed, cut and parsed on its own by the edit
+  window's own rules, ending AFTER A BLANK LINE (ended at a mere line start, a window
+  is never clean, and it doubled until it swallowed the document). Anything a window
+  refuses gives the preparation up and the first keystroke builds as before; a
+  keystroke that comes first finishes what is left; a load, `forget` or a feature
+  switch retires it. The loaded document need not be its markdown's parse (a code
+  block typed in the rich pane lacks marked's trailing newline): parsed nodes equal
+  to the loaded ones ARE the loaded objects, and when all are (`shared`) the model is
+  simply that document's — a rich edit since is found by identity, as any is;
+  otherwise the first projection turns the document into the parse (`replaceRange`,
+  as the build did) and re-parses the edit's window on top, in one transaction
+  (`incremental(..., base)`). Measured at 4× CPU: first keystroke 1.6 MB 9.1 s →
+  0.7 s, 4 MB 28 s → 2.7 s (a document whose ~900 code blocks that first projection
+  rewrites), slices' longest task 55–76 ms; later keystrokes 0.6 s and 1.4 s (were
+  ~23 s and ~116 s). `incremental-rich-prebuild.test.js` walks prepared loads —
+  prepared text messy on purpose, and half the time NOT the converter's own output
+  (the app only ever hands it that, which never holds a link definition or a raw
+  `</div>`). Tokens are walked with `walkTokensLinear` — marked's `walkTokens` rebuilds its result array
   with `concat` at every token (1 MB: 54 s against 13 ms) — and not at all without a
   "<" or an extension `walkTokens` (`incremental-rich-walk.test.js`).
+- **A transaction's STEP COUNT is a cost of its own** (A083, docs/gotchas.md). Each
+  ReplaceStep rebuilds the document's top-level node list, so a step per changed
+  stretch is quadratic when there are hundreds (the first projection after a load
+  rewrote ~900 code blocks at 4 MB: 6 s at 4× CPU). Above `STEP_LIMIT` (16)
+  stretches `replaceRange` takes ONE step that carries the unchanged nodes between
+  them as the very same objects — the view matches children by node equality, so
+  their DOM stays — and maps the selection itself as the per-stretch steps would
+  have (the one step's own map would send a caret anywhere in the range to its end).
+  A plugin must never map each step's range through every LATER step: `BidiAuto`
+  did (it now has no state at all); `UnresolvedWikiLinks` carries the range
+  forward through each step's map instead, reporting their union above 32 steps.
 - **marked-footnote is registered AFTER maths**, and every parse calls
   `resetFootnoteNumbering(m)` first: registered first, a document opening with `$$`
   that held a `[^1]` threw, and the extension then stayed stuck for every later
@@ -2396,10 +2427,14 @@ The product ships three ways from one codebase: the standalone app
   with strikethrough. So single `~`/`^` carry no inline-format meaning.
 - **Right-to-left text is VIEW-ONLY** (A099): `BidiAuto` (rich pane) gives every text
   block `dir="auto"` through NODE VIEWS for paragraph, heading, listItem, blockquote,
-  callout, table cells and summary, and a decoration only for taskItem — never go
-  back to a decoration per block: ProseMirror's decoration handling made it
-  quadratic (one keystroke at 1.6 MB: 714 ms → 8 ms, A083). An extension that adds
-  its own node view for one of those types must take the `dir` over. And
+  callout, table cells and summary, and task items through `TaskItemAutoDir` (TipTap's
+  own node view with the attribute added — a plugin's node view cannot replace it;
+  NOT `HTMLAttributes`, which would write `dir` into getHTML()). It holds NO
+  decorations — never go back to one per block: mapping and handing them down is
+  quadratic (one keystroke at 1.6 MB: 714 ms → 8 ms, A083), and so is building the
+  set (the task-item decorations cost 1.5 s at 4x CPU on every 4 MB open and large
+  projection). An extension that adds its own node view for one of those types must
+  take the `dir` over. And
   `extensions/cm-bidi.ts` does the same per visible CodeMirror line with
   `perLineTextDirection`. Do NOT use TipTap's `textDirection` option: it adds a
   `dir` attr to every node of the canonical JSON — rewriting every stored document
