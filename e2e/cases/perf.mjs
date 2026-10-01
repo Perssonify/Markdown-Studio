@@ -21,6 +21,8 @@
 // pane, the keystroke that parses the whole document once to build the
 // incremental projection's model) and laterMedianMs (the rest), and print
 // every sample in order. SAMPLES=<n> takes more than the default 5.
+// prepLongestMs / prepBlockingMs: long tasks in the pause after the load
+// (PREP_WAIT ms, default 3000, unthrottled), while the model is prepared.
 // CODE_EVERY=12 puts a code block in every cycle of the mixed document (the
 // default, 48, one in four) — to measure OPENING a code-heavy document.
 // DOC=math opens a formula-heavy document instead (mathDoc).
@@ -155,7 +157,17 @@ async function richOnce(kb) {
     await pg.waitForTimeout(500);
   }
   const loadMs = Date.now() - t0;
-  await pg.waitForTimeout(3000);
+  // After the load, the markdown→rich model is prepared in idle slices (A083),
+  // so the first markdown keystroke need not parse the whole document. Long
+  // tasks while that runs are jank a reader would feel: prepLongestMs and
+  // prepBlockingMs. (A build without the preparation shows what the load's own
+  // tail costs here.) PREP_WAIT sets the pause; the default is the old one.
+  await pg.evaluate(() => {
+    window.__ltPrep = [];
+    try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__ltPrep.push(e.duration); }).observe({ entryTypes: ["longtask"] }); } catch {}
+  });
+  await pg.waitForTimeout(Number(process.env.PREP_WAIT ?? 3000));
+  const prepLt = await pg.evaluate(() => window.__ltPrep.slice());
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.THROTTLE || 4) });
 
   await pg.locator(MD_LARGE ? ".cm-content" : ".ProseMirror").first().click();
@@ -214,9 +226,10 @@ async function richOnce(kb) {
   const lt = await pg.evaluate(() => window.__lt);
   await browser.close();
   const sorted = [...samples].sort((a, b) => a - b);
-  // The FIRST markdown keystroke after opening a document parses all of it
-  // once (the incremental projection's model, A083); the rest do not. Both are
-  // reported: the first, and the median of the others.
+  // The FIRST markdown keystroke after opening a document used to parse all of
+  // it once (the incremental projection's model, A083) — now prepared in idle
+  // time after the load, or finished by that keystroke when the preparation
+  // has not. Both are reported: the first, and the median of the others.
   const rest = samples.slice(1).sort((a, b) => a - b);
   return {
     loadMs,
@@ -225,6 +238,8 @@ async function richOnce(kb) {
     firstMs: samples[0],
     laterMedianMs: rest.length ? rest[Math.floor((rest.length - 1) / 2)] : 0,
     samples: samples.join(" "),
+    prepLongestMs: Math.round(Math.max(0, ...prepLt)),
+    prepBlockingMs: Math.round(prepLt.reduce((a, d) => a + Math.max(0, d - 50), 0)),
     longestTaskMs: Math.round(Math.max(0, ...lt)),
     blockingMs: Math.round(lt.reduce((a, d) => a + Math.max(0, d - 50), 0)),
     errors: errors.length,
@@ -242,11 +257,12 @@ if (LARGE) {
     const pick = (k) => median(runs.map((r) => r[k]));
     rows.push({ kb, loadMs: pick("loadMs"), mirrorMedianMs: pick("mirrorMedianMs"), mirrorMaxMs: pick("mirrorMaxMs"),
       firstMs: pick("firstMs"), laterMedianMs: pick("laterMedianMs"),
+      prepLongestMs: pick("prepLongestMs"), prepBlockingMs: pick("prepBlockingMs"),
       longestTaskMs: pick("longestTaskMs"), blockingMs: pick("blockingMs"), errors: runs.reduce((n, r) => n + r.errors, 0),
       samples: runs.map((r) => r.samples).join(" | ") });
   }
   srv.close();
-  const H = ["docKB", "loadMs", "mirrorMedianMs", "mirrorMaxMs", "firstMs", "laterMedianMs", "longestTaskMs", "blockingMs", "errors"];
+  const H = ["docKB", "loadMs", "prepLongestMs", "prepBlockingMs", "mirrorMedianMs", "mirrorMaxMs", "firstMs", "laterMedianMs", "longestTaskMs", "blockingMs", "errors"];
   console.log(`\n=== ${LABEL} (${MD_LARGE ? "markdown pane -> rich pane" : "rich pane -> markdown pane"}) ===`);
   console.log(H.map((h) => h.padStart(15)).join(""));
   for (const r of rows) console.log(H.map((h) => String(r[h === "docKB" ? "kb" : h]).padStart(15)).join(""));
