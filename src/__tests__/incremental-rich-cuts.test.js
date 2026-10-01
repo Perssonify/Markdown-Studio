@@ -380,6 +380,27 @@ describe("the cut rules", () => {
     } finally { r.destroy(); }
   });
 
+  it("a link definition that could still grow past a blank line keeps the text whole", () => {
+    // marked's label may hold a blank line: `[x` + blank line + `]:` is two
+    // paragraphs, until a destination is typed after the colon — then it is
+    // ONE definition reaching back across the cut. Same for an open title.
+    const r = rig(`${paras(3)}\n\n[x\n\n]:\n\n${paras(2, "Q")}`);
+    try {
+      expect(r.first).toEqual({ path: "whole", reason: "open link definition" });
+      r.same();
+      expect(r.project(r.md.replace("]:\n", "]: /url\n"))).toEqual({ path: "whole", reason: "link definitions" });
+      r.same();
+      expect(r.project(`${paras(3)}\n\n[x]: /url "ti\n\nle\n\n${paras(2, "Q")}`))
+        .toEqual({ path: "whole", reason: "open link definition" });
+      r.same();
+      expect(r.project(r.md.replace("\n\nle\n", "\n\nle\"\n"))).toEqual({ path: "whole", reason: "link definitions" });
+      r.same();
+      // A label closed and not followed by a colon can never be one.
+      expect(r.project(`${paras(3)}\n\n[x] and more\n\n${paras(2, "Q")}`).path).not.toBe("whole");
+      r.same();
+    } finally { r.destroy(); }
+  });
+
   it("an alias in a table cell stays one cell (the preprocessor escapes its pipe)", () => {
     const r = rig(paras(5));
     try {
