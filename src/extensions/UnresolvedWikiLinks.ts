@@ -75,6 +75,32 @@ export function unresolvedLinkDecorations(doc: PMNode, resolve: Resolve | null):
  * no positions at all, so a map-only reading would never see it.
  */
 function changedRanges(tr: Transaction): Array<[number, number]> | null {
+  // Many steps (Replace All, a projection with many stretches): their union,
+  // carried forward through each step's map. One range per step, each mapped
+  // through every later step, is quadratic in the steps (A083) — and with that
+  // many, the blocks between them are about all there is anyway.
+  if (tr.steps.length > MANY_STEPS) {
+    let from = Infinity;
+    let to = -Infinity;
+    for (let i = 0; i < tr.steps.length; i++) {
+      const step = tr.steps[i] as unknown as { from?: unknown; to?: unknown; pos?: unknown };
+      const map = tr.mapping.maps[i]!;
+      if (from <= to) {
+        from = map.map(from, -1);
+        to = map.map(to, 1);
+      }
+      if (typeof step.from === "number" && typeof step.to === "number") {
+        from = Math.min(from, map.map(step.from, -1));
+        to = Math.max(to, map.map(step.to, 1));
+      } else if (typeof step.pos === "number") {
+        from = Math.min(from, map.map(step.pos, -1));
+        to = Math.max(to, map.map(step.pos + 1, 1));
+      } else {
+        return null;
+      }
+    }
+    return [[from, to]];
+  }
   const ranges: Array<[number, number]> = [];
   for (let i = 0; i < tr.steps.length; i++) {
     const step = tr.steps[i] as unknown as { from?: unknown; to?: unknown; pos?: unknown };
@@ -91,6 +117,9 @@ function changedRanges(tr: Transaction): Array<[number, number]> | null {
   }
   return ranges;
 }
+
+/** Above this many steps, changedRanges reports their union (see there). */
+const MANY_STEPS = 32;
 
 /**
  * The previous decorations carried through `tr`, with only the top-level
