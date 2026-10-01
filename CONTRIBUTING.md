@@ -2,63 +2,73 @@
 
 Thanks for taking a look. This file is the short version; the full guide —
 coding standards, where things live, what not to break — lives in
-[`docs/contributing.md`](docs/contributing.md), and the architecture it assumes
-is in [`docs/architecture.md`](docs/architecture.md).
+[`apps/web/docs/contributing.md`](apps/web/docs/contributing.md), and the
+architecture it assumes is in
+[`apps/web/docs/architecture.md`](apps/web/docs/architecture.md).
 
 Security problems do **not** go in an issue or a PR — see
 [SECURITY.md](SECURITY.md).
 
+## The repository
+
+A Turborepo monorepo ([README.md](README.md)): the editor is `apps/web`, the
+backend is `apps/api` with its database package `packages/db`, and the AWS
+infrastructure is `infra`.
+
 ## Getting set up
 
-The package manager is **Bun** (1.4.0 — pinned by `packageManager` in
-`package.json`; CI installs with `bun install --frozen-lockfile`, so commit
-`bun.lock` with any dependency change).
+The package manager is **Bun** (1.4.0 — pinned by `packageManager` in the root
+`package.json`; CI installs with `bun install --frozen-lockfile`, so commit the
+root `bun.lock` with any dependency change).
 
 ```bash
 bun install
-bun run dev          # standalone app on Vite's dev server
+bun run dev          # the editor (Vite, :5173) and the API (:4000) together
+bun run --cwd apps/web dev   # the editor alone, exactly as before the monorepo
 ```
 
 ## The verification gate
 
-Run all five before you open a pull request. CI
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same commands
-on every PR to `main`, plus the embed build and the browser campaign
-(`bun run e2e`, see [`e2e/README.md`](e2e/README.md)).
+Run these before you open a pull request — from the root they cover every
+package through Turbo. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+runs the same checks on every PR to `main`, plus the browser campaign
+(`bun run e2e` in `apps/web`, see [`apps/web/e2e/README.md`](apps/web/e2e/README.md)).
 
 ```bash
 bun run lint         # ESLint — zero errors (warnings are the tracked backlog)
-bunx tsc --noEmit    # type gate — must be clean
-bun run test         # vitest — must pass
-bun run build:app    # standalone app build
-bun run build        # library build (@perssonify/editor)
+bun run typecheck    # type gate — must be clean
+bun run test         # vitest — must pass (bun run db:up first for the database cases)
+bun run build        # the editor's app, library and embed builds, and the API bundle
 ```
 
 ## Things that bite first-time contributors
 
-- **Read [`CLAUDE.md`](CLAUDE.md) before changing anything structural.** It
-  records the deliberate decisions and invariants of this codebase — most
-  "obvious cleanups" in this repo are re-breaking something that was already
-  fixed once.
+- **Read [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md) before changing anything
+  structural in the editor.** It records the deliberate decisions and
+  invariants of this codebase — most "obvious cleanups" in this repo are
+  re-breaking something that was already fixed once.
 - **The `perssonify` naming is intentional.** The product is Markdown Studio,
   but the npm package, the `pf:` preference keys, the `perssonify-document`
   export envelope, the `perssonify-backup` archive and the `perssonify-docs` /
   `perssonify-snapshots` IndexedDB databases are on-disk contracts with existing
-  installs ([`docs/data-contracts.md`](docs/data-contracts.md)). Renaming them
-  orphans people's documents. Do not "fix" them.
-- **Test files must be `.js`.** `vitest.config.js` only picks up
-  `*.test.{js,jsx}` — renaming a test to `.ts` silently stops running it.
-- **Add tests under [`src/__tests__/`](src/__tests__/)** for anything you fix.
-- **`src/components/ui/*` are generated shadcn primitives** — regenerate them
-  via the CLI rather than hand-editing. (`input.tsx` and `textarea.tsx` are the
-  documented exception: their `forwardRef` wrappers are deliberate while React 18
-  is in the library's peer range, and must be re-applied after any regeneration.)
+  installs ([`apps/web/docs/data-contracts.md`](apps/web/docs/data-contracts.md)).
+  Renaming them orphans people's documents. Do not "fix" them.
+- **The editor's test files must be `.js`.** `apps/web/vitest.config.js` only
+  picks up `*.test.{js,jsx}` — renaming a test to `.ts` silently stops running
+  it. (The backend packages use `.ts` tests.)
+- **Add tests under [`apps/web/src/__tests__/`](apps/web/src/__tests__/)** for
+  anything you fix in the editor.
+- **`apps/web/src/components/ui/*` are generated shadcn primitives** —
+  regenerate them via the CLI rather than hand-editing. (`input.tsx` and
+  `textarea.tsx` are the documented exception: their `forwardRef` wrappers are
+  deliberate while React 18 is in the library's peer range, and must be
+  re-applied after any regeneration.)
 - **A node or mark added to `TiptapPane.tsx` must also be registered in
-  `src/engine/serialize-doc.ts`** (`SERIALIZE_EXTENSIONS`), or headless export
-  silently corrupts or throws on documents that use it.
-- **Style:** ESLint ([`eslint.config.js`](eslint.config.js)) checks correctness
-  — the React hook rules above all — not layout; there is no formatter config.
-  Match the surrounding file.
+  `apps/web/src/engine/serialize-doc.ts`** (`SERIALIZE_EXTENSIONS`), or headless
+  export silently corrupts or throws on documents that use it.
+- **Style:** ESLint ([`apps/web/eslint.config.js`](apps/web/eslint.config.js))
+  checks correctness — the React hook rules above all — not layout; there is no
+  formatter config. Match the surrounding file.
 
 ## Pull requests
 

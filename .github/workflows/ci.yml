@@ -27,6 +27,9 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -82,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: app-sourcemaps-${{ github.sha }}
-          path: dist-app-sourcemaps/
+          path: apps/web/dist-app-sourcemaps/
           retention-days: 90
           if-no-files-found: warn
 
@@ -108,6 +111,9 @@ jobs:
   react18:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -136,6 +142,48 @@ jobs:
       - name: Test (React 18 runtime)
         run: bun run test
 
+  # The backend: apps/api (Hono), packages/db (Drizzle) and infra (AWS CDK).
+  # Postgres is the major production runs (RDS PostgreSQL 17); the suites
+  # create their own throwaway databases on it. The API's build also starts
+  # the bundled Lambda handler and Node server (apps/api/scripts/smoke-bundle.mjs).
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: markdown_studio
+          POSTGRES_PASSWORD: markdown_studio
+          POSTGRES_DB: markdown_studio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U markdown_studio -d markdown_studio"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgres://markdown_studio:markdown_studio@localhost:5432/markdown_studio
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # The API runs its TypeScript on Node (type stripping) and Lambda runs
+      # Node 24, so the backend is checked on the same .node-version.
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint, type-check, test and build the backend
+        run: bunx turbo run lint typecheck test build --filter=@markdown-studio/api --filter=@markdown-studio/db --filter=@markdown-studio/infra
+
   # Browser campaign. Unit tests cannot reach real IME composition, real
   # IndexedDB, quota exhaustion, a second tab, a coarse pointer, a service
   # worker or an enforced CSP — every one of which has hidden a defect in this
@@ -144,6 +192,9 @@ jobs:
     runs-on: ubuntu-latest
     # A hung browser would otherwise burn the 360-minute default.
     timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -232,8 +283,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
           path: |
-            e2e/*.json
-            e2e/artifacts/**
+            apps/web/e2e/*.json
+            apps/web/e2e/artifacts/**
 
   # The same app on Firefox and WebKit (A100). The suites that are
   # engine-neutral run again here — the ones e2e/run.mjs lists for all three
@@ -244,6 +295,9 @@ jobs:
   e2e-engines:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/web
     strategy:
       fail-fast: false
       matrix:
@@ -301,5 +355,5 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
           path: |
-            e2e/*.json
-            e2e/artifacts/**
+            apps/web/e2e/*.json
+            apps/web/e2e/artifacts/**

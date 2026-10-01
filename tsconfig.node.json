@@ -1,0 +1,27 @@
+{
+  // Shared by the Node packages: apps/api, packages/db and infra. The
+  // frontend keeps its own tsconfig (apps/web/tsconfig.json), untouched.
+  //
+  // Sources are run as TypeScript directly — Node 24 strips the types (`node
+  // src/server.ts`), Vitest and the bundler read .ts — so imports carry their
+  // .ts extension and only erasable syntax is allowed (no enums, namespaces or
+  // parameter properties). tsc only type-checks.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  }
+}
