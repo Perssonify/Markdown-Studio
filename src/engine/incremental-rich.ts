@@ -45,6 +45,7 @@
 import { Lexer, Parser, type Marked, type MarkedOptions, type Token, type TokensList } from "marked";
 import { DOMParser as PMDOMParser, Fragment, type Node as PMNode, type Schema } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
+import { TableMap } from "@tiptap/pm/tables";
 import type { MarkdownFeatureSettings } from "../store/settings";
 import { frontmatterLength, preprocessMarkdown, type PreprocessFeatures } from "./preprocessor";
 
@@ -308,11 +309,22 @@ const DEF_MAY_CONTINUE = /^ {0,3}\[(?:\\[\s\S]|[^[\]\\])*$|^ {0,3}\[(?:\\[\s\S]|
  * marks every context it closes past as whitespace-preserving (`sync`, with
  * `localPreserveWS`), and when the pre's own context was closed early (a
  * raw `<pre>` holding a paragraph), that reaches the DOCUMENT's context: from
- * there on, whitespace is kept everywhere. Marked's own code blocks hold only
- * text and never do it; raw HTML is refused whole — any `<pre`, and a style
- * that mentions white-space or holds a CSS escape (`wh\69te-space`).
+ * there on, whitespace is kept everywhere. A pre holding only text (in one
+ * `<code>`, as marked and the serialiser write code blocks) never closes its
+ * own context early and is fine; raw HTML holding any other `<pre`, or a style
+ * attribute that mentions white-space or holds a CSS escape (`wh\69te-space`),
+ * keeps the text from being cut. (The style may sit on a heading holding a
+ * block, which closes the heading early the same way.)
  */
-const PRESERVES_WS = /<pre(?![\w-])|style[\s\S]*(?:white-space|\\)/i;
+const WS_STYLE = /\sstyle\s*=\s*(?:"[^"]*(?:white-space|\\)[^"]*"|'[^']*(?:white-space|\\)[^']*'|[^\s"'=<>`]*(?:white-space|\\))/i;
+const PRE_OPEN = /<pre(?![\w-])/gi;
+/** A pre holding only text, perhaps in one <code> — the code block a serialiser writes. */
+const SIMPLE_PRE = /<pre(?![\w-])[^>]*>\s*(?:<code(?![\w-])[^>]*>)?[^<]*(?:<\/code>)?\s*<\/pre>/gi;
+const preservesWhitespace = (raw: string): boolean => {
+  if (WS_STYLE.test(raw)) return true;
+  const pres = raw.match(PRE_OPEN)?.length ?? 0;
+  return pres > 0 && pres !== (raw.match(SIMPLE_PRE)?.length ?? 0);
+};
 
 interface Lexed {
   opt: MarkedOptions;
@@ -338,14 +350,14 @@ function lex(m: Marked, src: string): Lexed {
   let preserves = false;
   const walk = opt.walkTokens;
   m.walkTokens(tokens, function (this: Marked, t: Token) {
-    if (t.type === "html" && PRESERVES_WS.test(t.raw)) preserves = true;
+    if (t.type === "html" && preservesWhitespace(t.raw)) preserves = true;
     return walk ? walk.call(this as never, t) : undefined;
   });
   const no = (why: string): Lexed => ({ opt, tokens, top: null, clear: [], clearAtEnd: false, why });
   // Link reference definitions: every reference anywhere reads them.
   if (Object.keys(tokens.links).length) return no("link definitions");
   // ProseMirror keeps whitespace for the REST of the document after some raw
-  // `<pre>` (see PRESERVES_WS): state no cut can carry.
+  // `<pre>` (see preservesWhitespace): state no cut can carry.
   if (preserves) return no("raw <pre> or white-space");
   const top: Token[] = [];
   let sum = 0;
@@ -769,7 +781,27 @@ const isTrailingNode = (node: PMNode, schema: Schema): boolean => {
     node.sameMarkup(para.create());
 };
 
-const eqNode = (a: PMNode, b: PMNode): boolean => a === b || a.eq(b);
+/**
+ * Whether a node holds a table TipTap's fixTables would mend — one whose
+ * TableMap reports problems (a raw `<table>` with `colspan="0"`, say).
+ * fixTables looks only at tables a transaction CHANGED, and its mend of such a
+ * table is not always a fixed point; the whole-document path re-creates every
+ * node, so it mends every such table again on every projection. A re-parsed
+ * node holding one must therefore be replaced even when it equals the live
+ * one, so fixTables mends it as the whole path would (seed 37704359 in the
+ * walks: a rich-pane edit had serialised a mended table back into the
+ * markdown). Runs outside the window need nothing: they hold what an earlier
+ * projection made of the same markdown — the same parse, mended the same way.
+ */
+function holdsMendableTable(node: PMNode): boolean {
+  if (node.isTextblock || node.isLeaf) return false;
+  if (node.type.spec["tableRole"] === "table" && TableMap.get(node).problems?.length) return true;
+  for (let i = 0; i < node.childCount; i++) if (holdsMendableTable(node.child(i))) return true;
+  return false;
+}
+
+/** A live node can stand for a parsed one: equal, and nothing in it fixTables would mend again. */
+const eqNode = (a: PMNode, b: PMNode): boolean => (a === b || a.eq(b)) && !holdsMendableTable(b);
 
 /**
  * The first `count` top-level nodes of `after` are those of `planned`, the

@@ -85,7 +85,8 @@ const SNIPPETS = [
 ];
 
 /** The snippets whose effect is local: for the long walks (see CUTTABLE). */
-const LOCAL_SNIPPETS = SNIPPETS.filter((s) => !/\]: |\[\^|^---\ntitle|\|Alias|<a |<code>|<pre>|\{color/.test(s));
+// (`</pre>` too: one deleted slash makes it a `<pre>`, which keeps the text whole.)
+const LOCAL_SNIPPETS = SNIPPETS.filter((s) => !/\]: |\[\^|^---\ntitle|\|Alias|<a |<code>|<\/?pre>|\{color/.test(s));
 
 const FEATURE_TOGGLES = ["math", "footnotes", "tables", "strikethrough", "taskLists", "callouts", "emoji", "curlyBraceFormatting", "autolink"];
 
@@ -105,16 +106,32 @@ function project(ed, engine, md) {
   plan.commit(ed.state.doc);
 }
 
+/** The path to the deepest node where two documents differ, and both nodes there. */
+function firstDiff(a, b, path = []) {
+  for (;;) {
+    if (!a.sameMarkup(b) || a.childCount !== b.childCount || a.isText) return { path, a, b };
+    let k = 0;
+    while (k < a.childCount && a.child(k).eq(b.child(k))) k++;
+    if (k === a.childCount) return { path, a, b };
+    path = [...path, k];
+    a = a.child(k);
+    b = b.child(k);
+  }
+}
+
 function expectSame(ed, ref, engine, md, where) {
   const want = ed.schema.nodeFromJSON(oracle(ref, engine, md));
   if (!ed.state.doc.eq(want)) {
-    // Say WHICH block differs; the JSON of both is in the diff below it.
+    // Say WHICH block differs, and where inside it; the JSON of both is in
+    // the diff below.
     const a = ed.state.doc;
     let at = 0;
     while (at < Math.min(a.childCount, want.childCount) && a.child(at).eq(want.child(at))) at++;
+    const d = firstDiff(a, want);
+    const inside = `deepest difference at [${d.path}]: ${JSON.stringify(d.a.toJSON()).slice(0, 400)} vs ${JSON.stringify(d.b.toJSON()).slice(0, 400)}`;
     expect(
       JSON.stringify(a.toJSON().content?.slice(at, at + 2)),
-      `${where}: block ${at} of ${a.childCount} (expected ${want.childCount}) — markdown:\n${JSON.stringify(md)}`,
+      `${where}: block ${at} of ${a.childCount} (expected ${want.childCount}) — ${inside} — markdown:\n${JSON.stringify(md)}`,
     ).toBe(JSON.stringify(want.toJSON().content?.slice(at, at + 2)));
     expect(a.toJSON(), where).toEqual(want.toJSON());
   }
@@ -242,7 +259,8 @@ function walk(seed, { steps = 50, start = 3, richEvery = 0.12, toggleEvery = 0.0
   const engine = createMarkdownEngine(() => features, undefined, { richRunLength: runLength });
   const ed = newEditor();
   const ref = newEditor();
-  const paths = { incremental: 0, build: 0, whole: 0 };
+  // `why`: how many times each fallback reason came up (named in a failed ratio).
+  const paths = { incremental: 0, build: 0, whole: 0, why: {} };
   try {
     let md = Array.from({ length: start }, () => corpus[Math.floor(rand() * corpus.length)]).join("\n\n");
     project(ed, engine, md);
@@ -271,7 +289,9 @@ function walk(seed, { steps = 50, start = 3, richEvery = 0.12, toggleEvery = 0.0
         throw new Error(`seed ${seed}, step ${step} (${what}) threw ${e}\nfrom ${JSON.stringify(before)}\nto ${JSON.stringify(md)}`, { cause: e });
       }
       paths[engine.lastRichPath().path]++;
-      expectSame(ed, ref, engine, md, `seed ${seed}, step ${step} (${what}) from ${JSON.stringify(before)}\n`);
+      if (engine.lastRichPath().path !== "incremental") paths.why[engine.lastRichPath().reason] = (paths.why[engine.lastRichPath().reason] || 0) + 1;
+      const how = engine.lastRichPath();
+      expectSame(ed, ref, engine, md, `seed ${seed}, step ${step} (${what}; ${how.path}: ${how.reason}) from ${JSON.stringify(before)}\n`);
       // Projecting the same markdown again changes nothing — and dispatches
       // nothing, once there is a model to say so.
       const settled = ed.state.doc;
@@ -299,7 +319,21 @@ describe("A083 — the incremental markdown→rich projection is identical to th
   const from = Number(process.env.RICH_SEED_FROM) || 0;
   it.each(Array.from({ length: seeds }, (_, i) => [2000 + (from + i) * 7919]))("random edit walk, seed %i", (seed) => {
     const paths = walk(seed);
-    for (const k in paths) totals[k] += paths[k];
+    for (const k in totals) totals[k] += paths[k];
+  }, 120000);
+
+  // Seeds that each found a defect in a deep run (600 to 4,000 seeds) — kept,
+  // because CI's 40 found none of them. They replay the walk that failed only
+  // while the corpus and snippets above are unchanged; after that they are
+  // simply more walks.
+  const FOUND = [
+    532573, 564249, 912685, 1459096, 1641233, 2155968, 2203482, 2243077, 3003301, 3098329,
+    3304223, 3423008, 3438846, 3937743, 4214908, 4302017, 4523749, 4777157, 4808833, 7113262,
+    7667592, 10257105, 10328376, 11128195, 12909970, 26491055, 34219999, 37704359, 40452252, 62950131,
+  ];
+  it.each(FOUND.map((s) => [s]))("random edit walk that once found a defect, seed %i", (seed) => {
+    const paths = walk(seed);
+    for (const k in totals) totals[k] += paths[k];
   }, 120000);
 
   it("took the incremental path for most projections (or the walks test nothing)", () => {
@@ -317,7 +351,7 @@ describe("A083 — the incremental markdown→rich projection is identical to th
 
   it.each([[91], [92], [93]])("a long document, seed %i (windows grow across many runs)", (seed) => {
     const paths = walk(seed, { steps: 30, start: 60, richEvery: 0.1, toggleEvery: 0, corpus: CUTTABLE, snippets: LOCAL_SNIPPETS });
-    expect(paths.incremental).toBeGreaterThan(paths.build + paths.whole);
+    expect(paths.incremental, JSON.stringify(paths.why)).toBeGreaterThan(paths.build + paths.whole);
   }, 300000);
 
   it.each([[71], [72]])("a long document at the app's run length, seed %i", (seed) => {
@@ -325,6 +359,6 @@ describe("A083 — the incremental markdown→rich projection is identical to th
     // finely as they can, which is the harder test of the rules.
     // ~50 KB: a couple of dozen runs at that length.
     const paths = walk(seed, { steps: 30, start: 400, richEvery: 0.1, toggleEvery: 0, corpus: CUTTABLE, snippets: LOCAL_SNIPPETS, runLength: 2048 });
-    expect(paths.incremental).toBeGreaterThan(paths.build + paths.whole);
+    expect(paths.incremental, JSON.stringify(paths.why)).toBeGreaterThan(paths.build + paths.whole);
   }, 300000);
 });
