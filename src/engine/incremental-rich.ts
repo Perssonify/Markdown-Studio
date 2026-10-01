@@ -45,6 +45,7 @@
 import { Lexer, Parser, type Marked, type MarkedOptions, type Token, type TokensList } from "marked";
 import { DOMParser as PMDOMParser, Fragment, type Node as PMNode, type Schema } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
+import { StepMap } from "@tiptap/pm/transform";
 import { TableMap } from "@tiptap/pm/tables";
 import type { MarkdownFeatureSettings } from "../store/settings";
 import { frontmatterLength, preprocessMarkdown, type PreprocessFeatures } from "./preprocessor";
@@ -786,16 +787,37 @@ export interface RichPlan {
  * How the last plan was made: `incremental` re-parsed runs of the document,
  * `build` parsed all of it and made a model, `whole` parsed all of it and
  * could not (the reason says why) — as does a `build` that was not first.
+ * `prebuilt` re-parsed runs of a model prepared ahead (see `prepare`); its
+ * reason starts "ready" or "finished on demand" — what was left of the
+ * preparation when the edit came.
  */
 export interface RichPath {
-  path: "incremental" | "build" | "whole" | "none";
+  path: "incremental" | "build" | "whole" | "prebuilt" | "none";
   reason: string;
+}
+
+/** A model being prepared ahead, a slice at a time (RichProjector.prepare). */
+export interface RichPrebuild {
+  /**
+   * Work until `timeUp()` says stop (checked between slices of about
+   * `prebuildChunk` characters). True when nothing is left: done, given up, or
+   * superseded — by a projection, another preparation or `forget`.
+   */
+  step(timeUp: () => boolean): boolean;
 }
 
 export interface RichProjector {
   plan(md: string, state: EditorState): RichPlan;
   /** Drop the model (a different document was loaded). */
   forget(): void;
+  /**
+   * Begin preparing the model for `md` — what the markdown pane holds — over
+   * the document in `state`, right after a document is loaded, so the first
+   * markdown keystroke does not have to parse all of it. Nothing is prepared
+   * until `step` is called; a projection that comes first finishes what is
+   * left. Null when there is nothing worth preparing.
+   */
+  prepare(md: string, state: EditorState): RichPrebuild | null;
   /** For tests and diagnostics. */
   readonly last: RichPath;
 }
@@ -811,6 +833,10 @@ export interface RichProjectorOptions {
   style: (html: string) => string;
   /** The fewest characters of markdown a run holds before it may be cut (see cut). */
   runLength?: number;
+  /** Documents shorter than this are not prepared ahead: their first keystroke is cheap. */
+  prebuildMin?: number;
+  /** Markdown parsed per slice of a preparation (see RichPrebuild). */
+  prebuildChunk?: number;
 }
 
 /** Length of the common prefix of two strings. */
@@ -866,6 +892,9 @@ function holdsMendableTable(node: PMNode): boolean {
 /** A live node can stand for a parsed one: equal, and nothing in it fixTables would mend again. */
 const eqNode = (a: PMNode, b: PMNode): boolean => (a === b || a.eq(b)) && !holdsMendableTable(b);
 
+/** Above this many stretches of changed nodes, replaceRange takes one step instead of one each. */
+export const STEP_LIMIT = 16;
+
 /**
  * The first `count` top-level nodes of `after` are those of `planned`, the
  * same objects — except a table fixTables mended, still a table in its place.
@@ -895,9 +924,13 @@ function sameNodes(planned: PMNode, after: PMNode, count: number): boolean {
  * (`Visit example.com`) on every markdown keystroke, a mark no markdown in the
  * pane asked for. A partial transaction would have linked different text (the
  * edited block's), so neither is kept: the rich pane shows what the markdown says.
+ *
+ * `tr` continues a transaction that already holds steps (the prebuilt model's
+ * first projection, see Prebuild); the range is then in ITS document. Returns
+ * null when nothing changed — and adds nothing to `tr`.
  */
-function replaceRange(state: EditorState, from: number, to: number, nodes: PMNode[]): Transaction | null {
-  const doc = state.doc;
+function replaceRange(state: EditorState, from: number, to: number, nodes: PMNode[], tr: Transaction = state.tr): Transaction | null {
+  const doc = tr.doc;
   let a = from;
   let b = to;
   let na = 0;
@@ -923,7 +956,6 @@ function replaceRange(state: EditorState, from: number, to: number, nodes: PMNod
   if (a === b && na === nb) return null;
   let start = 0;
   for (let k = 0; k < a; k++) start += doc.child(k).nodeSize;
-  const tr = state.tr;
   // TrailingNode's paragraph at the end, with nothing to stand for in the new
   // content: compared as absent, and deleted (the plugin decides afresh).
   const tail = b === doc.childCount && b - a === nb - na + 1 && isTrailingNode(doc.child(b - 1), state.schema) ? 1 : 0;
@@ -931,8 +963,7 @@ function replaceRange(state: EditorState, from: number, to: number, nodes: PMNod
     // As many nodes as before: replace only the ones that differ, one step per
     // stretch of them, from the end so the positions before stay put. After a
     // load most of a document parses back to itself, but not all of it (a
-    // code block gains the trailing newline marked writes), and one range from
-    // the first difference to the last re-rendered everything between.
+    // code block gains the trailing newline marked writes).
     const from: number[] = [];
     let pos = start;
     for (let k = a; k <= b; k++) {
@@ -940,17 +971,51 @@ function replaceRange(state: EditorState, from: number, to: number, nodes: PMNod
       if (k < b) pos += doc.child(k).nodeSize;
     }
     const n = b - a - tail;
-    const same = (k: number) => eqNode(doc.child(a + k), nodes[na + k]!);
+    const differs: boolean[] = new Array(n);
+    for (let k = 0; k < n; k++) differs[k] = !eqNode(doc.child(a + k), nodes[na + k]!);
     // The tail goes with the last stretch when that stretch ends the range,
     // else on its own — first, being last in the document.
-    const tailAlone = tail === 1 && (n === 0 || same(n - 1));
-    if (tailAlone) tr.delete(from[n]!, from[n + 1]!);
+    const tailAlone = tail === 1 && (n === 0 || !differs[n - 1]);
+    // Each stretch, from the end: [first, last, end] — `end` the index its
+    // replaced range stops before (past the tail, when the tail goes with it).
+    const stretches: Array<[number, number, number]> = [];
     for (let k = n - 1; k >= 0;) {
-      if (same(k)) { k--; continue; }
+      if (!differs[k]) { k--; continue; }
       const last = k;
-      while (k >= 0 && !same(k)) k--;
-      const end = last === n - 1 && tail && !tailAlone ? n + 1 : last + 1;
-      tr.replaceWith(from[k + 1]!, from[end]!, Fragment.fromArray(nodes.slice(na + k + 1, na + last + 1)));
+      while (k >= 0 && differs[k]) k--;
+      stretches.push([k + 1, last, last === n - 1 && tail && !tailAlone ? n + 1 : last + 1]);
+    }
+    if (stretches.length + (tailAlone ? 1 : 0) <= STEP_LIMIT) {
+      if (tailAlone) tr.delete(from[n]!, from[n + 1]!);
+      for (const [first, last, end] of stretches) {
+        tr.replaceWith(from[first]!, from[end]!, Fragment.fromArray(nodes.slice(na + first, na + last + 1)));
+      }
+    } else {
+      // Many stretches — the first projection after a load, when every code
+      // block typed in the rich pane gains that newline. Each step rebuilds the
+      // document's top-level node list, so a step per stretch is quadratic: at
+      // 4 MB, ~900 of them took 6 s at 4x CPU before anything was drawn. So
+      // ONE step, from the first stretch to the last, carrying the unchanged
+      // nodes between them as the very same objects (the view keeps their DOM:
+      // it matches children by node equality, not by step). The selection is
+      // mapped as the steps per stretch would have mapped it — the one step's
+      // map sends a caret anywhere in the range to its end.
+      const sel = tr.selection;
+      const ranges: number[] = [];
+      for (let s = stretches.length - 1; s >= 0; s--) {
+        const [first, last, end] = stretches[s]!;
+        let size = 0;
+        for (let k = first; k <= last; k++) size += nodes[na + k]!.nodeSize;
+        ranges.push(from[first]!, from[end]! - from[first]!, size);
+      }
+      if (tailAlone) ranges.push(from[n]!, from[n + 1]! - from[n]!, 0);
+      const firstK = stretches[stretches.length - 1]![0];
+      const endK = tail ? n + 1 : stretches[0]![2];
+      const content: PMNode[] = [];
+      for (let k = firstK; k < Math.min(endK, n); k++) content.push(differs[k] ? nodes[na + k]! : doc.child(a + k));
+      tr.replaceWith(from[firstK]!, from[endK]!, Fragment.fromArray(content));
+      const mapped = sel.map(tr.doc, new StepMap(ranges));
+      if (!mapped.eq(tr.selection)) tr.setSelection(mapped);
     }
   } else {
     let end = start;
@@ -991,10 +1056,165 @@ const childrenOf = (doc: PMNode): PMNode[] => {
 /** A run of about 2 KB of markdown: a keystroke re-parses one or two. */
 const RUN_LENGTH = 2048;
 
+/** Below ~64 KB the first keystroke's whole parse takes well under a frame budget's worth at 1x. */
+const PREBUILD_MIN = 64 * 1024;
+
+/** ~16 KB a slice: a few runs, ~10 ms at 1x CPU (~35 ms at 4x). */
+const PREBUILD_CHUNK = 16 * 1024;
+
+/**
+ * A model being prepared ahead (A083). The first markdown keystroke after
+ * opening a large document used to parse ALL of it to make the model the later
+ * ones re-parse a run or two of — 4 MB: 22 s at 4x CPU. Preparing it means
+ * walking the document from the start in windows, each lexed, cut and parsed
+ * on its own exactly as `incremental` handles the window an edit touched: a
+ * window starts where the last one ended, and ends only where the markdown,
+ * marked's state, the HTML and ProseMirror are all clean (else it grows) — so
+ * each is its slice of the whole parse, by the same rules the edit windows
+ * rest on, and the walks in `incremental-rich-prebuild.test.js` hold the
+ * result to the whole-document parse. Anything a window refuses gives the
+ * preparation up, and the first keystroke builds as it always did.
+ *
+ * The nodes are the parse of `md`, which need not be what the editor holds:
+ * a document loaded from storage may not be the parse of its own markdown (a
+ * code block typed in the rich pane lacks the trailing newline marked writes).
+ * Where a parsed node equals the loaded document's node at the same index, the
+ * loaded node is kept, so `shared` says the editor holds exactly this parse.
+ */
+interface Prebuild {
+  marked: Marked;
+  schema: Schema;
+  pre: PreprocessFeatures;
+  /** The markdown it describes, and the document the editor held when it began. */
+  md: string;
+  base: PMNode;
+  fm: number;
+  /** Where the next window starts. */
+  at: number;
+  nodes: PMNode[];
+  lens: number[];
+  counts: number[];
+  /** Every node so far is the base's own, at its own index. */
+  shared: boolean;
+  state: "running" | "done" | "failed";
+  why: string;
+}
+
 export function createRichProjector(opts: RichProjectorOptions): RichProjector {
   const runLength = opts.runLength ?? RUN_LENGTH;
+  const prebuildMin = opts.prebuildMin ?? PREBUILD_MIN;
+  const prebuildChunk = Math.max(1, opts.prebuildChunk ?? PREBUILD_CHUNK);
   let model: Model | null = null;
+  let job: Prebuild | null = null;
   let last: RichPath = { path: "none", reason: "" };
+
+  /** `advance`, with a throw giving the preparation up: the build it stands in for is still there. */
+  function advanceSafely(j: Prebuild): void {
+    try {
+      advance(j);
+    } catch {
+      j.state = "failed";
+      j.why = "error";
+    }
+  }
+
+  /** Prepare the next window of `j`, growing it until it ends clean. */
+  function advance(j: Prebuild): void {
+    const md = j.md;
+    const len = md.length;
+    const start = j.at;
+    const fail = (why: string): void => {
+      j.state = "failed";
+      j.why = why;
+    };
+    // A window ends after a blank line, where a cut can fall — at a mere line
+    // start it ends inside a block, is never clean, and doubles until it has
+    // swallowed the document. Where that is not clean either (a list, a
+    // fence), it doubles: re-lexing a window that grew by a slice each time
+    // would be quadratic in a long unclean stretch.
+    const blankAfter = (pos: number): number => {
+      if (pos >= len) return len;
+      const at = md.indexOf("\n\n", Math.max(start, pos - 2));
+      return at === -1 ? len : at + 2;
+    };
+    // The front matter stays inside the first window, as the build keeps it in the first run.
+    let end = blankAfter(Math.min(len, Math.max(start + prebuildChunk, start === 0 ? j.fm : 0)));
+    for (;;) {
+      const grow = (): number => blankAfter(Math.min(len, end + Math.max(prebuildChunk, end - start)));
+      const text = md.slice(start, end);
+      // What an edit window refuses (see `incremental`), a preparing one does.
+      // The alias refusal and the preprocessor check below are each a net
+      // behind the other — the preprocessor rewrites a bare-pipe alias — so
+      // neither can be told apart on its own (mutation-tested).
+      if (text.indexOf("[^") !== -1) return fail("footnote syntax");
+      if (holdsBarePipe(text)) return fail("alias wiki link");
+      // The first window carries the front matter the way `build` does.
+      const fm = start === 0 ? j.fm : 0;
+      const src = fm ? preprocessMarkdown(text.slice(0, fm), j.pre) + text.slice(fm) : text;
+      if (preprocessMarkdown(text, j.pre) !== src) return fail("preprocessor");
+      const lexed = lex(j.marked, src);
+      if (!lexed.top) return fail(lexed.why);
+      const pieces = cut(lexed, src, opts.style, runLength);
+      if (end < len && !pieces.endClean) {
+        end = grow();
+        continue;
+      }
+      const parsed = parsePieces(pieces.html, j.schema, j.nodes.length > 0 ? "after" : "start");
+      if (!parsed) return fail("markers");
+      // The edit window's rule, kept as stated: after a window that ended
+      // clean, text here parses the same on its own (no case found tells the
+      // two apart — mutation-tested, `</div> tail` at every window size).
+      if (start > 0 && parsed.startsWithText) return fail("text at a run start");
+      if (end < len && !parsed.endClean) {
+        end = grow();
+        continue;
+      }
+      const shift = src.length - text.length;
+      const runs = runsOf(pieces, parsed, fm ? (l) => l < shift + fm : () => false);
+      runs.lens[0] = runs.lens[0]! - shift;
+      for (const node of parsed.nodes) {
+        const k = j.nodes.length;
+        const own = k < j.base.childCount ? j.base.child(k) : null;
+        if (own && eqNode(own, node)) {
+          j.nodes.push(own);
+        } else {
+          j.nodes.push(node);
+          j.shared = false;
+        }
+      }
+      j.lens.push(...runs.lens);
+      j.counts.push(...runs.counts);
+      j.at = end;
+      if (end === len) {
+        // An empty document: the whole parse fills in its paragraph.
+        if (!j.nodes.length) return fail("empty");
+        j.shared = j.shared && j.nodes.length === j.base.childCount;
+        j.state = "done";
+      }
+      return;
+    }
+  }
+
+  /**
+   * The projection of `md` from a finished preparation. When the editor holds
+   * exactly the prepared parse, the model is simply that document's; otherwise
+   * the transaction first turns the editor's document into the parse — as
+   * `build` would — and the edit's window is re-parsed on top of it.
+   */
+  function fromPrebuild(j: Prebuild, md: string, state: EditorState, m: Marked, f: MarkdownFeatureSettings, how: string): RichPlan {
+    const pre = opts.preprocess(f);
+    let base: Transaction | null = null;
+    let doc = j.base;
+    if (!j.shared) {
+      base = replaceRange(state, 0, state.doc.childCount, j.nodes);
+      doc = base ? base.doc : state.doc;
+    }
+    const mdl: Model = { marked: m, schema: j.schema, md: j.md, doc, lens: j.lens, counts: j.counts, fm: j.fm };
+    const plan = incremental(mdl, md, state, m, pre, base);
+    if (typeof plan === "string") return build(md, state, m, f, plan);
+    last = { path: "prebuilt", reason: `${how}; ${last.reason}` };
+    return plan;
+  }
 
   /** `setContent(html)`'s document, with no model to show for it. */
   function whole(html: string, state: EditorState, reason: string): RichPlan {
@@ -1056,10 +1276,14 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
     return planned(md, m, schema, fm, lens, counts, replaceRange(state, 0, state.doc.childCount, parsed.nodes));
   }
 
-  /** Re-parse only the runs the edit touched; a reason when that cannot be done. */
-  function incremental(mdl: Model, md: string, state: EditorState, m: Marked, pre: PreprocessFeatures): RichPlan | string {
+  /**
+   * Re-parse only the runs the edit touched; a reason when that cannot be done.
+   * With `base`, the editor's document is `base.doc` (see Prebuild) and the
+   * window's steps are added to `base`.
+   */
+  function incremental(mdl: Model, md: string, state: EditorState, m: Marked, pre: PreprocessFeatures, base: Transaction | null = null): RichPlan | string {
     const old = mdl.md;
-    const live = state.doc;
+    const live = base ? base.doc : state.doc;
     const n = mdl.lens.length;
     const starts = new Array<number>(n + 1);
     const nodeStarts = new Array<number>(n + 1);
@@ -1108,7 +1332,7 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
     }
     if (i >= j) {
       last = { path: "incremental", reason: "unchanged" };
-      return planned(md, m, mdl.schema, mdl.fm, mdl.lens, mdl.counts, null);
+      return planned(md, m, mdl.schema, mdl.fm, mdl.lens, mdl.counts, base);
     }
     const delta = md.length - old.length;
     // Front matter is replaced by the preprocessor, so the first run is never
@@ -1175,7 +1399,7 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
         md, m, mdl.schema, mdl.fm,
         [...mdl.lens.slice(0, i), ...runs.lens, ...mdl.lens.slice(j)],
         [...mdl.counts.slice(0, i), ...runs.counts, ...mdl.counts.slice(j)],
-        replaceRange(state, liveFrom, liveTo, parsed.nodes),
+        replaceRange(state, liveFrom, liveTo, parsed.nodes, base ?? undefined) ?? base,
       );
     }
   }
@@ -1184,19 +1408,54 @@ export function createRichProjector(opts: RichProjectorOptions): RichProjector {
     plan(md: string, state: EditorState): RichPlan {
       const m = opts.marked();
       const f = opts.features();
+      // A preparation is used once, by the first projection after it began.
+      const j = job;
+      job = null;
       // Configurations the cuts do not cover: the curly-brace syntax rewrites
       // across lines, hooks may rewrite anything, and "\r" moves every offset
       // (marked normalises line endings before it lexes).
       if (f.curlyBraceFormatting === true) return whole(opts.mdToHtml(md), state, "curly braces");
       if (m.defaults.hooks) return whole(opts.mdToHtml(md), state, "marked hooks");
       if (md.indexOf("\r") !== -1) return whole(opts.mdToHtml(md), state, "carriage return");
+      if (j && j.marked === m && j.schema === state.schema) {
+        // The edit came before the slices finished: finish here. What is left
+        // costs no more than the build it replaces.
+        const how = j.state === "running" ? "finished on demand" : "ready";
+        while (j.state === "running") advanceSafely(j);
+        if (j.state === "done") return fromPrebuild(j, md, state, m, f, how);
+      }
       const mdl = model && model.marked === m && model.schema === state.schema ? model : null;
-      if (!mdl) return build(md, state, m, f, model ? "configuration" : "no model");
+      if (!mdl) return build(md, state, m, f, model ? "configuration" : j ? `prebuild: ${j.why || "configuration"}` : "no model");
       const planned = incremental(mdl, md, state, m, opts.preprocess(f));
       return typeof planned === "string" ? build(md, state, m, f, planned) : planned;
     },
     forget() {
       model = null;
+      job = null;
+    },
+    prepare(md: string, state: EditorState): RichPrebuild | null {
+      // A preparation describes a freshly loaded document: whatever the model
+      // knew is of no use (the caller has forgotten it already; this makes sure).
+      model = null;
+      job = null;
+      if (md.length < prebuildMin) return null;
+      const m = opts.marked();
+      const f = opts.features();
+      if (f.curlyBraceFormatting === true || m.defaults.hooks || md.indexOf("\r") !== -1) return null;
+      const mine: Prebuild = {
+        marked: m, schema: state.schema, pre: opts.preprocess(f), md, base: state.doc, fm: frontmatterLength(md),
+        at: 0, nodes: [], lens: [], counts: [], shared: true, state: "running", why: "",
+      };
+      job = mine;
+      return {
+        step(timeUp: () => boolean): boolean {
+          while (job === mine && mine.state === "running") {
+            advanceSafely(mine);
+            if (timeUp()) break;
+          }
+          return job !== mine || mine.state !== "running";
+        },
+      };
     },
     get last() {
       return last;
