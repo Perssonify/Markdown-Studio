@@ -368,6 +368,16 @@ describe("the cut rules", () => {
         expect(r.project(`${paras(3)}\n\n${style}\n\n${paras(3, "Q")}`).path).toBe("whole");
         r.same();
       }
+      // A pre holding only text — a code block as a serialiser writes one
+      // inside raw HTML — and a style about something else are fine.
+      for (const fine of [
+        "<details><summary>s</summary><pre><code>a\nb</code></pre></details>",
+        '<div style="color: red">C:\\path</div>',
+      ]) {
+        const how = r.project(`${paras(3)}\n\n${fine}\n\n${paras(3, "Q")}`);
+        expect(how.reason).not.toBe("raw <pre> or white-space");
+        r.same();
+      }
     } finally { r.destroy(); }
   });
 
