@@ -297,6 +297,12 @@ finding IDs (A001–A114) are cited below.
   9.1 s → 0.7 s, 4 MB: 28 s → 2.7 s (4× CPU). Large documents also open about
   twice as fast (4 MB: 15.9 s → 8.1 s), and right-to-left support no longer
   slows down documents with many checklist items. (A083)
+- **Saving a large document no longer freezes the page.** Each autosave of a
+  4 MB note used to stop the editor for 1–2 s (4× CPU); now most saves cause no
+  pause at all and the longest is under half a second. A save no longer reads
+  the whole document back to check it, version history stores its copies far
+  more cheaply, and any update to the screen no longer makes the browser scan
+  the whole open document. (A083)
 - **Opening a document with many code blocks is no longer quadratic.** A 1.6 MB
   document with a code block every 12 blocks opens in 5.4 s instead of 58.5 s,
   and the mixed large-document fixture in 3.2 s instead of 13.1 s. The word
