@@ -290,6 +290,19 @@ const BARE_PIPE_WIKI = /\[\[(?:[^[\]\n\\|]|\\[^\n])*\|/;
 const holdsBarePipe = (md: string): boolean => md.indexOf("[[") !== -1 && BARE_PIPE_WIKI.test(md);
 
 /**
+ * A block a link definition could still grow out of, past the blank line after
+ * it. marked's label (`[^\[\]\\]` — newlines included) and its "…" and (…) titles may span blank
+ * lines — CommonMark's may not — so `[x` or `[x]: /url "ti` lexes as a
+ * paragraph until text AFTER a cut completes it, and then as a definition
+ * reaching back across the cut: a window re-lexing only the later run never
+ * sees it. Any block starting with an unclosed label, or with a label and its
+ * colon (a definition that failed, perhaps on an open title), keeps the text
+ * from being cut. Every other block tokenizer either stops at a blank line or
+ * is recognised by its opener whatever follows (fences, HTML blocks).
+ */
+const DEF_MAY_CONTINUE = /^ {0,3}\[(?:\\[\s\S]|[^[\]\\])*$|^ {0,3}\[(?:\\[\s\S]|[^[\]\\])+\]:/;
+
+/**
  * Raw HTML that can change how ProseMirror parses everything AFTER it. Inside a
  * `<pre>` — or an element whose style's white-space holds "pre" — the parser
  * marks every context it closes past as whitespace-preserving (`sync`, with
@@ -348,6 +361,8 @@ function lex(m: Marked, src: string): Lexed {
       sectionAt = sum;
       continue;
     }
+    // (A footnote definition is marked-footnote's own token, refused above.)
+    if (t.type !== "footnote" && DEF_MAY_CONTINUE.test(t.raw)) return no("open link definition");
     sum += t.raw.length;
     top.push(t);
   }

@@ -86,8 +86,14 @@ flowchart TD
   those nodes, in one transaction that, like setContent's, fires no update and
   is one step in the rich pane's history. The document is `Node.eq` to the
   whole-document parse (`incremental-rich.test.js` checks it after every step of
-  seeded random walks). Link definitions, footnotes, the curly syntax, alias
-  wiki links, marked hooks and edits at the front matter take the whole path,
+  seeded random walks). CI runs 40 walks, which is not enough to trust a change
+  to the cut rules: runs of 600 and 2,000 seeds each found defects the 40 did
+  not (`RICH_SEEDS`, `RICH_SEED_FROM` and `RICH_LONG_SEEDS` run more — split
+  across processes, since the jsdom oracle slows as one process goes on).
+  Link definitions, footnotes, the curly syntax, alias wiki links, marked
+  hooks, a raw `<pre>` or white-space style (ProseMirror can then keep
+  whitespace for the rest of the document) and edits at the front matter take
+  the whole path,
   which also rebuilds the model; the first markdown keystroke after a load is
   such a build. The projection sets `preventAutolink`: TipTap's autolink plugin
   otherwise linked a bare domain ending the document's first paragraph on every
