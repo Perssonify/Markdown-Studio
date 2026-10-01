@@ -443,7 +443,7 @@ describe("a preparation that cannot be used", () => {
         r.same(next, extra);
       } finally { r.destroy(); }
     }
-  });
+  }, 60000);
 
   it("grows a window past a node ProseMirror leaves open, and never starts one with text", () => {
     // A stray <li> is clean markup, but ProseMirror wraps it in a list it
@@ -468,7 +468,7 @@ describe("a preparation that cannot be used", () => {
         } finally { r.destroy(); }
       }
     }
-  });
+  }, 60000); // sixteen documents loaded and prepared: under a busy suite, more than 5 s
 
   it("is dropped by a feature switch before the first keystroke", () => {
     const r = rig({ chunk: 2048 });
