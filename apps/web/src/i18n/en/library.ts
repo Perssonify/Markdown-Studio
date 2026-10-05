@@ -45,6 +45,8 @@ export const library = {
   "library.moreOptions": "More options",
   "library.optionsFor": "Options for {name}",
   "library.duplicate": "Duplicate",
+  "library.shareLink": "Copy share link",
+  "library.folder": "Folder",
   "library.exportMarkdown": "Markdown (.md)",
   "library.exportHtml": "HTML (.html)",
   "library.exportWord": "Word (.docx)",

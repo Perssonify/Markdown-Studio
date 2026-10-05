@@ -31,6 +31,7 @@ import {
   PanelLeftClose,
   PlusIcon,
   SearchIcon,
+  Share2Icon,
   SquareIcon,
   StickyNoteIcon,
   Trash2Icon,
@@ -83,6 +84,8 @@ export interface WorkspacePanelProps {
   onExportFolder?: (folderId: string, opts?: { canonical?: boolean }) => void;
   onExportDocs?: (docIds: string[], zipName: string) => void;
   onExportDoc?: (docId: string, format: "md" | "html" | "docx" | "json") => void;
+  onShareDoc?: (docId: string) => void;
+  onShareFolder?: (folderId: string) => void;
   onSearchBody?: (docId: string, lowerQuery: string) => boolean;
 
   // ── Outline ───────────────────────────────────────────────────────────────
@@ -150,6 +153,8 @@ function WorkspacePanelInner({
   onExportFolder,
   onExportDocs,
   onExportDoc,
+  onShareDoc,
+  onShareFolder,
   onSearchBody,
   headings,
   activeIndex,
@@ -326,6 +331,8 @@ function WorkspacePanelInner({
           onExportFolder={onExportFolder}
           onExportDocs={onExportDocs}
           onExportDoc={onExportDoc}
+          onShareDoc={onShareDoc}
+          onShareFolder={onShareFolder}
           onSearchBody={onSearchBody}
         />
       )}
@@ -349,6 +356,8 @@ function FilesTab({
   onExportFolder,
   onExportDocs,
   onExportDoc,
+  onShareDoc,
+  onShareFolder,
   onSearchBody,
 }: Pick<
   WorkspacePanelProps,
@@ -361,6 +370,8 @@ function FilesTab({
   | "onExportFolder"
   | "onExportDocs"
   | "onExportDoc"
+  | "onShareDoc"
+  | "onShareFolder"
   | "onSearchBody"
 >) {
   const t = useT();
@@ -618,6 +629,8 @@ function FilesTab({
             onDuplicate={onDuplicate}
             onExportFolder={onExportFolder}
             onExportDoc={onExportDoc}
+            onShareDoc={onShareDoc}
+            onShareFolder={onShareFolder}
             confirmDeleteFolder={confirmDeleteFolder}
             scrollRef={listScrollRef}
           />
@@ -640,6 +653,7 @@ function FilesTab({
             onDuplicate={onDuplicate}
             onDelete={deleteOne}
             onExportDoc={onExportDoc}
+            onShareDoc={onShareDoc}
             scrollRef={listScrollRef}
           />
         )}
@@ -677,6 +691,7 @@ interface FlatDocListProps {
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onExportDoc?: (docId: string, format: "md" | "html" | "docx" | "json") => void;
+  onShareDoc?: (docId: string) => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -706,6 +721,7 @@ function FlatDocList({
   onDuplicate,
   onDelete,
   onExportDoc,
+  onShareDoc,
   scrollRef,
 }: FlatDocListProps) {
   const t = useT();
@@ -900,6 +916,9 @@ function FlatDocList({
                     <DropdownMenuItem onClick={() => onExportDoc(doc.id, "json")}>{t("library.exportBackupJson")}</DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+              )}
+              {onShareDoc && (
+                <DropdownMenuItem onClick={() => onShareDoc(doc.id)}><Share2Icon />{t("library.shareLink")}</DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(doc.id)}>

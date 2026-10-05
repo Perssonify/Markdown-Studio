@@ -43,6 +43,7 @@ import {
   FolderPlusIcon,
   HashIcon,
   MoreVerticalIcon,
+  Share2Icon,
   Trash2Icon,
 } from "lucide-react";
 import React, {
@@ -79,6 +80,9 @@ interface FolderTreeProps {
   onExportFolder?: (folderId: string, opts?: { canonical?: boolean }) => void;
   /** Export a single document (active or not) as md/html/docx/json. */
   onExportDoc?: (docId: string, format: ExportDocFormat) => void;
+  /** Copy a self-contained share link for one document / a folder subtree. */
+  onShareDoc?: (docId: string) => void;
+  onShareFolder?: (folderId: string) => void;
   /** Confirm before deleting a folder. Resolves true to proceed. When omitted,
    *  deletion proceeds without confirmation (kept optional for tests). */
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
@@ -365,6 +369,7 @@ function DocMenuBody({
   onDuplicate,
   onDelete,
   onExportDoc,
+  onShareDoc,
 }: {
   F: MenuFam;
   docId: string;
@@ -373,6 +378,7 @@ function DocMenuBody({
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onExportDoc?: (docId: string, format: ExportDocFormat) => void;
+  onShareDoc?: (docId: string) => void;
 }) {
   const t = useT();
   const moveDoc = useFolderStore((s) => s.moveDoc);
@@ -393,6 +399,12 @@ function DocMenuBody({
         }}
       />
       {onExportDoc && <ExportDocSubmenu F={F} docId={docId} onExportDoc={onExportDoc} />}
+      {onShareDoc && (
+        <F.Item onClick={() => onShareDoc(docId)}>
+          <Share2Icon className="mr-2 size-3.5" />
+          {t("library.shareLink")}
+        </F.Item>
+      )}
       <F.Separator />
       <F.Item className="text-destructive focus:text-destructive" onClick={() => onDelete(docId)}>
         <Trash2Icon className="mr-2 size-3.5" />
@@ -409,6 +421,7 @@ function FolderMenuBody({
   count,
   startRename,
   onExportFolder,
+  onShareFolder,
   confirmDeleteFolder,
 }: {
   F: MenuFam;
@@ -416,6 +429,7 @@ function FolderMenuBody({
   count: number;
   startRename: () => void;
   onExportFolder?: (folderId: string, opts?: { canonical?: boolean }) => void;
+  onShareFolder?: (folderId: string) => void;
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
 }) {
   const t = useT();
@@ -451,6 +465,12 @@ function FolderMenuBody({
             {t("library.fullBackupZip")}
           </F.Item>
         </>
+      )}
+      {onShareFolder && (
+        <F.Item onClick={() => onShareFolder(folder.id)}>
+          <Share2Icon className="mr-2 size-3.5" />
+          {t("library.shareLink")}
+        </F.Item>
       )}
       <F.Separator />
       <F.Item
@@ -988,6 +1008,7 @@ export function FolderTree(props: FolderTreeProps) {
           onDuplicate={props.onDuplicate}
           onDelete={props.onDelete}
           onExportDoc={props.onExportDoc}
+          onShareDoc={props.onShareDoc}
         />
       );
     }
@@ -1000,6 +1021,7 @@ export function FolderTree(props: FolderTreeProps) {
         count={row.count}
         startRename={() => setRenamingKey(folderRowKey(payload.id))}
         onExportFolder={props.onExportFolder}
+        onShareFolder={props.onShareFolder}
         confirmDeleteFolder={props.confirmDeleteFolder}
       />
     );

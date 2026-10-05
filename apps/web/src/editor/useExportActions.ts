@@ -7,6 +7,7 @@ import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimes
 import { printHtmlDocument } from "../store/print-export";
 import { recordFullBackup } from "../store/storage-durability";
 import { buildZipAsync, readDocuments } from "../store/zip-builder";
+import { buildShareUrl, SHARE_URL_SOFT_LIMIT, type ShareDoc } from "../store/share-link";
 import { t } from "../i18n";
 import { extForMime, replaceRefsInText } from "../store/asset-refs";
 import {
@@ -235,7 +236,69 @@ export function useExportActions({
   }, [exportDocsToZip, toast]);
   exportDocsRef.current = handleExportDocs;
 
-  return { handleExportFolder, handleExportDoc, handleExportDocs };
+  // Markdown for one stored doc, preferring the LIVE canonical when the editor
+  // holds it (its stored copy can lag by up to one autosave). Returns null only
+  // when there is no way to serialise (no engine and no cached markdown).
+  const markdownForDoc = useCallback((rec: DocumentRecord): string | null => {
+    const canonical = useDocumentStore.getState().hydratedDocId === rec.id ? getCanonical() : rec.canonical;
+    if (engine) return canonicalToMarkdown(canonical, engine.htmlToCleanMd) ?? rec.markdownCache ?? null;
+    return rec.markdownCache ?? null;
+  }, [engine, getCanonical]);
+
+  // Build a self-contained share link (content packed INTO the URL — see
+  // store/share-link.ts), copy it to the clipboard, and tell the user. Images
+  // kept as assets are NOT inlined (they would bloat the link), so a shared doc
+  // shows its text and loses any locally-stored images — noted to the user is
+  // out of scope for v1; the link stays small and works offline.
+  const copyShareUrl = useCallback(async (url: string) => {
+    const long = url.length > SHARE_URL_SOFT_LIMIT;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.show(long ? t("editor.shareLinkCopiedLong") : t("editor.shareLinkCopied"), long ? "warning" : "success");
+    } catch {
+      toast.show(t("editor.shareLinkCopyFailed"), "error");
+    }
+  }, [toast]);
+
+  // Share ONE document as a link.
+  const handleShareDoc = useCallback(async (docId: string) => {
+    try {
+      // Persist the open doc first so the link carries the latest edits.
+      try { await autosaveRef.current(); } catch { /* fall back to stored copy */ }
+      const rec = await useDocumentStore.getState().getStorage().get(docId);
+      if (!rec) { toast.show(t("editor.documentNotFound"), "error"); return; }
+      const canonical = useDocumentStore.getState().hydratedDocId === docId ? getCanonical() : rec.canonical;
+      const title = resolveDocTitle(rec, canonical).title || t("common.untitled");
+      const markdown = markdownForDoc(rec);
+      if (markdown == null) { toast.show(t("editor.shareFailed"), "error"); return; }
+      await copyShareUrl(buildShareUrl({ v: 1, kind: "file", name: title, docs: [{ path: [], title, markdown }] }));
+    } catch { toast.show(t("editor.shareFailed"), "error"); }
+  }, [getCanonical, markdownForDoc, copyShareUrl, toast, autosaveRef]);
+
+  // Share a whole FOLDER (its subtree) as one link, preserving folder structure.
+  const handleShareFolder = useCallback(async (folderId: string) => {
+    try {
+      try { await autosaveRef.current(); } catch { /* fall back to stored copy */ }
+      const { folders, docParents } = useFolderStore.getState();
+      const root = folders.find((f) => f.id === folderId);
+      const entries = collectFolderExport(folderId, folders, docParents);
+      if (entries.length === 0) { toast.show(t("editor.folderHasNoDocuments"), "warning"); return; }
+      const { docs: records } = await readDocuments(useDocumentStore.getState().getStorage(), entries.map((e) => e.docId));
+      const docs: ShareDoc[] = [];
+      for (const { docId, dirSegments } of entries) {
+        const rec = records.get(docId);
+        if (!rec) continue;
+        const markdown = markdownForDoc(rec);
+        if (markdown == null) continue;
+        const title = resolveDocTitle(rec, rec.canonical).title || t("common.untitled");
+        docs.push({ path: dirSegments, title, markdown });
+      }
+      if (docs.length === 0) { toast.show(t("editor.shareFailed"), "error"); return; }
+      await copyShareUrl(buildShareUrl({ v: 1, kind: "folder", name: root?.name || t("library.folder"), docs }));
+    } catch { toast.show(t("editor.shareFailed"), "error"); }
+  }, [markdownForDoc, copyShareUrl, toast, autosaveRef]);
+
+  return { handleExportFolder, handleExportDoc, handleExportDocs, handleShareDoc, handleShareFolder };
 }
 
 /** File ▸ Export ▸ All documents: the whole library as one ZIP. */
