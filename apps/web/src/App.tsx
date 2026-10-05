@@ -154,9 +154,9 @@ export function App() {
         if (!accounts && (route === "login" || route === "profile")) navigate("editor", { replace: true });
     }, [accounts, route, navigate]);
 
-    // The account control at the end of the menu bar. One element for the
-    // life of the shell: the menu bar is memoized, and a new element per render
-    // would re-render it every time.
+    // The account control at the right end of the top header. One element for
+    // the life of the shell: a fresh element each render would needlessly
+    // re-render the account menu subtree on every App render.
     const accountControl = useMemo(
         () => (accounts ? <AccountMenu onSignIn={() => navigate("login")} onProfile={() => navigate("profile")} /> : undefined),
         [accounts, navigate]
@@ -258,7 +258,7 @@ export function App() {
               lets the page scroll there instead (A091, styles.css). */}
           <div className="pf-shell pf-safe-x flex h-dvh flex-col overflow-hidden" lang={locale} dir={localeDir(locale)}>
             <div className="shrink-0" data-print-hide>
-                <EditorHeader />
+                <EditorHeader accountControl={accountControl} />
             </div>
             <div className="pf-shell-editor min-h-0 flex-1">
             <PerssonifyEditor
@@ -278,7 +278,6 @@ export function App() {
                 onAbout={() => navigate("about")}
                 onHelp={() => navigate("help")}
                 onStartTour={startTour}
-                accountControl={accountControl}
                 // Backup reminders, the wiped-library explanation, the moved-
                 // domain banner and the install tip: the app's own library,
                 // so the app's own notices (an embedder's storage is theirs).

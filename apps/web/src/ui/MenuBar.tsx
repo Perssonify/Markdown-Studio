@@ -94,8 +94,6 @@ export interface MenuBarProps {
   onAbout?: () => void;
   onHelp?: () => void;
   onStartTour?: () => void;
-  /** Standalone app only: the account control, after Settings (see PerssonifyEditorProps). */
-  accountControl?: ReactNode;
 }
 
 /** A single top-level menu (File, Edit, …) rendered as a ghost button + dropdown. */
@@ -652,7 +650,6 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
         >
           <SettingsIcon className="size-4" />
         </Button>
-        {props.accountControl}
       </div>
 
       {/* About / Shortcuts dialogs (embedder fallback when onAbout/onHelp absent) */}

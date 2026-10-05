@@ -1,9 +1,19 @@
 import { cn } from "@/lib/utils";
 import { FileText } from "lucide-react";
+import type { ReactNode } from "react";
 import { APP_BRAND, APP_NAME } from "./constants";
 
+interface EditorHeaderProps {
+  /**
+   * Standalone app only: the account control (sign in / the signed-in
+   * account's menu), rendered at the right end of this top header — the
+   * conventional top-right corner for a user profile. Omitted by the library
+   * and the iframe embed, which have no accounts.
+   */
+  accountControl?: ReactNode;
+}
 
-export function EditorHeader() {
+export function EditorHeader({ accountControl }: EditorHeaderProps) {
   return (
     <header
       className={cn(
@@ -30,6 +40,9 @@ export function EditorHeader() {
             </span>
           </div>
         </div>
+
+        {/* Right: the account control sits in the top-right corner. */}
+        {accountControl && <div className="ml-auto flex shrink-0 items-center pl-2">{accountControl}</div>}
       </div>
     </header>
   );

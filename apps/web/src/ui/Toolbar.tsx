@@ -1,6 +1,7 @@
 import { displayKeys } from "../data/shortcuts";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ import {
   Layout,
   Link,
   List, ListOrdered, ListTodo,
+  Loader2,
   LucideIcon,
   Code,
   MinusSquare,
@@ -190,6 +192,20 @@ function TbBtn({ icon: Icon, title, hint, active, onClick, className = "size-8" 
 }
 
 /**
+ * Vertical section divider between control groups. A shadcn `Separator`, so the
+ * row is shadcn throughout. It carries NO horizontal margin of its own: the
+ * flow container gives every direct child the same `mr-2`, so the gap is
+ * symmetric on both sides. The old hand-rolled `w-px mx-0.5` div set a 2px
+ * margin that overrode that `mr-2`, so a divider hugged the control after it
+ * (2px) while sitting ~10px from the one before — the uneven spacing in the row.
+ * `self-stretch` (the Separator default) does nothing in this inline-flow
+ * context, so the height is explicit and sized to sit inside the 32px controls.
+ */
+function Divider() {
+  return <Separator orientation="vertical" className="h-5 self-center" />;
+}
+
+/**
  * Resolve any CSS color (including `var(--token)`, `hsl(...)`, `rgb(...)`) to a
  * `#rrggbb` hex string that a native `<input type="color">` can display.
  * Falls back to `#000000` outside the browser or on unparseable input.
@@ -265,15 +281,17 @@ function TbColor({ value, onChange, title, isHighlight = false, onClear }: TbCol
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
           render={
-            <Button variant="outline" className="relative h-8" title={title} />
+            <Button variant="outline" size="sm" className="relative h-8 w-12 justify-center gap-1 px-2" title={title} aria-label={title} />
           }
         >
-          {isHighlight ? <Highlighter className="w-3.5 h-3.5" /> : <Type className="w-3.5 h-3.5" />}
+          {isHighlight ? <Highlighter className="h-3.5 w-3.5" /> : <Type className="h-3.5 w-3.5" />}
+          {/* The current colour, as a bar under the glyph — sits clear of the icon,
+              so the button reads as "this tool, set to this colour". */}
           <div
-            className="absolute bottom-0.5 left-1.5 right-1.5 h-[3px] rounded-full"
+            className="pointer-events-none absolute bottom-0.5 left-1.5 right-1.5 h-[3px] rounded-full"
             style={{ backgroundColor: hasColor ? value : "transparent", outline: hasColor ? "none" : "1px dashed var(--border)" }}
           />
-          <ChevronDown className="ml-0.5 h-3 w-3 opacity-50" />
+          <ChevronDown className="h-3 w-3 opacity-50" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-52 p-2">
           <div className="mb-2 px-0.5 text-[11px] font-medium text-muted-foreground">
@@ -523,9 +541,9 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
   const blockFontControls = (
     <>
       {blockDropdown}
-      <div className="w-px h-4 bg-border mx-0.5" />
+      <Divider />
       {fontDropdown}
-      <div className="w-px h-4 bg-border mx-0.5" />
+      <Divider />
     </>
   );
 
@@ -544,7 +562,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           <TbBtn icon={Subscript} title={t("toolbar.subscript")} active={st.subscript} onClick={() => exec("subscript")} />
         </ButtonGroup>
 
-        <div className="w-px h-4 bg-border mx-0.5" />
+        <Divider />
 
         <ButtonGroup>
           <TbBtn icon={List} title={t("toolbar.bulletList")} active={st.bulletList} onClick={() => exec("bulletList")} />
@@ -554,7 +572,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           <TbBtn icon={Indent} title={t("toolbar.indent")} hint={t("toolbar.nestAListItemMarkdown")} onClick={() => exec("indent")} />
         </ButtonGroup>
 
-        <div className="w-px h-4 bg-border mx-0.5" />
+        <Divider />
 
         <ButtonGroup>
           {/* Alignment is the one formatting feature plain Markdown cannot record
@@ -565,32 +583,34 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           <TbBtn icon={AlignRight} title={t("toolbar.alignRight")} hint={t("toolbar.notCarriedByPlainMarkdown")} active={st["textAlign"] === "right"} onClick={() => exec("alignRight")} />
         </ButtonGroup>
 
-        <div className="w-px h-4 bg-border mx-0.5" />
+        <Divider />
 
-        <ButtonGroup>
-          <TbColor
-            value={st.color || ""}
-            onChange={(v) => exec("foreColor", v)}
-            onClear={() => exec("unsetColor")}
-            title={t("toolbar.textColor")}
-          />
-          <TbColor
-            value={st.highlight || ""}
-            onChange={(v) => exec("hiliteColor", v)}
-            onClear={() => exec("unsetHighlight")}
-            title={t("toolbar.highlightColor")}
-            isHighlight
-          />
-        </ButtonGroup>
+        {/* Text colour and highlight are two DISTINCT controls, so they are two
+            spaced buttons, not one joined ButtonGroup — grouped flush, their
+            chevrons and colour bars ran together and read as a single collided
+            control. The flow container spaces them like every other control. */}
+        <TbColor
+          value={st.color || ""}
+          onChange={(v) => exec("foreColor", v)}
+          onClear={() => exec("unsetColor")}
+          title={t("toolbar.textColor")}
+        />
+        <TbColor
+          value={st.highlight || ""}
+          onChange={(v) => exec("hiliteColor", v)}
+          onClear={() => exec("unsetHighlight")}
+          title={t("toolbar.highlightColor")}
+          isHighlight
+        />
 
-        <div className="w-px h-4 bg-border mx-0.5" />
+        <Divider />
 
         <ButtonGroup>
           <TbBtn icon={Link} title={t("toolbar.linkKeys", { keys: displayKeys("⌘K") })} onClick={async () => { const u = await prompt(t("toolbar.insertLink"), { placeholder: t("toolbar.linkUrlPlaceholder"), description: t("toolbar.enterTheUrlForTheLink") }); if (u) exec("createLink", u); }} />
           <TbBtn icon={Image} title={t("toolbar.image")} onClick={async () => { const img = await promptImage(prompt); if (img) exec("insertImage", img); }} />
         </ButtonGroup>
 
-        <div className="w-px h-4 bg-border mx-0.5" />
+        <Divider />
 
         <div className="relative">
           <TbBtn icon={TableIcon} title={t("toolbar.insertTable")} onClick={() => setShowTablePicker(!showTablePicker)} />
@@ -643,7 +663,7 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
         {/* Contextual Table Controls */}
         {st.table && (
           <>
-            <div className="w-px h-4 bg-border mx-0.5" />
+            <Divider />
             <ButtonGroup className="animate-in fade-in zoom-in-95">
               <TbBtn icon={PlusSquare} title={t("toolbar.addRow")} onClick={() => exec("tableAddRow")} />
               <TbBtn icon={MinusSquare} title={t("toolbar.delRow")} onClick={() => exec("tableDeleteRow")} />
@@ -687,9 +707,32 @@ function EditorToolbarComponent({ toast, dispatch, updateFormats, showFindReplac
           <ButtonGroup>
             <Tooltip>
               <TooltipTrigger render={
-                <Button variant="ghost" onClick={onSave} disabled={!isDirty} aria-label={t("common.save")} className="h-8 hover:bg-card">
-                  <Save className="text-success" />
-                  <span className="hidden sm:inline-block">{t("common.save")}</span>
+                // Reflect the LIVE save state so a click visibly does something:
+                // Save → Saving… → ✓ Changes saved, then back to Save on the next
+                // edit. aria-label stays "Save" (the control is always the Save
+                // button; the toolbar + a11y tests pin that accessible name) — only
+                // the visible icon and text track the status.
+                <Button
+                  variant="ghost"
+                  onClick={onSave}
+                  disabled={!isDirty}
+                  aria-label={t("common.save")}
+                  className={cn("h-8 hover:bg-card", saveStatus === "saved" && "text-success")}
+                >
+                  {saveStatus === "saving" ? (
+                    <Loader2 className="animate-spin text-muted-foreground" />
+                  ) : saveStatus === "saved" ? (
+                    <Check className="text-success" />
+                  ) : (
+                    <Save className="text-success" />
+                  )}
+                  <span className="hidden sm:inline-block">
+                    {saveStatus === "saving"
+                      ? t("status.saving")
+                      : saveStatus === "saved"
+                        ? t("status.changesSaved")
+                        : t("common.save")}
+                  </span>
                 </Button>
               } />
               <TooltipContent side="bottom" className="text-[10px] font-bold">

@@ -110,7 +110,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## Decorative formatting silently lost in Clean mode
 
 - **Symptom:** You apply text color/highlight/font, switch to Clean mode, and it vanishes from the markdown.
-- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:38](../src/engine/useSyncEngine.ts#L38)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:410](../src/ui/Toolbar.tsx#L410)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
+- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:38](../src/engine/useSyncEngine.ts#L38)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:430](../src/ui/Toolbar.tsx#L430)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
 - **Fix/Workaround:** Use Styled mode to preserve styling, or export as JSON for a lossless copy.
 - **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/fidelity.ts](../src/store/fidelity.ts).
 
