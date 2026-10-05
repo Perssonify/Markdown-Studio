@@ -11,13 +11,15 @@ import { useCallback, useEffect, useState } from "react";
  * (see `vercel.json`), so real paths like `/about` deep-link and refresh
  * cleanly with no extra configuration.
  */
-export type AppRoute = "editor" | "about" | "help" | "graph";
+export type AppRoute = "editor" | "about" | "help" | "graph" | "login" | "profile";
 
 const ROUTE_PATHS: Record<AppRoute, string> = {
   editor: "/",
   about: "/about",
   help: "/help",
   graph: "/graph",
+  login: "/login",
+  profile: "/profile",
 };
 
 export function pathToRoute(pathname: string): AppRoute {
@@ -25,6 +27,8 @@ export function pathToRoute(pathname: string): AppRoute {
   if (p === "/about") return "about";
   if (p === "/help") return "help";
   if (p === "/graph") return "graph";
+  if (p === "/login") return "login";
+  if (p === "/profile") return "profile";
   return "editor";
 }
 

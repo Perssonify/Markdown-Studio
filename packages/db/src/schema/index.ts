@@ -1,3 +1,4 @@
-// Every table the backend owns. Documents are not here yet: their shape is
-// part of the sync feature, which has not been designed.
+// Every table the backend owns: accounts (Better Auth) and the cloud index of
+// each user's library (content in S3).
 export * from "./auth.ts";
+export * from "./sync.ts";

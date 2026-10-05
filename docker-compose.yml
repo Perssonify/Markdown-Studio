@@ -1,14 +1,15 @@
-# Local Postgres for the API — the same major version as production (RDS
-# PostgreSQL 17). `bun run db:up` starts it and waits until it is healthy;
-# `bun run db:migrate` creates the tables; `bun run db:down` stops it (the
-# data volume survives — `docker compose down -v` deletes it).
+# Local services for the API. `bun run db:up` starts both and waits;
+# `bun run db:migrate` creates the tables; `bun run db:down` stops them (the
+# data volumes survive — `docker compose down -v` deletes them).
 #
-# The credentials are for this local container only and match
-# apps/api/.env.example. Port 5440, not 5432, so it never collides with a Postgres already
-# installed on the machine; set POSTGRES_PORT to change it.
+# The credentials are for these local containers only and match
+# apps/api/.env.example. Host ports 5440 and 9540, not the usual 5432 and 9090,
+# so they never collide with something already running on the machine; set
+# POSTGRES_PORT / S3_PORT to change them.
 name: markdown-studio
 
 services:
+  # The same major version as production (RDS PostgreSQL 17).
   postgres:
     image: postgres:17-alpine
     environment:
@@ -25,5 +26,22 @@ services:
       timeout: 3s
       retries: 30
 
+  # Local S3 (production uses Amazon S3). Adobe S3Mock: S3-compatible, opens
+  # with the bucket already created, and accepts any credentials — local only.
+  # (MinIO, the usual choice, no longer publishes images.)
+  s3:
+    image: adobe/s3mock:5.2.3
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: markdown-studio-local
+      # Under the image user's home: S3Mock runs as uid 1000, and a volume
+      # mounted where the image has a folder takes that folder's owner.
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /home/cnb/s3
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+    ports:
+      - "127.0.0.1:${S3_PORT:-9540}:9090"
+    volumes:
+      - s3store:/home/cnb
+
 volumes:
   pgdata:
+  s3store:

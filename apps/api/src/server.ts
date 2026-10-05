@@ -10,6 +10,7 @@ const { app, database } = buildApp(env, { poolSize: 10 });
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`api: listening on http://localhost:${info.port} (health: /health)`);
   if (!env.DATABASE_URL) console.log("api: no DATABASE_URL — running without a database (bun run db:up starts one)");
+  if (!env.S3_BUCKET) console.log("api: no S3_BUCKET — running without file storage (bun run db:up starts a local S3)");
   const missing = missingAuthSettings(env);
   if (missing.length) console.log(`api: Google sign-in is off until these are set: ${missing.join(", ")}`);
 });

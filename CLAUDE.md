@@ -18,7 +18,10 @@ break). Every path in it is relative to `apps/web`.
   live at the repository root (`.github/`, `.node-version`, `SECURITY.md`,
   `bun.lock`, `node_modules/`) are read as `../../…`.
 - `apps/api` — Hono on Node 24. `src/app.ts` is the whole HTTP surface;
-  `src/server.ts` serves it locally, `src/lambda.ts` on AWS Lambda.
+  `src/server.ts` serves it locally, `src/lambda.ts` on AWS Lambda. File storage is
+  `src/lib/storage.ts` (S3): Amazon S3 through the Lambda's role on AWS, Adobe
+  S3Mock locally (docker-compose; MinIO no longer publishes images). Keys are
+  plain paths (`assertKey` refuses `..`, leading `/`, empty segments).
 - `packages/db` — Drizzle schema (`src/schema/`), committed SQL migrations
   (`drizzle/`), `runMigrations` (advisory-locked).
 - `infra` — AWS CDK, one stack (`MarkdownStudio`, us-east-1).
@@ -48,6 +51,16 @@ break). Every path in it is relative to `apps/web`.
 - **Better Auth's origin check is ON explicitly** (`advanced.disableOriginCheck:
   false`, `apps/api/src/lib/auth.ts`). Its default turns the check off whenever
   it detects a test run, so the suite would pass an open redirect.
+- **Users' files live in their own stack, `MarkdownStudioFiles`** (`infra/lib/files-stack.ts`,
+  deployed): one production bucket, retained, termination-protected, versioned. The
+  app stack only finds it by name (`filesBucketName`) and grants access — never own
+  or recreate it there. Local development points `apps/api/.env` at it with the AWS
+  CLI login; TESTS never touch AWS (`TEST_S3_ENDPOINT` is the local S3).
+- **Cloud sync never infers a deletion** (`apps/web/src/app/cloud/plan.ts`): a
+  document is deleted in the account only from the editor's own delete event; one
+  missing locally is downloaded again. Server writes are conditional on the client's
+  `base` revision under a row lock (`apps/api/src/routes/sync.ts`). The client half
+  is tested against the real server half by `apps/web/src/__tests__/cloud-contract.test.js`.
 - **No code here may ever delete a database.** The RDS instance and the secret
   holding its password are `RemovalPolicy.RETAIN` with deletion protection
   (`infra/test/stack.test.ts` pins both): a failed deploy's rollback, a stack

@@ -1,5 +1,9 @@
 import { useTheme } from "next-themes";
-import React, { Suspense, useCallback, useEffect, useLayoutEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { accountsEnabled, useAccount } from "./app/account";
+import { AccountCheckScreen } from "./app/AccountCheckScreen";
+import { AccountMenu } from "./app/AccountMenu";
+import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud";
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
 import { useUIStore } from "./store/uiStore";
@@ -40,6 +44,9 @@ assetStore.configure({ enabled: true });
 
 const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
 const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
+const LoginPage = React.lazy(() => import("./ui/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const ProfilePage = React.lazy(() => import("./ui/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const SignInScreen = React.lazy(() => import("./ui/pages/LoginPage").then((m) => ({ default: m.SignInScreen })));
 const Walkthrough = React.lazy(() => import("./ui/Walkthrough").then((m) => ({ default: m.Walkthrough })));
 
 const TOUR_SEEN_KEY = "pf:tour-seen-v1";
@@ -111,6 +118,50 @@ export function App() {
         } catch { /* ignore */ }
     }, []);
 
+    // Accounts (Google sign-in through the backend), in builds that have one
+    // (accountsEnabled). Then the app is for signed-in visitors: a signed-out
+    // visitor gets the sign-in screen instead of the editor. Where the account
+    // service does not answer — offline, an outage — the editor opens as it
+    // always has: documents live in this browser and must stay reachable.
+    // Builds without accounts make no account call and show no account UI.
+    const [accounts] = useState(accountsEnabled);
+    const accountStatus = useAccount((s) => s.status);
+    const accountUserId = useAccount((s) => s.user?.id ?? null);
+    const cloudPhase = useCloudStatus((s) => s.phase);
+    // Cloud sync for the signed-in account. Before the editor opens, the
+    // library here is made ready: claimed for the account, and — when it is
+    // empty (a new device, a wiped browser) — filled from the account first, so
+    // the editor opens on the user's documents instead of seeding starter notes.
+    const [cloudReadyFor, setCloudReadyFor] = useState<string | null>(null);
+    useEffect(() => {
+        if (!accounts || accountStatus !== "signed-in" || !accountUserId) return;
+        let cancelled = false;
+        let stop: (() => void) | null = null;
+        void prepareCloudLibrary(accountUserId).then((outcome) => {
+            if (cancelled) return;
+            setCloudReadyFor(accountUserId);
+            if (outcome === "ready") stop = startCloudSync(accountUserId);
+        });
+        return () => {
+            cancelled = true;
+            stop?.();
+        };
+    }, [accounts, accountStatus, accountUserId]);
+    useEffect(() => {
+        if (accounts) void useAccount.getState().refresh();
+    }, [accounts]);
+    useEffect(() => {
+        if (!accounts && (route === "login" || route === "profile")) navigate("editor", { replace: true });
+    }, [accounts, route, navigate]);
+
+    // The account control at the end of the menu bar. One element for the
+    // life of the shell: the menu bar is memoized, and a new element per render
+    // would re-render it every time.
+    const accountControl = useMemo(
+        () => (accounts ? <AccountMenu onSignIn={() => navigate("login")} onProfile={() => navigate("profile")} /> : undefined),
+        [accounts, navigate]
+    );
+
     // Start the guided tour — return to the editor first so its targets are on
     // screen, then run on the next frame.
     const startTour = useCallback(() => {
@@ -154,7 +205,7 @@ export function App() {
     // Mute editor lifecycle toasts while a static interior page covers the
     // editor — "Ready" popping over the Help docs reads as a malfunction.
     useEffect(() => {
-        setToastsMutedForInteriorPage(route === "about" || route === "help");
+        setToastsMutedForInteriorPage(route === "about" || route === "help" || route === "login" || route === "profile");
         return () => setToastsMutedForInteriorPage(false);
     }, [route]);
 
@@ -172,8 +223,26 @@ export function App() {
             route === "about" ? t("app.aboutTitle", { app: base })
             : route === "help" ? t("app.helpTitle", { app: base })
             : route === "graph" ? t("app.relationshipMapTitle", { app: base })
+            : route === "login" ? t("account.loginDocumentTitle", { app: base })
+            : route === "profile" ? t("account.profileDocumentTitle", { app: base })
             : base;
     }, [route, t]);
+
+    if (accounts && accountStatus === "loading") return <AccountCheckScreen />;
+    if (accounts && accountStatus === "signed-in" && accountUserId && cloudReadyFor !== accountUserId) {
+        return <AccountCheckScreen message={cloudPhase === "preparing" ? t("account.bringingDocuments") : undefined} />;
+    }
+    if (accounts && accountStatus === "signed-out") {
+        return (
+            <ErrorBoundary isDark={isDark}>
+                <div lang={locale} dir={localeDir(locale)}>
+                    <Suspense fallback={<AccountCheckScreen />}>
+                        <SignInScreen />
+                    </Suspense>
+                </div>
+            </ErrorBoundary>
+        );
+    }
 
     return (
         <ErrorBoundary isDark={isDark}>
@@ -209,6 +278,7 @@ export function App() {
                 onAbout={() => navigate("about")}
                 onHelp={() => navigate("help")}
                 onStartTour={startTour}
+                accountControl={accountControl}
                 // Backup reminders, the wiped-library explanation, the moved-
                 // domain banner and the install tip: the app's own library,
                 // so the app's own notices (an embedder's storage is theirs).
@@ -226,6 +296,8 @@ export function App() {
             <Suspense fallback={null}>
                 {route === "about" && <AboutPage onClose={() => navigate("editor")} />}
                 {route === "help" && <HelpPage onClose={() => navigate("editor")} onStartTour={startTour} />}
+                {route === "login" && <LoginPage onClose={() => navigate("editor")} onProfile={() => navigate("profile")} />}
+                {route === "profile" && <ProfilePage onClose={() => navigate("editor")} onSignIn={() => navigate("login")} />}
                 {tourRun && <Walkthrough run={tourRun} onFinish={finishTour} />}
             </Suspense>
         </ErrorBoundary>

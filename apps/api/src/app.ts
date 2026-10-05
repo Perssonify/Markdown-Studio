@@ -6,20 +6,25 @@ import { requireOriginSecret } from "./middleware/origin-verify.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { importRelayRoutes } from "./routes/import-relay.ts";
+import { syncRoutes, type SyncDeps } from "./routes/sync.ts";
 
 export interface AppDeps {
   env: Env;
   /** One database round trip, or null when no database is configured. */
   pingDatabase: (() => Promise<void>) | null;
+  /** One file-storage round trip, or null when no bucket is configured. */
+  pingStorage: (() => Promise<void>) | null;
   /** Better Auth, or null until its settings are complete. */
   auth: Auth | null;
+  /** Cloud sync of each user's library: needs the database, file storage and auth. */
+  sync?: SyncDeps;
 }
 
 /**
  * The whole HTTP surface, independent of where it runs: src/server.ts serves
  * it with Node locally, src/lambda.ts on AWS Lambda behind CloudFront.
  */
-export function createApp({ env, pingDatabase, auth }: AppDeps): Hono {
+export function createApp({ env, pingDatabase, pingStorage, auth, sync }: AppDeps): Hono {
   const app = new Hono();
 
   if (env.ORIGIN_VERIFY_SECRET) app.use("*", requireOriginSecret(env.ORIGIN_VERIFY_SECRET));
@@ -28,8 +33,9 @@ export function createApp({ env, pingDatabase, auth }: AppDeps): Hono {
   app.route("/", importRelayRoutes());
 
   app.use("*", corsForFrontend(env.CORS_ORIGINS));
-  app.route("/", healthRoutes({ pingDatabase }));
+  app.route("/", healthRoutes({ pingDatabase, pingStorage }));
   app.route("/", authRoutes(auth, missingAuthSettings(env)));
+  app.route("/", syncRoutes(sync ?? { db: null, storage: null, userIdOf: null }) as unknown as Hono);
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   app.onError((err, c) => {

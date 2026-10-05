@@ -15,7 +15,7 @@ const migrationSql = readdirSync(MIGRATIONS_FOLDER)
 
 describe("the committed migrations cover the schema", () => {
   it("finds the schema's tables (the check is not vacuous)", () => {
-    expect(tables.map((t) => t.name).sort()).toEqual(["account", "session", "user", "verification"]);
+    expect(tables.map((t) => t.name).sort()).toEqual(["account", "session", "sync_asset", "sync_document", "sync_library", "user", "verification"]);
   });
 
   // A schema edit without `bun run db:generate` ships a table or column the
