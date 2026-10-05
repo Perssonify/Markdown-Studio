@@ -7,6 +7,8 @@ describe("app router path mapping", () => {
     expect(pathToRoute("/about")).toBe("about");
     expect(pathToRoute("/help")).toBe("help");
     expect(pathToRoute("/graph")).toBe("graph");
+    expect(pathToRoute("/login")).toBe("login");
+    expect(pathToRoute("/profile")).toBe("profile");
   });
 
   it("is case-insensitive and tolerates trailing slashes", () => {
@@ -21,7 +23,7 @@ describe("app router path mapping", () => {
   });
 
   it("routeToPath round-trips", () => {
-    for (const r of ["editor", "about", "help", "graph"]) {
+    for (const r of ["editor", "about", "help", "graph", "login", "profile"]) {
       expect(pathToRoute(routeToPath(r))).toBe(r);
     }
     expect(routeToPath("editor")).toBe("/");

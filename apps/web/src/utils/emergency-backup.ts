@@ -30,7 +30,8 @@ export interface BackupSources {
   docParents: Readonly<Record<string, string>>;
 }
 
-function liveSources(): BackupSources {
+/** The library as it is now: stored documents, parked drafts and folders. */
+export function liveBackupSources(): BackupSources {
   const docs = useDocumentStore.getState();
   const { folders, docParents } = useFolderStore.getState();
   return { storage: docs.getStorage(), drafts: docs._unsavedEdits, folders, docParents };
@@ -94,12 +95,24 @@ export async function buildBackupFiles(src: BackupSources): Promise<Record<strin
  * documents it contains (0 → nothing was downloaded).
  */
 export async function exportEmergencyBackup(
-  src: BackupSources = liveSources(),
+  src: BackupSources = liveBackupSources(),
   download: (blob: Blob, filename: string) => void = downloadBlob,
 ): Promise<number> {
+  const { zip, count } = await buildBackupZip(src);
+  if (!count) return 0;
+  download(new Blob([zip as BlobPart], { type: "application/zip" }), `perssonify-backup-${exportTimestamp()}.zip`);
+  return count;
+}
+
+/**
+ * The backup archive itself — the documents and, beside them, the images they
+ * keep as assets — without handing it anywhere. The crash screen downloads it;
+ * the signed-in app also stores one a day in the account (app/cloud/backup.ts).
+ */
+export async function buildBackupZip(src: BackupSources): Promise<{ zip: Uint8Array; count: number }> {
   const files = await buildBackupFiles(src);
   const count = Object.keys(files).length;
-  if (!count) return 0;
+  if (!count) return { zip: new Uint8Array(), count: 0 };
   // The images those documents keep as assets (A086) go in beside them, as
   // the ordinary backup writes them, so Import restores the pictures too.
   // Best effort: an asset store that cannot be read must not cost the user
@@ -109,7 +122,5 @@ export async function exportEmergencyBackup(
     const { assets } = await collectAssetsFor(Object.values(files));
     for (const [hash, a] of assets) archive[`assets/${hash}.${extForMime(a.mime)}`] = a.bytes;
   } catch { /* documents only */ }
-  const zip = buildZip(archive);
-  download(new Blob([zip as BlobPart], { type: "application/zip" }), `perssonify-backup-${exportTimestamp()}.zip`);
-  return count;
+  return { zip: buildZip(archive), count };
 }

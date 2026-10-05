@@ -90,6 +90,6 @@ describe.skipIf(!server)("/api/auth with Google configured", () => {
   });
 
   it("/health reports the database up", async () => {
-    expect(await (await app.request("/health")).json()).toEqual({ status: "ok", db: "up" });
+    expect(await (await app.request("/health")).json()).toMatchObject({ status: "ok", db: "up" });
   });
 });

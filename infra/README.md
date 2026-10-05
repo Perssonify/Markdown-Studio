@@ -1,20 +1,36 @@
 # infra — Markdown Studio on AWS (CDK)
 
-One CloudFormation stack, `MarkdownStudio`, in `us-east-1`, defined in
-[`lib/markdown-studio-stack.ts`](lib/markdown-studio-stack.ts):
+Two CloudFormation stacks in `us-east-1`:
+
+- **`MarkdownStudioFiles`** ([`lib/files-stack.ts`](lib/files-stack.ts)) — users' files:
+  ONE production bucket, `markdown-studio-labs`. **Deployed** (5 Oct 2026, as
+  `markdown-studio-files-519046119363`; renamed — S3 cannot rename, so the new
+  name is a new bucket and the old one is retained as it was). Its own stack so
+  no app deploy, rollback or delete can touch users'
+  files; retained and termination-protected. Private, encrypted, TLS-only,
+  versioned (old versions kept 30 days — Version history ▸ In your account), daily
+  backups (tagged `kind=backup` by the API) expired after 30 days, CORS for the site
+  and the local editor (presigned uploads). Deploy changes with `bunx cdk deploy MarkdownStudioFiles --exclusively`.
+- **`MarkdownStudio`** ([`lib/markdown-studio-stack.ts`](lib/markdown-studio-stack.ts)) — the app,
+  which finds the files bucket by name and grants the API access to it:
 
 ```
 browser ──► CloudFront ─┬─ /*      → S3 (the website, private, via Origin Access Control)
                         └─ /api/*  → Lambda function URL (apps/api)
                                        │ private subnets
                                        ├─► RDS PostgreSQL 17 (isolated subnets, no public access)
+                                       ├─► S3 files bucket (MarkdownStudioFiles; through the role)
                                        └─► NAT instance ─► internet (Google sign-in, the import relay)
 ```
+
+The API reads and writes the files bucket (`S3_BUCKET`) with the Lambda's own
+role — no keys. When the app is deployed, add its CloudFront address to the
+bucket's CORS origins (`-c extraOrigins=…`, then redeploy `MarkdownStudioFiles`).
 
 The site and the API share one origin, so the editor's existing relative call
 to `/api/import` works unchanged and sign-in cookies are first-party.
 
-**Nothing here has been deployed.** The account is bootstrapped for CDK
+**Only `MarkdownStudioFiles` has been deployed.** The account is bootstrapped for CDK
 (`CDKToolkit`); deploying is an owner step.
 
 ## The database is never deleted by this code
@@ -47,7 +63,8 @@ locally by Rolldown).
 bun run deploy        # from the repository root
 ```
 
-[`scripts/deploy.ts`](scripts/deploy.ts) builds the editor (`build:app`) and the
+[`scripts/deploy.ts`](scripts/deploy.ts) builds the editor (`build:app`, with
+`VITE_ACCOUNTS=on`: this deployment has the API, so visitors sign in) and the
 API bundle, strips the sourcemaps (as Vercel's build does), runs `cdk deploy`
 (which asks before any IAM or security-group change), uploads the site to its
 bucket — hashed assets first, HTML last — and invalidates CloudFront.
