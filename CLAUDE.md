@@ -24,7 +24,9 @@ break). Every path in it is relative to `apps/web`.
   plain paths (`assertKey` refuses `..`, leading `/`, empty segments).
 - `packages/db` — Drizzle schema (`src/schema/`), committed SQL migrations
   (`drizzle/`), `runMigrations` (advisory-locked).
-- `infra` — AWS CDK, one stack (`MarkdownStudio`, us-east-1).
+- `infra` — AWS CDK (us-east-1): `MarkdownStudioFiles` (the files bucket),
+  `MarkdownStudio` (the app on AWS, not deployed) and `MarkdownStudioVercelData`
+  (the database and S3 key the app on Vercel uses).
 - `vercel.json` (root) — the same two apps as ONE Vercel project with services:
   `web` (apps/web, static) and `api` (apps/api, a Vercel Function built from
   `src/vercel.ts` into `dist/vercel/`); `/api/*` goes to `api`, the rest to `web`.
@@ -50,6 +52,11 @@ break). Every path in it is relative to `apps/web`.
   SPA `rewrites`. infra reads it (`infra/lib/site-config.ts`): CloudFront's CSP and
   security headers, S3 objects' Cache-Control and the SPA rewrite all come from
   it. So an inline-script hash change (see apps/web/CLAUDE.md) updates both hosts.
+- **The Vercel database admits only the Vercel project's Static IPs**
+  (`infra/lib/vercel-data-stack.ts` refuses anything but single IPv4 addresses —
+  never a range, never `0.0.0.0/0`) and only over TLS; from Vercel the API verifies
+  RDS's certificate against `DATABASE_CA`. Migrations run from the `api` service's
+  PRODUCTION build (`scripts/migrate-on-vercel.mjs`); preview builds never touch it.
 - **The `api` service's `outputDirectory` stays `dist/vercel`.** With a build
   command, Vercel's builder takes the first server-like file it finds in the
   output folder (`dist/` by default) as the function — that was `dist/server.mjs`,

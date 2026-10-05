@@ -10,7 +10,7 @@ export function buildApp(
   env: Env,
   { poolSize }: { poolSize: number },
 ): { app: Hono; database: DatabaseHandle | null; storage: Storage | null } {
-  const database = env.DATABASE_URL ? createDatabase({ url: env.DATABASE_URL, ssl: env.DATABASE_SSL, max: poolSize }) : null;
+  const database = env.DATABASE_URL ? createDatabase({ url: env.DATABASE_URL, ssl: env.DATABASE_SSL, max: poolSize, ca: env.DATABASE_CA }) : null;
   const storage = storageFromEnv(env);
   const auth = authFromEnv(env, database?.db ?? null);
   const app = createApp({

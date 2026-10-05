@@ -44,4 +44,13 @@ describe("loadEnv", () => {
     });
     expect(missingAuthSettings(complete)).toEqual([]);
   });
+
+  // RDS from Vercel: the runtime does not trust Amazon's RDS CAs, so they come
+  // in a setting — often pasted on one line with literal "\n"s.
+  it("reads DATABASE_CA as PEM, with literal \"\\n\"s as line breaks", () => {
+    const pem = "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----";
+    expect(loadEnv({ DATABASE_CA: pem }).DATABASE_CA).toBe(pem);
+    expect(loadEnv({ DATABASE_CA: pem.replaceAll("\n", "\\n") }).DATABASE_CA).toBe(pem);
+    expect(loadEnv({}).DATABASE_CA).toBeUndefined();
+  });
 });

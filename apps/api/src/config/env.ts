@@ -36,6 +36,13 @@ export const EnvSchema = z.object({
 
   DATABASE_URL: optional.pipe(z.url().optional()),
   DATABASE_SSL: z.enum(["off", "require", "verify"]).default("off"),
+  /**
+   * PEM certificates the database's certificate is verified against
+   * (DATABASE_SSL=verify) where the runtime does not trust them already: RDS
+   * from Vercel. A value pasted on one line, with literal "\n"s, is read as
+   * the PEM it stands for.
+   */
+  DATABASE_CA: optional.transform((s) => s?.replaceAll("\\n", "\n")),
 
   /** Signs session cookies. At least 32 characters; `openssl rand -base64 32`. */
   BETTER_AUTH_SECRET: optional.pipe(z.string().min(32).optional()),
