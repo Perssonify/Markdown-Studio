@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MarkdownStudioStack } from "../lib/markdown-studio-stack.ts";
 import { readVercelConfig, securityHeadersFor } from "../lib/site-config.ts";
 
-const vercelPath = fileURLToPath(new URL("../../apps/web/vercel.json", import.meta.url));
+const vercelPath = fileURLToPath(new URL("../../vercel.json", import.meta.url));
 const vercel = readVercelConfig(vercelPath);
 const dirs: string[] = [];
 let template: Template;

@@ -2,10 +2,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { assertUniformHeaders, cacheControlFor, DEFAULT_CACHE_CONTROL, readVercelConfig, securityHeadersFor, spaRewrite } from "../lib/site-config.ts";
 
-const vercel = readVercelConfig(fileURLToPath(new URL("../../apps/web/vercel.json", import.meta.url)));
+const vercel = readVercelConfig(fileURLToPath(new URL("../../vercel.json", import.meta.url)));
 const value = (path: string, key: string) => securityHeadersFor(vercel, path).find((h) => h.key.toLowerCase() === key)?.value;
 
-describe("reading apps/web/vercel.json", () => {
+describe("reading vercel.json (the shared headers and the web service's)", () => {
   it("every CloudFront behaviour's paths get one consistent header set", () => {
     const h = assertUniformHeaders(vercel);
     expect(h.default.map((x) => x.key.toLowerCase()).sort()).toEqual([

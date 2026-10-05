@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { readVercelConfig, spaRewrite } from "../lib/site-config.ts";
 import { rewriteFunctionCode, siteFiles } from "../lib/spa-rewrite.ts";
 
-const vercel = readVercelConfig(fileURLToPath(new URL("../../apps/web/vercel.json", import.meta.url)));
+const vercel = readVercelConfig(fileURLToPath(new URL("../../vercel.json", import.meta.url)));
 
 const dist = mkdtempSync(join(tmpdir(), "ms-dist-"));
 afterAll(() => rmSync(dist, { recursive: true, force: true }));

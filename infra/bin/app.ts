@@ -59,7 +59,7 @@ if (missingBuilds.length) {
     terminationProtection: true,
     webDist,
     apiLambdaDist,
-    vercelConfig: repo("apps/web/vercel.json"),
+    vercelConfig: repo("vercel.json"),
     extraOrigins,
     domain: domainNames.length ? { names: domainNames, certificateArn } : undefined,
     filesBucketName,

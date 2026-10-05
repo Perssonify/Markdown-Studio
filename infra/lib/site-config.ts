@@ -1,16 +1,25 @@
 import { readFileSync } from "node:fs";
 
 /**
- * apps/web/vercel.json is the ONE description of how the site is served: its
- * SPA rewrite, its security headers (a hash-pinned CSP that
+ * The repository's vercel.json is the ONE description of how the site is
+ * served: its SPA rewrite, its security headers (a hash-pinned CSP that
  * apps/web/src/__tests__/ops-vercel-headers.test.js keeps in step with the
  * inline scripts) and its cache headers. The AWS deployment reads it rather
  * than restating it, so the two hosts cannot drift: change vercel.json and
  * the next deploy carries the change to CloudFront and S3.
+ *
+ * vercel.json describes services (Vercel runs the editor as `web` and the API
+ * as `api`): the site is the top-level headers, which every response gets, and
+ * the `web` service's own headers and rewrite.
  */
 export interface VercelConfig {
   rewrites: { source: string; destination: string }[];
   headers: { source: string; headers: { key: string; value: string }[] }[];
+}
+
+interface VercelFile {
+  headers?: VercelConfig["headers"];
+  services?: { web?: Partial<VercelConfig> };
 }
 
 export interface Header {
@@ -19,7 +28,10 @@ export interface Header {
 }
 
 export function readVercelConfig(file: string): VercelConfig {
-  return JSON.parse(readFileSync(file, "utf8")) as VercelConfig;
+  const cfg = JSON.parse(readFileSync(file, "utf8")) as VercelFile;
+  const web = cfg.services?.web;
+  if (!web) throw new Error(`${file} has no "web" service`);
+  return { rewrites: web.rewrites ?? [], headers: [...(cfg.headers ?? []), ...(web.headers ?? [])] };
 }
 
 /** Vercel `source` patterns used here are plain regex bodies (the test file reads them the same way). */
