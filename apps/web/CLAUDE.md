@@ -1103,6 +1103,66 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - Interior pages/graph are wired through PE via optional props (`onAbout`,
   `onHelp`, `onStartTour`, `graphOpen`/`onGraphOpenChange`); omitted by the
   library/iframe embed, which keep the built-in dialogs + internal graph toggle.
+- **Accounts are the STANDALONE APP's alone** (Google sign-in through the backend,
+  `apps/api` + Better Auth), and only in builds that have the backend:
+  `accountsEnabled()` is true for the dev server and for `VITE_ACCOUNTS=on` (the AWS
+  deploy sets it, `infra/scripts/deploy.ts`); every other build — the Vercel one, the
+  e2e builds, the unit tests — makes NO account call and shows no account UI. It reads
+  the exact expression `import.meta.env`: Vite and Vitest rewrite only that text, and a
+  cast-wrapped form read a stale copy (tests could not switch it on).
+  **Where accounts exist, the app is for signed-in visitors**: App.tsx renders the
+  sign-in screen (`SignInScreen`) INSTEAD of the editor while signed out, and a
+  checking screen while the session is unknown (`SESSION_CHECK_TIMEOUT_MS`), so
+  neither flashes. **`unavailable` (no answer: offline, an outage) opens the editor**
+  — documents live in this browser and must stay reachable offline.
+  `src/app/account.ts` is the session state (`useAccount`), calling same-origin
+  `/api/auth/*` — CloudFront routes `/api/*` to the API on AWS, and
+  `vite.app.config.ts` proxies `/api` to `:4000` in dev and preview, so local sign-in
+  also runs on ONE origin (`PUBLIC_URL` is the editor's address; a cookie set on
+  another port is not reliably sent back). Signed in: `src/app/AccountMenu.tsx` at the
+  right end of the menu bar after Settings (Profile, Sign out), handed in through PE's
+  `accountControl` prop (App.tsx only — the library and the embed never pass it,
+  pinned by `account.test.jsx`); `/login` and `/profile` are routed interior pages
+  (`ui/pages/LoginPage.tsx`, `ProfilePage.tsx`). Signing out unmounts the editor (the
+  gate takes over) — unmount is a document-leaving path (`releaseEditor`). Signing in
+  is a full navigation to Google, covered by the unload safety net, and does not touch
+  documents. Google returns to `/` on success and `/login?error=<code>` on failure
+  (`signInTargets`), both trusted origins of the API (`CORS_ORIGINS`).
+- **Cloud sync** (`src/app/cloud/`, signed-in only): documents, their images and the
+  folder tree, to the account (API `/api/sync`, content in S3). **The engine works
+  like ANOTHER TAB**: its own `IndexedDBStorageAdapter` on the app's database, and
+  what it changes is announced on the tab-sync channel (a second BroadcastChannel,
+  `from: "cloud-sync:…"`), so the editor's tested multi-tab paths do the rest — a
+  clean open note reloads, a dirty one gets "Keep mine / Use theirs". It learns of
+  local changes by LISTENING on that channel. Rules (`plan.ts`, pure, mutation-
+  tested): one side changed → it travels; both → the NEWER wins and the other goes
+  to Version history (`"cloud-sync"` snapshot reason, both devices); **a document
+  is deleted in the account ONLY from the editor's own delete event** (pending
+  deletes) — a document merely missing here is downloaded again, so a wiped browser
+  can never erase the account; an edit after a deletion restores the note. Every
+  local copy replaced or deleted is snapshotted first. The folder tree is a
+  THREE-WAY merge per entry against the last agreed tree, judged by CONTENT (a
+  server-issued revision guards the write; timestamps collided). Images go
+  straight to S3 with presigned URLs and S3 verifies each SHA-256. One web lock per
+  account runs one cycle at a time across tabs. One account owns a browser's
+  library (`pf:cloud-owner`); another account signing in there does not sync. An
+  EMPTY library (new device, wiped browser) is filled from the account BEFORE the
+  editor mounts (`prepareCloudLibrary`), so no starter notes are seeded over it.
+  "Erase all local data" (`cleared`) resets this device's sync state and pauses
+  sync for the page. **Beside sync** (both only in the account that owns the library):
+  a full backup a DAY (`backup.ts`: the File ▸ Export ▸ Full backup ZIP, built by
+  `buildBackupZip` — the crash screen's builder — and PUT straight to S3 through a
+  presigned link whose SHA-256 S3 checks; first device that day stores it, a minute
+  after sign-in, inside the sync lock; `pf:cloud-backup:<user>` is the day done;
+  Profile ▸ Backups lists, downloads and "Back up now"), and Version history ▸ **In
+  your account** (`versions.ts` → `store/account-versions.ts`, a registry the editor
+  reads so the library and embed never import app code): the bucket's past versions
+  of the open note, THINNED by the API (`thinVersions`) so they span the 30 days;
+  bringing one back records an `"account-version"` snapshot and restores THAT, so it
+  is undone like any restore. The avatar is the initials on `--primary`, never the
+  Google picture. Tests: `cloud-plan`, `cloud-folder-merge`, `cloud-sync` (two
+  devices, in-memory account), `cloud-backup`, `cloud-versions` and `cloud-contract`
+  (this code against the REAL API, Postgres and S3 — CI's backend job).
 - `src/PerssonifyEditor.tsx` — the orchestrator: reads the stores, owns the refs and
   engines, calls the hooks below, and renders. **Where PerssonifyEditor's parts live**
   (`src/editor/`, A110 — each hook takes its dependencies explicitly; `types.ts`

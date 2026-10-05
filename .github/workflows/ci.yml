@@ -143,8 +143,9 @@ jobs:
         run: bun run test
 
   # The backend: apps/api (Hono), packages/db (Drizzle) and infra (AWS CDK).
-  # Postgres is the major production runs (RDS PostgreSQL 17); the suites
-  # create their own throwaway databases on it. The API's build also starts
+  # Postgres is the major production runs (RDS PostgreSQL 17) and S3 an
+  # S3-compatible server; the suites create their own throwaway databases and
+  # buckets on them. The API's build also starts
   # the bundled Lambda handler and Node server (apps/api/scripts/smoke-bundle.mjs).
   backend:
     runs-on: ubuntu-latest
@@ -161,8 +162,14 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U markdown_studio -d markdown_studio"
           --health-interval 2s --health-timeout 3s --health-retries 30
+      # S3-compatible storage (docker-compose.yml runs the same image locally).
+      s3:
+        image: adobe/s3mock:5.2.3
+        ports:
+          - 9090:9090
     env:
       TEST_DATABASE_URL: postgres://markdown_studio:markdown_studio@localhost:5432/markdown_studio
+      TEST_S3_ENDPOINT: http://localhost:9090
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -183,6 +190,12 @@ jobs:
 
       - name: Lint, type-check, test and build the backend
         run: bunx turbo run lint typecheck test build --filter=@markdown-studio/api --filter=@markdown-studio/db --filter=@markdown-studio/infra
+
+      # The browser's sync code against the real API, Postgres and S3 — the
+      # one test that notices if the two halves of cloud sync disagree.
+      - name: Cloud sync contract (browser code against the API)
+        working-directory: apps/web
+        run: bunx vitest run src/__tests__/cloud-contract.test.js
 
   # Browser campaign. Unit tests cannot reach real IME composition, real
   # IndexedDB, quota exhaustion, a second tab, a coarse pointer, a service

@@ -35,6 +35,12 @@ export interface MarkdownStudioStackProps extends cdk.StackProps {
    * The first name becomes the site's URL.
    */
   domain?: { names: string[]; certificateArn: string };
+  /**
+   * The file-storage bucket, by name. It lives in its own stack (FilesStack,
+   * lib/files-stack.ts) so the app's deploys can never touch users' files;
+   * this stack only grants the API access to it.
+   */
+  filesBucketName: string;
 }
 
 export const SITE_URL_PARAMETER = "/markdown-studio/site-url";
@@ -84,6 +90,9 @@ export class MarkdownStudioStack extends cdk.Stack {
       ],
     });
     nat.connections.allowFrom(ec2.Peer.ipv4(vpc.vpcCidrBlock), ec2.Port.allTraffic(), "private subnets reach the internet through it");
+    // S3 traffic (the API's file storage) goes straight to S3 inside AWS, not
+    // through the small NAT instance. Gateway endpoints cost nothing.
+    vpc.addGatewayEndpoint("S3Endpoint", { service: ec2.GatewayVpcEndpointAwsService.S3 });
 
     const apiSg = new ec2.SecurityGroup(this, "ApiSecurityGroup", { vpc, description: "Markdown Studio API (Lambda)", allowAllOutbound: true });
     const dbSg = new ec2.SecurityGroup(this, "DatabaseSecurityGroup", { vpc, description: "Markdown Studio database", allowAllOutbound: false });
@@ -158,18 +167,8 @@ export class MarkdownStudioStack extends cdk.Stack {
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
-    // For the documents feature. Nothing reads or writes it yet.
-    const documentsBucket = new s3.Bucket(this, "DocumentsBucket", {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      lifecycleRules: [
-        { abortIncompleteMultipartUploadAfter: cdk.Duration.days(7) },
-        { noncurrentVersionExpiration: cdk.Duration.days(30) },
-      ],
-    });
+    // Users' files: owned by FilesStack, found here by name.
+    const filesBucket = s3.Bucket.fromBucketName(this, "FilesBucket", props.filesBucketName);
 
     // ── API (Lambda) ────────────────────────────────────────────────────────
     const code = lambda.Code.fromAsset(props.apiLambdaDist, { exclude: ["*.map"] });
@@ -203,9 +202,14 @@ export class MarkdownStudioStack extends cdk.Stack {
         ORIGIN_SECRET_ARN: originSecret.secretArn,
         SITE_URL_PARAMETER,
         CORS_ORIGINS: (props.extraOrigins ?? []).join(","),
+        // File storage: the documents bucket, reached with the function's own
+        // role (no keys in the environment).
+        S3_BUCKET: filesBucket.bucketName,
+        S3_REGION: this.region,
       },
     });
     for (const s of [database.secret!, authSecret, googleSecret, originSecret]) s.grantRead(api);
+    filesBucket.grantReadWrite(api);
     api.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["ssm:GetParameter"],
@@ -343,7 +347,7 @@ export class MarkdownStudioStack extends cdk.Stack {
     out("GoogleRedirectUri", `${siteUrl}/api/auth/callback/google`, "Add to the Google OAuth client's authorized redirect URIs");
     out("DistributionId", distribution.distributionId, "For cache invalidations");
     out("SiteBucketName", siteBucket.bucketName, "The website's files");
-    out("DocumentsBucketName", documentsBucket.bucketName, "For the documents feature (unused yet)");
+    out("FilesBucketName", filesBucket.bucketName, "File storage for the API (S3_BUCKET), owned by the MarkdownStudioFiles stack");
     out("ApiFunctionName", api.functionName, "The API Lambda");
     out("DatabaseEndpoint", database.dbInstanceEndpointAddress, "Private; reachable from the VPC only");
     out("GoogleSecretName", googleSecret.secretName, "Put the Google OAuth client ID and secret here");

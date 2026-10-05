@@ -9,10 +9,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { AlertCircle, History, RotateCcw, Trash2, FilePlus2 } from "lucide-react";
+import { AlertCircle, Cloud, History, RotateCcw, Trash2, FilePlus2 } from "lucide-react";
 import React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTickWhileActive } from "../hooks/useTickWhileActive";
+import { useAccountVersions, type AccountVersion, type AccountVersionsProvider } from "../store/account-versions";
 import { useDocumentStore } from "../store/documentStore";
 import {
   formatSnapshotBytes,
@@ -42,6 +43,8 @@ const REASON_LABEL: Record<SnapshotReason, string> = {
   get "pre-restore"() { return t("dialogs.reasonPreRestore"); },
   get "pre-link-update"() { return t("dialogs.reasonPreLinkUpdate"); },
   get "tab-conflict"() { return t("dialogs.reasonTabConflict"); },
+  get "cloud-sync"() { return t("dialogs.reasonCloudSync"); },
+  get "account-version"() { return t("dialogs.reasonAccountVersion"); },
   get manual() { return t("dialogs.reasonManual"); },
 };
 
@@ -79,6 +82,124 @@ function formatWhen(ts: number): string {
   return d.toLocaleString();
 }
 
+type AccountList =
+  | { docId: string; state: "loading" }
+  | { docId: string; state: "failed" }
+  | { docId: string; state: "ready"; versions: AccountVersion[] };
+
+/**
+ * The account's earlier versions of the current note (only while the app syncs
+ * with an account). Bringing one back stores it as an ordinary snapshot, then
+ * restores that — so it is undone the way any restore is.
+ */
+function AccountVersionsSection({
+  provider,
+  docId,
+  disabled,
+  onRestoreInPlace,
+  onRestoreAsNew,
+}: {
+  provider: AccountVersionsProvider;
+  docId: string;
+  disabled: boolean;
+  onRestoreInPlace: (snapshotId: number) => Promise<void>;
+  onRestoreAsNew: (meta: SnapshotMeta) => Promise<void>;
+}) {
+  const t = useT();
+  const [list, setList] = useState<AccountList>({ docId, state: "loading" });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    setList({ docId, state: "loading" });
+    provider.list(docId).then(
+      (versions) => live && setList({ docId, state: "ready", versions }),
+      () => live && setList({ docId, state: "failed" }),
+    );
+    return () => { live = false; };
+  }, [provider, docId]);
+
+  const bringBack = async (v: AccountVersion, asNew: boolean) => {
+    if (disabled || busy) return;
+    setBusy(v.id);
+    setFailed(false);
+    try {
+      const id = await provider.bringBack(docId, v.id);
+      const meta = id == null ? undefined : (await snapshotStore.listForDoc(docId)).find((m) => m.id === id);
+      if (id == null || !meta) {
+        setFailed(true);
+        return;
+      }
+      if (asNew) await onRestoreAsNew(meta);
+      else await onRestoreInPlace(id);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // A list loaded for the previous note is not this note's.
+  const shown: AccountList = list.docId === docId ? list : { docId, state: "loading" };
+  const note = (text: string) => (
+    <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">{text}</p>
+  );
+  let body: React.ReactNode;
+  if (shown.state === "loading") body = note(t("dialogs.accountVersionsLoading"));
+  else if (shown.state === "failed") body = note(t("dialogs.accountVersionsUnavailable"));
+  else if (shown.versions.length === 0) body = note(t("dialogs.accountVersionsNone"));
+  else {
+    body = (
+      <ul className="overflow-hidden rounded-md border border-border">
+        {shown.versions.map((v, i) => (
+          <li key={v.id} className={cn("flex items-center gap-2 px-3 py-2.5", i % 2 === 1 && "bg-card/40")}>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium">{t("dialogs.accountVersion")}</p>
+              <p className="text-[11px] text-muted-foreground">{formatWhen(v.at)}</p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 shrink-0 gap-1 text-xs pointer-coarse:h-9"
+              disabled={disabled || busy != null}
+              onClick={() => void bringBack(v, false)}
+            >
+              <RotateCcw className="size-3.5" /> {t("dialogs.restore")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 shrink-0 gap-1 text-xs pointer-coarse:h-9"
+              disabled={disabled || busy != null}
+              onClick={() => void bringBack(v, true)}
+              title={t("dialogs.restoreThisVersionAsA")}
+            >
+              <FilePlus2 className="size-3.5" /> {t("dialogs.asNew")}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div>
+      <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <Cloud className="size-3.5" /> {t("dialogs.inYourAccount")}
+      </p>
+      <p className="mb-2 text-[11px] text-muted-foreground">{t("dialogs.accountVersionsHint")}</p>
+      {failed && (
+        <p role="alert" className="mb-2 flex items-start gap-1.5 text-xs text-destructive">
+          <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+          <span>{t("dialogs.accountVersionCouldNotBeBroughtBack")}</span>
+        </p>
+      )}
+      {body}
+    </div>
+  );
+}
+
 /**
  * Version history (Tools → Version history…). Surfaces the recoverable snapshot
  * net: prior content versions kept per document so an overwrite, clear, or
@@ -98,6 +219,7 @@ function VersionHistorySheetInner({
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { confirm } = useDialog();
+  const accountVersions = useAccountVersions();
   // Restoring writes a document and deleting a version destroys recoverable
   // data; read-only mode gates every mutation, and these are two of them.
   const readOnly = useUIStore((s) => s.readOnly);
@@ -240,6 +362,16 @@ function VersionHistorySheetInner({
                 </ul>
               )}
             </div>
+
+            {accountVersions && activeDocId && (
+              <AccountVersionsSection
+                provider={accountVersions}
+                docId={activeDocId}
+                disabled={readOnly || busy != null}
+                onRestoreInPlace={async (id) => { await onRestoreInPlace(id); onOpenChange(false); }}
+                onRestoreAsNew={async (meta) => { await onRestoreAsNew(meta); onOpenChange(false); }}
+              />
+            )}
 
             {others.length > 0 && (
               <div>

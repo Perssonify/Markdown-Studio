@@ -8,7 +8,9 @@ import { defineConfig } from "rolldown";
 //   with packages/db/drizzle copied beside them for the migration handler.
 //
 // The AWS SDK is left out of the Lambda bundle: the Node.js runtime provides
-// it. pg's optional native binding is never used.
+// it. The server bundle carries the S3 client (it stores files wherever it
+// runs); the Secrets Manager and SSM clients are read only on Lambda. pg's
+// optional native binding is never used.
 rmSync("dist", { recursive: true, force: true });
 
 // CommonJS dependencies (pg, undici's internals) call require() for Node
@@ -17,7 +19,7 @@ const banner = 'import { createRequire as __pfCreateRequire } from "node:module"
 
 const shared = {
   platform: "node" as const,
-  external: [/^@aws-sdk\//, "pg-native"],
+  external: [/^@aws-sdk\/client-(secrets-manager|ssm)$/, "pg-native"],
   output: { format: "esm" as const, banner, entryFileNames: "[name].mjs", chunkFileNames: "[name]-[hash].mjs", sourcemap: true },
 };
 
@@ -26,6 +28,7 @@ export default defineConfig([
   {
     ...shared,
     input: { index: "src/lambda.ts", migrate: "src/migrate-lambda.ts" },
+    external: [/^@aws-sdk\//, "pg-native"],
     output: { ...shared.output, dir: "dist/lambda" },
     plugins: [
       {

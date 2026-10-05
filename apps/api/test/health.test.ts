@@ -1,27 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { testApp } from "./helpers.ts";
 
+const up = async () => {};
+const down = async () => {
+  throw new Error("connect ECONNREFUSED");
+};
+
 describe("GET /health", () => {
-  it("answers ok without a database, and says none is configured", async () => {
+  it("answers ok with nothing configured, and says so", async () => {
     const res = await testApp().request("/health");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: "ok", db: "not_configured" });
+    expect(await res.json()).toEqual({ status: "ok", db: "not_configured", storage: "not_configured" });
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("reports the database up when it answers", async () => {
-    const res = await testApp({}, { pingDatabase: async () => {} }).request("/health");
+  it("reports the database and storage up when they answer", async () => {
+    const res = await testApp({}, { pingDatabase: up, pingStorage: up }).request("/health");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: "ok", db: "up" });
+    expect(await res.json()).toEqual({ status: "ok", db: "up", storage: "up" });
   });
 
   it("is 503 degraded when a configured database does not answer", async () => {
-    const down = async () => {
-      throw new Error("connect ECONNREFUSED");
-    };
-    const res = await testApp({}, { pingDatabase: down }).request("/health");
+    const res = await testApp({}, { pingDatabase: down, pingStorage: up }).request("/health");
     expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ status: "degraded", db: "down" });
+    expect(await res.json()).toEqual({ status: "degraded", db: "down", storage: "up" });
+  });
+
+  it("is 503 degraded when configured storage does not answer", async () => {
+    const res = await testApp({}, { pingDatabase: up, pingStorage: down }).request("/health");
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ status: "degraded", db: "up", storage: "down" });
   });
 
   it("is also served at /api/health (the path CloudFront routes to the API)", async () => {

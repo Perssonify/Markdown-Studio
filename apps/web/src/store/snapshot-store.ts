@@ -42,6 +42,8 @@ export type SnapshotReason =
   | "pre-restore" // captured current state before restoring an older snapshot
   | "pre-link-update" // before links to a renamed heading were retargeted (heading-renames.ts)
   | "tab-conflict" // the version set aside when two tabs changed a document (useTabSync.ts)
+  | "cloud-sync" // the version set aside when the account had a newer one, or lost to it (app/cloud)
+  | "account-version" // a past version brought back from the account (Version history ▸ In your account)
   | "manual";     // user asked to snapshot now
 
 export interface SnapshotMeta {
@@ -282,21 +284,25 @@ class SnapshotStore {
     this.lastAutoAt.set(docId, now);
     // Returns the write promise so callers (tests) MAY await it; production
     // callers treat it as fire-and-forget and ignore the result.
-    return this.record(docId, title, oldCanonical, shrink ? "pre-clear" : "autosave");
+    return this.record(docId, title, oldCanonical, shrink ? "pre-clear" : "autosave").then(() => undefined);
   }
 
   /**
    * Record a snapshot unconditionally (used for pre-delete / pre-restore /
    * manual). Deduped against the most recent snapshot for the doc by content
    * hash so back-to-back identical captures don't accumulate.
+   *
+   * Resolves to the id of the snapshot that now holds this content — the new
+   * one, or the latest one when it already held it — or null when nothing was
+   * kept (snapshots off, or a blank document).
    */
   async record(
     docId: string,
     title: string,
     canonical: unknown,
     reason: SnapshotReason
-  ): Promise<void> {
-    if (!this.enabled || !docId || isBlank(canonical)) return;
+  ): Promise<number | null> {
+    if (!this.enabled || !docId || isBlank(canonical)) return null;
     await this.open();
     const serialized = serialize(canonical);
     const hash = quickHash(serialized);
@@ -313,21 +319,25 @@ class SnapshotStore {
 
     // Dedup vs the latest existing snapshot for this doc.
     const latest = await this.latestForDoc(docId);
-    if (latest && latest.hash === hash) return;
+    if (latest && latest.hash === hash) return latest.id;
 
+    let id: number;
     if (!this.usable || !this.db) {
-      this.mem.push({ ...meta, canonical, id: this.memSeq-- });
+      id = this.memSeq--;
+      this.mem.push({ ...meta, canonical, id });
     } else {
       try {
         const tx = this.db.transaction(STORE, "readwrite");
-        await idbRequest(tx.objectStore(STORE).add({ ...meta, json: serialized } as SnapshotRecord));
+        id = (await idbRequest(tx.objectStore(STORE).add({ ...meta, json: serialized } as SnapshotRecord))) as number;
       } catch {
         // Fall back to memory on any write error (e.g. quota).
-        this.mem.push({ ...meta, canonical, id: this.memSeq-- });
+        id = this.memSeq--;
+        this.mem.push({ ...meta, canonical, id });
       }
     }
     await this.prune(docId);
     this.emit();
+    return id;
   }
 
   /**
