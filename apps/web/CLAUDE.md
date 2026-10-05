@@ -5,8 +5,10 @@
 > is relative to `apps/web`; `bun.lock` and the hoisted `node_modules` sit at
 > the repository root, two levels up, as do `.github/`, `.node-version` and
 > `SECURITY.md`. Run commands here or through Turbo from the root. The
-> frontend was moved in unchanged; on AWS, infra serves it from the same
-> `vercel.json` (headers, rewrite, cache rules) — `infra/lib/site-config.ts`.
+> frontend was moved in unchanged. How it is served — headers, rewrite, cache
+> rules — is the ROOT `vercel.json` (`../../vercel.json`: its top-level `headers`
+> and its `web` service); Vercel and, on AWS, infra (`infra/lib/site-config.ts`)
+> both serve it from that one file.
 
 > **The product is Markdown Studio** (home: markdownstudio.com). The repo, the
 > npm package (`@perssonify/editor`) and every DATA identifier keep their old
@@ -1106,8 +1108,9 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **Accounts are the STANDALONE APP's alone** (Google sign-in through the backend,
   `apps/api` + Better Auth), and only in builds that have the backend:
   `accountsEnabled()` is true for the dev server and for `VITE_ACCOUNTS=on` (the AWS
-  deploy sets it, `infra/scripts/deploy.ts`); every other build — the Vercel one, the
-  e2e builds, the unit tests — makes NO account call and shows no account UI. It reads
+  deploy sets it, `infra/scripts/deploy.ts`; Vercel's `web` service builds with
+  `build:app:accounts`); every other build — the library, the embed, the e2e builds,
+  the unit tests — makes NO account call and shows no account UI. It reads
   the exact expression `import.meta.env`: Vite and Vitest rewrite only that text, and a
   cast-wrapped form read a stale copy (tests could not switch it on).
   **Where accounts exist, the app is for signed-in visitors**: App.tsx renders the
@@ -2600,7 +2603,8 @@ step in `docs/deployment.md`).
 **`build:app` also writes the third-party licence notice**, read from the build's
 HIDDEN sourcemaps (`scripts/third-party-licenses.mjs` → `dist-app/third-party-licenses.txt`;
 it refuses to run without maps), and **Vercel strips the maps AFTERWARDS** —
-`vercel.json` `buildCommand` is `bun run build:app && node scripts/strip-sourcemaps.mjs`,
+the root `vercel.json`'s `web` `buildCommand` is
+`bun run build:app:accounts && node scripts/strip-sourcemaps.mjs`,
 so the order is build → notice → strip, and the maps land in the gitignored
 `dist-app-sourcemaps/` (deploy 35 MB → 9.4 MB, A016). Moving the maps inside the
 build would break the notice (A077). When dependencies change, refresh the

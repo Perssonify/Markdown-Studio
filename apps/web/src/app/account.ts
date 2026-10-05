@@ -59,10 +59,11 @@ function buildEnv(): BuildEnv {
 
 /**
  * Whether this build has accounts: true where a backend serves /api/auth.
- * VITE_ACCOUNTS=on (the AWS deploy builds with it) or the development server
- * turns them on; VITE_ACCOUNTS=off turns them off. Elsewhere — today's Vercel
- * build, the e2e builds, the unit tests — the app makes no account call and
- * shows no account UI: exactly the editor it was before accounts.
+ * VITE_ACCOUNTS=on (the AWS deploy and Vercel's `web` service build with it)
+ * or the development server turns them on; VITE_ACCOUNTS=off turns them off.
+ * Elsewhere — the library, the embed, the e2e builds, the unit tests — the app
+ * makes no account call and shows no account UI: exactly the editor it was
+ * before accounts.
  */
 export function accountsEnabled(env: BuildEnv = buildEnv()): boolean {
   const flag = env["VITE_ACCOUNTS"];

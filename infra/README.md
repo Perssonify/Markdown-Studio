@@ -90,7 +90,7 @@ put the Google keys in.
 3. New Lambda instances read it at start; to pick it up at once, redeploy or
    update any setting of the API function.
 
-## How the website is served — taken from `apps/web/vercel.json`
+## How the website is served — taken from the root `vercel.json`
 
 infra does not restate the hosting rules; it reads them
 ([`lib/site-config.ts`](lib/site-config.ts)):

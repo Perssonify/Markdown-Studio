@@ -25,6 +25,10 @@ break). Every path in it is relative to `apps/web`.
 - `packages/db` — Drizzle schema (`src/schema/`), committed SQL migrations
   (`drizzle/`), `runMigrations` (advisory-locked).
 - `infra` — AWS CDK, one stack (`MarkdownStudio`, us-east-1).
+- `vercel.json` (root) — the same two apps as ONE Vercel project with services:
+  `web` (apps/web, static) and `api` (apps/api, a Vercel Function built from
+  `src/vercel.ts` into `dist/vercel/`); `/api/*` goes to `api`, the rest to `web`.
+  The Vercel project's Root Directory is the repository root.
 
 ## Invariants — do NOT break
 - **One `bun.lock`, hoisted (`bunfig.toml` `linker = "hoisted"`).** Bun's
@@ -41,10 +45,18 @@ break). Every path in it is relative to `apps/web`.
   The relay answers its own CORS (markdownstudio.com only), so the API's
   CORS middleware is registered AFTER the relay route — widening the relay's
   origins would loosen a security control (`test/cors.test.ts`).
-- **`apps/web/vercel.json` is the one description of how the site is served.**
-  infra reads it (`infra/lib/site-config.ts`): CloudFront's CSP and security
-  headers, S3 objects' Cache-Control and the SPA rewrite all come from it. So
-  an inline-script hash change (see apps/web/CLAUDE.md) updates both hosts.
+- **The root `vercel.json` is the one description of how the site is served**:
+  its top-level `headers` (every response) and the `web` service's `headers` and
+  SPA `rewrites`. infra reads it (`infra/lib/site-config.ts`): CloudFront's CSP and
+  security headers, S3 objects' Cache-Control and the SPA rewrite all come from
+  it. So an inline-script hash change (see apps/web/CLAUDE.md) updates both hosts.
+- **The `api` service's `outputDirectory` stays `dist/vercel`.** With a build
+  command, Vercel's builder takes the first server-like file it finds in the
+  output folder (`dist/` by default) as the function — that was `dist/server.mjs`,
+  the LOCAL Node server, with every other bundle shipped beside it. `vercel dev`
+  cannot run the `api` service (CLI 62: it ignores `entrypoint` and `devCommand`
+  and detects `src/app.ts`); local development is `bun run dev`, which routes
+  `/api` the same way.
 - **The API's TypeScript runs on Node directly** (type stripping): relative
   imports carry `.ts`, and only erasable syntax is allowed (no enums,
   namespaces or parameter properties) — `tsconfig.node.json`.

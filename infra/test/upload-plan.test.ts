@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { readVercelConfig } from "../lib/site-config.ts";
 import { planUploads } from "../lib/upload-plan.ts";
 
-const vercel = readVercelConfig(fileURLToPath(new URL("../../apps/web/vercel.json", import.meta.url)));
+const vercel = readVercelConfig(fileURLToPath(new URL("../../vercel.json", import.meta.url)));
 const made: string[] = [];
 afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })));
 

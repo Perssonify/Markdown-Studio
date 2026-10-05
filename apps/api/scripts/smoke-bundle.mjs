@@ -37,6 +37,15 @@ if (relay.statusCode !== 403 || !/first-party/.test(relay.body)) fail(`lambda /a
 const { handler: migrate } = await import(new URL("../dist/lambda/migrate.mjs", import.meta.url));
 if (typeof migrate !== "function") fail("lambda migrate handler is not exported");
 
+// ── Vercel ──────────────────────────────────────────────────────────────────
+// The function's default export is the app; Vercel calls its fetch().
+const { default: vercelApp } = await import(new URL("../dist/vercel/index.mjs", import.meta.url));
+if (typeof vercelApp?.fetch !== "function") fail("vercel bundle does not export the app as default");
+const vHealth = await vercelApp.fetch(new Request("https://example.vercel.app/api/health"));
+if (vHealth.status !== 200 || (await vHealth.json()).status !== "ok") fail(`vercel /api/health → ${vHealth.status}`);
+const vRelay = await vercelApp.fetch(new Request("https://example.vercel.app/api/import"));
+if (vRelay.status !== 403 || !/first-party/.test(await vRelay.text())) fail(`vercel /api/import → ${vRelay.status}`);
+
 // ── Node server ─────────────────────────────────────────────────────────────
 const port = await new Promise((resolve) => {
   const s = createServer().listen(0, () => {
@@ -64,4 +73,4 @@ try {
   child.kill();
   if (child.exitCode === null) await once(child, "exit");
 }
-console.log("smoke-bundle: lambda and server bundles start and answer /health");
+console.log("smoke-bundle: lambda, vercel and server bundles start and answer /health");

@@ -49,7 +49,7 @@ describe("strip-sourcemaps", () => {
   });
 
   it("the deploy runs it LAST, after the build that emits (and the scans that read) the maps", () => {
-    const vercel = JSON.parse(readFileSync(join(process.cwd(), "vercel.json"), "utf8"));
+    const vercel = JSON.parse(readFileSync(join(process.cwd(), "../../vercel.json"), "utf8")).services.web;
     expect(vercel.buildCommand).toMatch(/^bun run build:app\b.*&& node scripts\/strip-sourcemaps\.mjs$/);
     // …and the build still emits them for those scans.
     expect(readFileSync(join(process.cwd(), "vite.app.config.ts"), "utf8")).toMatch(/sourcemap: 'hidden'/);
