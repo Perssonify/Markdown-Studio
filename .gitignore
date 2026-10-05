@@ -15,6 +15,10 @@ dist/
 .env.*
 !.env.example
 
+# Vercel: the linked project (`vercel link`) and `vercel build` output. The
+# project is the repository root — vercel.json's services.
+.vercel/
+
 # AWS CDK output.
 infra/cdk.out/
 infra/cdk.context.local.json

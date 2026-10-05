@@ -39,7 +39,7 @@ documents, their images and your folders sync to your account (S3), so they
 follow you to any device. The
 editor reaches the API through its own address (Vite forwards `/api`), so the
 Google client's redirect URI is `http://localhost:5173/api/auth/callback/google`.
-Builds without the backend (`VITE_ACCOUNTS` unset — e.g. today's Vercel build)
+Builds without the backend (`VITE_ACCOUNTS` unset — the npm library, the embed)
 have no sign-in at all.
 
 ## Commands (from the root)
@@ -63,7 +63,8 @@ The site and the API are served by AWS ([infra/README.md](infra/README.md)):
 one CloudFront distribution serves the site from S3 and sends `/api/*` to the
 API on Lambda, so the editor's existing relative calls work unchanged.
 
-Until the domain moves, markdownstudio.com is still the Vercel project. Vercel
-now needs **Root Directory = `apps/web`** in the project's settings (the
-`vercel.json` and the `api/` function moved there with the rest of the
-editor).
+The same two apps also deploy to Vercel as ONE project with services
+([`vercel.json`](vercel.json)): `web` serves the editor, `api` runs the API as a
+Vercel Function, and `/api/*` goes to `api` on the same domain. The project's
+**Root Directory is the repository root** (leave it empty). The API reads its
+settings from the project's environment variables (see `apps/api/.env.example`).

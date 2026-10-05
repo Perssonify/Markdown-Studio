@@ -18,7 +18,9 @@ import path from "node:path";
 import { serve, open, boot, runCase, until, APP_DIR, ROOT } from "../lib.mjs";
 import { PROBE_MD, allRendered, exportWord, openLazySurfaces, pasteMarkdown, renderers } from "../renderers.mjs";
 
-const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
+// The repository's vercel.json: the top-level headers and the web service's.
+const root = JSON.parse(fs.readFileSync(path.join(ROOT, "..", "..", "vercel.json"), "utf8"));
+const vercel = { headers: [...root.headers, ...root.services.web.headers] };
 
 /** vercel.json's headers for a path, with the report-only policy ENFORCED. */
 function headersFor(urlPath) {

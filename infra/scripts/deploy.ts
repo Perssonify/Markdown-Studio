@@ -50,7 +50,7 @@ const bucket = outputs.SiteBucketName;
 const distributionId = outputs.DistributionId;
 if (!bucket || !distributionId) throw new Error(`stack ${STACK} has no SiteBucketName/DistributionId output — deploy it first`);
 
-const plan = planUploads(repo("apps/web/dist-app"), readVercelConfig(repo("apps/web/vercel.json")));
+const plan = planUploads(repo("apps/web/dist-app"), readVercelConfig(repo("vercel.json")));
 const s3 = new S3Client({ region: REGION });
 const put = (u: Upload) =>
   s3.send(new PutObjectCommand({ Bucket: bucket, Key: u.key, Body: readFileSync(u.file), ContentType: u.contentType, CacheControl: u.cacheControl }));

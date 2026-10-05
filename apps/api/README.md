@@ -1,8 +1,9 @@
 # apps/api — the Markdown Studio backend
 
-Hono on Node 24. One app (`src/app.ts`), two ways to run it:
-`src/server.ts` (Node, locally) and `src/lambda.ts` (AWS Lambda behind
-CloudFront, see [infra](../../infra/README.md)).
+Hono on Node 24. One app (`src/app.ts`), three ways to run it:
+`src/server.ts` (Node, locally), `src/lambda.ts` (AWS Lambda behind
+CloudFront, see [infra](../../infra/README.md)) and `src/vercel.ts` (a Vercel
+Function: the `api` service of the root [`vercel.json`](../../vercel.json)).
 
 ## Endpoints
 
@@ -30,13 +31,14 @@ src/
   bootstrap.ts         env → database + auth → app
   server.ts            Node entry (local)
   lambda.ts            Lambda entry (+ trustViewerAddress)
+  vercel.ts            Vercel entry (the app as the default export)
   migrate-lambda.ts    the migration function infra runs on deploy
   config/env.ts        every setting, validated (zod)
   middleware/          cors.ts (the frontend's origins), origin-verify.ts (CloudFront only)
   routes/              health.ts, import-relay.ts, auth.ts
   lib/                 auth.ts (Better Auth), storage.ts (S3), aws-secrets.ts, vercel-handler.ts
 test/                  vitest; auth.test.ts uses a real Postgres
-scripts/smoke-bundle.mjs  run by `build`: starts the bundled server and Lambda handler
+scripts/smoke-bundle.mjs  run by `build`: starts the bundled server, Lambda handler and Vercel app
 ```
 
 ## Running it
@@ -51,8 +53,9 @@ imports carry their `.ts` extension and only erasable syntax is allowed), and
 restarts it when `src/`, `packages/db/src` or the relay changes. It watches
 those folders rather than every imported file: watching `node_modules` too
 restarted the server on startup noise.
-`build` type-checks, bundles `dist/server.mjs` and `dist/lambda/*.mjs`
-(Rolldown, no `node_modules` needed at runtime) and smoke-tests both.
+`build` type-checks, bundles `dist/server.mjs`, `dist/lambda/*.mjs` and
+`dist/vercel/index.mjs` (Rolldown, no `node_modules` needed at runtime) and
+smoke-tests all three.
 
 ## Settings (`.env`, see `.env.example`)
 
