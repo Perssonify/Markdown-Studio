@@ -570,6 +570,39 @@ body.pf-app {
      `disableTransitionOnChange` instead (see main.tsx). */
 }
 
+/* The STANDALONE app renders at 92% by default — the zoom the team reads it at
+   (Chrome's 92% step), baked in so no manual browser zoom is needed. Scoped to
+   `pf-app-standalone` (index.html) so it reaches ONLY the standalone app: the
+   iframe embed is sized by its host and must stay at 100%, and library consumers
+   never carry the class. A visitor's own browser zoom still stacks on top of
+   this. `--app-zoom` is the single source for the factor (reused just below). */
+html.pf-app-standalone {
+  --app-zoom: 0.92;
+  zoom: var(--app-zoom);
+}
+
+/* CSS `zoom` scales the rendering but, UNLIKE the browser's own page zoom, does
+   not enlarge the viewport — so viewport units resolve against the un-zoomed
+   viewport and come up short by the zoom factor. The shell's `h-dvh` (100dvh)
+   therefore rendered at 92% of the screen height and left a gap at the bottom.
+   Divide it back out so header + editor fill the screen exactly. Unlayered, so
+   it beats the `h-dvh` utility (same reason the A091 rules are). Only above the
+   A091 short-viewport threshold — below it the shell deliberately scrolls (see
+   `@media (max-height: 449px)`), and that rule must keep winning. */
+@media (min-height: 450px) {
+  html.pf-app-standalone .pf-shell {
+    height: calc(100dvh / var(--app-zoom));
+  }
+  /* Same fix for the full-screen states that render IN PLACE OF the shell
+     (loading / sign-in / error) — each a `min-h-dvh` root, so each fell short by
+     the zoom factor and showed a band of page background below it. In this
+     codebase `min-h-dvh` is only ever a full-screen root; if that stops being
+     true, scope this instead of overriding the utility wholesale. */
+  html.pf-app-standalone .min-h-dvh {
+    min-height: calc(100dvh / var(--app-zoom));
+  }
+}
+
 /* Safe-area helpers for full-screen in-app webviews. On a notched phone the top
    header, the side edges (landscape), and the bottom status bar would otherwise
    sit UNDER the notch / home indicator; these push the chrome's own background

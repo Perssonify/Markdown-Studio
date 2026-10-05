@@ -288,10 +288,11 @@ describe("the profile page's backups", () => {
 describe("accounts are the standalone app's alone", () => {
   const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
 
-  it("the app shell hands the menu bar its account control, after Settings", () => {
-    expect(read("src/App.tsx")).toMatch(/accountControl=\{accountControl\}/);
-    const menuBar = read("src/ui/MenuBar.tsx");
-    expect(menuBar.indexOf("{props.accountControl}")).toBeGreaterThan(menuBar.indexOf('data-tour="settings"'));
+  it("the app shell hands the top header its account control", () => {
+    // Lives at the right end of the top brand header, not in the menu bar.
+    expect(read("src/App.tsx")).toMatch(/<EditorHeader accountControl=\{accountControl\}/);
+    expect(read("src/EditorHeader.tsx")).toMatch(/accountControl/);
+    expect(read("src/ui/MenuBar.tsx")).not.toMatch(/accountControl/);
   });
 
   it.each(["src/embed.tsx", "src/index.tsx", "src/integration/PerssonifyEditorIntegration.tsx"])("%s never mounts it", (file) => {

@@ -24,7 +24,7 @@ interface AccountMenuProps {
 }
 
 /**
- * The account control at the right end of the menu bar, after Settings.
+ * The account control at the right end of the top header (EditorHeader).
  * Signed out: a "Sign in" button that opens the sign-in page. Signed in: the
  * account's photo, opening a menu with the name and email, Profile and Sign
  * out. Renders NOTHING while the session is being checked or when no account
