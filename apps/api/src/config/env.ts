@@ -84,6 +84,20 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   return parsed.data;
 }
 
+/**
+ * On Vercel, where a setting the site's own address belongs in is unset, the
+ * project's production address (`VERCEL_PROJECT_PRODUCTION_URL`, e.g.
+ * markdown-studio.vercel.app, which Vercel sets itself) fills it: PUBLIC_URL
+ * (Better Auth's base URL) and CORS_ORIGINS (its trusted origins). A value
+ * the project sets wins.
+ */
+export function withVercelSite(source: Record<string, string | undefined>): Record<string, string | undefined> {
+  const host = source.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (!host) return source;
+  const site = `https://${host}`;
+  return { ...source, PUBLIC_URL: source.PUBLIC_URL?.trim() || site, CORS_ORIGINS: source.CORS_ORIGINS?.trim() || site };
+}
+
 /** The settings Google sign-in still needs, by name (never by value). */
 export function missingAuthSettings(env: Env): string[] {
   const missing: string[] = [];

@@ -46,7 +46,8 @@ export class VercelDataStack extends cdk.Stack {
 
     const dbSg = new ec2.SecurityGroup(this, "DatabaseSg", {
       vpc,
-      description: "PostgreSQL from the Vercel project's Static IPs only",
+      // EC2 refuses an apostrophe here (the first deploy failed on one).
+      description: "PostgreSQL from the Vercel project Static IPs only",
       allowAllOutbound: false,
     });
     for (const ip of props.allowedIps) dbSg.addIngressRule(ec2.Peer.ipv4(`${ip}/32`), ec2.Port.tcp(5432), "Vercel Static IP");
@@ -69,7 +70,9 @@ export class VercelDataStack extends cdk.Stack {
 
     const database = new rds.DatabaseInstance(this, "Database", {
       engine,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
+      // db.t3.micro: RDS no longer offers db.t4g.micro for PostgreSQL in
+      // us-east-1 (Oct 2026 — the second deploy failed on it). Same price.
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroups: [dbSg],
