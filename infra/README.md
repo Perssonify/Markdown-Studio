@@ -13,7 +13,7 @@ Three CloudFormation stacks in `us-east-1`:
   and the local editor (presigned uploads). Deploy changes with `bunx cdk deploy MarkdownStudioFiles --exclusively`.
 - **`MarkdownStudioVercelData`** ([`lib/vercel-data-stack.ts`](lib/vercel-data-stack.ts)) —
   what the app on Vercel (the root `vercel.json`) keeps in AWS: an RDS
-  PostgreSQL 17 (`db.t4g.micro`, not Aurora; retained, deletion-protected, 7-day
+  PostgreSQL 17 (`db.t3.micro`, not Aurora; retained, deletion-protected, 7-day
   backups) with a public address that its firewall opens ONLY to the Vercel
   project's Static IPs (`-c vercelStaticIps=a.b.c.d,e.f.g.h`; none given = closed),
   TLS forced (`rds.force_ssl`), and an IAM user whose key (in Secrets Manager) can

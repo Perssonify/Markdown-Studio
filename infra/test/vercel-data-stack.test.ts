@@ -20,7 +20,7 @@ describe("the database for Markdown Studio on Vercel", () => {
     template.hasResourceProperties("AWS::RDS::DBInstance", {
       Engine: "postgres",
       EngineVersion: "17.11",
-      DBInstanceClass: "db.t4g.micro",
+      DBInstanceClass: "db.t3.micro",
       StorageEncrypted: true,
       BackupRetentionPeriod: 7,
     });
@@ -52,6 +52,16 @@ describe("the database for Markdown Studio on Vercel", () => {
     );
     expect(ingress).toEqual([]);
     expect(() => synth(["0.0.0.0/0"])).toThrow(/not an IPv4 address/);
+  });
+
+  // EC2 accepts only these characters in security-group descriptions; an
+  // apostrophe failed the first deploy.
+  it("describes its firewall rules in characters EC2 accepts", () => {
+    const allowed = /^[a-zA-Z0-9. _\-:/()#,@[\]+=&;{}!$*]*$/;
+    for (const r of Object.values(template.findResources("AWS::EC2::SecurityGroup")) as { Properties: { GroupDescription: string; SecurityGroupIngress?: { Description?: string }[] } }[]) {
+      expect(r.Properties.GroupDescription).toMatch(allowed);
+      for (const rule of r.Properties.SecurityGroupIngress ?? []) expect(rule.Description ?? "").toMatch(allowed);
+    }
   });
 
   it("needs no NAT", () => {
