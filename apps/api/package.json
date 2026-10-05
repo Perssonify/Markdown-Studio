@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node --watch-path=src --watch-path=../../packages/db/src --watch-path=../web/api --env-file-if-exists=.env src/server.ts",
     "build": "tsc --noEmit && rolldown -c rolldown.config.ts && node scripts/smoke-bundle.mjs",
+    "build:vercel": "bun run build && node scripts/migrate-on-vercel.mjs",
     "start": "node --env-file-if-exists=.env dist/server.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

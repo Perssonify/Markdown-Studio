@@ -36,6 +36,13 @@ export const EnvSchema = z.object({
 
   DATABASE_URL: optional.pipe(z.url().optional()),
   DATABASE_SSL: z.enum(["off", "require", "verify"]).default("off"),
+  /**
+   * PEM certificates the database's certificate is verified against
+   * (DATABASE_SSL=verify) where the runtime does not trust them already: RDS
+   * from Vercel. A value pasted on one line, with literal "\n"s, is read as
+   * the PEM it stands for.
+   */
+  DATABASE_CA: optional.transform((s) => s?.replaceAll("\\n", "\n")),
 
   /** Signs session cookies. At least 32 characters; `openssl rand -base64 32`. */
   BETTER_AUTH_SECRET: optional.pipe(z.string().min(32).optional()),
@@ -75,6 +82,20 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error(`Invalid API configuration:\n${issues}`);
   }
   return parsed.data;
+}
+
+/**
+ * On Vercel, where a setting the site's own address belongs in is unset, the
+ * project's production address (`VERCEL_PROJECT_PRODUCTION_URL`, e.g.
+ * markdown-studio.vercel.app, which Vercel sets itself) fills it: PUBLIC_URL
+ * (Better Auth's base URL) and CORS_ORIGINS (its trusted origins). A value
+ * the project sets wins.
+ */
+export function withVercelSite(source: Record<string, string | undefined>): Record<string, string | undefined> {
+  const host = source.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (!host) return source;
+  const site = `https://${host}`;
+  return { ...source, PUBLIC_URL: source.PUBLIC_URL?.trim() || site, CORS_ORIGINS: source.CORS_ORIGINS?.trim() || site };
 }
 
 /** The settings Google sign-in still needs, by name (never by value). */

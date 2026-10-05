@@ -10,7 +10,8 @@ export { schema };
  * - `require`: TLS without verifying the certificate.
  * - `verify`: TLS with the certificate checked against the trusted CAs. RDS
  *   on Lambda: the runtime's bundle carries the RDS CAs once
- *   NODE_EXTRA_CA_CERTS points at it (infra sets that).
+ *   NODE_EXTRA_CA_CERTS points at it (infra sets that). Elsewhere (Vercel),
+ *   `ca` passes the RDS certificates themselves.
  */
 export type DatabaseSsl = "off" | "require" | "verify";
 
@@ -19,6 +20,8 @@ export interface DatabaseOptions {
   ssl?: DatabaseSsl;
   /** Pool size. A Lambda instance serves one request at a time, so 1–2 there. */
   max?: number;
+  /** PEM certificates to verify the server against (with `verify`), instead of the default CAs. */
+  ca?: string;
 }
 
 export type Database = NodePgDatabase<typeof schema>;
@@ -31,10 +34,10 @@ export interface DatabaseHandle {
   close(): Promise<void>;
 }
 
-export function createDatabase({ url, ssl = "off", max = 10 }: DatabaseOptions): DatabaseHandle {
+export function createDatabase({ url, ssl = "off", max = 10, ca }: DatabaseOptions): DatabaseHandle {
   const pool = new pg.Pool({
     connectionString: url,
-    ssl: ssl === "off" ? false : { rejectUnauthorized: ssl === "verify" },
+    ssl: ssl === "off" ? false : { rejectUnauthorized: ssl === "verify", ...(ssl === "verify" && ca ? { ca } : {}) },
     max,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 10_000,

@@ -1,6 +1,6 @@
 # infra — Markdown Studio on AWS (CDK)
 
-Two CloudFormation stacks in `us-east-1`:
+Three CloudFormation stacks in `us-east-1`:
 
 - **`MarkdownStudioFiles`** ([`lib/files-stack.ts`](lib/files-stack.ts)) — users' files:
   ONE production bucket, `markdown-studio-labs`. **Deployed** (5 Oct 2026, as
@@ -11,6 +11,15 @@ Two CloudFormation stacks in `us-east-1`:
   versioned (old versions kept 30 days — Version history ▸ In your account), daily
   backups (tagged `kind=backup` by the API) expired after 30 days, CORS for the site
   and the local editor (presigned uploads). Deploy changes with `bunx cdk deploy MarkdownStudioFiles --exclusively`.
+- **`MarkdownStudioVercelData`** ([`lib/vercel-data-stack.ts`](lib/vercel-data-stack.ts)) —
+  what the app on Vercel (the root `vercel.json`) keeps in AWS: an RDS
+  PostgreSQL 17 (`db.t3.micro`, not Aurora; retained, deletion-protected, 7-day
+  backups) with a public address that its firewall opens ONLY to the Vercel
+  project's Static IPs (`-c vercelStaticIps=a.b.c.d,e.f.g.h`; none given = closed),
+  TLS forced (`rds.force_ssl`), and an IAM user whose key (in Secrets Manager) can
+  use the files bucket and nothing else. Deploy with
+  `bunx cdk deploy MarkdownStudioVercelData --exclusively -c vercelStaticIps=…` —
+  the IPs must be passed on EVERY deploy of this stack, or the firewall closes.
 - **`MarkdownStudio`** ([`lib/markdown-studio-stack.ts`](lib/markdown-studio-stack.ts)) — the app,
   which finds the files bucket by name and grants the API access to it:
 
