@@ -20,7 +20,7 @@ export interface MarkdownStudioStackProps extends cdk.StackProps {
   webDist: string;
   /** The bundled Lambda handlers: apps/api/dist/lambda. */
   apiLambdaDist: string;
-  /** apps/web/vercel.json — the site's headers and rewrite. */
+  /** The repository's vercel.json — the site's headers and rewrite. */
   vercelConfig: string;
   /**
    * Origins besides the site's own that may call the API with credentials and
@@ -419,7 +419,7 @@ function headersPolicy(scope: Construct, id: string, list: Header[], override: b
     }
   }
   return new cloudfront.ResponseHeadersPolicy(scope, id, {
-    comment: `Markdown Studio — from apps/web/vercel.json (${id})`,
+    comment: `Markdown Studio — from vercel.json (${id})`,
     securityHeadersBehavior: security,
     customHeadersBehavior: custom.length ? { customHeaders: custom } : undefined,
   });

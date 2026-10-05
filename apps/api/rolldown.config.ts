@@ -1,11 +1,13 @@
 import { cpSync, rmSync } from "node:fs";
 import { defineConfig } from "rolldown";
 
-// Two self-contained bundles, so neither a server nor a Lambda needs
-// node_modules:
+// Three self-contained bundles, so none needs node_modules:
 // - dist/server.mjs — the Node server (`bun run start`)
 // - dist/lambda/{index,migrate}.mjs — the Lambda handlers infra deploys,
 //   with packages/db/drizzle copied beside them for the migration handler.
+// - dist/vercel/index.mjs — the Vercel Function (the root vercel.json's `api`
+//   service). Bundled here so Vercel runs plain JavaScript, not our `.ts`
+//   imports and the workspace's TypeScript packages.
 //
 // The AWS SDK is left out of the Lambda bundle: the Node.js runtime provides
 // it. The server bundle carries the S3 client (it stores files wherever it
@@ -25,6 +27,7 @@ const shared = {
 
 export default defineConfig([
   { ...shared, input: { server: "src/server.ts" }, output: { ...shared.output, dir: "dist" } },
+  { ...shared, input: { index: "src/vercel.ts" }, output: { ...shared.output, dir: "dist/vercel" } },
   {
     ...shared,
     input: { index: "src/lambda.ts", migrate: "src/migrate-lambda.ts" },

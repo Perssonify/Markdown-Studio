@@ -20,7 +20,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8").replace(/\r\n/g, "\n");
-const vercel = JSON.parse(read("vercel.json"));
+// vercel.json is at the repository root: Vercel runs the editor as the `web`
+// service and the API as `api`. The site's headers are the top-level ones,
+// which every response gets, and the web service's own.
+const root = JSON.parse(read("../../vercel.json"));
+const vercel = { ...root.services.web, headers: [...root.headers, ...root.services.web.headers] };
 
 function inlineScriptHashes(html) {
   const out = [];
@@ -184,7 +188,16 @@ describe("caching and routing", () => {
     expect(existsSync(join(process.cwd(), "public", "embed.html"))).toBe(false);
   });
 
-  it("installs exactly what bun.lock pins (A014)", () => {
-    expect(vercel.installCommand).toMatch(/--frozen-lockfile/);
+  it("installs exactly what bun.lock pins, for every service (A014)", () => {
+    for (const [name, service] of Object.entries(root.services)) expect(service.installCommand, name).toMatch(/--frozen-lockfile/);
+  });
+
+  // The API keeps every route under /api, and the editor takes everything else:
+  // the catch-all must come last, or it would swallow the API.
+  it("routes /api/* to the API service and everything else to the editor", () => {
+    expect(root.rewrites).toEqual([
+      { source: "/api/(.*)", destination: { service: "api" } },
+      { source: "/(.*)", destination: { service: "web" } },
+    ]);
   });
 });
