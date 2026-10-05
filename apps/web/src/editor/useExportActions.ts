@@ -246,10 +246,11 @@ export function useExportActions({
   }, [engine, getCanonical]);
 
   // Build a self-contained share link (content packed INTO the URL — see
-  // store/share-link.ts), copy it to the clipboard, and tell the user. Images
-  // kept as assets are NOT inlined (they would bloat the link), so a shared doc
-  // shows its text and loses any locally-stored images — noted to the user is
-  // out of scope for v1; the link stays small and works offline.
+  // store/share-link.ts), copy it to the clipboard, and tell the user. The
+  // caller inlines each doc's images as `data:` URLs first (inlineAssetRefsInText),
+  // so pictures travel in the link and the recipient's import restores them to
+  // the asset store — at the cost of a bigger link, which the length warning
+  // covers.
   const copyShareUrl = useCallback(async (url: string) => {
     const long = url.length > SHARE_URL_SOFT_LIMIT;
     try {
@@ -271,7 +272,11 @@ export function useExportActions({
       const title = resolveDocTitle(rec, canonical).title || t("common.untitled");
       const markdown = markdownForDoc(rec);
       if (markdown == null) { toast.show(t("editor.shareFailed"), "error"); return; }
-      await copyShareUrl(buildShareUrl({ v: 1, kind: "file", name: title, docs: [{ path: [], title, markdown }] }));
+      // Inline the doc's images as data URLs so they travel in the link.
+      const inlined = await inlineAssetRefsInText(markdown);
+      await copyShareUrl(buildShareUrl({ v: 1, kind: "file", name: title, docs: [{ path: [], title, markdown: inlined.text }] }));
+      const note = missingImagesNote(inlined.missing.length);
+      if (note) toast.show(note, "warning");
     } catch { toast.show(t("editor.shareFailed"), "error"); }
   }, [getCanonical, markdownForDoc, copyShareUrl, toast, autosaveRef]);
 
@@ -285,16 +290,22 @@ export function useExportActions({
       if (entries.length === 0) { toast.show(t("editor.folderHasNoDocuments"), "warning"); return; }
       const { docs: records } = await readDocuments(useDocumentStore.getState().getStorage(), entries.map((e) => e.docId));
       const docs: ShareDoc[] = [];
+      let missingImages = 0;
       for (const { docId, dirSegments } of entries) {
         const rec = records.get(docId);
         if (!rec) continue;
         const markdown = markdownForDoc(rec);
         if (markdown == null) continue;
+        // Inline each doc's images as data URLs so they travel in the link.
+        const inlined = await inlineAssetRefsInText(markdown);
+        missingImages += inlined.missing.length;
         const title = resolveDocTitle(rec, rec.canonical).title || t("common.untitled");
-        docs.push({ path: dirSegments, title, markdown });
+        docs.push({ path: dirSegments, title, markdown: inlined.text });
       }
       if (docs.length === 0) { toast.show(t("editor.shareFailed"), "error"); return; }
       await copyShareUrl(buildShareUrl({ v: 1, kind: "folder", name: root?.name || t("library.folder"), docs }));
+      const note = missingImagesNote(missingImages);
+      if (note) toast.show(note, "warning");
     } catch { toast.show(t("editor.shareFailed"), "error"); }
   }, [markdownForDoc, copyShareUrl, toast, autosaveRef]);
 
