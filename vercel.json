@@ -92,7 +92,7 @@
       "root": "apps/api",
       "framework": "hono",
       "installCommand": "bun install --frozen-lockfile",
-      "buildCommand": "bun run build",
+      "buildCommand": "bun run build:vercel",
       "outputDirectory": "dist/vercel",
       "entrypoint": "dist/vercel/index.mjs",
       "functions": {

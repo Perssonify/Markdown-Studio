@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { FilesStack } from "../lib/files-stack.ts";
 import { MarkdownStudioStack } from "../lib/markdown-studio-stack.ts";
+import { VercelDataStack } from "../lib/vercel-data-stack.ts";
 
 const repo = (p: string) => fileURLToPath(new URL(`../../${p}`, import.meta.url));
 const webDist = repo("apps/web/dist-app");
@@ -37,6 +38,16 @@ new FilesStack(app, "MarkdownStudioFiles", {
   // The site (its CloudFront address is added once the app is deployed), and
   // the editor on a developer's machine.
   allowedOrigins: [...new Set([...extraOrigins, ...domainNames.map((d) => `https://${d}`), "http://localhost:5173", "http://localhost:4173"])],
+});
+
+// Markdown Studio on Vercel (the root vercel.json): its database and S3 key.
+// `-c vercelStaticIps=a.b.c.d,e.f.g.h` — the Vercel project's Static IPs, the
+// only addresses the database admits (none until they are given).
+new VercelDataStack(app, "MarkdownStudioVercelData", {
+  env: { account, region: "us-east-1" },
+  description: "Markdown Studio on Vercel — database (RDS PostgreSQL) and the API's S3 key",
+  filesBucketName,
+  allowedIps: list("vercelStaticIps"),
 });
 
 // The production stack needs the builds. Without them it is left out, with a
