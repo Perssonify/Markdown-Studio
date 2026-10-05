@@ -30,6 +30,7 @@ beforeAll(() => {
     apiLambdaDist: dir(["index.mjs", "migrate.mjs", "drizzle/0000_init.sql"]),
     vercelConfig: vercelPath,
     extraOrigins: ["https://markdownstudio.com"],
+    filesBucketName: "markdown-studio-files-test",
   });
   template = Template.fromStack(stack);
 }, 120_000);
@@ -68,8 +69,9 @@ describe("the AWS stack", () => {
     template.hasResourceProperties("AWS::EC2::SecurityGroupIngress", { IpProtocol: "tcp", FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: Match.anyValue() });
   });
 
-  it("keeps both buckets private", () => {
-    template.resourceCountIs("AWS::S3::Bucket", 2);
+  // Users' files live in FilesStack; this stack owns only the website's bucket.
+  it("owns only the website bucket, and keeps it private", () => {
+    template.resourceCountIs("AWS::S3::Bucket", 1);
     template.allResourcesProperties("AWS::S3::Bucket", {
       PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },
     });
@@ -92,6 +94,25 @@ describe("the AWS stack", () => {
     });
     const env = JSON.stringify(template.findResources("AWS::Lambda::Function"));
     expect(env).not.toMatch(/GOOGLE_CLIENT_SECRET|BETTER_AUTH_SECRET|DATABASE_URL/);
+  });
+
+  it("gives the API its file-storage bucket, read and write, through its role (no keys)", () => {
+    const fns = template.findResources("AWS::Lambda::Function", { Properties: { Handler: "index.handler" } });
+    const vars = Object.values(fns)[0]!.Properties.Environment.Variables;
+    expect(vars.S3_BUCKET).toBe("markdown-studio-files-test");
+    expect(vars).not.toHaveProperty("S3_ACCESS_KEY_ID");
+    expect(vars).not.toHaveProperty("S3_ENDPOINT");
+    const policies = JSON.stringify(template.findResources("AWS::IAM::Policy"));
+    // Tagging: the backup upload links carry `kind=backup`. List*: past versions.
+    for (const action of ["s3:PutObject", "s3:PutObjectTagging", "s3:GetObject*", "s3:List*", "s3:DeleteObject*"]) expect(policies).toContain(action);
+    expect(policies).toContain(":s3:::markdown-studio-files-test/*");
+  });
+
+  it("reaches S3 through a gateway endpoint, not the NAT instance", () => {
+    template.hasResourceProperties("AWS::EC2::VPCEndpoint", {
+      VpcEndpointType: "Gateway",
+      ServiceName: Match.objectLike({ "Fn::Join": Match.arrayWith([Match.arrayWith([".s3"])]) }),
+    });
   });
 
   it("migrates the database before the API is updated", () => {

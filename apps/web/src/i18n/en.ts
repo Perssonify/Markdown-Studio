@@ -24,6 +24,7 @@ import { tour } from "./en/tour";
 import { pages } from "./en/pages";
 import { editor } from "./en/editor";
 import { shortcuts } from "./en/shortcuts";
+import { account } from "./en/account";
 
 export const en = {
   ...common,
@@ -44,6 +45,7 @@ export const en = {
   ...pages,
   ...editor,
   ...shortcuts,
+  ...account,
 };
 
 export type MessageKey = keyof typeof en;

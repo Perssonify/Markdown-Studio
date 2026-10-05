@@ -3,19 +3,16 @@
 import * as cdk from "aws-cdk-lib";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { FilesStack } from "../lib/files-stack.ts";
 import { MarkdownStudioStack } from "../lib/markdown-studio-stack.ts";
 
 const repo = (p: string) => fileURLToPath(new URL(`../../${p}`, import.meta.url));
 const webDist = repo("apps/web/dist-app");
 const apiLambdaDist = repo("apps/api/dist/lambda");
-for (const [dir, how] of [
-  [webDist, "bun run --cwd apps/web build:app"],
-  [apiLambdaDist, "bun run --cwd apps/api build"],
-] as const) {
-  if (!existsSync(dir)) throw new Error(`${dir} does not exist — build it first (${how}), or run \`bun run deploy\`, which does`);
-}
 
 const app = new cdk.App();
+const account = process.env.CDK_DEFAULT_ACCOUNT;
+
 const list = (key: string) =>
   String(app.node.tryGetContext(key) ?? "")
     .split(",")
@@ -28,13 +25,43 @@ const domainNames = list("domainNames");
 const certificateArn = String(app.node.tryGetContext("certificateArn") ?? "");
 if (domainNames.length && !certificateArn) throw new Error("domainNames needs certificateArn (an ACM certificate in us-east-1)");
 
-new MarkdownStudioStack(app, "MarkdownStudio", {
-  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: "us-east-1" },
-  description: "Markdown Studio — website (S3 + CloudFront), API (Lambda), database (RDS PostgreSQL)",
-  terminationProtection: true,
-  webDist,
-  apiLambdaDist,
-  vercelConfig: repo("apps/web/vercel.json"),
-  extraOrigins,
-  domain: domainNames.length ? { names: domainNames, certificateArn } : undefined,
+// Users' files — its own stack, deployed on its own (`bunx cdk deploy
+// MarkdownStudioFiles`) and never touched by the app's deploys. S3 cannot
+// rename a bucket: a new name here is a NEW bucket, and the old one is left
+// as it is, files and all (retained) — copy them over before switching.
+const filesBucketName = "markdown-studio-labs";
+new FilesStack(app, "MarkdownStudioFiles", {
+  env: { account, region: "us-east-1" },
+  description: "Markdown Studio — users' files (S3)",
+  bucketName: filesBucketName,
+  // The site (its CloudFront address is added once the app is deployed), and
+  // the editor on a developer's machine.
+  allowedOrigins: [...new Set([...extraOrigins, ...domainNames.map((d) => `https://${d}`), "http://localhost:5173", "http://localhost:4173"])],
 });
+
+// The production stack needs the builds. Without them it is left out, with a
+// note, so the files bucket can still be deployed on its own.
+const missingBuilds = (
+  [
+    [webDist, "bun run --cwd apps/web build:app"],
+    [apiLambdaDist, "bun run --cwd apps/api build"],
+  ] as const
+).filter(([dir]) => !existsSync(dir));
+
+if (missingBuilds.length) {
+  for (const [dir, how] of missingBuilds) {
+    console.warn(`MarkdownStudio stack skipped: ${dir} does not exist — build it (${how}) or run \`bun run deploy\`, which does`);
+  }
+} else {
+  new MarkdownStudioStack(app, "MarkdownStudio", {
+    env: { account, region: "us-east-1" },
+    description: "Markdown Studio — website (S3 + CloudFront), API (Lambda), database (RDS PostgreSQL)",
+    terminationProtection: true,
+    webDist,
+    apiLambdaDist,
+    vercelConfig: repo("apps/web/vercel.json"),
+    extraOrigins,
+    domain: domainNames.length ? { names: domainNames, certificateArn } : undefined,
+    filesBucketName,
+  });
+}

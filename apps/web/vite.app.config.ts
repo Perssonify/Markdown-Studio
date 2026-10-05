@@ -123,6 +123,15 @@ export default defineConfig({
       },
     }),
   ],
+  // The app calls its backend at its own origin, /api/… — on AWS CloudFront
+  // routes /api/* to the API. In development the API is a separate process
+  // (apps/api, :4000; `bun run dev` from the repository root starts both), so
+  // the dev and preview servers forward /api to it. API_URL overrides the
+  // address. Headers pass through untouched, so the import relay's
+  // Sec-Fetch-Site check and the sign-in cookies behave as they do in
+  // production.
+  server: { proxy: { '/api': process.env.API_URL ?? 'http://localhost:4000' } },
+  preview: { proxy: { '/api': process.env.API_URL ?? 'http://localhost:4000' } },
   build: {
     outDir: 'dist-app',
     target: 'es2020',

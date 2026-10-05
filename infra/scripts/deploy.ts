@@ -21,14 +21,17 @@ const REGION = "us-east-1";
 const repo = (p = "") => fileURLToPath(new URL(`../../${p}`, import.meta.url));
 const args = new Set(process.argv.slice(2));
 
-function run(command: string, cwd = repo()): void {
+function run(command: string, cwd = repo(), env: Record<string, string> = {}): void {
   console.log(`\n$ ${command}`);
-  const r = spawnSync(command, { cwd, stdio: "inherit", shell: true });
+  const r = spawnSync(command, { cwd, stdio: "inherit", shell: true, env: { ...process.env, ...env } });
   if (r.status !== 0) throw new Error(`failed (${r.status}): ${command}`);
 }
 
 if (!args.has("--skip-build")) {
-  run("bunx turbo run build:app --filter=@perssonify/editor");
+  // This deployment has the API, so the site is built WITH accounts: visitors
+  // sign in (apps/web/src/app/account.ts). A build without the flag — the
+  // Vercel one — has no account UI and makes no account calls.
+  run("bunx turbo run build:app --filter=@perssonify/editor", repo(), { VITE_ACCOUNTS: "on" });
   run("bunx turbo run build --filter=@markdown-studio/api");
 }
 // As on Vercel: sourcemaps are built (the licence notice reads them) but never deployed.

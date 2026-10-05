@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { LinkClickPayload } from "../hooks/useLinkIndex";
 import type { EditorChromeLevel, EditorViewMode } from "../integration/host-bridge";
 import type { DocumentRecord, DocumentSummary } from "../store/document";
@@ -150,6 +150,12 @@ export interface PerssonifyEditorProps {
   onAbout?: () => void;
   onHelp?: () => void;
   onStartTour?: () => void;
+  /**
+   * Standalone app only: the account control (sign in / the signed-in
+   * account's menu), rendered at the right end of the menu bar after Settings.
+   * Omitted by the library and the iframe embed, which have no accounts.
+   */
+  accountControl?: ReactNode;
   /** Controlled graph visibility (paired with onGraphOpenChange). */
   graphOpen?: boolean;
   onGraphOpenChange?: (open: boolean) => void;

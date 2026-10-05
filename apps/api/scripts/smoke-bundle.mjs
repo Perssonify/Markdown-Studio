@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
 
-for (const k of ["DATABASE_URL", "DB_SECRET_ARN", "AUTH_SECRET_ARN", "GOOGLE_SECRET_ARN", "ORIGIN_SECRET_ARN", "ORIGIN_VERIFY_SECRET"]) {
+for (const k of ["DATABASE_URL", "DB_SECRET_ARN", "AUTH_SECRET_ARN", "GOOGLE_SECRET_ARN", "ORIGIN_SECRET_ARN", "ORIGIN_VERIFY_SECRET", "S3_BUCKET", "S3_ENDPOINT"]) {
   delete process.env[k];
 }
 

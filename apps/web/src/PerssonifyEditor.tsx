@@ -100,6 +100,7 @@ function PerssonifyEditorInstance({
   onAbout,
   onHelp,
   onStartTour,
+  accountControl,
   graphOpen,
   onGraphOpenChange,
   durabilityNotices = false,
@@ -721,6 +722,7 @@ function PerssonifyEditorInstance({
             onAbout={onAbout}
             onHelp={onHelp}
             onStartTour={onStartTour}
+            accountControl={accountControl}
           />
         )}
 
