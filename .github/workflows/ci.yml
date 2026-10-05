@@ -31,13 +31,13 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Vite, Vitest, ESLint and the e2e rig run on Node, even through `bunx`.
       # The runner image's default Node is not ours to choose; .node-version is,
       # and it sits inside engines.node (ops-node-range.test.js).
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
 
@@ -82,7 +82,7 @@ jobs:
       # exact build (hashes match a deploy built from the same commit).
       - name: Keep the sourcemaps as an artifact
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-sourcemaps-${{ github.sha }}
           path: apps/web/dist-app-sourcemaps/
@@ -115,13 +115,13 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Vite, Vitest, ESLint and the e2e rig run on Node, even through `bunx`.
       # The runner image's default Node is not ours to choose; .node-version is,
       # and it sits inside engines.node (ops-node-range.test.js).
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
 
@@ -171,12 +171,12 @@ jobs:
       TEST_DATABASE_URL: postgres://markdown_studio:markdown_studio@localhost:5432/markdown_studio
       TEST_S3_ENDPOINT: http://localhost:9090
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The API runs its TypeScript on Node (type stripping) and Lambda runs
       # Node 24, so the backend is checked on the same .node-version.
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
 
@@ -209,13 +209,13 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Vite, Vitest, ESLint and the e2e rig run on Node, even through `bunx`.
       # The runner image's default Node is not ours to choose; .node-version is,
       # and it sits inside engines.node (ops-node-range.test.js).
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
 
@@ -290,7 +290,7 @@ jobs:
       # only evidence a failure leaves is the PASS/FAIL lines in the log.
       - name: Upload failure artefacts
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-failure
           if-no-files-found: ignore
@@ -318,13 +318,13 @@ jobs:
     env:
       E2E_BROWSER: ${{ matrix.engine }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Vite, Vitest, ESLint and the e2e rig run on Node, even through `bunx`.
       # The runner image's default Node is not ours to choose; .node-version is,
       # and it sits inside engines.node (ops-node-range.test.js).
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
 
@@ -362,7 +362,7 @@ jobs:
 
       - name: Upload failure artefacts
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-failure-${{ matrix.engine }}
           if-no-files-found: ignore
