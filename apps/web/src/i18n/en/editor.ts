@@ -2,6 +2,13 @@ import type { Message } from "../types";
 
 /** Editor actions, toasts and prompts: src/editor/*, hooks/useDocumentLifecycle.ts, hooks/useLinkIndex.ts and the store messages that reach the screen. */
 export const editor = {
+  // Share links (useExportActions, useEditorBoot — store/share-link.ts)
+  "editor.shareLinkCopied": "Share link copied to clipboard.",
+  "editor.shareLinkCopiedLong": "Share link copied — but it's long, so some apps may cut it off. If it won't open, export and send the file instead.",
+  "editor.shareLinkCopyFailed": "Couldn't copy the share link to the clipboard.",
+  "editor.shareFailed": "Couldn't create the share link.",
+  "editor.shareImported": { one: "Opened a shared document.", other: "Opened {count} shared documents." },
+  "editor.shareImportFailed": "That shared link couldn't be opened.",
   // Saving (useAutosave, documentStore)
   "editor.storageFullNotSaved": "Storage is full — your latest changes are NOT saved. Free space by deleting documents or old versions (Tools ▸ Version history), then keep typing to retry.",
   "editor.saveFailed": "Save failed",

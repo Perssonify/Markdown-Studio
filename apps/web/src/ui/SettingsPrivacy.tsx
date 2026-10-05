@@ -3,8 +3,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { APP_NAME } from "../constants";
-import { getRelayConsent, setRelayConsent, type RelayConsent } from "../store/url-import";
+// APP_NAME was only used by the (now hidden) import-relay description below.
+// import { APP_NAME } from "../constants";
+// Import-relay setting HIDDEN 2026-10-05 per request — commented out, not deleted.
+// The relay feature itself (api/import.js, url-import.ts) is untouched; only this
+// toggle is hidden. Restore by un-commenting the import, the state/effect/handler
+// and the JSX block below.
+// import { getRelayConsent, setRelayConsent, type RelayConsent } from "../store/url-import";
 import {
   remoteImagePolicyActive,
   remoteImagePolicySupported,
@@ -17,10 +22,12 @@ import { useT } from "../i18n";
  * Settings ▸ Privacy (A076): the two ways a document can reach the network
  * without the user typing an address into a browser — the import relay and
  * remote images — each under the user's control.
+ *
+ * NOTE: the import-relay toggle is currently HIDDEN (commented out below).
  */
 export function PrivacySection({ open }: { open: boolean }) {
   const t = useT();
-  const [relay, setRelay] = useState<RelayConsent | null>(() => getRelayConsent());
+  // const [relay, setRelay] = useState<RelayConsent | null>(() => getRelayConsent());
   const [blockImages, setBlockImages] = useState(() => remoteImagesBlocked());
   const supported = remoteImagePolicySupported();
   const active = remoteImagePolicyActive();
@@ -28,15 +35,15 @@ export function PrivacySection({ open }: { open: boolean }) {
   // The consent can change from the import dialog while this sheet is closed.
   useEffect(() => {
     if (!open) return;
-    setRelay(getRelayConsent());
+    // setRelay(getRelayConsent());
     setBlockImages(remoteImagesBlocked());
   }, [open]);
 
-  const changeRelay = (allow: boolean) => {
-    const v: RelayConsent = allow ? "allow" : "deny";
-    setRelayConsent(v);
-    setRelay(v);
-  };
+  // const changeRelay = (allow: boolean) => {
+  //   const v: RelayConsent = allow ? "allow" : "deny";
+  //   setRelayConsent(v);
+  //   setRelay(v);
+  // };
   const changeImages = (block: boolean) => {
     setRemoteImagesBlocked(block);
     setBlockImages(block);
@@ -45,6 +52,7 @@ export function PrivacySection({ open }: { open: boolean }) {
   return (
     <section className="space-y-3" aria-label={t("settings.privacy")}>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("settings.privacy")}</h3>
+      {/* Import-relay toggle HIDDEN 2026-10-05 per request — un-comment to restore.
       <div className="flex items-start justify-between gap-3">
         <div>
           <Label htmlFor="pref-import-relay" className="text-sm">{t("settings.importRelay")}</Label>
@@ -57,6 +65,7 @@ export function PrivacySection({ open }: { open: boolean }) {
         </div>
         <Switch id="pref-import-relay" checked={relay === "allow"} onCheckedChange={changeRelay} />
       </div>
+      */}
       {/* Only where the page enforces it: the app shell installs the policy at
           startup; a library host never does (it must not restrict its page). */}
       {supported && (

@@ -7,6 +7,7 @@ import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
 import { useUIStore } from "./store/uiStore";
+import { readSharePayloadFromHash } from "./store/share-link";
 import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
@@ -76,6 +77,13 @@ export function App() {
         try { return new URLSearchParams(window.location.search).get("import_url") || undefined; }
         catch { return undefined; }
     });
+    /** A self-contained share link (`#share=…`) the visitor opened: its documents,
+     *  decoded during render so the editor can import them on boot. Captured here
+     *  (not in an effect) before the `#share=` is stripped from the address below. */
+    const [shareSeed] = useState(() => {
+        if (typeof window === "undefined") return undefined;
+        return readSharePayloadFromHash() ?? undefined;
+    });
 
     // Config deep-links: apply ?ads=, ?readonly=, and ?view_mode= (md|html|split)
     // on load, then strip them from the URL. `ads`/`readonly` are applied for the
@@ -115,6 +123,18 @@ export function App() {
         const qs = params.toString();
         try {
             window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+        } catch { /* ignore */ }
+    }, []);
+
+    // Strip `#share=…` from the address after it was captured (shareSeed), so a
+    // refresh does not re-import the shared documents. Any other hash is kept.
+    useEffect(() => {
+        if (typeof window === "undefined" || !/[#&]share=/.test(window.location.hash)) return;
+        try {
+            const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+            params.delete("share");
+            const rest = params.toString();
+            window.history.replaceState({}, "", window.location.pathname + window.location.search + (rest ? `#${rest}` : ""));
         } catch { /* ignore */ }
     }, []);
 
@@ -283,6 +303,7 @@ export function App() {
                 // so the app's own notices (an embedder's storage is theirs).
                 durabilityNotices
                 initialImportUrl={importUrlSeed}
+                initialShare={shareSeed}
                 graphOpen={route === "graph"}
                 // Opening the graph pushes (so browser Back closes it); closing
                 // REPLACES the /graph entry — otherwise every toggle stacked two

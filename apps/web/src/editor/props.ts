@@ -6,6 +6,7 @@ import type { DocumentRecord, DocumentSummary } from "../store/document";
 import type { FidelityReport } from "../store/fidelity";
 import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
 import type { GraphEdge, GraphNode } from "../store/link-index";
+import type { SharePayload } from "../store/share-link";
 import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter";
 
 /** The document graph the editor exports (wiki links between documents). */
@@ -173,6 +174,12 @@ export interface PerssonifyEditorProps {
    * never set, so every generated import link silently did nothing.
    */
   initialImportUrl?: string;
+  /**
+   * Standalone app only: documents decoded from a self-contained share link
+   * (`#share=…`, see store/share-link.ts). The editor imports them on boot
+   * through the normal import path. Omitted by the library / iframe embed.
+   */
+  initialShare?: SharePayload;
 
   /**
    * Open read-only: editing disabled, formatting toolbar hidden, view mode

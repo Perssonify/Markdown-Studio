@@ -104,6 +104,7 @@ function PerssonifyEditorInstance({
   onGraphOpenChange,
   durabilityNotices = false,
   initialImportUrl,
+  initialShare,
   readOnly: readOnlyProp,
   fitParent = false,
 }: PerssonifyEditorProps) {
@@ -546,7 +547,7 @@ function PerssonifyEditorInstance({
     setInitialSyncMode, setInitialMarkdownFeatures, setMode, setEditorReady,
     initialMode, initialDocument, starterDocuments, durabilityNotices,
     waitForEditor, importItems, hydrateEditorWithDoc, handleSwitchDoc,
-    storageMetrics, onStorageMetricsChange,
+    storageMetrics, onStorageMetricsChange, initialShare,
   });
 
   // ── Saving ────────────────────────────────────────────────────────────────
@@ -616,7 +617,7 @@ function PerssonifyEditorInstance({
   // Library exports (useExportActions): one document in any format, a folder,
   // a selection or everything as a ZIP. Also points exportDocsRef — which the
   // "export all" and "full backup" actions above call — at the ZIP exporter.
-  const { handleExportFolder, handleExportDoc, handleExportDocs } = useExportActions({
+  const { handleExportFolder, handleExportDoc, handleExportDocs, handleShareDoc, handleShareFolder } = useExportActions({
     engine, syncMode, getCanonical, toast, toastRef, autosaveRef, exportDocsRef,
   });
 
@@ -803,6 +804,8 @@ function PerssonifyEditorInstance({
                   onExportFolder={handleExportFolder}
                   onExportDocs={handleExportDocs}
                   onExportDoc={handleExportDoc}
+                  onShareDoc={handleShareDoc}
+                  onShareFolder={handleShareFolder}
                   onSearchBody={searchDocBody}
                   headings={docNavHeadings}
                   activeIndex={activeHeadingIndex}

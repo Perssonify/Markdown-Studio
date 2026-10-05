@@ -118,6 +118,8 @@ interface EditorBootParams {
   handleSwitchDoc: Lifecycle["handleSwitchDoc"];
   storageMetrics: DocStore["storageMetrics"];
   onStorageMetricsChange?: PerssonifyEditorProps["onStorageMetricsChange"];
+  /** Documents from a `#share=` link to import on boot (standalone app only). */
+  initialShare?: PerssonifyEditorProps["initialShare"];
 }
 
 /**
@@ -137,7 +139,7 @@ export function useEditorBoot({
   setInitialSyncMode, setInitialMarkdownFeatures, setMode, setEditorReady,
   initialMode, initialDocument, starterDocuments, durabilityNotices,
   waitForEditor, importItems, hydrateEditorWithDoc, handleSwitchDoc,
-  storageMetrics, onStorageMetricsChange,
+  storageMetrics, onStorageMetricsChange, initialShare,
 }: EditorBootParams) {
   // ── Inject storage adapter before init (runs once, synchronously before engine) ──
   const storageInjectedRef = useRef(false);
@@ -326,6 +328,28 @@ export function useEditorBoot({
           // No stored documents and no initialDocument — show empty state.
           setEditorReady(true);
           toastSonner.dismiss(loadingId);
+        }
+        // A self-contained share link (`#share=…`): import its documents through
+        // the ordinary import path (headless schema conversion; folders created
+        // as needed), then open the first so the recipient lands on it. Runs AFTER
+        // the normal boot so the shared docs join whatever library already exists.
+        // Best-effort — a bad link must never break startup.
+        if (initialShare?.docs?.length) {
+          try {
+            await waitForEditor(3000);
+            const result = await importItems(
+              initialShare.docs.map((d) => ({
+                raw: d.markdown,
+                format: (d.format ?? "markdown") as IngestFormat,
+                folderPath: d.path ?? [],
+              }))
+            );
+            if (result.firstDocId) await handleSwitchDoc(result.firstDocId);
+            toastSonner.success(t("editor.shareImported", { count: result.importedCount }), { duration: 3000 });
+          } catch (e) {
+            diagError("initEffect.initialShare", e);
+            toastSonner.error(t("editor.shareImportFailed"), { duration: 4000 });
+          }
         }
         initDoneRef.current = true;
       } catch (e) {
