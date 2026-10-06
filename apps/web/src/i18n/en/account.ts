@@ -68,6 +68,7 @@ export const account = {
   "account.planFreeFeature3": "Share links with images built in",
   "account.planFreeFeature4": "Import and export Markdown, Word, PDF",
   "account.planProName": "Pro",
+  "account.planProPrice": "Soon",
   "account.planProTagline": "More room, more power",
   "account.planProFeature1": "More storage for images and backups",
   "account.planProFeature2": "Longer version history",
