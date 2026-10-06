@@ -5,6 +5,7 @@ import { useAccount } from "../../app/account";
 import { AccountAvatar } from "../../app/AccountAvatar";
 import { AccountBackups } from "../../app/AccountBackups";
 import { CloudStatusLine } from "../../app/CloudStatusLine";
+import { PlansSection } from "../../app/PlansSection";
 import { backUpNow, libraryOwner, useCloudStatus } from "../../app/cloud";
 import { useLocale, useT } from "../../i18n";
 import { PageChrome } from "./PageChrome";
@@ -119,7 +120,10 @@ export function ProfilePage({ onClose, onSignIn }: ProfilePageProps) {
 
   return (
     <PageChrome title={t("account.profileTitle")} onClose={onClose}>
-      <div className="mx-auto max-w-xl px-4 py-8 sm:px-8 sm:py-10">{body}</div>
+      <div className="mx-auto max-w-xl px-4 py-8 sm:px-8 sm:py-10">
+        {body}
+        <PlansSection />
+      </div>
     </PageChrome>
   );
 }
