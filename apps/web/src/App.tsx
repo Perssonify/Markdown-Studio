@@ -252,7 +252,12 @@ export function App() {
     if (accounts && accountStatus === "signed-in" && accountUserId && cloudReadyFor !== accountUserId) {
         return <AccountCheckScreen message={cloudPhase === "preparing" ? t("account.bringingDocuments") : undefined} />;
     }
-    if (accounts && accountStatus === "signed-out") {
+    // A visitor who opened a SHARE link (`#share=…`) is let straight into the
+    // editor as a guest — no sign-in. The whole point of a share link is that
+    // anyone can open it; gating it behind Google sign-in defeats it. They read
+    // and import the shared document into this browser's local library; signing
+    // in later (and cloud-syncing it) stays available, it is just not required.
+    if (accounts && accountStatus === "signed-out" && !shareSeed) {
         return (
             <ErrorBoundary isDark={isDark}>
                 <div lang={locale} dir={localeDir(locale)}>
