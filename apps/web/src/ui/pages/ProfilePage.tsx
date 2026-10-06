@@ -3,10 +3,8 @@ import { LogIn, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useAccount } from "../../app/account";
 import { AccountAvatar } from "../../app/AccountAvatar";
-import { AccountBackups } from "../../app/AccountBackups";
 import { CloudStatusLine } from "../../app/CloudStatusLine";
 import { PlansSection } from "../../app/PlansSection";
-import { backUpNow, libraryOwner, useCloudStatus } from "../../app/cloud";
 import { useLocale, useT } from "../../i18n";
 import { PageChrome } from "./PageChrome";
 
@@ -48,7 +46,6 @@ export function ProfilePage({ onClose, onSignIn }: ProfilePageProps) {
   const signOut = useAccount((s) => s.signOut);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
-  const cloudPhase = useCloudStatus((s) => s.phase);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -89,9 +86,6 @@ export function ProfilePage({ onClose, onSignIn }: ProfilePageProps) {
           {since && <Row label={t("account.memberSinceLabel")} value={since} />}
         </dl>
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{t("account.documentsNote")}</p>
-        {/* Only the account this browser's library syncs with: backing up
-            another account's library into this one would mix the two. */}
-        {cloudPhase !== "blocked" && libraryOwner() === user.id && <AccountBackups backUpNow={() => backUpNow(user.id)} />}
         <div className="mt-10 flex flex-col items-center gap-2 border-t border-border pt-6">
           <Button variant="outline" className="gap-2" disabled={signingOut} onClick={handleSignOut}>
             <LogOut className="size-4" />

@@ -237,27 +237,12 @@ describe("the profile page's backups", () => {
   const BACKUPS = [{ date: "2026-10-05", size: 2048, at: 1 }, { date: "2026-10-04", size: 1024, at: 0 }];
   afterEach(() => localStorage.removeItem("pf:cloud-owner"));
 
-  it("lists the account's daily backups, and downloads one from its link", async () => {
+  // Backups are intentionally no longer surfaced on the profile page: the
+  // library is kept indefinitely, so a "kept for 30 days" panel only misled.
+  // The AccountBackups component still works and is covered directly below.
+  it("are no longer shown on the profile page", () => {
     signedIn();
     localStorage.setItem("pf:cloud-owner", USER.id);
-    fetchMock.mockResolvedValueOnce(json({ backups: BACKUPS }));
-    render(<ProfilePage onClose={() => {}} onSignIn={() => {}} />);
-    expect(screen.getByRole("heading", { name: "Backups" })).toBeTruthy();
-    const buttons = await screen.findAllByRole("button", { name: /Download the backup of/ });
-    expect(buttons).toHaveLength(2);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/sync/backups");
-
-    fetchMock.mockResolvedValueOnce(json({ url: "https://bucket.s3.amazonaws.com/users/u1/backups/2026-10-05.zip?X-Amz-Signature=x" }));
-    await act(async () => { fireEvent.click(buttons[0]); });
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/sync/backups/2026-10-05");
-    expect(go).toHaveBeenCalledWith("https://bucket.s3.amazonaws.com/users/u1/backups/2026-10-05.zip?X-Amz-Signature=x");
-  });
-
-  // This browser's library belongs to another account: backing it up into
-  // this one would mix the two people's notes.
-  it("is not offered to an account this browser's library does not sync with", () => {
-    signedIn();
-    localStorage.setItem("pf:cloud-owner", "someone-else");
     render(<ProfilePage onClose={() => {}} onSignIn={() => {}} />);
     expect(screen.queryByRole("heading", { name: "Backups" })).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
