@@ -11,7 +11,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { Env } from "../config/env.ts";
+import type { Env } from "../../config/env/index.ts";
 
 export interface StorageOptions {
   bucket: string;
@@ -44,7 +44,7 @@ export interface PresignedUpload {
 /**
  * Files in one S3 bucket (users' documents and images). Browsers move image
  * bytes directly with presigned URLs; documents go through the API, which
- * checks each write against the database first (routes/sync.ts).
+ * checks each write against the database first (modules/sync/routes/index.ts).
  */
 export interface Storage {
   readonly bucket: string;

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { AUTH_BASE_PATH, type Auth } from "../lib/auth.ts";
+import { AUTH_BASE_PATH, type Auth } from "../services/index.ts";
 
 /**
  * /api/auth/* — handed to Better Auth. Until every setting it needs is

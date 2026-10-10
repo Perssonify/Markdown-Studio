@@ -25,7 +25,7 @@ export interface PresignedTransfer {
 }
 
 /**
- * The account's side of sync (apps/api/src/routes/sync.ts). An interface, so
+ * The account's side of sync (apps/api/src/modules/sync/routes/index.ts). An interface, so
  * the sync engine is tested against an in-memory account
  * (cloud-sync.test.js) and runs against the real one here.
  */

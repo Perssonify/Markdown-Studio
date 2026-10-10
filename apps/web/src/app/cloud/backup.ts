@@ -12,7 +12,7 @@ import type { AccountArchiveApi } from "./api";
  * every other device sees it is there.
  */
 
-/** The API's limit on one backup (apps/api/src/routes/sync.ts). */
+/** The API's limit on one backup (apps/api/src/modules/sync/routes/index.ts). */
 export const MAX_BACKUP_BYTES = 1024 * 1024 * 1024;
 
 const doneKey = (userId: string) => `pf:cloud-backup:${userId}`;

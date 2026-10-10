@@ -5,7 +5,7 @@ import { Hono, type Context } from "hono";
 import { randomUUID } from "node:crypto";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { z } from "zod";
-import type { Storage } from "../lib/storage.ts";
+import type { Storage } from "../../../lib/storage/index.ts";
 
 /**
  * /api/sync — each signed-in user's library in the cloud: documents, the

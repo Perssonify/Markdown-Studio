@@ -1,7 +1,7 @@
 import type { LambdaFunctionURLEvent } from "aws-lambda";
 import { describe, expect, it } from "vitest";
 import { trustViewerAddress } from "../src/lambda.ts";
-import { resolveSecretsIntoEnv } from "../src/lib/aws-secrets.ts";
+import { resolveSecretsIntoEnv } from "../src/lib/awsSecrets/index.ts";
 
 const event = (headers: Record<string, string>) => ({ headers }) as unknown as LambdaFunctionURLEvent;
 

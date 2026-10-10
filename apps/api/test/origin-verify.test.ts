@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ORIGIN_VERIFY_HEADER } from "../src/middleware/origin-verify.ts";
+import { ORIGIN_VERIFY_HEADER } from "../src/middlewares/originVerify/index.ts";
 import { testApp } from "./helpers.ts";
 
 const SECRET = "s3cret-from-cloudfront";

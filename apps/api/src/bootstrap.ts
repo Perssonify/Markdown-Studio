@@ -1,9 +1,9 @@
 import { createDatabase, type DatabaseHandle } from "@markdown-studio/db";
 import type { Hono } from "hono";
 import { createApp } from "./app.ts";
-import type { Env } from "./config/env.ts";
-import { authFromEnv } from "./lib/auth.ts";
-import { storageFromEnv, type Storage } from "./lib/storage.ts";
+import type { Env } from "./config/env/index.ts";
+import { authFromEnv } from "./modules/auth/index.ts";
+import { storageFromEnv, type Storage } from "./lib/storage/index.ts";
 
 /** The app plus what it opened, so a caller can close the database on shutdown. */
 export function buildApp(

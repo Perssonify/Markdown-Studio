@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runVercelHandler, type VercelLikeHandler } from "../src/lib/vercel-handler.ts";
+import { runVercelHandler, type VercelLikeHandler } from "../src/utils/vercelHandler/index.ts";
 import { testApp } from "./helpers.ts";
 
 // The relay's own behaviour is tested where it lives

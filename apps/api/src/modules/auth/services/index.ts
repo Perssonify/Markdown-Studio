@@ -2,7 +2,7 @@ import type { Database } from "@markdown-studio/db";
 import { schema } from "@markdown-studio/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import type { Env } from "../config/env.ts";
+import type { Env } from "../../../config/env/index.ts";
 
 export const AUTH_BASE_PATH = "/api/auth";
 

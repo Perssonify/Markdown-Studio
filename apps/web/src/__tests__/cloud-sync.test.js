@@ -1,6 +1,6 @@
 // Cloud sync end to end on the device side (app/cloud/engine.ts): two devices,
 // each with its own real (fake-indexeddb) library, syncing through an
-// in-memory account that keeps the server's rules (apps/api routes/sync.ts:
+// in-memory account that keeps the server's rules (apps/api modules/sync/routes/index.ts:
 // conditional writes, tombstones, verified images).
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
