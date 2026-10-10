@@ -1,7 +1,7 @@
 # Folder restructure: plan
 
-**Status:** Phase 2 is done and waiting for approval. Nothing has been moved yet.
-**Branch:** `refactor/folder-structure` (local only, at `22d8aff`, no commits), checked out in the git-ignored worktree `.claude/worktrees/refactor-folder-structure`. Your checkout of `main` and its uncommitted edits (`apps/web/src/App.tsx`, `apps/web/src/i18n/en/account.ts`, `apps/web/src/ui/pages/LoginPage.tsx`) were not touched. The baseline below is `HEAD` without those edits.
+**Status:** Done. You approved the plan with its defaults, Phases 3 and 4 have run, and the results are in §15.
+**Branch:** `refactor/folder-structure` (local only: 8 commits on top of `22d8aff`, not pushed), checked out in the git-ignored worktree `.claude/worktrees/refactor-folder-structure`. Your checkout of `main` and its uncommitted edits (`apps/web/src/App.tsx`, `apps/web/src/i18n/en/account.ts`, `apps/web/src/ui/pages/LoginPage.tsx`) were not touched. The baseline below is `HEAD` without those edits.
 
 ## 1. Summary
 
@@ -481,3 +481,530 @@ Defaults are in bold.
 | D8 | Commit this plan as the branch's first commit | **Yes**. The copy in your checkout's `docs/` can be deleted afterwards. |
 
 Reply "approved" to run Phase 3 with these defaults, or name the decisions you want changed.
+
+---
+
+## 15. Results (Phases 3 and 4)
+
+Executed with the defaults in §14 (Option A, naming rules R1 to R3, docs and comments updated, web e2e and web unit tests left in place, API barrels). Nothing was pushed, and no PR was opened.
+
+### Branch and commits
+
+`refactor/folder-structure` is a local branch on top of `22d8aff`, checked out in `.claude/worktrees/refactor-folder-structure`:
+
+| Commit | Area | Renames | Checked before committing |
+|---|---|---:|---|
+| `5dbd5b6` | docs: add the folder-restructure plan | — | — |
+| `71e2654` | refactor(api): module layout (modules/, middlewares/, lib/, utils/) | 11 (+4 barrels) | typecheck, lint, 84 API tests, endpoint table, bundle comparison |
+| `cc15032` | refactor(api): unit tests beside their code, integration tests under tests/ | 10 | typecheck (all 9 test files still in the program), lint, the same 84 tests by name, bundle comparison |
+| `2558b12` | refactor(web): group store/ by feature | 45 | typecheck, lint, 169 affected test files, scan scopes, madge |
+| `97f58c9` | refactor(web): group ui/ by feature — editor frame and panes | 25 | typecheck, lint, 46 affected test files, scan scopes |
+| `7bf4d37` | refactor(web): group the rest of ui/ by feature | 49 | typecheck, lint, 48 affected test files, scan scopes |
+| `5f9040e` | refactor(web): group the standalone app's account surface | 7 | typecheck (web, infra), lint, affected tests, scan scopes |
+| *(this commit)* | docs: record the restructure results | — | — |
+
+Overall: 147 files moved, every one of them a git rename (similarity 66–100%, so `git log --follow` works); 4 barrels added; nothing deleted. Leaving out this document, the branch changes 471 files by +1,903 / −1,889 lines: import specifiers, path strings and doc paths, plus the barrels and the API README's layout tree.
+
+### Checks, before and after
+
+| Check | Before (`22d8aff`) | After (branch) |
+|---|---|---|
+| `bun install --frozen-lockfile` | ✅ | ✅ (`bun.lock` untouched) |
+| Lint (`turbo run lint`, forced) | ✅ 0 errors, 112 warnings | ✅ 0 errors, the same 112 warnings |
+| Typecheck (`turbo run typecheck`, forced) | ✅ 4/4 | ✅ 4/4 |
+| Build (`turbo run build build:app build:embed`, forced) | ✅ 6/6 | ✅ 6/6 (incl. the API bundle smoke test) |
+| Tests: files / tests | 293 / 4,574 | **293 / 4,574** |
+| Tests: passed / failed (full run) | 4,566 / 8 | 4,568 / 6 |
+| Tests failing when re-run alone | 3 | **the same 3** |
+
+| Package | Files | Tests | Before: passed / failed | After: passed / failed |
+|---|---:|---:|---:|---:|
+| apps/web | 276 | 4,438 | 4,430 / 8 | 4,432 / 6 |
+| apps/api | 9 | 84 | 84 / 0 | 84 / 0 |
+| packages/db | 2 | 13 | 13 / 0 | 13 / 0 |
+| infra | 6 | 39 | 39 / 0 | 39 / 0 |
+
+**Every test has the same full name before and after.** I compared all 4,574 test names, file by file, mapping the 10 moved API test files and the titles that contain a moved path. API, db and infra are identical by name and status. In the web app, the only status differences are load timeouts:
+
+- **Fail in both runs, and when run alone:** these exist on `main` today:
+  - `a11y-keyboard-order` › puts the skip link first in the app shell;
+  - `g4-privacy` › the `src/i18n/en/account.ts` claim;
+  - `g4-privacy` › Settings ▸ Privacy ▸ Import relay ("Not decided yet").
+- **Time out only under the full suite's load, and pass when run alone:**
+  - At baseline: `code-block-plain-view` (mermaid), `i18n-render` (pseudo-locale), `pkg-cjs-require` ×2 and `scroll-anchors`.
+  - In the final run: `converter-escape` (the lookbehind scan took 5.98 s against a 5 s budget) and `pkg-cjs-require` ×2.
+  - Seen the same way in the per-area runs: `cloud-contract` (the presigned image upload, and the deletion case that depends on it), `editor-modules` (`collectImportItems`), `persistence-local-data` ×2, and another `code-block-plain-view` case.
+
+### Route and endpoint parity: confirmed
+
+- **Web routes are identical.** This covers:
+  - `routeToPath` for all six routes, and `pathToRoute` for 16 probe paths (edge cases included), run through the real `src/app/router.tsx`;
+  - `App.tsx`'s route → page mapping;
+  - the HTML entries (`/src/main.tsx`, `/src/embed.tsx`).
+
+  The only difference is the module paths of the lazy routes, for example `./ui/pages/AboutPage` became `./ui/pages/aboutPage`. Each still loads the same exported component.
+- **API endpoints are identical.** Hono's own route table from the real `createApp()` matches line for line, including middleware order: 20 registrations without the CloudFront origin secret, 21 with it.
+
+### Build output parity
+
+The baseline and branch builds were compared file by file. Hashed chunk names, the API bundler's `//#region <path>` comments and `sourceMappingURL` lines were normalised first.
+
+| Output | Result |
+|---|---|
+| `dist-embed/` (iframe embed) | 239 of 239 files content-identical; 5 chunks renamed |
+| `dist-app/` (the app) | 257 of 258 identical; 15 chunks renamed. `sw.js` has the same code and the same 217 precache entries; the only difference is the revision hash of `index.html`, whose raw bytes differ only by the renamed chunk names |
+| `dist/` (npm library) | every JavaScript file identical. The 75 declaration files that differ are identical once module specifiers and comments are set aside. The four `exports`-map declaration entries are present, and `pkg-declarations` (which compiles a consumer against `dist/`) passes |
+| API bundles (server, Vercel, Lambda) | identical apart from one JSDoc comment that names a moved web path (`store/importExport/url-import.ts`); one shared Lambda chunk renamed `aws-secrets-*` → `awsSecrets-*` |
+
+**Lazy chunk names:** Rolldown names an `index.tsx` chunk after its folder, so `GraphView-<hash>.js` became `graphView-<hash>.js`, not `index-<hash>.js` as §11 and §12 expected. Many hashes didn't change at all, because the content is identical.
+
+**Import cycles (madge):** the API has none, with the barrels and moved tests included. The web app has the same 5 pre-existing cycles under their new paths, and no new ones.
+
+**What the source-scanning tests see** is unchanged, by file set: `a11y-accent-text` 58 files, the i18n scanner 143, the whole-`src` walkers 292, and the i18n catalog check 273.
+
+### Before / after trees (depth 3)
+
+Folders show their file count; deeper folders are folded into it.
+
+<details><summary>apps/api — before</summary>
+
+```
+apps/api/
+  scripts/  (2)
+    migrate-on-vercel.mjs
+    smoke-bundle.mjs
+  src/  (17)
+    config/  (1)
+      env.ts
+    lib/  (4)
+      auth.ts
+      aws-secrets.ts
+      storage.ts
+      vercel-handler.ts
+    middleware/  (2)
+      cors.ts
+      origin-verify.ts
+    routes/  (4)
+      auth.ts
+      health.ts
+      import-relay.ts
+      sync.ts
+    app.ts
+    bootstrap.ts
+    lambda.ts
+    migrate-lambda.ts
+    server.ts
+    vercel.ts
+  test/  (10)
+    auth.test.ts
+    cors.test.ts
+    env.test.ts
+    health.test.ts
+    helpers.ts
+    import-relay.test.ts
+    lambda.test.ts
+    origin-verify.test.ts
+    storage.test.ts
+    sync.test.ts
+  .env.example
+  README.md
+  eslint.config.js
+  package.json
+  rolldown.config.ts
+  tsconfig.json
+  vitest.config.ts
+```
+
+</details>
+
+<details><summary>apps/api — after</summary>
+
+```
+apps/api/
+  scripts/  (2)
+    migrate-on-vercel.mjs
+    smoke-bundle.mjs
+  src/  (23)
+    config/  (2)
+      env/  (2)
+    lib/  (2)
+      awsSecrets/  (1)
+      storage/  (1)
+    middlewares/  (2)
+      cors/  (1)
+      originVerify/  (1)
+    modules/  (9)
+      auth/  (3)
+      health/  (2)
+      importRelay/  (2)
+      sync/  (2)
+    utils/  (1)
+      vercelHandler/  (1)
+    app.ts
+    bootstrap.ts
+    lambda.test.ts
+    lambda.ts
+    migrate-lambda.ts
+    server.ts
+    vercel.ts
+  tests/  (8)
+    fixtures/  (1)
+      index.ts
+    integration/  (7)
+      auth.test.ts
+      cors.test.ts
+      health.test.ts
+      importRelay.test.ts
+      originVerify.test.ts
+      storage.test.ts
+      sync.test.ts
+  .env.example
+  README.md
+  eslint.config.js
+  package.json
+  rolldown.config.ts
+  tsconfig.json
+  vitest.config.ts
+```
+
+</details>
+
+<details><summary>apps/web — before (src/__tests__ unchanged, folded)</summary>
+
+```
+apps/web/
+  api/  (1)
+    import.js
+  build/  (5)
+    externals.d.mts
+    externals.mjs
+    finish-declarations.mjs
+    scope-css.d.mts
+    scope-css.mjs
+  docs/  (35)
+    runbooks/  (10)
+    README.md
+    architecture.md
+    audit-2026-09.md
+    auth.md
+    backlog.md
+    codebase-tour.md
+    contributing.md
+    data-contracts.md
+    data-pipeline.md
+    database.md
+    decisions.md
+    deployment-todo.md
+    deployment.md
+    domain-glossary.md
+    extended-features.md
+    features.md
+    gotchas.md
+    i18n.md
+    import-relay.md
+    integration-guide.md
+    integration-threejs.md
+    local-development.md
+    v1-to-current-changelog.md
+    why-markdown-studio.md
+    workflows.md
+  e2e/  (60)
+    cases/  (14)
+    fixtures/  (2)
+    probes/  (37)
+    README.md
+    docs.mjs
+    lib.mjs
+    map-library.mjs
+    map-measure.mjs
+    renderers.mjs
+    run.mjs
+  marketing/  (8)
+    00-README.md
+    01-short-descriptions.md
+    02-long-description.md
+    03-feature-list.md
+    04-audiences.md
+    05-social-and-launch.md
+    06-faq.md
+    07-messaging-guide.md
+  public/  (17)
+    .well-known/  (1)
+    brand/  (8)
+    apple-touch-icon.png
+    favicon-96x96.png
+    favicon.ico
+    site.webmanifest
+    sw-recover.js
+    third-party-licenses.txt
+    web-app-manifest-192x192.png
+    web-app-manifest-512x512.png
+  scripts/  (4)
+    doc-anchors.mjs
+    live-preview-walkthrough.mjs
+    strip-sourcemaps.mjs
+    third-party-licenses.mjs
+  src/  (576)
+    __tests__/  (283)
+      fixtures/  (1)
+    app/  (15)
+      cloud/  (7)
+    components/  (20)
+      ui/  (20)
+    data/  (3)
+    editor/  (17)
+    engine/  (17)
+    extensions/  (23)
+    formatting/  (9)
+    hooks/  (8)
+    i18n/  (26)
+      en/  (19)
+    integration/  (7)
+    lib/  (1)
+    pwa/  (1)
+    store/  (46)
+    theme/  (3)
+    types/  (2)
+    ui/  (74)
+      pages/  (7)
+    utils/  (13)
+    App.tsx
+    EditorHeader.tsx
+    PerssonifyEditor.tsx
+    constants.ts
+    embed.tsx
+    index.tsx
+    main.tsx
+    styles.css
+  .gitignore
+  CHANGELOG.md
+  CLAUDE.md
+  HANDOVER.md
+  LICENSE
+  ONBOARDING.md
+  PRODUCT.md
+  README.md
+  components.json
+  embed.html
+  eslint.config.js
+  index.html
+  package.json
+  tsconfig.build.json
+  tsconfig.json
+  vite.app.config.ts
+  vite.chunks.ts
+  vite.config.ts
+  vite.embed.config.ts
+  vitest.config.js
+```
+
+</details>
+
+<details><summary>apps/web — after</summary>
+
+```
+apps/web/
+  api/  (1)
+    import.js
+  build/  (5)
+    externals.d.mts
+    externals.mjs
+    finish-declarations.mjs
+    scope-css.d.mts
+    scope-css.mjs
+  docs/  (35)
+    runbooks/  (10)
+    README.md
+    architecture.md
+    audit-2026-09.md
+    auth.md
+    backlog.md
+    codebase-tour.md
+    contributing.md
+    data-contracts.md
+    data-pipeline.md
+    database.md
+    decisions.md
+    deployment-todo.md
+    deployment.md
+    domain-glossary.md
+    extended-features.md
+    features.md
+    gotchas.md
+    i18n.md
+    import-relay.md
+    integration-guide.md
+    integration-threejs.md
+    local-development.md
+    v1-to-current-changelog.md
+    why-markdown-studio.md
+    workflows.md
+  e2e/  (60)
+    cases/  (14)
+    fixtures/  (2)
+    probes/  (37)
+    README.md
+    docs.mjs
+    lib.mjs
+    map-library.mjs
+    map-measure.mjs
+    renderers.mjs
+    run.mjs
+  marketing/  (8)
+    00-README.md
+    01-short-descriptions.md
+    02-long-description.md
+    03-feature-list.md
+    04-audiences.md
+    05-social-and-launch.md
+    06-faq.md
+    07-messaging-guide.md
+  public/  (17)
+    .well-known/  (1)
+    brand/  (8)
+    apple-touch-icon.png
+    favicon-96x96.png
+    favicon.ico
+    site.webmanifest
+    sw-recover.js
+    third-party-licenses.txt
+    web-app-manifest-192x192.png
+    web-app-manifest-512x512.png
+  scripts/  (4)
+    doc-anchors.mjs
+    live-preview-walkthrough.mjs
+    strip-sourcemaps.mjs
+    third-party-licenses.mjs
+  src/  (576)
+    __tests__/  (283)
+      fixtures/  (1)
+    app/  (15)
+      account/  (7)
+      cloud/  (7)
+    components/  (20)
+      ui/  (20)
+    data/  (3)
+    editor/  (17)
+    engine/  (17)
+    extensions/  (23)
+    formatting/  (9)
+    hooks/  (8)
+    i18n/  (26)
+      en/  (19)
+    integration/  (7)
+    lib/  (1)
+    pwa/  (1)
+    store/  (46)
+      assets/  (4)
+      cards/  (2)
+      diagnostics/  (1)
+      documents/  (10)
+      editor/  (1)
+      graph/  (3)
+      history/  (3)
+      importExport/  (11)
+      links/  (2)
+      persistence/  (5)
+      preferences/  (2)
+      search/  (1)
+    theme/  (3)
+    types/  (2)
+    ui/  (74)
+      cards/  (1)
+      chrome/  (13)
+      diagnostics/  (3)
+      dialogs/  (3)
+      find/  (3)
+      graph/  (1)
+      history/  (1)
+      importExport/  (2)
+      links/  (1)
+      notices/  (3)
+      pages/  (7)
+      panes/  (12)
+      settings/  (6)
+      share/  (2)
+      shared/  (9)
+      tour/  (1)
+      workspace/  (6)
+    utils/  (13)
+    App.tsx
+    EditorHeader.tsx
+    PerssonifyEditor.tsx
+    constants.ts
+    embed.tsx
+    index.tsx
+    main.tsx
+    styles.css
+  .gitignore
+  CHANGELOG.md
+  CLAUDE.md
+  HANDOVER.md
+  LICENSE
+  ONBOARDING.md
+  PRODUCT.md
+  README.md
+  components.json
+  embed.html
+  eslint.config.js
+  index.html
+  package.json
+  tsconfig.build.json
+  tsconfig.json
+  vite.app.config.ts
+  vite.chunks.ts
+  vite.config.ts
+  vite.embed.config.ts
+  vitest.config.js
+```
+
+</details>
+
+### Moves skipped, and why
+
+| Not moved | Why |
+|---|---|
+| Web unit tests (`apps/web/src/__tests__/`, 283 files) | Co-locating them would need test-logic or lint-config edits (§5). Moving them to `apps/web/tests/` needs a glob change in `eslint.config.js` (decision D5). |
+| Web e2e (`apps/web/e2e/`) | Root paths computed at runtime, CI regexes, the doc-anchor checker, 14 `package.json` scripts and CI steps (decision D4) |
+| API `params/` and `repositories/` | The request schemas and queries sit inside `modules/sync/routes/index.ts`; splitting the file changes its content |
+| `docker-compose.yml` → `infra/` | `bun run db:up` runs a bare `docker compose up` from the root; moving it needs a `-f` flag in `package.json`. `infra/` (the CDK app) is already grouped. |
+| `packages/db` | Not part of the web app or the API; holds the migrations |
+| Fixed paths (§5): Vite HTML entries, the four package entry points, `api/import.js`, shadcn output (`components/ui`, `lib/utils.ts`, `hooks/use-mobile.ts`), `styles.css`, `i18n/`, the API's runtime entries | Tooling, deployment or the published package names them |
+| Other web layers (`editor/`, `engine/`, `extensions/`, `formatting/`, `hooks/`, `utils/`, `data/`, `theme/`, `integration/`, `pwa/`) | Out of Option A's scope (§6). They are not flat enough to need it, and some hold the package's entry points. |
+
+No step needed a logic change, so no step was reverted. Where the tooling was adjusted to keep moves path-only:
+
+- **Bare file names in code** (`"EditorPanes.tsx"`) were changed only inside comments. In `divider-drag.test.jsx` they build test titles, and renaming a test is not a move.
+- **`graph-legacy.js`** kept its comments: the project marks it frozen, and its comments describe the old code.
+- **Your three uncommitted files** (`App.tsx`, `ui/pages/LoginPage.tsx`, `i18n/en/account.ts`) received import-path changes only, with no comment edits, to keep merge conflicts small.
+- **History stays as written:** `CHANGELOG.md`, `docs/v1-to-current-changelog.md`, `docs/audit-2026-09.md` and this plan's §1–§14.
+
+### Suspected dead code (not deleted)
+
+Found by knip 6.41 (run through `npx`, not installed, without a project config) and the import graph, with each item checked by grep. Two caveats: knip doesn't see `embed.html`'s entry, so `embed.tsx` and `integration/embed-origins.ts` are false positives; and in production mode it lists every script, e2e and build file, which run from `package.json` and CI.
+
+- **Files nothing imports:**
+  - `src/components/ui/select.tsx`, `sidebar.tsx` and `toggle-group.tsx` (shadcn);
+  - `skeleton.tsx` and `toggle.tsx`, which only those use;
+  - `src/app/account/accountBackups/index.tsx`, which only a test imports. `backUpNow` in `app/cloud/index.ts` exists only for it.
+- **Exports nothing imports, tests included** (some are used inside their own file):
+  - **UI:** `ConfirmDialog` in `ui/dialogs/index.tsx` (the app renders the one from `useConfirm()` in `ui/dialogs/confirmDialog/`); `useNewDocPrompt` (`confirmDialog/`); `CrashActions` (`shared/errorBoundary/`); `EmptyOutline` (`workspace/docNavPanel/`); `formatStorageBytes` (`settings/settingsStorage/`); `folderRowKey` and `docRowKey` (`workspace/folderTree/`).
+  - **Store:** `encodeSharePayload`, `decodeSharePayload` and `SHARE_HASH_KEY` (`store/importExport/share-link.ts`); `exportMarkdown` (`store/importExport/import-export.ts`); `openTransport` (`store/persistence/tab-sync.ts`).
+  - **App, utils, engine, i18n:** `libraryOwner` (`app/cloud/index.ts`); `clearDiagnostics` (`utils/diagnostics.ts`); `parseColwidth`, `styleAttrValue` and three `css-safety` exports (`engine/`); and the i18n helpers `translateRich`, `localeAttributes`, `matchLocale`, `resolveInitialLocale` and `DEFAULT_LOCALE`, which are re-exported but never imported.
+- About 30 exported constants are used only inside their own file, so the `export` is unnecessary.
+- **Kept on purpose, not dead:** the deprecated extension exports (`BlockId`, `FieldBlock`, `TransclusionBlock` and their helpers) are public API that warns when used (web `CLAUDE.md`, A105).
+
+### Open decisions for you
+
+1. **Merging.**
+   - Pushing and opening a PR are yours to do; the brief ruled them out for me.
+   - Before merging, commit your work in progress on `main` (`App.tsx`, `i18n/en/account.ts`, `ui/pages/LoginPage.tsx`). `LoginPage.tsx` now lives at `ui/pages/loginPage/index.tsx`; git's rename detection carries your edits across, and `App.tsx` will likely have a small conflict in its import block.
+   - Delete the untracked copy of this file in your checkout's `docs/`, or git will refuse to overwrite it with the committed one.
+2. **Open branches:** `audit/production-readiness-fixes`, `monorepo-backend`, `neon-database`, `vercel-services`, `vercel-site-origin` and the Dependabot branches each conflict once on any import of a moved file.
+3. **Option B** (features-first, §7) is still possible on top of this.
+4. **Doc style:** bare component names in the docs became `menuBar/index.tsx`. If you'd prefer full paths (`ui/chrome/menuBar/index.tsx`), that's a mechanical follow-up.
+5. **My suggestions (not from the brief):**
+   - split `modules/sync/routes/index.ts` into `params/` and `repositories/`;
+   - remove the dead code above;
+   - fix the 3 tests that fail on `main`;
+   - give the load-sensitive tests realistic time budgets: 11 cases failed only under load across these runs (timeouts or time budgets).
