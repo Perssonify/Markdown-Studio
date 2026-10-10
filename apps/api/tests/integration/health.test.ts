@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { testApp } from "./helpers.ts";
+import { testApp } from "../fixtures/index.ts";
 
 const up = async () => {};
 const down = async () => {

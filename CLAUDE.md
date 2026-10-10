@@ -46,7 +46,7 @@ break). Every path in it is relative to `apps/web`.
   it there; the API runs that same file through `src/utils/vercelHandler/index.ts`.
   The relay answers its own CORS (markdownstudio.com only), so the API's
   CORS middleware is registered AFTER the relay route — widening the relay's
-  origins would loosen a security control (`test/cors.test.ts`).
+  origins would loosen a security control (`tests/integration/cors.test.ts`).
 - **The root `vercel.json` is the one description of how the site is served**:
   its top-level `headers` (every response) and the `web` service's `headers` and
   SPA `rewrites`. infra reads it (`infra/lib/site-config.ts`): CloudFront's CSP and

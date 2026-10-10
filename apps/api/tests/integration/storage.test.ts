@@ -1,8 +1,8 @@
 import { CreateBucketCommand, PutBucketVersioningCommand, S3Client } from "@aws-sdk/client-s3";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { loadEnv } from "../src/config/env/index.ts";
-import { assertKey, createStorage, storageFromEnv, type Storage } from "../src/lib/storage/index.ts";
-import { testApp } from "./helpers.ts";
+import { loadEnv } from "../../src/config/env/index.ts";
+import { assertKey, createStorage, storageFromEnv, type Storage } from "../../src/lib/storage/index.ts";
+import { testApp } from "../fixtures/index.ts";
 
 describe("storage keys", () => {
   it.each(["docs/u1/a.md", "a", "images/2026/10/x.png"])("accepts %s", (key) => {

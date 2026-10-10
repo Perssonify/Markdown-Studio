@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRONTEND, testApp } from "./helpers.ts";
+import { FRONTEND, testApp } from "../fixtures/index.ts";
 
 const preflight = (path: string, origin: string) =>
   testApp().request(path, {

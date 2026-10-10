@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv, missingAuthSettings, withVercelSite } from "../src/config/env/index.ts";
+import { loadEnv, missingAuthSettings, withVercelSite } from "./index.ts";
 
 describe("loadEnv", () => {
   it("runs with nothing set: port 4000, the frontend's local origins, no database", () => {
