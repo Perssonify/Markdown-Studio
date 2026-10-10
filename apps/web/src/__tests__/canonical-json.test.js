@@ -2,9 +2,9 @@ import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { canonicalJsonText, canonicalOf } from "../store/canonical-json";
-import { computeCounts } from "../store/document";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { canonicalJsonText, canonicalOf } from "../store/documents/canonical-json";
+import { computeCounts } from "../store/documents/document";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 /**
  * A083 — a save of a large note serialized the whole document, and counted

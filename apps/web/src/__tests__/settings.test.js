@@ -4,7 +4,7 @@ import {
   DEFAULT_MARKDOWN_FEATURES,
   FLAVOR_PRESETS,
   normalizeMarkdownFeatures,
-} from '../store/settings.ts';
+} from '../store/preferences/settings.ts';
 
 describe('markdown settings', () => {
   it('applyFlavor sets flavor + its preset toggles, keeps rich flags', () => {

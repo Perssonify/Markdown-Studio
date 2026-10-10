@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { normalizeImportUrl } from "../store/import-url-normalize";
-import { buildImportShareLink } from "../store/url-import";
+import { normalizeImportUrl } from "../store/importExport/import-url-normalize";
+import { buildImportShareLink } from "../store/importExport/url-import";
 
 describe("normalizeImportUrl — Google Drive", () => {
   it("rewrites a /file/d/ID/view link to the usercontent download endpoint", () => {

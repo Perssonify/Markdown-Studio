@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LazyChunkBoundary } from "../ui/LazyChunkBoundary";
 import { pageActions } from "../utils/app-health";
 import { _resetDiagnosticsForTests, getDiagnostics } from "../utils/diagnostics";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 const realReload = pageActions.reload;
 let onLine = true;

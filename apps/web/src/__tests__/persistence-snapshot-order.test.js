@@ -10,7 +10,7 @@
  * evicted the newest versions instead of the oldest. (Reproduced by the audit.)
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { snapshotStore } from "../store/snapshot-store";
+import { snapshotStore } from "../store/history/snapshot-store";
 
 const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 const textOf = async (id) => JSON.stringify(await snapshotStore.getCanonical(id));

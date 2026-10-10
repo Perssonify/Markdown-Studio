@@ -10,7 +10,7 @@
  * exactly as first imported, the same kind of payload.
  */
 import { describe, expect, it } from "vitest";
-import { toExportEnvelope } from "../store/import-export";
+import { toExportEnvelope } from "../store/importExport/import-export";
 import { buildBackupFiles } from "../utils/emergency-backup";
 
 const para = (text) => ({ type: "doc", content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text }] }] });

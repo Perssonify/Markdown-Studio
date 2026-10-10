@@ -1,8 +1,8 @@
 import "fake-indexeddb/auto";
 import { unzipSync, strFromU8 } from "fflate";
 import { beforeEach, describe, expect, it } from "vitest";
-import { assetStore, sha256Hex } from "../store/asset-store";
-import { assetRef, bytesToDataUrl, collectAssetRefs, collectImageSrcs } from "../store/asset-refs";
+import { assetStore, sha256Hex } from "../store/assets/asset-store";
+import { assetRef, bytesToDataUrl, collectAssetRefs, collectImageSrcs } from "../store/assets/asset-refs";
 import {
   collectAssetsFor,
   decodeEnvelopeAssets,
@@ -12,14 +12,14 @@ import {
   prepareImportedDocAssets,
   relativeAssetPath,
   restoreAssets,
-} from "../store/assets";
-import { archiveEntriesToItems, buildZip, extractArchive } from "../store/archive";
-import { ingest } from "../store/ingest";
-import { createDocument, serializeForStorage } from "../store/document";
-import { toExportEnvelope } from "../store/import-export";
+} from "../store/assets/assets";
+import { archiveEntriesToItems, buildZip, extractArchive } from "../store/importExport/archive";
+import { ingest } from "../store/importExport/ingest";
+import { createDocument, serializeForStorage } from "../store/documents/document";
+import { toExportEnvelope } from "../store/importExport/import-export";
 import { canonicalToHtml } from "../engine/serialize-doc";
 import { exportEmergencyBackup } from "../utils/emergency-backup";
-import { exportAsDocx, imageDimensions } from "../store/docx-export";
+import { exportAsDocx, imageDimensions } from "../store/importExport/docx-export";
 
 /**
  * Stored images through every door (A086): imports turn big data: images into
@@ -77,7 +77,7 @@ describe("imports store big data: images as assets", () => {
 
   it("markdown imported through the real ingest path", async () => {
     // A markdown file with a data: image, converted headlessly like importItems does.
-    const { captureIngestHeadless } = await import("../store/headless-ingest");
+    const { captureIngestHeadless } = await import("../store/importExport/headless-ingest");
     const { headlessSchema } = await import("../engine/serialize-doc");
     const { doc, html } = ingest(`# A\n\n![shot](${dataUrl(4)})\n`, "markdown", "file-import", {
       mdToHtml: (md) => md.replace(/!\[([^\]]*)\]\(([^)]+)\)/, '<p><img alt="$1" src="$2"></p>').replace(/^# (.*)$/m, "<h1>$1</h1>"),

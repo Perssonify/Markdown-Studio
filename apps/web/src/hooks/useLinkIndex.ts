@@ -10,10 +10,10 @@ import {
   updateDocInIndex,
   type LinkIndex,
   type DocRecord,
-} from "../store/link-index";
-import { storedRecordIfCurrent, useDocumentStore } from "../store/documentStore";
-import { useEditorStore } from "../store/editorStore";
-import { useUIStore } from "../store/uiStore";
+} from "../store/links/link-index";
+import { storedRecordIfCurrent, useDocumentStore } from "../store/documents/documentStore";
+import { useEditorStore } from "../store/editor/editorStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { isDangerousUrl, isExternalHref } from "../utils/url-safety";
 import { t } from "../i18n";
 

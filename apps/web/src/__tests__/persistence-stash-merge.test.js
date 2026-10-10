@@ -10,7 +10,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   RECOVERY_KEY, clearStash, configureRecovery, stashUnsaved, takeStashed,
-} from "../store/crash-recovery";
+} from "../store/persistence/crash-recovery";
 
 const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 

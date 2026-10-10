@@ -13,10 +13,10 @@
  * `updated`, which is all a second tab is from this tab's point of view.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ConflictError, useDocumentStore } from "../store/documentStore";
-import { createDocument } from "../store/document";
+import { ConflictError, useDocumentStore } from "../store/documents/documentStore";
+import { createDocument } from "../store/documents/document";
 
-vi.mock("../store/snapshot-store", () => ({
+vi.mock("../store/history/snapshot-store", () => ({
   snapshotStore: { maybeRecordOnSave: vi.fn(), record: vi.fn(async () => null) },
 }));
 

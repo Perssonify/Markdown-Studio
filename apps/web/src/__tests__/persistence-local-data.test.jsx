@@ -21,12 +21,12 @@ const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{
 async function fresh() {
   vi.resetModules();
   return {
-    ds: await import("../store/documentStore"),
-    snaps: (await import("../store/snapshot-store")).snapshotStore,
-    rec: await import("../store/crash-recovery"),
-    idb: await import("../store/idb-storage-adapter"),
-    document: await import("../store/document"),
-    folders: await import("../store/folders"),
+    ds: await import("../store/documents/documentStore"),
+    snaps: (await import("../store/history/snapshot-store")).snapshotStore,
+    rec: await import("../store/persistence/crash-recovery"),
+    idb: await import("../store/persistence/idb-storage-adapter"),
+    document: await import("../store/documents/document"),
+    folders: await import("../store/documents/folders"),
   };
 }
 
@@ -178,8 +178,8 @@ describe("A079: deleted documents", () => {
 
 describe("A079: exports leave out the raw import and clipboard copies", () => {
   it("toExportEnvelope strips origin.raw and alternates, keeping the provenance", async () => {
-    const { toExportEnvelope } = await import("../store/import-export");
-    const { createDocument } = await import("../store/document");
+    const { toExportEnvelope } = await import("../store/importExport/import-export");
+    const { createDocument } = await import("../store/documents/document");
     const d = createDocument({
       id: "p", title: "Pasted", canonical: doc("what remains"),
       origin: { format: "paste-html", raw: "<p>text the user later DELETED</p>", source: "clipboard-paste", timestamp: "t", alternates: { "text/plain": "deleted text", "text/rtf": "{\\rtf deleted}" } },

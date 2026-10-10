@@ -5,8 +5,8 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { backedUpToday, backupDay, backUpToAccount } from "../app/cloud/backup";
-import { extractArchive } from "../store/archive";
-import { sha256Hex } from "../store/asset-store";
+import { extractArchive } from "../store/importExport/archive";
+import { sha256Hex } from "../store/assets/asset-store";
 
 const para = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 const record = (id, text) => ({

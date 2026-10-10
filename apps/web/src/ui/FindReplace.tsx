@@ -28,7 +28,7 @@ import {
   type HighlightSpec,
 } from "../formatting/find-engine";
 import { FindSupersededError, FindTimeoutError, FindUnsafePatternError, runFind } from "../formatting/find-worker";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { isAltGraphInput } from "../utils/alt-graph";
 import { MAX_PREVIEW_WIDGETS } from "./search-colors";
 import { t, useT } from "../i18n";

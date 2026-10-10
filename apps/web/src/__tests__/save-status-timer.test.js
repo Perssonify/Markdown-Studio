@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useDocumentStore } from "../store/documentStore.ts";
-import { MemoryStorageAdapter } from "../store/storage-adapter.ts";
-import { createDocument } from "../store/document.ts";
+import { useDocumentStore } from "../store/documents/documentStore.ts";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter.ts";
+import { createDocument } from "../store/documents/document.ts";
 
 /**
  * Regression guard for the save-status "saved → ready" auto-reset (documentStore).

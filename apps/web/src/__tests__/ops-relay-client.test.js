@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TOO_LARGE_MESSAGE } from "../../api/import.js";
-import { fetchImportResource as fetchImport } from "../store/url-import";
+import { fetchImportResource as fetchImport } from "../store/importExport/url-import";
 
 const DRIVE_VIEW = "https://drive.google.com/file/d/12a4D7oHxJ7bKlkJV6hpQMS5FX8iPXSnD/view?usp=sharing";
 

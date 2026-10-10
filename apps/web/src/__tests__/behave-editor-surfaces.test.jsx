@@ -16,7 +16,7 @@ import {
   act, click, fireEvent, heading, installBrowserStubs, key, menuClick, mountEditor, onDisk, para, richEditor,
   scrolledTo, seededAdapter, store, storedDoc, textOf, typeMd, until, untilHydrated, untilRichHas,
 } from "./behave-harness";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 vi.setConfig({ testTimeout: 30000 });
 

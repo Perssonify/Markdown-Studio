@@ -12,7 +12,7 @@ import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mdImage, promptImage, toImageInsert } from "../formatting/image-insert";
 import { useFormatDispatcher } from "../formatting/useFormatDispatcher";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { CodeMirrorPane } from "../ui/CodeMirrorPane";
 import { TiptapPane } from "../ui/TiptapPane";
 

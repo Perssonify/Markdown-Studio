@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cardSyncSignature, planCardReload } from "../store/cards";
+import { cardSyncSignature, planCardReload } from "../store/cards/cards";
 import { CardsView } from "../ui/CardsView";
 import { GraphView } from "../ui/GraphView";
 

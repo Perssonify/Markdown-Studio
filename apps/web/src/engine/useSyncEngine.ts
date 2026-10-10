@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, RefObject } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { canonicalOf } from "../store/canonical-json";
+import { canonicalOf } from "../store/documents/canonical-json";
 import { quickHash } from "../utils/index";
 import { runWhenIdle } from "../utils/idle";
 import { MarkdownEngine } from "./useMarkdownEngine";
@@ -13,7 +13,7 @@ interface SyncEngineParams {
   onCanonicalChange?: (pmJson: any) => void;
 }
 
-// The canonical handed to onCanonicalChange is canonicalOf's (store/canonical-json.ts):
+// The canonical handed to onCanonicalChange is canonicalOf's (store/documents/canonical-json.ts):
 // getJSON(), with each top-level block's JSON cached on its node (A083).
 
 /**

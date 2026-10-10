@@ -18,8 +18,8 @@ import {
   toSummary,
   type DocumentRecord,
   type DocumentSummary,
-} from "./document";
-import { safeStorage } from "../utils/safe-storage";
+} from "../documents/document";
+import { safeStorage } from "@/utils/safe-storage";
 import {
   IndexedDBStorageAdapter,
   StorageQuotaError,
@@ -29,7 +29,7 @@ import {
   type IDBStorageConfig,
   type StorageMetrics,
 } from "./idb-storage-adapter";
-import { diag } from "../utils/diag";
+import { diag } from "@/utils/diag";
 
 // Re-export IDB types so callers only need to import from this module
 export { IndexedDBStorageAdapter, StorageQuotaError, StorageReadError };

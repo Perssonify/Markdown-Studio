@@ -13,9 +13,9 @@ import { act, cleanup, createEvent, fireEvent, render, screen, within } from "@t
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useDocumentStore } from "../store/documentStore";
-import { useFolderStore } from "../store/folders";
-import { DOCNAV_WIDTH_MIN, docNavWidthMax, useUIStore } from "../store/uiStore";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useFolderStore } from "../store/documents/folders";
+import { DOCNAV_WIDTH_MIN, docNavWidthMax, useUIStore } from "../store/preferences/uiStore";
 import { DialogProvider } from "../ui/DialogProvider";
 import { DND_MIME } from "../ui/folder-dnd";
 import { WorkspacePanel } from "../ui/WorkspacePanel";

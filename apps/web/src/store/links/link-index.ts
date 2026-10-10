@@ -8,7 +8,7 @@
  * incrementally when individual documents are saved.
  */
 
-import { extractText } from "./document";
+import { extractText } from "../documents/document";
 
 // Wiki-link matcher, hoisted to module scope so a full library rebuild doesn't
 // allocate a fresh RegExp per text node. Scanning is synchronous and

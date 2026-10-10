@@ -7,7 +7,7 @@
  * app can IMPORT again, so the round trip goes through the real archive reader.
  */
 import { describe, expect, it } from "vitest";
-import { archiveEntriesToItems, buildZip, extractArchive } from "../store/archive";
+import { archiveEntriesToItems, buildZip, extractArchive } from "../store/importExport/archive";
 import { buildBackupFiles, exportEmergencyBackup } from "../utils/emergency-backup";
 
 const para = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });

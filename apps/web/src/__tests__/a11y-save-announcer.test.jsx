@@ -1,7 +1,7 @@
 import { act, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 import {
   FAILURE_MESSAGES,
   INITIAL_ANNOUNCER,

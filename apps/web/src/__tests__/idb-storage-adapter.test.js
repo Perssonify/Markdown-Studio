@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IndexedDBStorageAdapter, StorageQuotaError } from "../store/idb-storage-adapter";
-import { createDocument } from "../store/document";
+import { IndexedDBStorageAdapter, StorageQuotaError } from "../store/persistence/idb-storage-adapter";
+import { createDocument } from "../store/documents/document";
 
 /**
  * The real persistence layer had NO tests at all.

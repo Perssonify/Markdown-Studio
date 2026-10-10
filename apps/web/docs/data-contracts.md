@@ -27,7 +27,7 @@ longer recognises it — which a user experiences as "my documents are gone".
 A library host that passes its own `storageConfig` (`dbName` or `namespace`)
 gets suffixed names for two of these — `perssonify-snapshots:<namespace>` and
 `pf:recovery:<namespace>` — so its users' version history and unload stash are
-kept apart ([src/store/documentStore.ts](../src/store/documentStore.ts)
+kept apart ([src/store/documents/documentStore.ts](../src/store/documents/documentStore.ts)
 `configureLocalStores`). The unsuffixed names above are the standalone app's
 and stay exactly as they are.
 

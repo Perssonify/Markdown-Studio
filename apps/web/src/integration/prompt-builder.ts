@@ -11,7 +11,7 @@
  * Includes metadata, fields, and relationship context when available.
  */
 
-import { extractText, type DocumentRecord, type PMNode } from "../store/document";
+import { extractText, type DocumentRecord, type PMNode } from "../store/documents/document";
 
 // --- Types ---
 

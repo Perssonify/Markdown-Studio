@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 // Typography & reading-comfort prefs (v1.35.0). Each setter must update the
 // store AND persist to its localStorage key so the pref survives a reload.

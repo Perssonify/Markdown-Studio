@@ -33,7 +33,7 @@ import React, { type ReactNode, useEffect, useRef, useState } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 import { COMMON_SHORTCUTS, displayKeys } from "../data/shortcuts";
 import { getStoredPalette, PALETTES, setPalette } from "../theme/palette";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { adsAvailable } from "../utils/build-gates";
 import { useDialog } from "./DialogProvider";
 import { ModeSwitcher } from "./ModeSwitcher";

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { APP_NAME } from "../constants";
-import { claimEditorInstance, onEditorInstanceReleased, releaseEditorInstance } from "../store/documentStore";
+import { claimEditorInstance, onEditorInstanceReleased, releaseEditorInstance } from "../store/documents/documentStore";
 import { useT } from "../i18n";
 
 /** What a refused editor logs, once per mount. */

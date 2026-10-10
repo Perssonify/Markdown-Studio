@@ -1,4 +1,4 @@
-import type { SaveStatus } from "../store/documentStore";
+import type { SaveStatus } from "../store/documents/documentStore";
 import { t } from "../i18n";
 import { en } from "../i18n/en";
 

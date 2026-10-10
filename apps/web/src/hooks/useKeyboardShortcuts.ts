@@ -1,5 +1,5 @@
 import { RefObject, useEffect, useRef } from "react";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { isAltGraphInput } from "../utils/alt-graph";
 import { t } from "../i18n";
 import type { useToast } from "../ui/Toast";

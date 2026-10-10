@@ -31,9 +31,9 @@
  *    (`canonical` is absent, so it reports the version unreadable).
  */
 
-import { canonicalJsonText } from "./canonical-json";
-import { computeCounts, type PMNode } from "./document";
-import { quickHash } from "../utils";
+import { canonicalJsonText } from "../documents/canonical-json";
+import { computeCounts, type PMNode } from "../documents/document";
+import { quickHash } from "@/utils";
 
 export type SnapshotReason =
   | "autosave"    // periodic pre-overwrite capture during editing

@@ -22,10 +22,10 @@ import { httpAccountArchive, httpCloudApi } from "../app/cloud/api";
 import { backUpToAccount, MAX_BACKUP_BYTES } from "../app/cloud/backup";
 import { SyncEngine } from "../app/cloud/engine";
 import { accountVersionsProvider } from "../app/cloud/versions";
-import { extractArchive } from "../store/archive";
-import { sha256Hex } from "../store/asset-store";
-import { createDocument } from "../store/document";
-import { IndexedDBStorageAdapter } from "../store/idb-storage-adapter";
+import { extractArchive } from "../store/importExport/archive";
+import { sha256Hex } from "../store/assets/asset-store";
+import { createDocument } from "../store/documents/document";
+import { IndexedDBStorageAdapter } from "../store/persistence/idb-storage-adapter";
 
 const envFile = fileURLToPath(new URL("../../../api/.env", import.meta.url));
 const dotenv = existsSync(envFile) ? parseEnv(readFileSync(envFile, "utf8")) : {};

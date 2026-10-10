@@ -16,12 +16,12 @@ import {
   seededAdapter, store, storedDoc, tick, toastText, typeMd, until, untilHydrated, untilMdHas,
 } from "./behave-harness";
 import { HEADING_RENAME_CHECK_MS } from "../editor/useHeadingRenameLinks";
-import { createWikiResolver } from "../store/link-index";
-import { findHeadingByAnchor } from "../store/doc-outline";
-import { headingsFromDoc } from "../store/heading-renames";
-import { snapshotStore } from "../store/snapshot-store";
-import { useEditorStore } from "../store/editorStore";
-import { useUIStore } from "../store/uiStore";
+import { createWikiResolver } from "../store/links/link-index";
+import { findHeadingByAnchor } from "../store/documents/doc-outline";
+import { headingsFromDoc } from "../store/links/heading-renames";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { useEditorStore } from "../store/editor/editorStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 vi.setConfig({ testTimeout: 40000 });
 

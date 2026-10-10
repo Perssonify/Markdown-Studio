@@ -3,7 +3,7 @@ import { join } from "path";
 import React from "react";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useFolderStore } from "../store/folders";
+import { useFolderStore } from "../store/documents/folders";
 import { FolderTree } from "../ui/FolderTree";
 
 /**

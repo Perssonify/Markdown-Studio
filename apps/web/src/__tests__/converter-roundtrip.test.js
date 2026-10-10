@@ -18,7 +18,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
-import { computeFidelity } from "../store/fidelity";
+import { computeFidelity } from "../store/documents/fidelity";
 import { engineFor, htmlRoundTrip, roundTrip } from "./converter-harness";
 
 /** Assert the input survives two trips unchanged. */

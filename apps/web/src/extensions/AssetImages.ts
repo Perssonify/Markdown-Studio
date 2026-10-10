@@ -10,8 +10,8 @@ import {
   isExternalizableDataUrl,
   isRasterMime,
   parseAssetRef,
-} from "../store/asset-refs";
-import { assetStore } from "../store/asset-store";
+} from "../store/assets/asset-refs";
+import { assetStore } from "../store/assets/asset-store";
 import { t } from "../i18n/core";
 
 /**

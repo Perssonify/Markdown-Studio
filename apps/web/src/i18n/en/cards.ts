@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Cards board: CardsView.tsx, store/cards.ts. */
+/** Cards board: CardsView.tsx, store/cards/cards.ts. */
 export const cards = {
   "cards.boardTitle": "Cards",
   "cards.searchNotes": "Search notes…",
@@ -26,7 +26,7 @@ export const cards = {
   "cards.colour": "Colour",
   "cards.changeNoteColour": "Change note colour",
   "cards.noteColour": "Note colour",
-  /** Card colour names (store/cards.ts CARD_COLORS). */
+  /** Card colour names (store/cards/cards.ts CARD_COLORS). */
   "cards.colorDefault": "Default",
   "cards.colorCoral": "Coral",
   "cards.colorPeach": "Peach",

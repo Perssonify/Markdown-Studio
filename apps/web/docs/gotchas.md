@@ -23,7 +23,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Status:** The dead legacy file has been deleted. The only document store is
   the Zustand `documentStore.ts` — note its **export** is still named
   `useDocumentStore` (imported by `PerssonifyEditor`, the lifecycle/link hooks,
-  and the UI). Edit [src/store/documentStore.ts](../src/store/documentStore.ts).
+  and the UI). Edit [src/store/documents/documentStore.ts](../src/store/documents/documentStore.ts).
 - **Related:** [codebase-tour.md](codebase-tour.md).
 
 ## Tests must be `.js`, not `.ts`
@@ -85,7 +85,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   in the markdown pane (its text is preserved until you edit the rich pane), and
   use Styled mode for colour, highlight and font.
 - **Related:** [build-marked.ts](../src/engine/build-marked.ts),
-  [turndown-rules.ts](../src/engine/turndown-rules.ts), [fidelity.ts](../src/store/fidelity.ts),
+  [turndown-rules.ts](../src/engine/turndown-rules.ts), [fidelity.ts](../src/store/documents/fidelity.ts),
   `converter-roundtrip.test.js`.
 
 ## A table cell's Markdown comes from the document's own conversion — there is no cell converter
@@ -112,19 +112,19 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 - **Symptom:** You apply text color/highlight/font, switch to Clean mode, and it vanishes from the markdown.
 - **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:38](../src/engine/useSyncEngine.ts#L38)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:430](../src/ui/Toolbar.tsx#L430)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
 - **Fix/Workaround:** Use Styled mode to preserve styling, or export as JSON for a lossless copy.
-- **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/fidelity.ts](../src/store/fidelity.ts).
+- **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/documents/fidelity.ts](../src/store/documents/fidelity.ts).
 
 ## IndexedDB transactions abort if you await the wrong thing
 
 - **Symptom:** A storage write silently fails / the transaction aborts mid-operation.
-- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented above `idbTransaction` ([src/store/idb-storage-adapter.ts:229](../src/store/idb-storage-adapter.ts#L229)). The same rule applies to the version-history database: read first, in its own transaction, then open the write.
+- **Cause:** Inside `idbTransaction()`, the callback may **only** await `idbRequest()` calls. Awaiting an unrelated Promise yields the microtask queue and the browser auto-commits (aborts) the transaction. Documented above `idbTransaction` ([src/store/persistence/idb-storage-adapter.ts:229](../src/store/persistence/idb-storage-adapter.ts#L229)). The same rule applies to the version-history database: read first, in its own transaction, then open the write.
 - **Fix/Workaround:** Keep all awaits inside a transaction limited to `idbRequest` wrappers; do any other async work before/after the transaction.
 - **Related:** [database.md#invariants](database.md#invariants).
 
 ## Importing the same file twice creates duplicate documents
 
 - **Symptom:** Re-importing a file yields two copies.
-- **Cause:** Ingest mints a **new id** for every import (`generateId`, [src/store/document.ts](../src/store/document.ts)); there's no dedup by content or filename. A `perssonify-document` envelope (a JSON export or a backup ZIP) carries its own id, but if that id is already in the library `createDoc` mints a fresh one, so the import sits beside the stored document instead of overwriting it.
+- **Cause:** Ingest mints a **new id** for every import (`generateId`, [src/store/documents/document.ts](../src/store/documents/document.ts)); there's no dedup by content or filename. A `perssonify-document` envelope (a JSON export or a backup ZIP) carries its own id, but if that id is already in the library `createDoc` mints a fresh one, so the import sits beside the stored document instead of overwriting it.
 - **Fix/Workaround:** Expected behavior. Delete the dupe, or add dedup if your feature needs it.
 - **Related:** [data-pipeline.md#idempotency](data-pipeline.md#idempotency).
 
@@ -132,7 +132,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 - **Symptom:** The map stutters while it settles on a large library.
 - **Cause — measured, not assumed:** a CPU profile of a 153-note settle never surfaced the simulation at all. Not `stepOnce`; not `placeLabels`, which benchmarks at ~1ms at 150 nodes. 69% of samples were browser-internal work (style, layout, paint) for the SVG tree the render rewrites, and the frame measured a **44ms median**. The force loop *is* O(n²) per tick, and at these sizes that is still cheap next to one DOM pass.
-- **What was done:** above 60 notes the layout advances several steps per rendered frame (`stepsPerFrame` in [src/store/graph-metrics.ts](../src/store/graph-metrics.ts), capped at 6 so one huge library cannot stall a single frame) — the same steps, the same resting layout, a third of the renders. Measured at 153 notes: **108 rendered frames / 5.6s / 3.9s blocking → 35 frames / 2.3s / 1.7s**.
+- **What was done:** above 60 notes the layout advances several steps per rendered frame (`stepsPerFrame` in [src/store/graph/graph-metrics.ts](../src/store/graph/graph-metrics.ts), capped at 6 so one huge library cannot stall a single frame) — the same steps, the same resting layout, a third of the renders. Measured at 153 notes: **108 rendered frames / 5.6s / 3.9s blocking → 35 frames / 2.3s / 1.7s**.
 - **If you optimise further:** the remaining win is in the DOM, not the maths — fewer per-frame attribute writes (memoising the rail, or mutating node transforms imperatively instead of through React) beats Barnes-Hut here. Profile before you start; this entry exists because the obvious answer was the wrong one.
 - **At library scale both halves matter (A088).** At 2,000 notes the exact O(n²) loop and the per-note SVG are each too slow, so above `BARNES_HUT_MIN` (300) the layout is Barnes–Hut and above `LARGE_MAP_MIN` (250) ordinary notes and links are drawn as a few batched paths, with each frame planned to either step or paint (`planFrame`). Below those thresholds nothing changed — the small-map loop is pinned bit-for-bit against `graph-legacy.js`, a frozen copy that must never be "fixed". Measure with `node e2e/run.mjs perf-map` rather than eyeballing.
 - **Related:** [features.md#17-knowledge-graph-the-relationship-map](features.md#17-knowledge-graph-the-relationship-map).
@@ -176,7 +176,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   still works — and whether upstream has fixed it, in which case delete the module
   and keep the cases.
 - **Related:** [src/engine/build-marked.ts](../src/engine/build-marked.ts),
-  [src/store/docx-export.ts](../src/store/docx-export.ts),
+  [src/store/importExport/docx-export.ts](../src/store/importExport/docx-export.ts),
   [src/__tests__/marked-upgrade-parity.test.js](../src/__tests__/marked-upgrade-parity.test.js).
 
 ## Reading CodeMirror's text with `innerText` double-counts blank lines
@@ -329,7 +329,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 - **Symptom:** A user reports their documents "disappeared."
 - **Cause:** There is no server copy; documents exist only in this origin's IndexedDB, which browsers may evict under storage pressure (Chromium, for a "best-effort" origin), delete after seven days without a visit (Safari, unless the app is installed), discard on closing a private window, or lose when the user clears site data.
-- **What the app does about it** (standalone app, [src/store/storage-durability.ts](../src/store/storage-durability.ts)): after the first successful save it asks the browser to keep its storage (`navigator.storage.persist()`), and Settings ▸ Storage & backup shows whether it is persisted and how much is used; a reminder appears when the last full backup is over 7 days old; Safari/iOS users get a tip to install the app. A localStorage canary (`pf:library-canary`) remembers how many documents the origin held — if IndexedDB comes back empty while the canary remembers documents, the starter documents are NOT seeded (which would make a wipe look like a first visit) and a notice explains the loss. A wipe that also takes localStorage is indistinguishable from a new visitor.
+- **What the app does about it** (standalone app, [src/store/persistence/storage-durability.ts](../src/store/persistence/storage-durability.ts)): after the first successful save it asks the browser to keep its storage (`navigator.storage.persist()`), and Settings ▸ Storage & backup shows whether it is persisted and how much is used; a reminder appears when the last full backup is over 7 days old; Safari/iOS users get a tip to install the app. A localStorage canary (`pf:library-canary`) remembers how many documents the origin held — if IndexedDB comes back empty while the canary remembers documents, the starter documents are NOT seeded (which would make a wipe look like a first visit) and a notice explains the loss. A wipe that also takes localStorage is indistinguishable from a new visitor.
 - **Fix/Workaround:** Encourage regular full backups (File ▸ Export ▸ Full backup). See the runbook, which starts with Version history and the unload stash.
 - **Related:** [runbooks/documents-disappeared.md](runbooks/documents-disappeared.md), [architecture.md ADR-5](architecture.md#adr-5--local-first-no-backend).
 
@@ -351,7 +351,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 - **Symptom:** Type a sentence and reload within the autosave window; the text is gone.
 - **Cause:** The unload handler fires a best-effort autosave, but `saveActiveDoc` **awaits a read** before it writes. The page is gone before the write is issued, and the in-memory draft cache does not survive a reload.
-- **Fix:** the handler also writes a synchronous localStorage stash (`src/store/crash-recovery.ts`, `pf:recovery`), which `documentStore.initialize` adopts into the ordinary unsaved-draft cache before activating a document. It is deliberately ONE-SHOT — a stash that survived its own restore would keep resurrecting itself over newer content.
+- **Fix:** the handler also writes a synchronous localStorage stash (`src/store/persistence/crash-recovery.ts`, `pf:recovery`), which `documentStore.initialize` adopts into the ordinary unsaved-draft cache before activating a document. It is deliberately ONE-SHOT — a stash that survived its own restore would keep resurrecting itself over newer content.
 - **Watch for:** stash the live canonical only when `hydratedDocId === activeDocId`; the editor's JSON belongs to the document it holds, not to whichever is active. Also wired to `pagehide` (iOS never fires `beforeunload` on a swipe-away). Each entry carries the revision its draft was based on and whether the tab was in conflict — without them, reloading a conflicted tab turned the refused save into an overwrite of the other tab's work — and `stashUnsaved` read-merge-writes the shared key per document, so a second tab's unload cannot erase the first tab's stash. A host's `storageConfig` can namespace or disable the stash (`configureRecovery`).
 - **Guard:** `crash-recovery.test.js`, `e2e/cases/faults.mjs`.
 
@@ -441,7 +441,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## A loss report must be checked against the serializer, not against intuition
 
 - **Symptom:** The status bar warns "1 other not in MD" on a document whose formatting round-trips perfectly — including the shipped Welcome document, on a brand-new user's very first visit.
-- **Cause:** [`fidelity.ts`](../src/store/fidelity.ts) classified marks by what *feels* like plain Markdown rather than by what [`turndown-rules.ts`](../src/engine/turndown-rules.ts) actually emits. `underline`/`subscript`/`superscript` sat in the styled-only set, but their rules live in `addBaseRules`, which **both** turndown instances get — Clean keeps them. An image's `width`/`height` were counted as attribute losses, while the `sizedImage` rule exists specifically to carry them.
+- **Cause:** [`fidelity.ts`](../src/store/documents/fidelity.ts) classified marks by what *feels* like plain Markdown rather than by what [`turndown-rules.ts`](../src/engine/turndown-rules.ts) actually emits. `underline`/`subscript`/`superscript` sat in the styled-only set, but their rules live in `addBaseRules`, which **both** turndown instances get — Clean keeps them. An image's `width`/`height` were counted as attribute losses, while the `sizedImage` rule exists specifically to carry them.
 - **Fix:** classify from the rule tables. Only `addInlineStyleRule` (the `<span style="…">` carrier for colour, highlight and font family) is mode-dependent; only `textAlign` has no carrier at all.
 - **Watch for:** the mirror image of the strikethrough bug two entries up. There, a format with no rule was classed as safe and destroyed silently; here, formats with rules were classed as lossy and warned about needlessly. Both come from reading the classification instead of the serializer — measure `turndown(html)` in both modes.
 - **Guard:** `clean-vs-styled.test.js` (measures the turndown output for each case the docs promise), `fidelity.test.js`.

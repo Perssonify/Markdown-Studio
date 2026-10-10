@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IndexedDBStorageAdapter, StorageReadError } from "../store/idb-storage-adapter";
-import { LocalStorageAdapter, WindowStorageAdapter } from "../store/storage-adapter";
-import { useDocumentStore } from "../store/documentStore";
-import { createDocument, serializeForStorage } from "../store/document";
+import { IndexedDBStorageAdapter, StorageReadError } from "../store/persistence/idb-storage-adapter";
+import { LocalStorageAdapter, WindowStorageAdapter } from "../store/persistence/storage-adapter";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { createDocument, serializeForStorage } from "../store/documents/document";
 
 /**
  * A029 — a storage read that FAILS must not look like "document not found".
@@ -14,7 +14,7 @@ import { createDocument, serializeForStorage } from "../store/document";
  * snapshot were all skipped: the "fails closed" promise was unreachable.
  */
 
-vi.mock("../store/snapshot-store", () => ({
+vi.mock("../store/history/snapshot-store", () => ({
   snapshotStore: { maybeRecordOnSave: vi.fn(), record: vi.fn(async () => null) },
 }));
 
@@ -177,7 +177,7 @@ describe("opening documents around an unreadable one", () => {
 
   it("boot skips a document it cannot read and opens the next one", async () => {
     vi.resetModules();
-    const { useDocumentStore: fresh } = await import("../store/documentStore");
+    const { useDocumentStore: fresh } = await import("../store/documents/documentStore");
     const good = createDocument({ id: "good", canonical: canonical("readable") });
     fresh.getState().initStorage({
       list: async () => [{ id: "broken", updated: "", title: "" }, { id: "good", updated: "", title: "" }],

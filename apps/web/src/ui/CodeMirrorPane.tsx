@@ -15,7 +15,7 @@ import { COMPOSITION_STALL_MS } from "../constants";
 import { perLineTextDirection } from "../extensions/cm-bidi";
 import { assetRefsInMarkdown } from "../extensions/cm-asset-refs";
 import type { HighlightSpec } from "../formatting/find-engine";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { dropAltGraphChords } from "../utils/alt-graph";
 import { t } from "../i18n";
 

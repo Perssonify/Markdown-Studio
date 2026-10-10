@@ -12,7 +12,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { CARD_COLORS } from "../store/cards";
+import { CARD_COLORS } from "../store/cards/cards";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
 

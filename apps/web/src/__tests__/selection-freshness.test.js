@@ -16,7 +16,7 @@ import { renderHook, act } from "@testing-library/react";
 import { createRef } from "react";
 import { useFormatDispatcher } from "../formatting/useFormatDispatcher";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts.js";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 /** A tiptap handle that records the ORDER of what the dispatcher does to it. */
 function fakeTiptap(order) {

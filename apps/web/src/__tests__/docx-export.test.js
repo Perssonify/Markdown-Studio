@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { exportAsDocx } from "../store/docx-export";
+import { exportAsDocx } from "../store/importExport/docx-export";
 
 // jsdom doesn't implement URL.createObjectURL / anchor downloads; stub them and
 // capture the Blob that downloadBlob would hand to the browser.

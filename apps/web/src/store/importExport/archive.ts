@@ -1,6 +1,6 @@
 import { Gunzip, strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import type { IngestFormat } from "./ingest";
-import { MAX_ASSET_BYTES, mimeForExt } from "./asset-refs";
+import { MAX_ASSET_BYTES, mimeForExt } from "../assets/asset-refs";
 
 /**
  * Archive (ZIP / TAR / TAR.GZ / GZ) import & export. Uses fflate (MIT) for

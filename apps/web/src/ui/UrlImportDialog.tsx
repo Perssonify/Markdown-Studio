@@ -28,8 +28,8 @@ import {
   relayConsentPrompt,
   UrlImportError,
   type ImportResource,
-} from "@/store/url-import";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError } from "@/store/archive";
+} from "@/store/importExport/url-import";
+import { ArchiveEncryptedError, ArchiveWrongPasswordError } from "@/store/importExport/archive";
 import { APP_NAME } from "@/constants";
 import { useDialog } from "./DialogProvider";
 import { useT } from "../i18n";

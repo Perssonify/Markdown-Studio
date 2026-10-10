@@ -1,5 +1,5 @@
 import { APP_HOSTS } from "../constants";
-import type { IDBStorageConfig } from "../store/idb-storage-adapter";
+import type { IDBStorageConfig } from "../store/persistence/idb-storage-adapter";
 
 /**
  * Which host origin(s) the iframe embed's bridge will talk to — pure, so the

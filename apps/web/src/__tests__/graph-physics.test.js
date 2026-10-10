@@ -13,8 +13,8 @@ import {
   shouldFreeze,
   stepLayout,
   worldFor,
-} from "../store/graph-physics";
-import { folderBounds, labelWidth, truncateLabel } from "../store/graph-metrics";
+} from "../store/graph/graph-physics";
+import { folderBounds, labelWidth, truncateLabel } from "../store/graph/graph-metrics";
 import { legacyStep, LEGACY_ALPHA_DECAY } from "./graph-legacy";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────

@@ -5,8 +5,8 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { NoticeDismiss as Dismiss, NoticeStrip as Strip, noticeButton as btn } from "./NoticeStrip";
 import { TabSyncNotice } from "./TabSyncNotice";
 import { APP_DOMAIN, APP_NAME, APP_URL } from "../constants";
-import { useDocumentStore } from "../store/documentStore";
-import { snapshotStore } from "../store/snapshot-store";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { snapshotStore } from "../store/history/snapshot-store";
 import {
   acknowledgeWipe,
   backupNudgeDue,
@@ -27,7 +27,7 @@ import {
   startDurabilityWatch,
   storagePersists,
   subscribeDurability,
-} from "../store/storage-durability";
+} from "../store/persistence/storage-durability";
 import { useT } from "../i18n";
 
 export interface DurabilityNoticesProps {
@@ -66,7 +66,7 @@ function DurabilityNoticesInner(props: DurabilityNoticesProps) {
 /**
  * Storage-durability notices (production-readiness audit A017 / A022 / A004).
  * Chooses at most one notice via `pickDurabilityNotice`; see
- * `store/storage-durability.ts` for what each protects against.
+ * `store/persistence/storage-durability.ts` for what each protects against.
  */
 function StorageNotice({
   appNotices,

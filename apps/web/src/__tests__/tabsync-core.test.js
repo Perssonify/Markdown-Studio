@@ -1,5 +1,5 @@
 /**
- * Live sync between tabs — the pure half (store/tab-sync.ts): what a message
+ * Live sync between tabs — the pure half (store/persistence/tab-sync.ts): what a message
  * may carry, how a batch coalesces, what a tab decides to do about its OPEN
  * document, what the save guard learns from other tabs, and the transports.
  *
@@ -31,7 +31,7 @@ import {
   tabSyncChannelName,
   withRemoteApply,
   isApplyingRemote,
-} from "../store/tab-sync";
+} from "../store/persistence/tab-sync";
 
 const T0 = "2026-09-01T10:00:00.000Z";
 const T1 = "2026-09-01T10:00:00.400Z"; // 400ms later — inside the save guard's 2s tolerance

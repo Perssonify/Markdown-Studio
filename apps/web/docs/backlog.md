@@ -17,7 +17,7 @@ release yet.
 ## 1. Console / automation & diagnostics tray
 
 **Status.** ✅ **Diagnostics console SHIPPED** (read-only curated registry —
-`src/ui/ConsolePanel.tsx` + `src/store/console-commands.ts`,
+`src/ui/ConsolePanel.tsx` + `src/store/diagnostics/console-commands.ts`,
 `consoleEnabled`/`pf:console`, the bottom tray's second tab after Document Links).
 It is switched on from the Settings **Admin** section, which production builds
 hide unless `localStorage["pf:admin"]` is `"1"`; while the section is hidden the
@@ -86,7 +86,7 @@ for suggestions needs care to avoid nagging.
 
 ## 3. DOCX import → Markdown (on the fly)
 
-**Status.** ✅ **SHIPPED for file import.** `src/store/docx-import.ts` converts a
+**Status.** ✅ **SHIPPED for file import.** `src/store/importExport/docx-import.ts` converts a
 `.docx` to HTML with `mammoth`, lazy-loaded in its own chunk; the import loop routes
 `.docx` files there before the text path and feeds the result to the ordinary
 `html` ingest (sanitise + residual report), for File ▸ Open and for files dropped
@@ -103,7 +103,7 @@ below are kept as the record of the decision.
 **Design sketch.**
 - Client-only, so a browser-capable converter is required. Candidate: **`mammoth`**
   (`.docx` → HTML) run in the browser, then feed the HTML through the existing
-  ingest → turndown pipeline (`store/ingest.ts` + `turndown-rules.ts`) to reach
+  ingest → turndown pipeline (`store/importExport/ingest.ts` + `turndown-rules.ts`) to reach
   Markdown/canonical. Lazy-import `mammoth` (like `@zip.js/zip.js`) to keep the
   main bundle small.
 - Wire into the existing file-import path (PE) and possibly URL import.
@@ -209,7 +209,7 @@ findings are lower-severity/narrower and are deferred with notes:
   parks the terminal `"conflict"` status (status bar: "Changed in another tab — not
   saving"); a reload after a conflict keeps the other tab's work (audits A018, A027),
   and rename, card pin/colour and bridge patches respect the conflict (audit A028).
-  Live cross-tab refresh is DONE (`store/tab-sync.ts`, a `BroadcastChannel` with a
+  Live cross-tab refresh is DONE (`store/persistence/tab-sync.ts`, a `BroadcastChannel` with a
   `storage`-event fallback). Still open: the non-IndexedDB fallbacks' `setPrefs` still reads, merges and writes
   across an `await`, so two overlapping calls can drop a key (the IndexedDB adapter
   merges inside one transaction).
@@ -218,7 +218,7 @@ findings are lower-severity/narrower and are deferred with notes:
   `undefined`-canonical edge is unreachable: capture always passes the live document's
   JSON and restore is skipped when there is none (the cache itself still hashes
   `undefined` as `""`). The `beforeunload` parked-draft write is covered by the
-  synchronous localStorage stash (`src/store/crash-recovery.ts`, written on
+  synchronous localStorage stash (`src/store/persistence/crash-recovery.ts`, written on
   `beforeunload` and `pagehide`, adopted on the next start; entries carry their base
   revision and conflict flag — audits A018, A027).
 
@@ -340,7 +340,7 @@ The default (unfiltered) Files tree is the only list without `title=` — the se
 
 **Priority:** low · **Audit severity:** low · **Status:** ✅ **RESOLVED (1.76.0)**
 
-`EXPORT_CONTENT_CSS` (`src/store/import-export.ts`) leaned on `overflow-x: auto`,
+`EXPORT_CONTENT_CSS` (`src/store/importExport/import-export.ts`) leaned on `overflow-x: auto`,
 which is meaningless on paper — there is nothing to scroll, so an over-wide line
 is simply clipped off the page, and exported HTML has the same problem in a
 narrow window. Long unbroken strings now have somewhere to break
@@ -353,11 +353,11 @@ narrow window. Long unbroken strings now have somewhere to break
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`store/import-export.ts:43-52`: export CSS has neither `overflow-wrap:anywhere` nor `table-layout:fixed`.
+`store/importExport/import-export.ts:43-52`: export CSS has neither `overflow-wrap:anywhere` nor `table-layout:fixed`.
 
 #### Original independently verified finding
 
-**File:** `src/store/import-export.ts:42-51` (`EXPORT_CONTENT_CSS`, shared by `exportAsHtml:250` and `print-export.ts:32`)
+**File:** `src/store/importExport/import-export.ts:42-51` (`EXPORT_CONTENT_CSS`, shared by `exportAsHtml:250` and `print-export.ts:32`)
 **Source:** [7]
 The live panes only wrap because prosemirror-view injects `word-wrap: break-word`; the export stylesheet sets `overflow-wrap: normal` and emits bare `<table>` with no `.tableWrapper` (`styles.css:1269` does not ship to exports).
 **Verifier correction — impact is narrow:** at the A4 778px content column, realistic URLs, sha256 hashes, Windows paths and 6-column tables all fit. Only *pathological unbroken tokens* overflow (a 200-char base64 `data:` URI pasted as text → `scrollWidth 2306`; a 150-char nonsense cell → table 1244px). Print cannot scroll, so those cases are silently truncated in the PDF.
@@ -593,7 +593,7 @@ squeezed editor until the next resize.
 
 #### Original independently verified finding
 
-**File:** `src/store/uiStore.ts:256-259` — `Math.min(720, Math.max(240, Math.round(value)))` ✅ verified in tree
+**File:** `src/store/preferences/uiStore.ts:256-259` — `Math.min(720, Math.max(240, Math.round(value)))` ✅ verified in tree
 **Source:** [3]
 The comment claims the clamp stops the panel eating the editor; 720 is compared against nothing, and the docked layout starts at `md` = 768px. At an 800×700 viewport with the persisted value: `aside` 720px, `<main>` **80px**, `.cm-editor` **40px** — one character per line. The value is in localStorage, so sizing the panel on a wide monitor poisons every later narrow-window session, with no visible cause.
 **Fix:** make the clamp viewport-relative *at apply time*:
@@ -1163,11 +1163,11 @@ programmatic creation must not leave traces only a user's action should.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`src/PerssonifyEditor.tsx:1161-1164` assigns the seed title to `doc.userTitle`; `src/store/document.ts:127-128` derives pinning from a user title.
+`src/PerssonifyEditor.tsx:1161-1164` assigns the seed title to `doc.userTitle`; `src/store/documents/document.ts:127-128` derives pinning from a user title.
 
 #### Original independently verified finding
 
-**Files:** `src/App.tsx:122-125` (seeds `initialDocument: { title: "Welcome" }`), `src/store/document.ts` (`createDocument` back-fills `titlePinnedByUser = true` for any non-placeholder `userTitle`), `resolveDocTitle`
+**Files:** `src/App.tsx:122-125` (seeds `initialDocument: { title: "Welcome" }`), `src/store/documents/document.ts` (`createDocument` back-fills `titlePinnedByUser = true` for any non-placeholder `userTitle`), `resolveDocTitle`
 **Source:** [114]
 A Ctrl+N document given `# Project Notes` retitles itself everywhere within one autosave. Doing the same to the welcome doc — which explicitly invites editing (*"Everything below is live and editable"*) — has no effect: after replacing its top with `# Reload Test Doc`, saving and reloading, both panes show the new H1 while the top bar, library row and status bar all still read "Welcome".
 **Fix:** seed the built-in initial document with `titlePinnedByUser` **false** so it heals from its first heading like every other doc.
@@ -1311,11 +1311,11 @@ GB tier.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`src/store/history-cache.ts:273-277` and `snapshot-store.ts:380-384` still stop at MB.
+`src/store/history/history-cache.ts:273-277` and `snapshot-store.ts:380-384` still stop at MB.
 
 #### Original independently verified finding
 
-**Files:** `src/store/history-cache.ts:273-277`, mirrored in `src/store/snapshot-store.ts:380-384`; rendered at `src/ui/MemorySheet.tsx:109`
+**Files:** `src/store/history/history-cache.ts:273-277`, mirrored in `src/store/history/snapshot-store.ts:380-384`; rendered at `src/ui/MemorySheet.tsx:109`
 **Source:** [87]
 The Memory sheet reads *"JS heap 44.3 MB of **4095.8 MB**"* for a 4 GB `jsHeapSizeLimit`.
 **Fix:** add `if (bytes < 1024**3) …; return `${(bytes/1024**3).toFixed(1)} GB`;` to both.
@@ -1525,7 +1525,7 @@ No `@media print` rule exists in `src/`; viewport-locked shell remains `src/App.
 
 **Files:** no `@media print` anywhere in `src/` ✅; shell is `h-dvh; overflow:hidden`
 **Source:** [95]
-`src/store/print-export.ts` builds its own hidden iframe for File ▸ Export ▸ PDF, but the browser's native print path is untouched. Measured with `emulateMedia({media:'print'})`: `document.scrollingElement.scrollHeight = 800` while `.ProseMirror.scrollHeight = 5046`; `page.pdf({format:'A4'})` yields a page tree of **`/Count 1`**. The user gets menu bar + toolbar + library + status bar + one screenful, with the remaining ~6 pages silently dropped and no hint that Export ▸ PDF exists.
+`src/store/importExport/print-export.ts` builds its own hidden iframe for File ▸ Export ▸ PDF, but the browser's native print path is untouched. Measured with `emulateMedia({media:'print'})`: `document.scrollingElement.scrollHeight = 800` while `.ProseMirror.scrollHeight = 5046`; `page.pdf({format:'A4'})` yields a page tree of **`/Count 1`**. The user gets menu bar + toolbar + library + status bar + one screenful, with the remaining ~6 pages silently dropped and no hint that Export ▸ PDF exists.
 **Fix:** an `@media print` block in `styles.css` that hides the chrome (`[data-tour="menubar"]`, toolbar, `aside`, `footer`, `[data-pane-header]`, overlays), releases the shell (`height:auto; overflow:visible` on html/body and the `h-dvh` container), shows only the rich pane, and reuses the page-break rules already written in `print-export.ts`.
 
 ### I2. Host-supplied `accentColor` / `themeVars` / `bg` never reach portaled menus, sheets and popovers
@@ -1554,11 +1554,11 @@ CSS custom properties inherit down the tree; portaled content is not a descendan
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`src/store/documentStore.ts:709-712` clears only identity/save state; `:884-886` no-ops on null canonical, leaving counts/fidelity stale.
+`src/store/documents/documentStore.ts:709-712` clears only identity/save state; `:884-886` no-ops on null canonical, leaving counts/fidelity stale.
 
 #### Original independently verified finding
 
-**Files:** `src/store/documentStore.ts:884-886` (`updateCounts` no-ops on a null canonical), `:711` (`closeTab` resets only identity); `src/ui/StatusBar.tsx:80,86`
+**Files:** `src/store/documents/documentStore.ts:884-886` (`updateCounts` no-ops on a null canonical), `:711` (`closeTab` resets only identity); `src/ui/StatusBar.tsx:80,86`
 **Source:** [93]
 Delete the last document: `<main>` correctly shows *"No document open"* and `.ProseMirror` unmounts, but the footer still reads `Panel | Split | 1 other not in MD | 672w | 4613c` — statistics and a fidelity warning for a document that no longer exists.
 **Fix:** in `closeTab`'s empty branch also `set({ counts: { words: 0, chars: 0 }, fidelityReport: null })`, and make `updateCounts` reset to zero on a null canonical rather than early-returning.

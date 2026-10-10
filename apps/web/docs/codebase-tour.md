@@ -140,11 +140,11 @@ markdown-studio/
 | The orchestrator that wires everything | [src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx) |
 | Bidirectional sync logic | [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts) |
 | Markdown ⇄ HTML conversion config | [src/engine/useMarkdownEngine.ts](../src/engine/useMarkdownEngine.ts) |
-| Document model / record shape | [src/store/document.ts](../src/store/document.ts) |
-| App state (Zustand) | [src/store/documentStore.ts](../src/store/documentStore.ts), [uiStore.ts](../src/store/uiStore.ts), [editorStore.ts](../src/store/editorStore.ts) |
-| Persistence / IndexedDB | [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts), [storage-adapter.ts](../src/store/storage-adapter.ts) |
-| Wiki links / graph data | [src/store/link-index.ts](../src/store/link-index.ts) |
-| Import / export / clipboard | [src/store/import-export.ts](../src/store/import-export.ts), [src/store/ingest.ts](../src/store/ingest.ts) |
+| Document model / record shape | [src/store/documents/document.ts](../src/store/documents/document.ts) |
+| App state (Zustand) | [src/store/documents/documentStore.ts](../src/store/documents/documentStore.ts), [uiStore.ts](../src/store/preferences/uiStore.ts), [editorStore.ts](../src/store/editor/editorStore.ts) |
+| Persistence / IndexedDB | [src/store/persistence/idb-storage-adapter.ts](../src/store/persistence/idb-storage-adapter.ts), [storage-adapter.ts](../src/store/persistence/storage-adapter.ts) |
+| Wiki links / graph data | [src/store/links/link-index.ts](../src/store/links/link-index.ts) |
+| Import / export / clipboard | [src/store/importExport/import-export.ts](../src/store/importExport/import-export.ts), [src/store/importExport/ingest.ts](../src/store/importExport/ingest.ts) |
 | Keyboard shortcuts | [src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts) |
 | Toolbar buttons → commands | [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) → [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts) |
 | Custom Tiptap nodes | [src/extensions/](../src/extensions/) |
@@ -152,7 +152,7 @@ markdown-studio/
 | Shared types (document, link, fidelity) | colocated in their store/ files; no central types file |
 | Env config | nothing at runtime; two optional **build-time** variables — `VITE_EMBED_ALLOWED_ORIGINS` (who may drive the iframe embed, [src/integration/embed-origins.ts](../src/integration/embed-origins.ts)) and `VITE_PERSSONIFY_DIAG` (turns on `[DIAG]` logs, [src/utils/diag.ts](../src/utils/diag.ts)) |
 | Find & Replace matching | [src/formatting/find-engine.ts](../src/formatting/find-engine.ts), [find-worker.ts](../src/formatting/find-worker.ts) |
-| Wiki-link rendering / resolution | [src/engine/wiki-link-marked.ts](../src/engine/wiki-link-marked.ts) / `createWikiResolver` in [src/store/link-index.ts](../src/store/link-index.ts) |
+| Wiki-link rendering / resolution | [src/engine/wiki-link-marked.ts](../src/engine/wiki-link-marked.ts) / `createWikiResolver` in [src/store/links/link-index.ts](../src/store/links/link-index.ts) |
 | Library stylesheet scoping | [build/scope-css.mjs](../build/scope-css.mjs) (library build only) |
 | Build config (app vs library) | [vite.app.config.ts](../vite.app.config.ts) / [vite.config.ts](../vite.config.ts) |
 | Tests | [src/__tests__/](../src/__tests__/) |
@@ -175,10 +175,10 @@ markdown-studio/
 - [src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx) — anything cross-cutting (new action, new panel).
 - [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) + [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts) — new formatting commands.
 - [src/hooks/useDocumentLifecycle.ts](../src/hooks/useDocumentLifecycle.ts) — document open/close/save behavior.
-- [src/store/documentStore.ts](../src/store/documentStore.ts) — state and persistence behavior.
+- [src/store/documents/documentStore.ts](../src/store/documents/documentStore.ts) — state and persistence behavior.
 
 ## Files you should almost never touch (and why)
 
 - [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts) — the empty-deps invariant on `forceSyncMdToHtml` ([:260](../src/engine/useSyncEngine.ts#L260)) and its twin is load-bearing; a careless dependency reintroduces infinite sync loops. Read [gotchas.md](gotchas.md) before editing.
 - [src/components/ui/](../src/components/ui/) — generated shadcn primitives; regenerate via shadcn rather than hand-editing.
-- [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts) `idbTransaction` internals — the await rules are subtle ([:229](../src/store/idb-storage-adapter.ts#L229)).
+- [src/store/persistence/idb-storage-adapter.ts](../src/store/persistence/idb-storage-adapter.ts) `idbTransaction` internals — the await rules are subtle ([:229](../src/store/persistence/idb-storage-adapter.ts#L229)).

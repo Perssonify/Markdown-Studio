@@ -199,7 +199,7 @@ describe("paste and export", () => {
   });
 
   it("does not declare every exported document English", () => {
-    const src = readFileSync(join(process.cwd(), "src/store/import-export.ts"), "utf8");
+    const src = readFileSync(join(process.cwd(), "src/store/importExport/import-export.ts"), "utf8");
     expect(src).not.toMatch(/<html lang="en">/);
   });
 });

@@ -20,15 +20,15 @@ import {
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { DocumentSummary } from "@/store/document";
-import { useUIStore } from "@/store/uiStore";
+import type { DocumentSummary } from "@/store/documents/document";
+import { useUIStore } from "@/store/preferences/uiStore";
 import {
   type BuiltTree,
   buildFolderTree,
   docOrderKey,
   type FolderRecord,
   useFolderStore,
-} from "@/store/folders";
+} from "@/store/documents/folders";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import {
   ArchiveIcon,

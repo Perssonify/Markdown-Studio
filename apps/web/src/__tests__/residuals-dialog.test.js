@@ -15,7 +15,7 @@ describe("residual reporting", () => {
     // A type with no entry renders as its raw slug ("dropped-attribute"), which
     // is the jargon this dialog exists to replace. Adding a residual type to
     // ingest.ts means adding its plain-language heading here.
-    const src = readFileSync(join(process.cwd(), "src/store/ingest.ts"), "utf8");
+    const src = readFileSync(join(process.cwd(), "src/store/importExport/ingest.ts"), "utf8");
     const emitted = new Set();
     // Only the types pushed as residuals — not `type: "doc"`/`"paragraph"`,
     // which are ProseMirror node names in the same file.

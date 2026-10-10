@@ -22,9 +22,9 @@
  */
 import { Fragment, type Node as PMNode } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
-import { normalizeHeadingAnchor } from "./doc-outline";
+import { normalizeHeadingAnchor } from "../documents/doc-outline";
 import type { WikiResolution } from "./link-index";
-import { parseWikiInner } from "../engine/wiki-link-marked";
+import { parseWikiInner } from "@/engine/wiki-link-marked";
 
 export interface HeadingInfo {
   level: number;

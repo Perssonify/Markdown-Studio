@@ -15,8 +15,8 @@ import {
   type DocumentSummary,
 } from "./document";
 import { computeFidelity, computeCanonicalStats, type FidelityReport } from "./fidelity";
-import type { IngestFormat, IngestSource } from "./ingest";
-import { completeIngest, ingest } from "./ingest";
+import type { IngestFormat, IngestSource } from "../importExport/ingest";
+import { completeIngest, ingest } from "../importExport/ingest";
 import {
   StorageQuotaError,
   StorageReadError,
@@ -27,23 +27,23 @@ import {
   WindowStorageAdapter,
   type StorageAdapter,
   type IDBStorageConfig,
-} from "./storage-adapter";
-import type { StorageMetrics } from "./idb-storage-adapter";
-import { snapshotStore } from "./snapshot-store";
+} from "../persistence/storage-adapter";
+import type { StorageMetrics } from "../persistence/idb-storage-adapter";
+import { snapshotStore } from "../history/snapshot-store";
 import { canonicalOf } from "./canonical-json";
-import { assetStore } from "./asset-store";
-import { clearStash, configureRecovery, takeStashed, type RecoveryEntry } from "./crash-recovery";
-import { historyCache } from "./history-cache";
+import { assetStore } from "../assets/asset-store";
+import { clearStash, configureRecovery, takeStashed, type RecoveryEntry } from "../persistence/crash-recovery";
+import { historyCache } from "../history/history-cache";
 import { useFolderStore } from "./folders";
-import { safeStorage } from "../utils/safe-storage";
-import { t } from "../i18n/core";
+import { safeStorage } from "@/utils/safe-storage";
+import { t } from "@/i18n/core";
 import {
   announce,
   configureTabSync,
   isDeletedElsewhere,
   isForeignRevision,
   tabSyncChannelName,
-} from "./tab-sync";
+} from "../persistence/tab-sync";
 
 /**
  * A canonical doc is "blank" when it holds no real content — an empty/absent

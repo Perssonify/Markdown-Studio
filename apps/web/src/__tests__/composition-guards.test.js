@@ -20,8 +20,8 @@ import { CodeMirrorPane } from "../ui/CodeMirrorPane";
 import { COMPOSITION_STALL_MS } from "../constants";
 import { useDocumentLifecycle } from "../hooks/useDocumentLifecycle";
 import { useFormatDispatcher } from "../formatting/useFormatDispatcher";
-import { useDocumentStore } from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
 
@@ -398,7 +398,7 @@ describe("a generation is CLAIMED only by a path that will hydrate", () => {
 
 describe("a stale save error does not follow the user to another document", () => {
   it("switching documents clears saveError", () => {
-    const src = read("src/store/documentStore.ts");
+    const src = read("src/store/documents/documentStore.ts");
     // The status bar reads saveError whenever the document is dirty, so a
     // failure on document A would otherwise be reported against document B the
     // moment the user typed in it.
@@ -406,14 +406,14 @@ describe("a stale save error does not follow the user to another document", () =
   });
 
   it("a save that lands clears it", () => {
-    const src = read("src/store/documentStore.ts");
+    const src = read("src/store/documents/documentStore.ts");
     expect(src).toMatch(/saveError: null, \/\/ this write landed/);
   });
 });
 
 describe("the unload stash never restores older content over newer", () => {
   it("compares the stash timestamp against what is on disk", () => {
-    const src = read("src/store/documentStore.ts");
+    const src = read("src/store/documents/documentStore.ts");
     const body = src.slice(src.indexOf("const storedAt = new Map"), src.indexOf("const prefs = await storage.getPrefs"));
     expect(body).toMatch(/entry\.at <= \(storedAt\.get\(entry\.docId\) \?\? 0\)/);
   });
@@ -442,7 +442,7 @@ describe("snapshotStore.deleteForDoc keeps its transaction alive", () => {
     // request pending, so awaiting a SEPARATE transaction after opening this
     // one left it dead: every delete threw into the catch, the memory ring was
     // cleared, and nothing was removed from the database.
-    const src = read("src/store/snapshot-store.ts");
+    const src = read("src/store/history/snapshot-store.ts");
     const body = src.slice(src.indexOf("async deleteForDoc"), src.indexOf("async deleteOne"));
     expect(body.indexOf("await this.allForDoc(")).toBeLessThan(body.indexOf("this.db.transaction("));
   });

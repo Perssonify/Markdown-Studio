@@ -14,8 +14,8 @@ import {
   para, pickFiles, readBlobBytes, readBlobText, richEditor, rowMenuClick, seededAdapter, store, storedDoc,
   textOf, toastText, until, untilHydrated, untilMdHas,
 } from "./behave-harness";
-import { buildZip, extractArchive } from "../store/archive";
-import { useFolderStore } from "../store/folders";
+import { buildZip, extractArchive } from "../store/importExport/archive";
+import { useFolderStore } from "../store/documents/folders";
 
 vi.setConfig({ testTimeout: 30000 });
 

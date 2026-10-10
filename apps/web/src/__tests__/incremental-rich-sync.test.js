@@ -13,7 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
 import { useSyncEngine } from "../engine/useSyncEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 const LOREM = "Perssonify builds custom technology for teams that move fast.";
 const paras = (n) => Array.from({ length: n }, (_, i) => `P${i} ${LOREM}`).join("\n\n");

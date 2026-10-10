@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link as LinkIcon, TerminalSquare } from "lucide-react";
-import type { ConsoleContext } from "../store/console-commands";
-import { extractHeadings } from "../store/doc-outline";
-import { useDocumentStore } from "../store/documentStore";
-import { useEditorStore } from "../store/editorStore";
-import { exportGraph, getBacklinks, getForwardLinks } from "../store/link-index";
+import type { ConsoleContext } from "../store/diagnostics/console-commands";
+import { extractHeadings } from "../store/documents/doc-outline";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useEditorStore } from "../store/editor/editorStore";
+import { exportGraph, getBacklinks, getForwardLinks } from "../store/links/link-index";
 import { BacklinksPanel } from "../ui/BacklinksPanel";
 import { ConsolePanel } from "../ui/ConsolePanel";
 import { trayFits } from "../ui/tray-fit";

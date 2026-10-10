@@ -7,9 +7,9 @@ import {
 } from "../extensions/UnresolvedWikiLinks";
 import { WikiLink } from "../extensions/WikiLink";
 import { useLinkIndex } from "../hooks/useLinkIndex";
-import { buildLinkIndex, createWikiResolver, resolveWikiLink, scanWikiLinks } from "../store/link-index";
-import { useDocumentStore } from "../store/documentStore";
-import { useEditorStore } from "../store/editorStore";
+import { buildLinkIndex, createWikiResolver, resolveWikiLink, scanWikiLinks } from "../store/links/link-index";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useEditorStore } from "../store/editor/editorStore";
 
 const para = (...content) => ({ type: "paragraph", content });
 const text = (t, marks) => (marks ? { type: "text", text: t, marks } : { type: "text", text: t });

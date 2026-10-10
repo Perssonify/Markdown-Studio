@@ -15,8 +15,8 @@ import {
   untilHydrated, untilMdHas, untilRichHas,
 } from "./behave-harness";
 import { findMenuItem } from "./behave-harness";
-import { StorageQuotaError } from "../store/idb-storage-adapter";
-import { RECOVERY_KEY } from "../store/crash-recovery";
+import { StorageQuotaError } from "../store/persistence/idb-storage-adapter";
+import { RECOVERY_KEY } from "../store/persistence/crash-recovery";
 
 vi.setConfig({ testTimeout: 30000 });
 

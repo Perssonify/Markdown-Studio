@@ -1,7 +1,7 @@
 import { Marked, type RendererObject, type TokenizerObject } from "marked";
 import { markedEmoji } from "marked-emoji";
 import markedFootnote from "marked-footnote";
-import type { MarkdownFeatureSettings } from "../store/settings";
+import type { MarkdownFeatureSettings } from "../store/preferences/settings";
 import { EMOJI_MAP } from "./emoji-map";
 import { emStrongMaskFix } from "./marked-emphasis-mask";
 import { mathBlockExtension, mathInlineExtension } from "./math-marked";

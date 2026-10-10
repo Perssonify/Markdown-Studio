@@ -1,6 +1,6 @@
 import type { PMNode } from "./document";
-import { isDangerousUrl } from "../utils/url-safety";
-import { sanitizeCssColor, sanitizeFontFamily, sanitizeTextAlign } from "../engine/css-safety";
+import { isDangerousUrl } from "@/utils/url-safety";
+import { sanitizeCssColor, sanitizeFontFamily, sanitizeTextAlign } from "@/engine/css-safety";
 
 // Compared lower-cased. `lightsrc`/`darksrc` are the themeImage node's two
 // image URLs: they render as <img src> and <source srcset>.

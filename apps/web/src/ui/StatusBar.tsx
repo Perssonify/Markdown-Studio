@@ -15,11 +15,11 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MODES } from "../constants";
-import { SCHEMA_LOCK_ERROR, useDocumentStore } from "../store/documentStore";
-import { useEditorStore } from "../store/editorStore";
-import { formatEstBytes, historyCache } from "../store/history-cache";
-import { useTabSyncStore } from "../store/tab-sync";
-import { useUIStore } from "../store/uiStore";
+import { SCHEMA_LOCK_ERROR, useDocumentStore } from "../store/documents/documentStore";
+import { useEditorStore } from "../store/editor/editorStore";
+import { formatEstBytes, historyCache } from "../store/history/history-cache";
+import { useTabSyncStore } from "../store/persistence/tab-sync";
+import { useUIStore } from "../store/preferences/uiStore";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import { ResidualsDialog } from "./ResidualsDialog";
 import { INITIAL_ANNOUNCER, nextAnnouncement } from "./save-announcer";

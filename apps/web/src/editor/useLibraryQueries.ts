@@ -1,8 +1,8 @@
 import { useCallback, useRef } from "react";
-import { extractHeadings } from "../store/doc-outline";
-import { docSearchText, docSearchTextLower } from "../store/doc-text";
-import { useDocumentStore } from "../store/documentStore";
-import { searchDocuments } from "../store/search";
+import { extractHeadings } from "../store/documents/doc-outline";
+import { docSearchText, docSearchTextLower } from "../store/documents/doc-text";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { searchDocuments } from "../store/search/search";
 import { t } from "../i18n";
 import type { DocStore, Lifecycle, LinkIndexApi, SyncEngine, UIStore } from "./types";
 

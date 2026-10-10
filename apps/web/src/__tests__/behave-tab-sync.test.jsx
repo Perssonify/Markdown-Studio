@@ -16,10 +16,10 @@ import {
   act, click, heading, installBrowserStubs, key, mdText, mountEditor, onDisk, para, richEditor, seededAdapter,
   store, storedDoc, textOf, tick, toastText, typeRich, until, untilHydrated, untilMdHas, untilRichHas,
 } from "./behave-harness";
-import { createDocument } from "../store/document";
-import { snapshotStore } from "../store/snapshot-store";
-import { tabSyncChannelName, useTabSyncStore } from "../store/tab-sync";
-import { useFolderStore } from "../store/folders";
+import { createDocument } from "../store/documents/document";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { tabSyncChannelName, useTabSyncStore } from "../store/persistence/tab-sync";
+import { useFolderStore } from "../store/documents/folders";
 
 vi.setConfig({ testTimeout: 30000 });
 

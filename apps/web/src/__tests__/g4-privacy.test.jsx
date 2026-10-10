@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { DialogProvider } from "../ui/DialogProvider";
 import { UrlImportDialog } from "../ui/UrlImportDialog";
 import { PrivacySection } from "../ui/SettingsPrivacy";
-import { getRelayConsent } from "../store/url-import";
+import { getRelayConsent } from "../store/importExport/url-import";
 import {
   BLOCK_REMOTE_IMAGES_KEY,
   REMOTE_IMAGE_CSP,

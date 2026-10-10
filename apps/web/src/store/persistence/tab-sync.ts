@@ -21,8 +21,8 @@
  * type-only import.
  */
 import { create } from "zustand";
-import type { SaveStatus } from "./documentStore";
-import { safeStorage } from "../utils/safe-storage";
+import type { SaveStatus } from "../documents/documentStore";
+import { safeStorage } from "@/utils/safe-storage";
 
 // ─── Messages ────────────────────────────────────────────────────────────────
 

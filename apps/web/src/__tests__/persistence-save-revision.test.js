@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { _knownStoredRevision, useDocumentStore } from "../store/documentStore";
-import { computeCounts, createDocument, deserializeFromStorage, serializeForStorage, stampUpdated } from "../store/document";
-import { readRevision, StorageReadError, utf8Bytes } from "../store/idb-storage-adapter";
-import { snapshotStore } from "../store/snapshot-store";
+import { _knownStoredRevision, useDocumentStore } from "../store/documents/documentStore";
+import { computeCounts, createDocument, deserializeFromStorage, serializeForStorage, stampUpdated } from "../store/documents/document";
+import { readRevision, StorageReadError, utf8Bytes } from "../store/persistence/idb-storage-adapter";
+import { snapshotStore } from "../store/history/snapshot-store";
 
 /**
  * A083 — an autosave of a large note froze the page: it read its own stored

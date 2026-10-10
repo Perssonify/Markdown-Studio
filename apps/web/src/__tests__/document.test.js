@@ -13,7 +13,7 @@ import {
   extractFields,
   extractTags,
   syncFieldsToMetadata,
-} from '../store/document';
+} from '../store/documents/document';
 
 // --- Helper: PM JSON builders ---
 

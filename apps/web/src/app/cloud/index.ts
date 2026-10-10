@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import { setAccountVersions } from "../../store/account-versions";
-import { assetStore } from "../../store/asset-store";
-import { IndexedDBStorageAdapter } from "../../store/idb-storage-adapter";
-import { snapshotStore } from "../../store/snapshot-store";
-import { recordFullBackup } from "../../store/storage-durability";
-import { parseTabSyncMessage, tabSyncChannel, tabSyncChannelName, type TabSyncEvent } from "../../store/tab-sync";
+import { setAccountVersions } from "@/store/history/account-versions";
+import { assetStore } from "@/store/assets/asset-store";
+import { IndexedDBStorageAdapter } from "@/store/persistence/idb-storage-adapter";
+import { snapshotStore } from "@/store/history/snapshot-store";
+import { recordFullBackup } from "@/store/persistence/storage-durability";
+import { parseTabSyncMessage, tabSyncChannel, tabSyncChannelName, type TabSyncEvent } from "@/store/persistence/tab-sync";
 import { liveBackupSources } from "../../utils/emergency-backup";
 import { safeStorage } from "../../utils/safe-storage";
 import { CloudError, httpAccountArchive, httpCloudApi } from "./api";

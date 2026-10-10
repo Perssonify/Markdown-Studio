@@ -6,7 +6,7 @@ import {
   buildHeadingTree,
   type OutlineHeading,
   type OutlineTreeNode,
-} from "@/store/doc-outline";
+} from "@/store/documents/doc-outline";
 import { useT } from "../i18n";
 
 /**

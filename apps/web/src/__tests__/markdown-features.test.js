@@ -4,7 +4,7 @@ import { buildMarked } from '../engine/build-marked.ts';
 import { createMarkdownEngine } from '../engine/useMarkdownEngine.ts';
 import { cleanHtmlForTurndown } from '../engine/html-cleaner.ts';
 import { addBaseRules, addInlineStyleRule } from '../engine/turndown-rules.ts';
-import { DEFAULT_MARKDOWN_FEATURES } from '../store/settings.ts';
+import { DEFAULT_MARKDOWN_FEATURES } from '../store/preferences/settings.ts';
 
 // Mirror the engine's htmlToMd path (clean → turndown) so span-stripping
 // regressions are caught, not just raw turndown behavior.

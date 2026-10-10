@@ -4,8 +4,8 @@ import { act, render } from "@testing-library/react";
 import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TiptapPane } from "../ui/TiptapPane";
-import { assetStore } from "../store/asset-store";
-import { assetRef } from "../store/asset-refs";
+import { assetStore } from "../store/assets/asset-store";
+import { assetRef } from "../store/assets/asset-refs";
 import { canonicalToHtml, SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 
 /**

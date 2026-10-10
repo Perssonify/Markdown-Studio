@@ -10,7 +10,7 @@
 
 import { canonicalJsonText } from "./canonical-json";
 import { sanitizeCanonicalNode } from "./canonical-sanitize";
-import type { ResidualItem } from "./ingest";
+import type { ResidualItem } from "../importExport/ingest";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version";
 
 // --- Types ---

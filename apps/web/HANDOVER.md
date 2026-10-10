@@ -83,15 +83,15 @@ Authoritative reading, in order:
 | Orchestrator | `src/PerssonifyEditor.tsx` | Wires stores, engine, panes, dialogs, host bridge. The big component. |
 | App shell | `src/App.tsx`, `src/app/router.tsx` | Standalone app: routing (`/about`,`/help`,`/graph`), URL-param reader, first-run tour. |
 | Doc lifecycle | `src/hooks/useDocumentLifecycle.ts` | Switch/new/close/delete/revert, sync debounce, history capture, snapshot restore. HIGH-RISK. |
-| Stores | `src/store/documentStore.ts`, `uiStore.ts`, `editorStore.ts`, `folders.ts` | Zustand. `documentStore` is the data-integrity core. |
-| Persistence | `src/store/storage-adapter.ts`, `idb-storage-adapter.ts` | Pluggable; IndexedDB default. |
-| Snapshots | `src/store/snapshot-store.ts` | **Sidecar** IndexedDB version-history ring (recovery net). Independent of the doc adapter. |
+| Stores | `src/store/documents/documentStore.ts`, `uiStore.ts`, `editorStore.ts`, `folders.ts` | Zustand. `documentStore` is the data-integrity core. |
+| Persistence | `src/store/persistence/storage-adapter.ts`, `idb-storage-adapter.ts` | Pluggable; IndexedDB default. |
+| Snapshots | `src/store/history/snapshot-store.ts` | **Sidecar** IndexedDB version-history ring (recovery net). Independent of the doc adapter. |
 | Sync engine | `src/engine/useSyncEngine.ts`, `useMarkdownEngine.ts`, `build-marked.ts`, `turndown-rules.ts` | Bidi MD↔canonical. Ref-based, empty-dep callbacks (see invariants). |
 | Panes | `src/ui/CodeMirrorPane.tsx`, `TiptapPane.tsx`, `EditorPanes.tsx` | The two editors + split/scroll-sync. |
 | Workspace panel | `src/ui/WorkspacePanel.tsx`, `FolderTree.tsx` | Left-docked Files / Outline tabs (the library + single-doc outline). |
-| Graph | `src/ui/GraphView.tsx`, `src/store/graph-metrics.ts`, `doc-outline.ts` | **Map-only** full-screen relationship overlay + orphan/broken-link metrics. |
+| Graph | `src/ui/GraphView.tsx`, `src/store/graph/graph-metrics.ts`, `doc-outline.ts` | **Map-only** full-screen relationship overlay + orphan/broken-link metrics. |
 | Find/Replace | `src/ui/FindReplace.tsx`, `src/formatting/find-engine.ts`, `find-worker.ts` | Floating draggable panel; ONE matcher; a regex runs in a terminable Web Worker. |
-| Durability & ops | `src/store/storage-durability.ts`, `crash-recovery.ts`, `src/pwa/sw-updates.ts`, `src/utils/*` | Wipe detection, backup reminder, unload stash, prompted updates, diagnostics ring, dev-only gates. |
+| Durability & ops | `src/store/persistence/storage-durability.ts`, `crash-recovery.ts`, `src/pwa/sw-updates.ts`, `src/utils/*` | Wipe detection, backup reminder, unload stash, prompted updates, diagnostics ring, dev-only gates. |
 | Extensions | `src/extensions/*` | Custom TipTap nodes (math, diagrams, callouts, details, task lists, background-color, wiki-link, sized/theme images, emoji, frontmatter). |
 | UI pages/dialogs | `src/ui/pages/*`, `src/ui/*Sheet.tsx`, `Dialogs.tsx` | Help/About, Settings, Memory, Version History, Link builder, etc. |
 | Relay | `api/import.js` | The ONLY server code: a hardened same-origin import proxy. |
@@ -174,7 +174,7 @@ CLAUDE.md invariant explaining it. **Do not weaken any of them.**
    the **editor hydration**; `documentStore.switchSeq` guards the store **`activeDocId`**.
    **Both are required** — without the store guard, `activeDocId` and `hydratedDocId`
    desync → every save blocked + cross-doc draft contamination.
-4. **Recoverable snapshot net** (`store/snapshot-store.ts`): a **sidecar IndexedDB**
+4. **Recoverable snapshot net** (`store/history/snapshot-store.ts`): a **sidecar IndexedDB**
    (`perssonify-snapshots`, its own DB — survives reloads) keeps a bounded per-doc ring of
    prior versions. `saveActiveDoc` snapshots the OLD content before overwriting; `deleteDoc`
    snapshots before delete. Restore via **Tools ▸ Version history**.
@@ -213,7 +213,7 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
 - **Sync is IME / voice-dictation aware** — do not strip the composition guards, or
   dictated text gets dropped.
 - **Hydrating a different document must drop undo history** (`resetHistory` on both panes).
-  The one sanctioned exception is `store/history-cache.ts` (validated restore).
+  The one sanctioned exception is `store/history/history-cache.ts` (validated restore).
 - **Do NOT re-add a focus-based heuristic in `syncHtmlToMd`** — it silently reverted genuine
   deletions on blur. Recoverability is the save backstop's job.
 - **CodeMirror multi-range selection needs BOTH `allowMultipleSelections` AND
@@ -298,7 +298,7 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
 1. `bun install --frozen-lockfile && bunx tsc --noEmit && bun run lint && bun run test`
    — confirm a green baseline.
 2. Read `CLAUDE.md` (map + invariants) and `docs/gotchas.md`.
-3. Skim `src/store/documentStore.ts` and `src/hooks/useDocumentLifecycle.ts` with §5 open
+3. Skim `src/store/documents/documentStore.ts` and `src/hooks/useDocumentLifecycle.ts` with §5 open
    beside them — that's the delicate core.
 4. Open the app (`bun run dev`) and try: type unsaved edits → rename in the Workspace panel
    (edits kept); rapidly switch docs while typing (no wrong-doc flicker); Tools ▸ Version

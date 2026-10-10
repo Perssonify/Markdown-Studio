@@ -1,9 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Copy, FilePlus2, FileX2, Undo2, X } from "lucide-react";
-import { useDocumentStore } from "../store/documentStore";
-import { snapshotStore } from "../store/snapshot-store";
-import { useTabSyncStore } from "../store/tab-sync";
-import { useUIStore } from "../store/uiStore";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { useTabSyncStore } from "../store/persistence/tab-sync";
+import { useUIStore } from "../store/preferences/uiStore";
 import { useT } from "../i18n";
 import { NoticeStrip, noticeButton } from "./NoticeStrip";
 

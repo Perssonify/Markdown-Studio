@@ -4,7 +4,7 @@ import {
   runConsoleCommand,
   type ConsoleContext,
   type ConsoleResult,
-} from "../store/console-commands";
+} from "../store/diagnostics/console-commands";
 import { useT } from "../i18n";
 
 interface ConsoleEntry {

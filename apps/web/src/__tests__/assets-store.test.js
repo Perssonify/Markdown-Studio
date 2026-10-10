@@ -1,8 +1,8 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ASSETS_DB_NAME, assetStore, sha256Hex } from "../store/asset-store";
-import { assetRef } from "../store/asset-refs";
-import { configureLocalStores, clearLocalData, useDocumentStore } from "../store/documentStore";
+import { ASSETS_DB_NAME, assetStore, sha256Hex } from "../store/assets/asset-store";
+import { assetRef } from "../store/assets/asset-refs";
+import { configureLocalStores, clearLocalData, useDocumentStore } from "../store/documents/documentStore";
 
 /**
  * The asset store (A086) against a REAL database (fake-indexeddb: real
@@ -169,7 +169,7 @@ describe("asset store: namespacing (configureLocalStores)", () => {
 
   it("the store starts OFF; the standalone app shell is what turns it on", async () => {
     const { readFileSync } = await import("node:fs");
-    const src = readFileSync("src/store/asset-store.ts", "utf8");
+    const src = readFileSync("src/store/assets/asset-store.ts", "utf8");
     expect(src).toMatch(/private enabled = false;/);
     const app = readFileSync("src/App.tsx", "utf8");
     expect(app).toMatch(/^assetStore\.configure\(\{ enabled: true \}\);$/m);

@@ -1,8 +1,8 @@
 import { type MutableRefObject, useCallback, useMemo, useRef } from "react";
 import { headingLinkHtml } from "../formatting/heading-link";
 import { promptImage } from "../formatting/image-insert";
-import { extractHeadings } from "../store/doc-outline";
-import { useUIStore } from "../store/uiStore";
+import { extractHeadings } from "../store/documents/doc-outline";
+import { useUIStore } from "../store/preferences/uiStore";
 import { t } from "../i18n";
 import type {
   CmRef, EquationPrompt, FormatDispatcher, Lifecycle, PromptText, SyncEngine, TiptapRef, Toast, UIStore,

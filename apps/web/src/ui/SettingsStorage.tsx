@@ -2,9 +2,9 @@ import { Button } from "@/components/ui/button";
 import { DownloadCloud, ImageMinus, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
-import { cleanUpUnusedAssets, findUnusedAssets } from "../store/asset-gc";
-import { assetStore } from "../store/asset-store";
-import { useDocumentStore } from "../store/documentStore";
+import { cleanUpUnusedAssets, findUnusedAssets } from "../store/assets/asset-gc";
+import { assetStore } from "../store/assets/asset-store";
+import { useDocumentStore } from "../store/documents/documentStore";
 import { useDialog } from "./DialogProvider";
 import {
   daysAgoLabel,
@@ -15,7 +15,7 @@ import {
   storagePersists,
   subscribeDurability,
   type PersistenceStatus,
-} from "../store/storage-durability";
+} from "../store/persistence/storage-durability";
 import { t, useT } from "../i18n";
 
 export function formatStorageBytes(n: number): string {

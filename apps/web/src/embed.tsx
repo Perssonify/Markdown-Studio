@@ -7,7 +7,7 @@ import { createRoot } from "react-dom/client";
 import { PerssonifyEditorIntegration, type EditorHandle } from "./integration/PerssonifyEditorIntegration";
 import { embedStorageConfig, resolveEmbedAllowedOrigins } from "./integration/embed-origins";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
-import { useUIStore } from "./store/uiStore";
+import { useUIStore } from "./store/preferences/uiStore";
 import { sanitizeCssColor } from "./theme/palette";
 import "./styles.css";
 import { initPalette } from "./theme/palette";

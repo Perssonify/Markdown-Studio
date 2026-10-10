@@ -19,12 +19,12 @@ import {
   describeUncommittedSave,
   isOvertaken,
   useDocumentStore,
-} from "../store/documentStore";
-import { createDocument } from "../store/document";
-import { _resetTabSyncForTests, markDeletedElsewhere, startTabSync } from "../store/tab-sync";
-import { snapshotStore } from "../store/snapshot-store";
+} from "../store/documents/documentStore";
+import { createDocument } from "../store/documents/document";
+import { _resetTabSyncForTests, markDeletedElsewhere, startTabSync } from "../store/persistence/tab-sync";
+import { snapshotStore } from "../store/history/snapshot-store";
 
-vi.mock("../store/snapshot-store", () => ({
+vi.mock("../store/history/snapshot-store", () => ({
   snapshotStore: {
     maybeRecordOnSave: vi.fn(),
     record: vi.fn(async () => {}),

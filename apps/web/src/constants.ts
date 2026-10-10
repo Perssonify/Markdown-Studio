@@ -21,7 +21,7 @@ export const APP_URL = `https://${APP_DOMAIN}`;
  * Where the product lived before the move to APP_DOMAIN. Browser storage is
  * per-ORIGIN, so libraries created there stay there: a visitor on this host is
  * shown a "we've moved — download a full backup, import it there" banner
- * (see store/storage-durability.ts). Serving the current build on this host is
+ * (see store/persistence/storage-durability.ts). Serving the current build on this host is
  * what makes that banner reach them; retiring the host strands their data.
  */
 export const LEGACY_APP_HOST = "markdowneditor.perssonify.com";

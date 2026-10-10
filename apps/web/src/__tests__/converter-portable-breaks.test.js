@@ -24,8 +24,8 @@ import { BREAK_MARK, withPortableBreaks, portableBreaksActive } from "../engine/
 import { findFencedCodeRanges } from "../engine/preprocessor";
 import { canonicalToMarkdown, canonicalToPortableMarkdown } from "../engine/serialize-doc";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { exportAsMarkdown } from "../store/import-export";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { exportAsMarkdown } from "../store/importExport/import-export";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 import { throughRichPane } from "./converter-harness";
 
 const FEATURES = { ...DEFAULT_MARKDOWN_FEATURES, footnotes: true };

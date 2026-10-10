@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { formatEstBytes, historyCache } from "../store/history-cache";
+import { formatEstBytes, historyCache } from "../store/history/history-cache";
 
 const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 

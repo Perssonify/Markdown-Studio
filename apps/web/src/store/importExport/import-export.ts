@@ -7,11 +7,11 @@
  */
 
 import { ingest, type IngestResult } from "./ingest";
-import { computeFidelity, type FidelityReport } from "./fidelity";
-import type { DocumentRecord } from "./document";
-import { APP_NAME } from "../constants";
-import { CURRENT_SCHEMA_VERSION } from "./schema-version";
-import { withPortableBreaks } from "../engine/portable-breaks";
+import { computeFidelity, type FidelityReport } from "../documents/fidelity";
+import type { DocumentRecord } from "../documents/document";
+import { APP_NAME } from "@/constants";
+import { CURRENT_SCHEMA_VERSION } from "../documents/schema-version";
+import { withPortableBreaks } from "@/engine/portable-breaks";
 
 // --- Types ---
 

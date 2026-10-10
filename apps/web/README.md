@@ -266,7 +266,7 @@ The mode switch is in the **markdown** pane's header. **Paste Styled**, in the *
 
 ## Document Model
 
-Each document uses a three-layer architecture (see [src/store/document.ts](src/store/document.ts)):
+Each document uses a three-layer architecture (see [src/store/documents/document.ts](src/store/documents/document.ts)):
 
 ```
 ┌─────────────────────────────────┐
@@ -321,7 +321,7 @@ Full pipeline (ingest → sync → persist): [docs/data-pipeline.md](docs/data-p
 
 ### Link Index
 
-The link index ([src/store/link-index.ts](src/store/link-index.ts)) maintains four maps (in memory, not persisted):
+The link index ([src/store/links/link-index.ts](src/store/links/link-index.ts)) maintains four maps (in memory, not persisted):
 
 | Map | Purpose |
 |-----|---------|
@@ -795,7 +795,7 @@ Deploy troubleshooting: [docs/runbooks/deploy-broken.md](docs/runbooks/deploy-br
 
 **Where a developer should look:** [`api/import.js`](api/import.js) is the entire
 server side of this product — one Vercel Serverless Function. The client that calls it
-is `fetchDirectOrProxy` in [`src/store/url-import.ts`](src/store/url-import.ts); its
+is `fetchDirectOrProxy` in [`src/store/importExport/url-import.ts`](src/store/importExport/url-import.ts); its
 tests are [`src/__tests__/import-relay.test.js`](src/__tests__/import-relay.test.js).
 
 **What it does.** "Import from URL" tries a direct browser `fetch` first. Some hosts

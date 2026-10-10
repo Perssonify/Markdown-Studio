@@ -18,7 +18,7 @@ import {
   planCardReload,
   sortCards,
   type CardColorId,
-} from "@/store/cards";
+} from "@/store/cards/cards";
 import { safeStorage } from "../utils/safe-storage";
 import { overlayShouldHandleEscape } from "./overlay-escape";
 import { neutralizeAssetSrcs, useResolvedAssetImages } from "./asset-dom";

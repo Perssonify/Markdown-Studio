@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateImportUrl, detectUrlFormat, UrlImportError } from "../store/url-import";
+import { validateImportUrl, detectUrlFormat, UrlImportError } from "../store/importExport/url-import";
 
 describe("validateImportUrl", () => {
   it("accepts http and https", () => {

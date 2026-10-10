@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { adsAvailable } from "../utils/build-gates";
 import { useT } from "../i18n";
 

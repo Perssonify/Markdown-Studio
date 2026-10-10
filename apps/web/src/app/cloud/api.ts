@@ -1,4 +1,4 @@
-import type { DocumentRecord } from "../../store/document";
+import type { DocumentRecord } from "@/store/documents/document";
 import type { SyncedTree } from "./folder-merge";
 
 /** The account's view of one document (or its tombstone). */

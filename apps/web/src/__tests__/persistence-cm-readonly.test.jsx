@@ -21,7 +21,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CodeMirrorPane } from "../ui/CodeMirrorPane";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 const mounted = [];
 afterEach(() => {

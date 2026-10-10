@@ -62,7 +62,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   other starters link to it as `[[Markdown Studio|Welcome]]`. The test used to
   hard-code "Welcome", so it agreed with `[[Welcome]]` links that resolved to
   nothing and were drawn as broken on first run.
-- `src/store/doc-outline.ts` — `extractHeadings(canonical)` + `buildHeadingTree()`
+- `src/store/documents/doc-outline.ts` — `extractHeadings(canonical)` + `buildHeadingTree()`
   (stack-nesting), consumed by the Workspace Outline tab. **`src/ui/GraphView.tsx`
   is the MAP-ONLY knowledge-graph overlay** — the force-directed relationship graph
   of the whole workspace (documents + wiki-links + folder clusters).
@@ -177,7 +177,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     layout untouched, never reheats) and **orphan / broken-link filter chips** —
     orphans are already isolated nodes (`findOrphans`); broken links come from
     `linkIndex.unresolved` via the `unresolved` prop (`brokenSourceIds`/`brokenLinks`
-    in `src/store/graph-metrics.ts`, unit-tested), highlighted on demand with an
+    in `src/store/graph/graph-metrics.ts`, unit-tested), highlighted on demand with an
     OFF-by-default ghost-target overlay (ghost nodes are excluded from the sim).
     The chips are the FILTER; the rail lists the actual notes behind each count.
   - **The rail is the whole information layer.** With a node selected: title,
@@ -283,7 +283,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     maps are also capped by the clock (`SLICE_MS`, next bullet).
   - **Above `LARGE_MAP_MIN` (250) notes the map is drawn and paced for scale; at or
     below it nothing changes** (A088). Ordinary dots, links and arrowheads are batched
-    `<path>`s (`store/graph-draw.ts`, integer hundredths inside
+    `<path>`s (`store/graph/graph-draw.ts`, integer hundredths inside
     `scale(1/BATCH_UNITS)`), memoized on `layoutVersionRef` and the zoom, never on
     the camera position; open, selected, hovered and keyboard-focused notes are drawn
     in full on top, and the pointer is hit-tested in code against the copy that was
@@ -295,7 +295,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     carry `pf-node-dots` plus `data-doc-ids` in draw order (`parseCircles`,
     `e2e/map-measure.mjs`) — keep them measurable. Measured at 2,000 notes under 4×
     CPU: first frame 8.9 → 1.0 s, blocking 64 → 6 s, a frame 3.7 s → 83 ms.
-  - **The layout is `stepLayout` in `store/graph-physics.ts`.** At or below
+  - **The layout is `stepLayout` in `store/graph/graph-physics.ts`.** At or below
     `BARNES_HUT_MIN` (300) it is the exact loop — a FOLDERLESS map pinned
     bit-for-bit against `graph-legacy.js` (a frozen copy of the old loop — never
     "fix" it; folder maps changed on purpose, above); above it,
@@ -450,7 +450,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   only). **While the section is hidden those switches read their DEFAULTS**
   (`uiStore`), or a value stored before the gate existed would stick with no control
   left to change it — `admin-prefs-fallback.test.js`. Add new admin-only modules here.
-- **Diagnostics console** (`src/ui/ConsolePanel.tsx` + `src/store/console-commands.ts`):
+- **Diagnostics console** (`src/ui/ConsolePanel.tsx` + `src/store/diagnostics/console-commands.ts`):
   an admin-gated (`consoleEnabled`) bottom-tray tab running a **CURATED, READ-ONLY**
   command registry (`CONSOLE_COMMANDS` + `runConsoleCommand`) over EXISTING read
   APIs — `diag.lifecycle` (`getLifecycleState`), `diag.storage` (`getStorageMetrics`),
@@ -510,7 +510,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`MenuBar.onOutline` → `setShowSidebar(true)` + `setWorkspaceTab("outline")`).
   The `useActiveHeading` tracker is gated to `showSidebar && workspaceTab==="outline"
   && mode!=="md"`.
-- **Cards board** (`src/ui/CardsView.tsx` + pure helpers in `src/store/cards.ts`): a
+- **Cards board** (`src/ui/CardsView.tsx` + pure helpers in `src/store/cards/cards.ts`): a
   Google-Keep-style board over the WHOLE library — every document is a card. Opened
   from the **top-bar surface switcher** / View ▸ Cards / **⌘⇧K** / a **launcher button
   in the Workspace panel header** (`onOpenCards` — a launcher, deliberately NOT a third
@@ -547,7 +547,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   replaces the whole note with what that markdown parses back to, and the Clean
   converter has no carrier for colour, highlight or font, so ONE card edit stripped
   them from the entire note (A020). Alignment has no carrier at all:
-  `carryBlockAttrs` (`store/card-save.ts`) restores it on every block the edit left
+  `carryBlockAttrs` (`store/cards/card-save.ts`) restores it on every block the edit left
   unchanged and the user is told when edited ones lost it; a note holding anything
   the round trip cannot carry is snapshotted before it is replaced. The save passes
   the revision the card was read from (`expectedUpdated`), so another tab's newer
@@ -879,7 +879,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **`view_mode=md|html|split`** URL param maps to `setMode` (App.tsx reader; embed.tsx
   aliases it to `mode`). The standalone app's URL-param reader (App.tsx) also applies
   `readonly` (and `ads`, in dev only) then strips them via `history.replaceState`.
-- **Password-protected ZIPs**: `isZipEncrypted(buf)` in `store/archive.ts` reads the
+- **Password-protected ZIPs**: `isZipEncrypted(buf)` in `store/importExport/archive.ts` reads the
   central-directory (fallback: local-header) general-purpose bit 0 with NO dependency;
   `extractArchive` throws `ArchiveEncryptedError` when encrypted+no password, and
   decrypts via a **lazy** `@zip.js/zip.js` import when a `password` option is given
@@ -887,7 +887,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `src/editor/useImportPipeline.ts`) and URL import
   (`fetchImportResource` + `UrlImportDialog`) prompt for a masked password (the shared
   `useDialog().prompt` gained a `type: "password"`) and retry.
-- **Archive path safety**: `normalizeArchivePath(path)` in `store/archive.ts` strips
+- **Archive path safety**: `normalizeArchivePath(path)` in `store/importExport/archive.ts` strips
   absolute roots, Windows drives (`C:`, incl. drive-relative `C:foo`), `..`/`.`/empty
   segments, AND prototype-pollution keys (`__proto__`/`constructor`/`prototype`);
   `extractArchive` runs every entry through it before the path is trusted anywhere
@@ -897,7 +897,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   "perssonify-backup", { canonical: true })` writes each doc as the full
   `perssonify-document` JSON envelope (canonical + title/id/tags/metadata/timestamps).
   Re-import restores the exact library state, which requires TWO cooperating paths:
-  (1) the `pmjson` ingest branch (`store/ingest.ts`) forwards
+  (1) the `pmjson` ingest branch (`store/importExport/ingest.ts`) forwards
   `tags/metadata/created/updated/origin/residuals` + pins `userTitle` from the envelope
   (NOT just id/canonical/title — omitting them silently drops the state and resets
   timestamps); (2) `archiveEntriesToItems` detects an all-envelope archive
@@ -908,7 +908,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   only, and they come back separately as `extractArchive(...).assets` (the returned
   entries array carries an `assets` property).
   **Every export ZIP filename carries an `exportTimestamp()` `YYYYMMDD-HHMMSSmmm` suffix**
-  (`store/import-export.ts`) for implicit version control. JSON and backup exports
+  (`store/importExport/import-export.ts`) for implicit version control. JSON and backup exports
   share **`toExportEnvelope`**, which stamps `schemaVersion` and LEAVES OUT
   `origin.raw` (the whole input as first imported) and the clipboard alternates —
   text the user may have deleted since, which nothing reads on import (A079). Large
@@ -960,12 +960,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   - Host-supplied CSS colors (`bg`/`accentColor` in `embed.tsx` +
     `PerssonifyEditorIntegration.tsx`) go through `sanitizeCssColor` (`theme/palette.ts`)
     — rejects `url(`/`expression(`/`var(`/`;{}` so a value can't become a tracking beacon.
-  - `htmlToCanonical` (`store/canonical-ops.ts`) parses via an inert `DOMParser`, never
+  - `htmlToCanonical` (`store/documents/canonical-ops.ts`) parses via an inert `DOMParser`, never
     `el.innerHTML` on a live element (avoids resource loads / mutation-XSS).
   - **Anything written into a `style` attribute goes through `engine/css-safety.ts`**
     — an allowlist; a CSS escape (`posit\ion`) walked past the old filter. Renderers
     concatenate canonical attrs into `style="…"`, so `sanitizeCanonicalNode`
-    (`store/canonical-sanitize.ts`) validates colour, highlight, font family,
+    (`store/documents/canonical-sanitize.ts`) validates colour, highlight, font family,
     alignment, cell align, column widths and theme-image sources wherever canonical
     JSON enters (import, storage load) — a crafted JSON document injected CSS (A070,
     A073). Ingest strips `class`/`id`/`name` except `language-*`, `sr-only`,
@@ -990,7 +990,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     (LF-normalised) and names the new one. Moving CSP to enforcing is an owner
     decision; `e2e:csp` runs the build under the ENFORCED policy and must stay at
     zero violations.
-- **Images are binary assets** (A086, `store/asset-store.ts`, `asset-refs.ts`,
+- **Images are binary assets** (A086, `store/assets/asset-store.ts`, `asset-refs.ts`,
   `assets.ts`, `asset-gc.ts`; `extensions/AssetImages.ts` and `cm-asset-refs.ts`).
   Pasted, dropped and imported images live ONCE in a sidecar IndexedDB,
   `perssonify-assets` (`perssonify-assets:<ns>` under a host namespace; stores
@@ -1076,10 +1076,10 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   pane) so casing never mangles syntax. The MD masker uses PUA delimiters (U+E000/E001), NOT bare
   digits, so it can't collide with numbers in the document.
 - **Archive imports wrap loose root files in a folder named after the archive** via
-  `archiveEntriesToItems(entries, zipBaseName)` in `store/archive.ts` (used by both the
+  `archiveEntriesToItems(entries, zipBaseName)` in `store/importExport/archive.ts` (used by both the
   file-upload and URL-import sites in `src/editor/useImportPipeline.ts`). A single top-level folder is kept as-is; a
   lone file imports at root.
-- **DOCX import** (`store/docx-import.ts` `convertDocxToHtml`): a `.docx` upload can't take
+- **DOCX import** (`store/importExport/docx-import.ts` `convertDocxToHtml`): a `.docx` upload can't take
   the text path (`getFileContentAndFormat` reads text → binary garbage), so the import loop
   (`collectImportItems`) branches on `.docx` BEFORE that call and routes through **lazy** `mammoth` (`await import`,
   own chunk — never in the main bundle) → HTML → the existing `format:"html"` ingest branch
@@ -1158,7 +1158,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   presigned link whose SHA-256 S3 checks; first device that day stores it, a minute
   after sign-in, inside the sync lock; `pf:cloud-backup:<user>` is the day done;
   Profile ▸ Backups lists, downloads and "Back up now"), and Version history ▸ **In
-  your account** (`versions.ts` → `store/account-versions.ts`, a registry the editor
+  your account** (`versions.ts` → `store/history/account-versions.ts`, a registry the editor
   reads so the library and embed never import app code): the bucket's past versions
   of the open note, THINNED by the API (`thinVersions`) so they span the 30 days;
   bringing one back records an `"account-version"` snapshot and restores THAT, so it
@@ -1352,7 +1352,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **Stored content reaches the editor ONLY through `hydrateEditorWithDoc`** (the
   hydration ritual, `useDocumentLifecycle`) — boot, late boot, switches, the
   bridge's update/append and card saves all use it. It first checks the content
-  against the LIVE schema (`canonicalMisfit`, `store/schema-version.ts` — TipTap's
+  against the LIVE schema (`canonicalMisfit`, `store/documents/schema-version.ts` — TipTap's
   own `nodeFromJSON` check): `setContent` handed a node or mark the schema lacks
   loads an EMPTY document, and the next keystroke's autosave wrote that over the
   stored one. A misfit, or a record stamped with a newer `schemaVersion`, is shown
@@ -1371,7 +1371,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **Hydrating a different document must drop undo history** (`resetHistory()` on
   both panes — `setCanonical`/`setFromHtml` do it automatically). Without it,
   ⌘Z after a doc switch resurrects the previous doc's content into the new one.
-  The ONE sanctioned exception is `src/store/history-cache.ts` (per-doc undo
+  The ONE sanctioned exception is `src/store/history/history-cache.ts` (per-doc undo
   stacks): restores only go through `takeForRestore`, which validates the
   cached content hash against the just-hydrated content and discards on any
   mismatch. Never restore a cached pane state without that validation.
@@ -1401,7 +1401,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   path is synchronous and only runs on real edits, so it correctly propagates a
   clear; recoverability is the save backstop's job.
 - **Unload is a data-loss path, and `beforeunload` alone does not cover it**
-  (`src/store/crash-recovery.ts`). The handler fires a best-effort autosave, but
+  (`src/store/persistence/crash-recovery.ts`). The handler fires a best-effort autosave, but
   IndexedDB is ASYNCHRONOUS — `saveActiveDoc` awaits a read before it writes, so
   the page is gone before the write is issued, and the in-memory draft cache does
   not survive a reload either. Measured: type a sentence, reload inside the
@@ -1426,7 +1426,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   tabs used to keep only the second tab's stash (A027). `configureRecovery()` lets a
   host namespace or disable it (A103).
 - **The library is defended against the BROWSER deleting it** (A017, A022, A004;
-  `store/storage-durability.ts`, one notice at a time in `ui/DurabilityNotices.tsx`,
+  `store/persistence/storage-durability.ts`, one notice at a time in `ui/DurabilityNotices.tsx`,
   and Settings ▸ Storage & backup). Documents live only in this origin's IndexedDB,
   which Safari clears after seven days without a visit. `navigator.storage.persist()`
   is requested after the first save (re-asked at most weekly), and a full backup
@@ -1596,7 +1596,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   never re-attempts the conflicting write). Live sync between tabs sits on top of
   it (next bullet); the save-status machine itself was not rewritten and the
   terminal statuses are unchanged.
-- **Live sync between tabs** (`store/tab-sync.ts`, `editor/useTabSync.ts`,
+- **Live sync between tabs** (`store/persistence/tab-sync.ts`, `editor/useTabSync.ts`,
   `ui/TabSyncNotice.tsx`). Every COMMITTED write announces `{type, id, updated}` —
   never content — from `documentStore`, right after the adapter resolves and never
   for a refused write: **any new commit path must add its own `announce`**. The
@@ -1673,7 +1673,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `src/editor/` — re-check `activeDocId` after their awaits instead
   (`isEditorTargeting`, below); the source pin names the lifecycle hook's functions
   only, so a new site in `src/editor/` must be checked by hand.
-- **Recoverable snapshot net (`store/snapshot-store.ts`).** The LAST line of
+- **Recoverable snapshot net (`store/history/snapshot-store.ts`).** The LAST line of
   defence: a SIDECAR IndexedDB (`perssonify-snapshots`, its own DB — independent
   of the injected StorageAdapter, must survive reloads) keeps a bounded, per-doc
   ring of prior content versions so anything the prevention layers miss stays
@@ -2122,7 +2122,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   navigation (`useLinkIndex`) and turndown round-trip (`turndown-rules.ts`
   `wikiLink` rule keys on those attrs; filter uses `hasAttribute`, since a
   same-doc anchor has `data-doc-link=""`).
-- **ONE resolver — `createWikiResolver` / `resolveWikiLink` (`store/link-index.ts`),
+- **ONE resolver — `createWikiResolver` / `resolveWikiLink` (`store/links/link-index.ts`),
   built once per library — serves the link index, the click handler and the
   broken-link decoration.** With an anchor it first tries the WHOLE `docLink#anchor`
   as a title (so `[[C# Tips]]` finds "C# Tips"), then an exact id, then an exact
@@ -2163,7 +2163,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   the classification is wrong; widen what routes to `rebuildLinks`.
 - **Heading anchors resolve in ONE place** — `scrollToHeadingByAnchor`
   (`src/editor/useHeadingNavigation.ts`) calls `findHeadingByAnchor` with THE normaliser,
-  `normalizeHeadingAnchor` (`store/doc-outline.ts`: NFKC, lowercase, keeps
+  `normalizeHeadingAnchor` (`store/documents/doc-outline.ts`: NFKC, lowercase, keeps
   `\p{L}\p{N}\p{M}`, collapses the rest); generation sites carry the raw heading
   text. The old `[^a-z0-9]` key turned every Cyrillic/CJK/Arabic heading into "", so
   any non-Latin anchor jumped to the FIRST non-Latin heading, and "Über" matched
@@ -2173,7 +2173,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   the long-removed in-graph structure view truncated the Outline, "Link to heading"
   and `doc.outline` (A063); the map rail keeps its own `HEADING_CAP`.
 - **Renaming a heading OFFERS to retarget the links to it** (#122): the pure half
-  is `store/heading-renames.ts`, timing and writes `editor/useHeadingRenameLinks.ts`.
+  is `store/links/heading-renames.ts`, timing and writes `editor/useHeadingRenameLinks.ts`.
   - **Baseline:** the heading texts at hydration (a `hydratedDocId` subscription).
   - **When it checks:** `HEADING_RENAME_CHECK_MS` after the caret LEAVES a heading
     (document `selectionchange`/`keyup`/`pointerup`, deferred one task, read from the
@@ -2424,7 +2424,7 @@ The product ships three ways from one codebase: the standalone app
   keep a host's version history and crash stash with its documents (A103).
 
 ## Feature architecture notes
-- **Markdown flavors/features** live in `src/store/settings.ts` (persisted under
+- **Markdown flavors/features** live in `src/store/preferences/settings.ts` (persisted under
   `__prefs.markdownFeatures`), consumed by `build-marked.ts`. The Settings panel
   (`SettingsSheet.tsx`) drives them; `useMarkdownEngine` rebuilds marked on change.
   **Toggling a feature must not strip rich formatting** (A033): the `configVersion`

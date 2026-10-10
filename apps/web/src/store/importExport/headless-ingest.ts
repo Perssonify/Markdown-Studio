@@ -11,9 +11,9 @@
  * no editor, no yield and nothing to race.
  */
 import type { Schema } from "@tiptap/pm/model";
-import { htmlToCanonical } from "./canonical-ops";
+import { htmlToCanonical } from "../documents/canonical-ops";
 import { completeIngest } from "./ingest";
-import type { DocumentRecord } from "./document";
+import type { DocumentRecord } from "../documents/document";
 
 /** Set `doc.canonical` (and its title) from its ingest HTML, headlessly. A
  *  document with no ingest HTML (a `pmjson` payload) already has its canonical

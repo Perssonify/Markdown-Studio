@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { DOCNAV_WIDTH_MIN, DOCNAV_WIDTH_MAX, docNavWidthMax, useUIStore } from "../store/uiStore";
+import { DOCNAV_WIDTH_MIN, DOCNAV_WIDTH_MAX, docNavWidthMax, useUIStore } from "../store/preferences/uiStore";
 
 /**
  * C2. Half of this was already fixed and the backlog had not noticed: the
