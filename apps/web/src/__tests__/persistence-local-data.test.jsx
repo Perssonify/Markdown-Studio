@@ -196,8 +196,8 @@ describe("A079: exports leave out the raw import and clipboard copies", () => {
 describe("Settings ▸ Erase all local data", () => {
   it("asks first, then erases", async () => {
     const m = await fresh();
-    const { EraseLocalDataSection } = await import("../ui/EraseLocalData");
-    const { DialogProvider } = await import("../ui/DialogProvider");
+    const { EraseLocalDataSection } = await import("../ui/settings/eraseLocalData");
+    const { DialogProvider } = await import("../ui/dialogs/dialogProvider");
     m.ds.useDocumentStore.getState().initStorage({ dbName: `a079-ui-${Math.random()}` });
     const adapter = m.ds.useDocumentStore.getState().getStorage();
     await adapter.save(m.document.createDocument({ id: "z", canonical: doc("z") }));

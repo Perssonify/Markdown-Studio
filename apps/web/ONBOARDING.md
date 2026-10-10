@@ -255,7 +255,7 @@ sequenceDiagram
 
 ### 3.6 Switching documents
 
-1. A library row's selection (`src/ui/FolderTree.tsx:860, 954`) → `handleSelectDocFromPanel` (`src/PerssonifyEditor.tsx:947-950`) → `handleSwitchDoc` (`src/hooks/useDocumentLifecycle.ts:509-561`).
+1. A library row's selection (`src/ui/workspace/folderTree/index.tsx:860, 954`) → `handleSelectDocFromPanel` (`src/PerssonifyEditor.tsx:947-950`) → `handleSwitchDoc` (`src/hooks/useDocumentLifecycle.ts:509-561`).
 2. `handleSwitchDoc` bumps `switchGenRef`, ends any IME composition, caches a dirty draft, captures undo history and runs `autosaveOnLeave`.
 3. `documentStore.switchToDoc` (`src/store/documents/documentStore.ts:1203-1273`):
    - bumps its own `switchSeq`
@@ -438,7 +438,7 @@ A few fixes are applied as records and prefs are read:
 - `titlePinnedByUser` back-fill (`src/store/documents/document.ts:133-135`)
 - workspace tab `map` → `outline` (`src/store/preferences/uiStore.ts:210-211`)
 - reading width px → ch (`migrateReadingWidth`, `uiStore.ts:142`)
-- legacy `pf:fr-headings` → `pf:fr-scope` (`src/ui/FindReplace.tsx:106`)
+- legacy `pf:fr-headings` → `pf:fr-scope` (`src/ui/find/findReplace/index.tsx:106`)
 
 ### 6.6 Export and backup formats
 
@@ -615,7 +615,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - This happens with blocked site data and in some private modes. The adapter is chosen by feature detection only; nothing falls back when `open` fails.
   - Init fails with a 4-second "Failed to initialize" toast. After that, autosave and ⌘S do nothing for the session, because `initDoneRef` never becomes true.
   - What changed (A022): a persistent, non-dismissible strip now says "Not saving — browser storage is unavailable in this window". It is not shown when a host injects its own adapter or mounts with `chrome="none"`.
-  - Evidence: `src/store/persistence/storage-adapter.ts:502-506`, `src/PerssonifyEditor.tsx:1671-1676, 1695, 1741, 2914-2921`, `src/store/persistence/storage-durability.ts:415-426`, `src/ui/DurabilityNotices.tsx:192-204`.
+  - Evidence: `src/store/persistence/storage-adapter.ts:502-506`, `src/PerssonifyEditor.tsx:1671-1676, 1695, 1741, 2914-2921`, `src/store/persistence/storage-durability.ts:415-426`, `src/ui/notices/durabilityNotices/index.tsx:192-204`.
 - **DI-15: "Content only" case change can corrupt HTML next to a URL.** `Low–Medium` · `Confirmed` (the option is on by default)
   - The URL mask swallows an adjacent tag placeholder, and the single-pass restore leaves a private-use token in the text.
   - Evidence: `src/formatting/case-transform.ts:111-118`, `src/store/preferences/uiStore.ts:178-179`.
@@ -642,7 +642,7 @@ This revision re-checked every item from the 1.77.0 pass:
 - **API-5: The in-app embed snippet points at a page that isn't deployed.** `Medium` · `Confirmed`
   - The Share/embed builder targets `/embed.html`, but the Vercel build emits only the app.
   - On markdownstudio.com the rewrite therefore serves the **full app** inside the iframe: there is no bridge, the `theme`/`accent`/`chrome`/`bg` params are ignored, and it registers the PWA worker. That path is also exempt from anti-framing (SEC-5).
-  - Evidence: `src/ui/LinkBuilder.tsx:205-206`, `vite.app.config.ts:134-135`, `vercel.json:2, 9-11, 13-14, 24-31`.
+  - Evidence: `src/ui/share/linkBuilder/index.tsx:205-206`, `vite.app.config.ts:134-135`, `vercel.json:2, 9-11, 13-14, 24-31`.
 - **API-7: A host's `setMode` value is not validated.** `Low–Medium` · `Confirmed`
   - An unknown value hides both panes and is persisted to prefs.
   - Evidence: `src/integration/host-bridge.ts:130-133`, `src/store/preferences/uiStore.ts:222`, `src/ui/panes/editorPanes/index.tsx:301-303`, `src/PerssonifyEditor.tsx:449-453`.
@@ -653,11 +653,11 @@ This revision re-checked every item from the 1.77.0 pass:
 - **API-10: The library touches the host page.** `Low` · `Confirmed`
   - `diag.ts` reads the host page's `?diag=1` and its localStorage.
   - The accent picker (View ▸ Appearance, Settings) writes `data-palette` on the host's `<html>` and writes `perssonify-palette` to its storage. It is reachable in any full-chrome library mount.
-  - Evidence: `src/utils/diag.ts:14-25`, `src/theme/palette.ts:67-75`, `src/ui/ThemeControls.tsx:80-84`.
+  - Evidence: `src/utils/diag.ts:14-25`, `src/theme/palette.ts:67-75`, `src/ui/settings/themeControls/index.tsx:80-84`.
 - **API-12: `clearLocalData()` leaves the Cards draft behind.** `Low–Medium` (shared devices) · `Confirmed`
   - `clearLocalData()` is the documented call for a host's logout. It erases documents, history, the stash, drafts and the canary.
   - Only `clearLocalData({ preferences: true })` removes `pf:*` keys, and `pf:card-draft` is one of them. That key holds the Cards composer's unsaved note text, and it is not namespaced by `storageConfig`.
-  - Evidence: `src/store/documents/documentStore.ts:540, 555-591`, `src/ui/CardsView.tsx:97-111`.
+  - Evidence: `src/store/documents/documentStore.ts:540, 555-591`, `src/ui/cards/cardsView/index.tsx:97-111`.
 
 ### 8.3 Import, export and the relay
 
@@ -723,7 +723,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - Every `dangerouslySetInnerHTML` that renders document content is escaped or sanitized. That covers the card faces and the opened card.
   - Mermaid runs with `securityLevel: "strict"`, and its CSS-bearing config keys can be set only by `initialize()`. KaTeX uses its default `trust: false`.
   - Links open with `noopener,noreferrer`, and only for http(s), mailto, tel and protocol-relative URLs.
-  - Evidence: `src/store/importExport/ingest.ts:446-483, 536-538`, `src/ui/CardsView.tsx:548, 578, 1038`, `src/PerssonifyEditor.tsx:2509-2514`, `src/ui/panes/diagramPreview/index.tsx:49-60`, `src/hooks/useLinkIndex.ts:322-334`, `src/utils/url-safety.ts:17-22`.
+  - Evidence: `src/store/importExport/ingest.ts:446-483, 536-538`, `src/ui/cards/cardsView/index.tsx:548, 578, 1038`, `src/PerssonifyEditor.tsx:2509-2514`, `src/ui/panes/diagramPreview/index.tsx:49-60`, `src/hooks/useLinkIndex.ts:322-334`, `src/utils/url-safety.ts:17-22`.
 - **SEC-4: The public `ingest()` can return unsanitized HTML.** `Low–Medium` · `Confirmed`
   - It is exported from `@perssonify/editor/store`. For Markdown input it returns marked's output unsanitized: `<img onerror>` and `javascript:` links pass through.
   - A consumer that renders `result.html` gets XSS.
@@ -756,20 +756,20 @@ This revision re-checked every item from the 1.77.0 pass:
   - Evidence: `src/data/starter-documents.ts:39, 280, 374`, `src/constants.ts:93-95`, `src/App.tsx:168-171`, `src/PerssonifyEditor.tsx:1594-1604`, `src/store/links/link-index.ts:193-221`, `src/__tests__/starter-documents.test.js:38`.
 - **UI-4: Notes can't be edited from the board on narrow phones.** `Medium` · `Confirmed`
   - Below 480 px, a card with no saved view preference opens in Preview, and the Preview/Write toggle is hidden.
-  - Evidence: `src/ui/CardsView.tsx:922-928, 1099-1110`, `src/styles.css:254`.
+  - Evidence: `src/ui/cards/cardsView/index.tsx:922-928, 1099-1110`, `src/styles.css:254`.
 - **UI-6: ⌘F while typing in the Find panel closes it.** `Low` · `Confirmed`
   - The panel renders inside the editor container, so the global ⌘F handler toggles it shut. ⌘H and ⌥⌘F still work, because they open rather than toggle.
   - Fixed (A060, A067): the highlights, the count and Replace All now come from one match set.
-  - Evidence: `src/hooks/useKeyboardShortcuts.ts:123`, `src/PerssonifyEditor.tsx:1946-1949, 2763-2768`, `src/ui/FindReplace.tsx:926-933`.
+  - Evidence: `src/hooks/useKeyboardShortcuts.ts:123`, `src/PerssonifyEditor.tsx:1946-1949, 2763-2768`, `src/ui/find/findReplace/index.tsx:926-933`.
 - **UI-13: The "Collapsible details" feature flag does nothing.** `Low` · `Confirmed`
   - Nothing reads it.
-  - Evidence: `src/store/preferences/settings.ts:39-40, 85`, `src/ui/SettingsSheet.tsx:55`.
+  - Evidence: `src/store/preferences/settings.ts:39-40, 85`, `src/ui/settings/settingsSheet/index.tsx:55`.
 - **UI-14: Most lazy chunks have no local error boundary.** `Low` · `Confirmed`
   - Only Find/Replace has one. A failed WorkspacePanel, GraphView or CardsView chunk falls through to the top-level boundary, which replaces the whole editor with the crash screen.
   - Evidence: `src/PerssonifyEditor.tsx:86-89, 2764-2768, 2785-2809, 2876-2906`.
 - **UI-15: A failed card pin or colour change is not rolled back on the board.** `Low` · `Confirmed`
   - The board applies the change at once and re-reads the card if the write rejects. The editor's handler catches the error and only shows a toast, so the rollback never runs, and the board shows the unsaved state until it is reopened.
-  - Evidence: `src/ui/CardsView.tsx:457-477`, `src/PerssonifyEditor.tsx:2600-2612`.
+  - Evidence: `src/ui/cards/cardsView/index.tsx:457-477`, `src/PerssonifyEditor.tsx:2600-2612`.
 
 ### 8.6 Build, packaging and dependencies
 
@@ -854,7 +854,7 @@ This revision re-checked every item from the 1.77.0 pass:
 - **Unused constants:** `THEME_KEYS`, `STORAGE_KEY`, `SYNC_MODE_KEY` and `FONT_SIZE_MAP` (`src/constants.ts:40-43, 77-78, 84-91`).
 - **Unused within other modules:**
   - 12 of the 15 icons in `src/ui/chrome/icons/index.tsx`
-  - `Dialogs.tsx` `ConfirmDialog`; `useNewDocPrompt`; the `useDialogs` confirm
+  - `dialogs/index.tsx` `ConfirmDialog`; `useNewDocPrompt`; the `useDialogs` confirm
   - the AdUnit `right-rail` variant
   - `StorageAdapter.search`, and the `markdownCache`/`htmlCache` fields, which are read with fallbacks but never written
   - every helper in `src/utils/index.ts` except `quickHash`
@@ -871,9 +871,9 @@ This revision re-checked every item from the 1.77.0 pass:
 | `src/PerssonifyEditor.tsx:106-110` | With `storageAdapter`, no localStorage or IndexedDB is touched | See API-3 |
 | `src/PerssonifyEditor.tsx:113-116`, `src/integration/PerssonifyEditorIntegration.tsx:79` | `storageConfig` is ignored when an adapter is given | It still configures the snapshot database and the crash stash (`src/PerssonifyEditor.tsx:1364-1370`) |
 | `api/import.js:5-6`, `src/store/importExport/url-import.ts:151-153, 191-192` | "No third party ever sees the request"; `viaProxy` means "the public CORS proxy (content transited a third party)" | `viaProxy` means the first-party relay. The hosting provider handles, and may log, the request (§3.7) |
-| `src/ui/FindReplace.tsx:926-933` | The global shortcut listener cannot see the panel's keys | It can; ⌘F in the panel closes it (UI-6) |
+| `src/ui/find/findReplace/index.tsx:926-933` | The global shortcut listener cannot see the panel's keys | It can; ⌘F in the panel closes it (UI-6) |
 | `src/PerssonifyEditor.tsx:1943` | `frWithReplace` | The state is `frMode` |
-| `src/PerssonifyEditor.tsx:92, 778, 786`, `src/ui/WorkspacePanel.tsx:129, 155, 162` | A `DocNavPanel` component | `src/ui/DocNavPanel.tsx` exports only `TocList` and `EmptyOutline` |
+| `src/PerssonifyEditor.tsx:92, 778, 786`, `src/ui/workspace/workspacePanel/index.tsx:129, 155, 162` | A `DocNavPanel` component | `src/ui/workspace/docNavPanel/index.tsx` exports only `TocList` and `EmptyOutline` |
 | `tsconfig.build.json:4-5` | The root tsconfig is noEmit | `tsconfig.json:13` has `"noEmit": false` |
 | `.gitignore:11-12` | See `docs/migration-markdown-studio.md` | That file doesn't exist |
 | `.gitignore:4` | `vite.app.config.ts` moves the sourcemaps | `scripts/strip-sourcemaps.mjs` does, after the build |
@@ -934,7 +934,7 @@ Drift in the Markdown docs themselves (README, `docs/`, `CLAUDE.md` and the rest
 5. **Hidden settings.** `docs/deployment.md` lists branch protection, Vercel Deployment Checks and Vercel's Bun version as owner settings (A005, A014); `docs/import-relay.md` adds the function's Node version. Whether any of them is set cannot be seen from the repo.
 6. **History claims.** This repository's history starts at the 1.77.0 import (`0fed016`). The commits the docs cite (`84d7099` auth removal, `41e831e…` import point, `2e29275`) belong to the predecessor repository and can't be checked here.
 7. **Missing doc.** Where did `docs/migration-markdown-studio.md` go (`.gitignore:11-12`), and how is the marketing-kit zip regenerated?
-8. **Browser support.** Answered (A097): the floor is Safari/iOS 16.4, Chrome/Edge 111 and Firefox 128, which is what Tailwind v4 needed anyway. Below it `index.html` and `embed.html` show a message instead of loading the app, so the lookbehind still in the lazily loaded Find & Replace chunk (`src/ui/FindReplace.tsx:132`) is above the floor.
+8. **Browser support.** Answered (A097): the floor is Safari/iOS 16.4, Chrome/Edge 111 and Firefox 128, which is what Tailwind v4 needed anyway. Below it `index.html` and `embed.html` show a message instead of loading the app, so the lookbehind still in the lazily loaded Find & Replace chunk (`src/ui/find/findReplace/index.tsx:132`) is above the floor.
 9. **Editor settings.** Is the `js/ts.tsdk.path` key in `.vscode/settings.json` intended? The long-standing key is `typescript.tsdk`.
 
 Answered since 1.77.0:

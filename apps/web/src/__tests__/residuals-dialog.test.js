@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { RESIDUAL_KINDS } from "../ui/ResidualsDialog";
+import { RESIDUAL_KINDS } from "../ui/importExport/residualsDialog";
 
 /**
  * Import fidelity used to be a bare number in the status bar: "3 residuals",

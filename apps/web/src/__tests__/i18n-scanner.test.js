@@ -26,7 +26,7 @@ const ROOTS = [
 const ALLOWLIST = [
   // Shown in the hint and as the input's placeholder: it is the admin console's
   // COMMAND, typed exactly as written — the registry matches the English word.
-  ["src/ui/ConsolePanel.tsx", "help", "a console command name the command registry matches literally, not prose"],
+  ["src/ui/diagnostics/consolePanel/index.tsx", "help", "a console command name the command registry matches literally, not prose"],
 ];
 
 const allowed = (hit) => ALLOWLIST.some(([file, text]) => file === hit.file && text === hit.text);

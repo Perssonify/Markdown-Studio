@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CREDITS, LICENSE_SUMMARY } from "../data/credits";
-import { HELP_SECTIONS, SHORTCUT_GROUPS } from "../ui/pages/help-content";
+import { HELP_SECTIONS, SHORTCUT_GROUPS } from "../ui/pages/helpPage/help-content";
 
 describe("About credits data", () => {
   it("every credit has a name, version and license", () => {

@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Settings sheet: SettingsSheet.tsx, SettingsPrivacy.tsx, SettingsStorage.tsx, ThemeControls.tsx, EraseLocalData.tsx, theme/palette.ts. */
+/** Settings sheet: settingsSheet/index.tsx, settingsPrivacy/index.tsx, settingsStorage/index.tsx, themeControls/index.tsx, eraseLocalData/index.tsx, theme/palette.ts. */
 export const settings = {
   "settings.appearanceAndMarkdownPreferencesSaved": "Appearance & Markdown preferences. Saved automatically.",
   "settings.appearance": "Appearance",

@@ -209,7 +209,7 @@ The mode switch is in the **markdown** pane's header. **Paste Styled**, in the *
 
 ### Document Management
 
-- **Workspace panel** ([src/ui/WorkspacePanel.tsx](src/ui/WorkspacePanel.tsx)) — one left-docked
+- **Workspace panel** ([src/ui/workspace/workspacePanel/index.tsx](src/ui/workspace/workspacePanel/index.tsx)) — one left-docked
   tray with two tabs. **Files** is the library (nested folders, search over titles and content,
   new document / new folder, drag-and-drop file import, a select mode for bulk export and delete,
   and a per-document export menu); **Outline** is the live table of contents for the active
@@ -643,25 +643,25 @@ markdown-studio/
     │   ├── editorPanes/index.tsx        # Pane layout + scroll sync
     │   ├── toolbar/index.tsx            # Format toolbar
     │   ├── menuBar/index.tsx            # File/Edit/Insert/View/Format/Tools/Help
-    │   ├── WorkspacePanel.tsx     # Left-docked Files + Outline tabs
-    │   ├── FolderTree.tsx         # Nested folder/document tree
-    │   ├── FindReplace.tsx        # Find and replace (draggable panel)
-    │   ├── GraphView.tsx          # Relationship map — docked header/map/rail (SVG)
-    │   ├── CardsView.tsx          # Cards board over the whole library (overlay)
-    │   ├── BacklinksPanel.tsx     # Backlink / forward link panel
+    │   ├── workspacePanel/index.tsx     # Left-docked Files + Outline tabs
+    │   ├── folderTree/index.tsx         # Nested folder/document tree
+    │   ├── findReplace/index.tsx        # Find and replace (draggable panel)
+    │   ├── graphView/index.tsx          # Relationship map — docked header/map/rail (SVG)
+    │   ├── cardsView/index.tsx          # Cards board over the whole library (overlay)
+    │   ├── backlinksPanel/index.tsx     # Backlink / forward link panel
     │   ├── bottomTray/index.tsx         # Tabbed tray (links + admin console)
-    │   ├── VersionHistorySheet.tsx# Recoverable snapshots
+    │   ├── versionHistorySheet/index.tsx# Recoverable snapshots
     │   ├── statusBar/index.tsx          # Word count, save status, import-fidelity chip
-    │   ├── ResidualsDialog.tsx    # What an import could not represent, in plain language
-    │   ├── LinkBuilder.tsx        # The ONE share/embed link builder (Tools + Help)
-    │   ├── UrlImportDialog.tsx    # Import from URL (discloses relay use)
+    │   ├── residualsDialog/index.tsx    # What an import could not represent, in plain language
+    │   ├── linkBuilder/index.tsx        # The ONE share/embed link builder (Tools + Help)
+    │   ├── urlImportDialog/index.tsx    # Import from URL (discloses relay use)
     │   ├── modeSwitcher/index.tsx       # MD / HTML / Split toggle
-    │   ├── Toast.tsx              # Notification system
+    │   ├── toast/index.tsx              # Notification system
     │   ├── icons/index.tsx             # SVG icon library
     │   ├── linkBubbleMenu/index.tsx     # Link editing popup
     │   ├── tableBubbleMenu/index.tsx    # Table operations popup
     │   ├── tableGridPicker/index.tsx    # Table size selector
-    │   └── ErrorBoundary.tsx      # Error boundary
+    │   └── errorBoundary/index.tsx      # Error boundary
     │
     ├── hooks/                     # Custom React hooks
     │   ├── useKeyboardShortcuts.ts # Global shortcut handler

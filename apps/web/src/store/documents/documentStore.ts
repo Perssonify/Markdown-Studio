@@ -1940,7 +1940,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
  * singleton, so a SECOND editor mounted while one is running would share the
  * active document, the hydration mark, parked drafts and the injected storage
  * — typing in one could be saved as the other's document. Rather than
- * half-work, a second editor is refused (ui/OneEditorPerPage.tsx): the editor
+ * half-work, a second editor is refused (ui/shared/oneEditorPerPage/index.tsx): the editor
  * claims this slot before it touches any store and releases it on unmount, so
  * unmounting and mounting again (A024) still works.
  *

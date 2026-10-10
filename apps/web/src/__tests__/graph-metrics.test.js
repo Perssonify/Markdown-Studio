@@ -407,7 +407,7 @@ describe("map paint order", () => {
   // and wins the pixel. Order in the source is order in the SVG, which is what
   // decides this.
   it("draws folder chips after node dots, so a cluster name is never covered", () => {
-    const src = readFileSync(join(process.cwd(), "src/ui/GraphView.tsx"), "utf8");
+    const src = readFileSync(join(process.cwd(), "src/ui/graph/graphView/index.tsx"), "utf8");
     const dot = src.indexOf('"pf-node-dot"');
     const chip = src.indexOf('className="pf-folder-chip"');
     const chipLabel = src.indexOf('pf-chip-label');
@@ -420,7 +420,7 @@ describe("map paint order", () => {
   it("still draws folder containers BEHIND everything they hold", () => {
     // The container is a background wash; drawing it late would grey out its own
     // members and the edges that cross it.
-    const src = readFileSync(join(process.cwd(), "src/ui/GraphView.tsx"), "utf8");
+    const src = readFileSync(join(process.cwd(), "src/ui/graph/graphView/index.tsx"), "utf8");
     // Guard the anchors first: with the folder render deleted, indexOf returns
     // -1 and `-1 < n` passes — the pin would survive the very change it exists
     // to catch. (Its sibling above already does this.)

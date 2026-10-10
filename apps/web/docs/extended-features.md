@@ -89,11 +89,11 @@ singleton) so flavors can toggle at runtime. See
   `<html>`, orthogonal to light/dark.
 - Persisted in localStorage and applied before first paint
   (`src/theme/palette.ts`, `initPalette()` in `main.tsx`). Controls live in
-  View ▸ Appearance and the Settings panel (`src/ui/ThemeControls.tsx`).
+  View ▸ Appearance and the Settings panel (`src/ui/settings/themeControls/index.tsx`).
 
 ## Nested folders (file explorer)
 
-- The Workspace panel's **Files** tab renders a **folder tree** (`src/ui/FolderTree.tsx`):
+- The Workspace panel's **Files** tab renders a **folder tree** (`src/ui/workspace/folderTree/index.tsx`):
   create/rename/delete folders, "Move to…" for docs and folders (cycle-guarded), expand/collapse.
 - **Design:** folders are an organizational overlay persisted under
   `__prefs.folderTree` (`src/store/documents/folders.ts`) — documents stay flat in storage,
@@ -115,7 +115,7 @@ singleton) so flavors can toggle at runtime. See
 
 ## Settings panel
 
-`src/ui/SettingsSheet.tsx` — a side sheet hosting Appearance (theme + accent),
+`src/ui/settings/settingsSheet/index.tsx` — a side sheet hosting Appearance (theme + accent),
 Markdown flavor presets, per-feature toggles (Features), the math / diagram /
 music / emoji / callout / details switches (Extensions), Editor, Reading &
 typography, Storage & backup, Privacy (the import relay, Block remote images),

@@ -59,7 +59,7 @@ interface UIState {
 
   // Unified left-docked WORKSPACE panel (Files / Outline). `showSidebar` is its
   // open/closed flag (persisted); `workspaceTab` the active tab. See
-  // src/ui/WorkspacePanel.tsx.
+  // src/ui/workspace/workspacePanel/index.tsx.
   workspaceTab: "files" | "outline";
 
   // Actions

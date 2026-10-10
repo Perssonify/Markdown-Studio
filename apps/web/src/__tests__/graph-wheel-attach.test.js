@@ -1,7 +1,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GraphView } from "../ui/GraphView";
+import { GraphView } from "../ui/graph/graphView";
 
 /**
  * A065. Wheel zoom was attached in an effect that ran once, on mount — but the

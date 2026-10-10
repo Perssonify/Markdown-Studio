@@ -1,5 +1,5 @@
 /**
- * A108 — the library (`ui/WorkspacePanel.tsx` + `ui/FolderTree.tsx`) as a user
+ * A108 — the library (`ui/workspace/workspacePanel/index.tsx` + `ui/workspace/folderTree/index.tsx`) as a user
  * drives it: tabs, the Outline, resizing, the phone drawer, search and its
  * keyboard-operable results list, rename, the row menus (dropdown and
  * right-click), select mode with bulk export and delete, new documents and
@@ -16,9 +16,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useDocumentStore } from "../store/documents/documentStore";
 import { useFolderStore } from "../store/documents/folders";
 import { DOCNAV_WIDTH_MIN, docNavWidthMax, useUIStore } from "../store/preferences/uiStore";
-import { DialogProvider } from "../ui/DialogProvider";
-import { DND_MIME } from "../ui/folder-dnd";
-import { WorkspacePanel } from "../ui/WorkspacePanel";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { DND_MIME } from "../ui/workspace/folderTree/folder-dnd";
+import { WorkspacePanel } from "../ui/workspace/workspacePanel";
 
 const BASE = Date.parse("2026-09-01T00:00:00Z");
 const summary = (id, title, i = 0, extra = {}) => ({

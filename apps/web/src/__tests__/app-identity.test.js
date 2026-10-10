@@ -64,8 +64,8 @@ describe("product name is single-sourced", () => {
       "src/constants.ts",
       "src/App.tsx",
       "src/EditorHeader.tsx",
-      "src/ui/pages/help-content.ts",
-      "src/ui/pages/AboutPage.tsx",
+      "src/ui/pages/helpPage/help-content.ts",
+      "src/ui/pages/aboutPage/index.tsx",
       "src/data/starter-documents.ts",
     ];
     for (const f of files) {

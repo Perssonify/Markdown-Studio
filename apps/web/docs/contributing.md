@@ -49,7 +49,7 @@
 
 - Install with **Bun** (`bun add <pkg>`) and commit `bun.lock`: CI and the deploy install with `bun install --frozen-lockfile`.
 - **Library impact:** the library's externals are **derived from `package.json`** ([build/externals.mjs](../build/externals.mjs)) — anything in `dependencies` or `peerDependencies` stays external, so consumers install and dedupe it; a devDependency the library imports is bundled, and must be listed as such in `pkg-manifest.test.js`, which fails on any import that is not declared. Use a `peerDependency` when the consumer must share your copy (React, Tiptap, CodeMirror). Tiptap packages move as one set at one version, and `pkg-lockfile.test.js` requires a single resolution of Tiptap, ProseMirror, React and KaTeX. UI-only deps used by the app build don't need any of this.
-- Prefer small, focused packages; this app deliberately implements things like the force-directed graph **without** a heavy library ([src/ui/GraphView.tsx](../src/ui/GraphView.tsx)). Match that bias before reaching for a big dependency.
+- Prefer small, focused packages; this app deliberately implements things like the force-directed graph **without** a heavy library ([src/ui/graph/graphView/index.tsx](../src/ui/graph/graphView/index.tsx)). Match that bias before reaching for a big dependency.
 - Avoid adding anything that duplicates an existing capability (we already have `marked`, `turndown`, `tiptap`, `codemirror`, `zustand`, `lucide-react`, shadcn/ui primitives).
 
 ## What not to do

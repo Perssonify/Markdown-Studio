@@ -1,6 +1,6 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GraphView } from "../ui/GraphView";
+import { GraphView } from "../ui/graph/graphView";
 import { LARGE_MAP_MIN } from "../store/graph/graph-metrics";
 import { parseCircles } from "../store/graph/graph-draw";
 

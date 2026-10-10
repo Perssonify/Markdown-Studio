@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Dialogs and sheets: ConfirmDialog.tsx, Dialogs.tsx, DialogProvider.tsx, keyboardShortcutsDialog/index.tsx, LinkBuilderDialog.tsx, LinkBuilder.tsx, UrlImportDialog.tsx, VersionHistorySheet.tsx, MemorySheet.tsx, formatting/image-insert.ts. */
+/** Dialogs and sheets: confirmDialog/index.tsx, dialogs/index.tsx, dialogProvider/index.tsx, keyboardShortcutsDialog/index.tsx, linkBuilderDialog/index.tsx, linkBuilder/index.tsx, urlImportDialog/index.tsx, versionHistorySheet/index.tsx, memorySheet/index.tsx, formatting/image-insert.ts. */
 export const dialogs = {
   // ConfirmDialog / Dialogs
   "dialogs.confirm": "Confirm",

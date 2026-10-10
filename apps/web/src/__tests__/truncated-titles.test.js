@@ -4,7 +4,7 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useFolderStore } from "../store/documents/folders";
-import { FolderTree } from "../ui/FolderTree";
+import { FolderTree } from "../ui/workspace/folderTree";
 
 /**
  * A5. A `truncate` class with no `title` leaves a clipped name with no way to
@@ -25,7 +25,7 @@ import { FolderTree } from "../ui/FolderTree";
  */
 
 const files = {
-  "WorkspacePanel.tsx": readFileSync(join(process.cwd(), "src/ui/WorkspacePanel.tsx"), "utf8"),
+  "WorkspacePanel.tsx": readFileSync(join(process.cwd(), "src/ui/workspace/workspacePanel/index.tsx"), "utf8"),
 };
 
 const doc = (id, title) => ({

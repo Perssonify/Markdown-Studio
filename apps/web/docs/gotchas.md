@@ -450,7 +450,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 - **Symptom:** After dragging a pane divider on a phone, no text anywhere in the app can be selected, and the divider follows the mouse without a button held.
 - **Cause:** Both resize separators registered `pointermove` and `pointerup` on `window` and nothing else. `pointercancel` is not exotic here — the stacked separator is a 4px strip with `touch-action:auto`, so the browser reclaims the gesture as a page scroll, and that reclaim IS a cancel. The teardown never ran, so `document.body.style.userSelect`/`cursor` stayed set; and with no `pointerId` filter the still-armed listener tracked any later pointer.
-- **Fix:** pointer CAPTURE, not a third listener — capture routes `pointercancel` and `lostpointercapture` to the element, so the drag cannot outlive its pointer. `touch-none` removes the reclaim that triggers it. Both live in [use-divider-drag.ts](../src/ui/use-divider-drag.ts), because the duplication was the cause.
+- **Fix:** pointer CAPTURE, not a third listener — capture routes `pointercancel` and `lostpointercapture` to the element, so the drag cannot outlive its pointer. `touch-none` removes the reclaim that triggers it. Both live in [use-divider-drag.ts](../src/ui/shared/hooks/use-divider-drag.ts), because the duplication was the cause.
 - **Watch for:** `role="separator"` without `tabIndex` and `aria-valuenow` — that is invalid ARIA, announced as unoperable, not merely un-keyboard-friendly.
 - **Guard:** `divider-drag.test.jsx`, which also counts separators against hook usages so a third one cannot skip it.
 

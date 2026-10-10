@@ -11,7 +11,7 @@ import { CodeMirrorPane, type CodeMirrorPaneHandle } from "../codeMirrorPane";
 import { isHandledImageDrop } from "@/extensions/AssetImages";
 import { Icons } from "@/ui/chrome/icons";
 import { TiptapPane, type TiptapPaneHandle } from "../tiptapPane";
-import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "@/ui/use-divider-drag";
+import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "@/ui/shared/hooks/use-divider-drag";
 import { markdownHeadings } from "./scroll-anchors";
 import { currentSplitShouldStack } from "./split-layout";
 import { useT } from "@/i18n";

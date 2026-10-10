@@ -21,7 +21,7 @@ import { formatEstBytes, historyCache } from "@/store/history/history-cache";
 import { useTabSyncStore } from "@/store/persistence/tab-sync";
 import { useUIStore } from "@/store/preferences/uiStore";
 import { KeyboardShortcutsDialog } from "../keyboardShortcutsDialog";
-import { ResidualsDialog } from "@/ui/ResidualsDialog";
+import { ResidualsDialog } from "@/ui/importExport/residualsDialog";
 import { INITIAL_ANNOUNCER, nextAnnouncement } from "./save-announcer";
 import { t, useT } from "@/i18n";
 

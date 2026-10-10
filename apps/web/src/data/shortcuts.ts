@@ -1,7 +1,7 @@
 /**
  * THE single source of truth for keyboard-shortcut documentation.
  *
- * Consumed by: the Help page (src/ui/pages/help-content.ts), the status-bar
+ * Consumed by: the Help page (src/ui/pages/helpPage/help-content.ts), the status-bar
  * shortcuts dialog (KeyboardShortcutsDialog), and the menu bar's embedder
  * fallback dialog. It previously lived as three hand-maintained lists, which
  * drifted (one still advertised a removed "Focus mode" binding).

@@ -21,8 +21,8 @@ import {
   readCanary,
   recordFullBackup,
 } from "../store/persistence/storage-durability";
-import { DurabilityNotices } from "../ui/DurabilityNotices";
-import { StorageBackupSection } from "../ui/SettingsStorage";
+import { DurabilityNotices } from "../ui/notices/durabilityNotices";
+import { StorageBackupSection } from "../ui/settings/settingsStorage";
 
 /** A working, persistent adapter (no isReady ⇒ nothing to fail). */
 const workingAdapter = () => ({

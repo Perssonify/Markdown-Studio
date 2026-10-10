@@ -10,7 +10,7 @@ import {
   GROUP_STYLES, MAX_PREVIEW_WIDGETS,
   REPLACE_NEW_STYLE,
   REPLACE_OLD_STYLE,
-} from "@/ui/search-colors";
+} from "@/ui/find/utils/search-colors";
 import { COMPOSITION_STALL_MS } from "@/constants";
 import { perLineTextDirection } from "@/extensions/cm-bidi";
 import { assetRefsInMarkdown } from "@/extensions/cm-asset-refs";

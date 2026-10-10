@@ -88,12 +88,12 @@ Authoritative reading, in order:
 | Snapshots | `src/store/history/snapshot-store.ts` | **Sidecar** IndexedDB version-history ring (recovery net). Independent of the doc adapter. |
 | Sync engine | `src/engine/useSyncEngine.ts`, `useMarkdownEngine.ts`, `build-marked.ts`, `turndown-rules.ts` | Bidi MD↔canonical. Ref-based, empty-dep callbacks (see invariants). |
 | Panes | `src/ui/panes/codeMirrorPane/index.tsx`, `tiptapPane/index.tsx`, `editorPanes/index.tsx` | The two editors + split/scroll-sync. |
-| Workspace panel | `src/ui/WorkspacePanel.tsx`, `FolderTree.tsx` | Left-docked Files / Outline tabs (the library + single-doc outline). |
-| Graph | `src/ui/GraphView.tsx`, `src/store/graph/graph-metrics.ts`, `doc-outline.ts` | **Map-only** full-screen relationship overlay + orphan/broken-link metrics. |
-| Find/Replace | `src/ui/FindReplace.tsx`, `src/formatting/find-engine.ts`, `find-worker.ts` | Floating draggable panel; ONE matcher; a regex runs in a terminable Web Worker. |
+| Workspace panel | `src/ui/workspace/workspacePanel/index.tsx`, `folderTree/index.tsx` | Left-docked Files / Outline tabs (the library + single-doc outline). |
+| Graph | `src/ui/graph/graphView/index.tsx`, `src/store/graph/graph-metrics.ts`, `doc-outline.ts` | **Map-only** full-screen relationship overlay + orphan/broken-link metrics. |
+| Find/Replace | `src/ui/find/findReplace/index.tsx`, `src/formatting/find-engine.ts`, `find-worker.ts` | Floating draggable panel; ONE matcher; a regex runs in a terminable Web Worker. |
 | Durability & ops | `src/store/persistence/storage-durability.ts`, `crash-recovery.ts`, `src/pwa/sw-updates.ts`, `src/utils/*` | Wipe detection, backup reminder, unload stash, prompted updates, diagnostics ring, dev-only gates. |
 | Extensions | `src/extensions/*` | Custom TipTap nodes (math, diagrams, callouts, details, task lists, background-color, wiki-link, sized/theme images, emoji, frontmatter). |
-| UI pages/dialogs | `src/ui/pages/*`, `src/ui/*Sheet.tsx`, `Dialogs.tsx` | Help/About, Settings, Memory, Version History, Link builder, etc. |
+| UI pages/dialogs | `src/ui/pages/*`, `src/ui/*Sheet.tsx`, `dialogs/index.tsx` | Help/About, Settings, Memory, Version History, Link builder, etc. |
 | Relay | `api/import.js` | The ONLY server code: a hardened same-origin import proxy. |
 | Generated | `src/components/ui/*` | shadcn primitives — regenerate via CLI, don't hand-edit. |
 
@@ -134,7 +134,7 @@ out-of-user-control data loss impossible, and into recoverability when preventio
 
 ## 4. The knowledge graph (current design)
 
-`src/ui/GraphView.tsx` is a **map-only, full-screen relationship overlay** (opened from
+`src/ui/graph/graphView/index.tsx` is a **map-only, full-screen relationship overlay** (opened from
 the top-bar Editor · Cards · Map switcher, View ▸ Relationship map, or **⌘⇧G**):
 
 - Documents are nodes, `[[wiki links]]` are edges, folders are labeled dashed clusters.
