@@ -5,8 +5,8 @@ import { freshTestDatabase } from "@markdown-studio/db/testing";
 import { createHash } from "node:crypto";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createStorage, type Storage } from "../src/lib/storage.ts";
-import { MAX_DOCUMENT_BYTES, MAX_LISTED_VERSIONS, SYNC_HEADER, SYNC_HEADER_VALUE, thinVersions } from "../src/routes/sync.ts";
+import { createStorage, type Storage } from "../src/lib/storage/index.ts";
+import { MAX_DOCUMENT_BYTES, MAX_LISTED_VERSIONS, SYNC_HEADER, SYNC_HEADER_VALUE, thinVersions } from "../src/modules/sync/index.ts";
 import { testApp } from "./helpers.ts";
 
 describe("the versions listed", () => {

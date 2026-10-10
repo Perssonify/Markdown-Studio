@@ -2,7 +2,7 @@
 //
 // The CONTRACT between the two halves of cloud sync: the browser's real sync
 // code (app/cloud — httpCloudApi + SyncEngine) against the real API
-// (apps/api — routes/sync.ts) on a real Postgres and an S3-compatible server.
+// (apps/api — modules/sync/routes/index.ts) on a real Postgres and an S3-compatible server.
 // cloud-sync.test.js tests the device side against an in-memory account and
 // apps/api/test/sync.test.ts the server side on its own; only this test
 // notices if they disagree (a field name, compression, a status code).
@@ -45,9 +45,9 @@ describe.skipIf(!dbServer || !s3Endpoint)("cloud sync: the browser's sync code a
     const { runMigrations } = await import("@markdown-studio/db/migrate");
     const { freshTestDatabase } = await import("@markdown-studio/db/testing");
     const { S3Client, CreateBucketCommand, PutBucketVersioningCommand } = await import("@aws-sdk/client-s3");
-    const { createStorage } = await import("../../../api/src/lib/storage.ts");
+    const { createStorage } = await import("../../../api/src/lib/storage/index.ts");
     const { createApp } = await import("../../../api/src/app.ts");
-    const { loadEnv } = await import("../../../api/src/config/env.ts");
+    const { loadEnv } = await import("../../../api/src/config/env/index.ts");
 
     handle = createDatabase({ url: await freshTestDatabase(dbServer, "markdown_studio_test_contract"), max: 4 });
     await runMigrations(handle.pool);
@@ -214,7 +214,7 @@ describe.skipIf(!dbServer || !s3Endpoint)("cloud sync: the browser's sync code a
   });
 
   it("the browser and the API agree on the largest backup", async () => {
-    const { MAX_BACKUP_BYTES: apiLimit } = await import("../../../api/src/routes/sync.ts");
+    const { MAX_BACKUP_BYTES: apiLimit } = await import("../../../api/src/modules/sync/index.ts");
     expect(MAX_BACKUP_BYTES).toBe(apiLimit);
   });
 });

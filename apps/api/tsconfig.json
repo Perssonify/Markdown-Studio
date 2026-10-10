@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.node.json",
   "compilerOptions": {
-    // src/routes/import-relay.ts runs the relay from its one copy,
+    // src/modules/importRelay/routes/index.ts runs the relay from its one copy,
     // apps/web/api/import.js (plain JavaScript, tested in the frontend).
     "allowJs": true,
     "checkJs": false

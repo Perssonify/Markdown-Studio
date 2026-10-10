@@ -75,7 +75,7 @@ export interface CycleResult {
   skipped: string[];
 }
 
-/** The ids the account accepts (apps/api/src/routes/sync.ts DOC_ID). */
+/** The ids the account accepts (apps/api/src/modules/sync/routes/index.ts DOC_ID). */
 export const SYNCABLE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const BATCH = 100;
 

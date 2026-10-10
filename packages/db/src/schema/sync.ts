@@ -1,6 +1,6 @@
 // Cloud copies of each user's library. The CONTENT lives in S3
 // (users/<userId>/…); these tables are the index the sync protocol reads and
-// the conflict check it takes a row lock on (apps/api/src/routes/sync.ts).
+// the conflict check it takes a row lock on (apps/api/src/modules/sync/routes/index.ts).
 import { boolean, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import { user } from "./auth.ts";
 

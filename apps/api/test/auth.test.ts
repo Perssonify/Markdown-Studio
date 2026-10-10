@@ -2,8 +2,8 @@ import { createDatabase, type DatabaseHandle } from "@markdown-studio/db";
 import { runMigrations } from "@markdown-studio/db/migrate";
 import { freshTestDatabase } from "@markdown-studio/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { loadEnv } from "../src/config/env.ts";
-import { authFromEnv } from "../src/lib/auth.ts";
+import { loadEnv } from "../src/config/env/index.ts";
+import { authFromEnv } from "../src/modules/auth/index.ts";
 import { FRONTEND, testApp } from "./helpers.ts";
 
 describe("/api/auth before it is configured", () => {
