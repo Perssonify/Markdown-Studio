@@ -39,7 +39,10 @@ src/
                        module's index.ts is what the rest of the app imports
   lib/                 storage/ (S3), awsSecrets/
   utils/               vercelHandler/
-test/                  vitest; auth.test.ts uses a real Postgres
+  *.test.ts            unit tests sit next to the code they test (vitest)
+tests/
+  integration/         vitest through createApp(); auth.test.ts uses a real Postgres
+  fixtures/            testApp() and the test settings
 scripts/smoke-bundle.mjs  run by `build`: starts the bundled server, Lambda handler and Vercel app
 ```
 

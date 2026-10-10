@@ -12,7 +12,7 @@ const testS3 = process.env.TEST_S3_ENDPOINT ?? dotenv.TEST_S3_ENDPOINT;
 
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     env: {
       NODE_ENV: "test",
       ...(testDb ? { TEST_DATABASE_URL: testDb } : {}),

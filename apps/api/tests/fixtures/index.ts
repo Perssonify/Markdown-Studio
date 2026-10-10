@@ -1,5 +1,5 @@
-import { createApp, type AppDeps } from "../src/app.ts";
-import { loadEnv } from "../src/config/env/index.ts";
+import { createApp, type AppDeps } from "../../src/app.ts";
+import { loadEnv } from "../../src/config/env/index.ts";
 
 /** The app with test settings: no database and no auth unless a case supplies them. */
 export function testApp(overrides: Record<string, string> = {}, deps: Partial<Omit<AppDeps, "env">> = {}) {

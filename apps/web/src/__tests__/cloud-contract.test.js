@@ -4,7 +4,7 @@
 // code (app/cloud — httpCloudApi + SyncEngine) against the real API
 // (apps/api — modules/sync/routes/index.ts) on a real Postgres and an S3-compatible server.
 // cloud-sync.test.js tests the device side against an in-memory account and
-// apps/api/test/sync.test.ts the server side on its own; only this test
+// apps/api/tests/integration/sync.test.ts the server side on its own; only this test
 // notices if they disagree (a field name, compression, a status code).
 //
 // The only stand-in is the network: `fetch("/api/…")` is answered by the app
