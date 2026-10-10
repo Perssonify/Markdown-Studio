@@ -3,7 +3,7 @@ import { createRef } from "react";
 import { act, render, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mdIndentable, useFormatDispatcher } from "../formatting/useFormatDispatcher";
-import { TiptapPane } from "../ui/TiptapPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 
 /**
  * Indent / outdent mean ONE thing in a markdown document: a list item's nesting

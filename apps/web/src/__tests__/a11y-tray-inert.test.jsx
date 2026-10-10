@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { BottomTray } from "../ui/BottomTray";
+import { BottomTray } from "../ui/chrome/bottomTray";
 
 /**
  * A093. The collapsed tray stays MOUNTED (it animates grid-template-rows to

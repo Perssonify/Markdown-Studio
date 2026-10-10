@@ -1,8 +1,8 @@
 import { ChevronDown } from "lucide-react";
 import React, { type ReactNode, useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { useRovingFocus } from "./use-roving-focus";
-import { useT } from "../i18n";
+import { useRovingFocus } from "../hooks/use-roving-focus";
+import { useT } from "@/i18n";
 
 export interface TrayTab {
   id: string;

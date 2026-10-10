@@ -9,8 +9,8 @@ import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
-import { TiptapPane } from "../ui/TiptapPane";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 import { useUIStore } from "../store/preferences/uiStore";
 import { dropAltGraphChords, isAltGraphInput } from "../utils/alt-graph";
 

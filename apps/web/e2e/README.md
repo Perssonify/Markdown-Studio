@@ -12,7 +12,7 @@ them:
 - **Real IndexedDB**, quota exhaustion, blocked storage, a second tab.
 - **Layout that is measured, not declared** — the toolbar compacts on its OWN
   width, the panes stack by the viewport's width AND height
-  (`src/ui/split-layout.ts`), `pointer-coarse:` rules need touch emulation.
+  (`src/ui/panes/editorPanes/split-layout.ts`), `pointer-coarse:` rules need touch emulation.
 - **Duration.** Listener churn and uncancelled timers only show up over time.
 
 ## Running it

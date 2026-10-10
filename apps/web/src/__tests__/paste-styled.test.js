@@ -62,7 +62,7 @@ describe("styled paste", () => {
     // inversion above — a documented feature — never once fired. ProseMirror
     // tracks the modifier itself and reads exactly this field for its own
     // plain-text-paste branch.
-    const pane = read("src/ui/TiptapPane.tsx");
+    const pane = read("src/ui/panes/tiptapPane/index.tsx");
     const handler = code(pane.slice(pane.indexOf("handlePaste:"), pane.indexOf("onUpdate:")));
     expect(handler).toMatch(/input\?\.shiftKey/);
     expect(handler).not.toMatch(/event\.shiftKey/);

@@ -638,29 +638,29 @@ markdown-studio/
     │   └── fidelity.ts            # Serialization loss analysis
     │
     ├── ui/                        # React components
-    │   ├── CodeMirrorPane.tsx     # CM6 markdown editor
-    │   ├── TiptapPane.tsx         # Tiptap rich text editor
-    │   ├── EditorPanes.tsx        # Pane layout + scroll sync
-    │   ├── Toolbar.tsx            # Format toolbar
-    │   ├── MenuBar.tsx            # File/Edit/Insert/View/Format/Tools/Help
+    │   ├── codeMirrorPane/index.tsx     # CM6 markdown editor
+    │   ├── tiptapPane/index.tsx         # Tiptap rich text editor
+    │   ├── editorPanes/index.tsx        # Pane layout + scroll sync
+    │   ├── toolbar/index.tsx            # Format toolbar
+    │   ├── menuBar/index.tsx            # File/Edit/Insert/View/Format/Tools/Help
     │   ├── WorkspacePanel.tsx     # Left-docked Files + Outline tabs
     │   ├── FolderTree.tsx         # Nested folder/document tree
     │   ├── FindReplace.tsx        # Find and replace (draggable panel)
     │   ├── GraphView.tsx          # Relationship map — docked header/map/rail (SVG)
     │   ├── CardsView.tsx          # Cards board over the whole library (overlay)
     │   ├── BacklinksPanel.tsx     # Backlink / forward link panel
-    │   ├── BottomTray.tsx         # Tabbed tray (links + admin console)
+    │   ├── bottomTray/index.tsx         # Tabbed tray (links + admin console)
     │   ├── VersionHistorySheet.tsx# Recoverable snapshots
-    │   ├── StatusBar.tsx          # Word count, save status, import-fidelity chip
+    │   ├── statusBar/index.tsx          # Word count, save status, import-fidelity chip
     │   ├── ResidualsDialog.tsx    # What an import could not represent, in plain language
     │   ├── LinkBuilder.tsx        # The ONE share/embed link builder (Tools + Help)
     │   ├── UrlImportDialog.tsx    # Import from URL (discloses relay use)
-    │   ├── ModeSwitcher.tsx       # MD / HTML / Split toggle
+    │   ├── modeSwitcher/index.tsx       # MD / HTML / Split toggle
     │   ├── Toast.tsx              # Notification system
-    │   ├── Icons.tsx             # SVG icon library
-    │   ├── LinkBubbleMenu.tsx     # Link editing popup
-    │   ├── TableBubbleMenu.tsx    # Table operations popup
-    │   ├── TableGridPicker.tsx    # Table size selector
+    │   ├── icons/index.tsx             # SVG icon library
+    │   ├── linkBubbleMenu/index.tsx     # Link editing popup
+    │   ├── tableBubbleMenu/index.tsx    # Table operations popup
+    │   ├── tableGridPicker/index.tsx    # Table size selector
     │   └── ErrorBoundary.tsx      # Error boundary
     │
     ├── hooks/                     # Custom React hooks

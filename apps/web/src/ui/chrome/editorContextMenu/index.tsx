@@ -11,8 +11,8 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { selectMenuBody, type MenuPrimitives } from "./SelectMenuContent";
-import { useUIStore } from "../store/preferences/uiStore";
+import { selectMenuBody, type MenuPrimitives } from "../selectMenuContent";
+import { useUIStore } from "@/store/preferences/uiStore";
 import {
   Bold, CaseSensitive, Clipboard, Code, Copy, Eraser, Hash, Heading1, Heading2, Heading3, Highlighter,
   Image as ImageIcon, Italic, Link2, List, ListOrdered, Minus, Quote, Redo2,
@@ -20,7 +20,7 @@ import {
   Underline as UnderlineIcon, Undo2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useT } from "../i18n";
+import { useT } from "@/i18n";
 
 export interface EditorContextMenuApi {
   /** Run a formatting/insert command (same command strings as the toolbar). */

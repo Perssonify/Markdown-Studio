@@ -8,8 +8,8 @@
 // in the Markdown pane.
 
 import type { ComponentType, ReactNode } from "react";
-import { SCOPE_GROUPS, SCOPE_TYPES } from "../formatting/select-scope";
-import { t, type MessageKey } from "../i18n";
+import { SCOPE_GROUPS, SCOPE_TYPES } from "@/formatting/select-scope";
+import { t, type MessageKey } from "@/i18n";
 
 // The group names are ids (compared in code); this is what each is CALLED.
 const GROUP_LABELS: Record<(typeof SCOPE_GROUPS)[number], MessageKey> = {

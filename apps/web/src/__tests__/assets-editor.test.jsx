@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { act, render } from "@testing-library/react";
 import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TiptapPane } from "../ui/TiptapPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 import { assetStore, sha256Hex } from "../store/assets/asset-store";
 import { assetRef, bytesToDataUrl, collectImageSrcs } from "../store/assets/asset-refs";
 import { assetImagesKey, isHandledImageDrop } from "../extensions/AssetImages";

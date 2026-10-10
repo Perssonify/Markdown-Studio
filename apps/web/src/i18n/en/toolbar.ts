@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Formatting toolbar and bubble menus: Toolbar.tsx, ModeSwitcher.tsx, TableGridPicker.tsx, TableBubbleMenu.tsx, LinkBubbleMenu.tsx. */
+/** Formatting toolbar and bubble menus: toolbar/index.tsx, modeSwitcher/index.tsx, tableGridPicker/index.tsx, tableBubbleMenu/index.tsx, linkBubbleMenu/index.tsx. */
 export const toolbar = {
   "toolbar.highlightedText": "Highlighted text",
   "toolbar.sampleText": "Sample text",

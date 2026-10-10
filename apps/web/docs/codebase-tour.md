@@ -60,19 +60,19 @@ markdown-studio/
     │   └── index.ts              # store barrel export (used by library entry)
     │
     ├── ui/                     # React components (see features.md for each)
-    │   ├── EditorPanes.tsx        # split layout + scroll sync + sync-mode pills
-    │   ├── CodeMirrorPane.tsx     # CM6 markdown editor wrapper
-    │   ├── TiptapPane.tsx         # Tiptap rich-text editor wrapper (+ extensions list)
-    │   ├── Toolbar.tsx            # formatting buttons → dispatch()
+    │   ├── editorPanes/index.tsx        # split layout + scroll sync + sync-mode pills
+    │   ├── codeMirrorPane/index.tsx     # CM6 markdown editor wrapper
+    │   ├── tiptapPane/index.tsx         # Tiptap rich-text editor wrapper (+ extensions list)
+    │   ├── toolbar/index.tsx            # formatting buttons → dispatch()
     │   ├── WorkspacePanel.tsx     # left-docked Files / Outline tabs
     │   ├── CardsView.tsx          # cards board over the whole library (overlay)
-    │   ├── StatusBar.tsx · ModeSwitcher.tsx · MenuBar.tsx
+    │   ├── statusBar/index.tsx · modeSwitcher/index.tsx · menuBar/index.tsx
     │   ├── FindReplace.tsx        # Find & Replace panel (matching lives in formatting/find-engine.ts)
     │   ├── GraphView.tsx          # force-directed SVG graph (custom physics)
-    │   ├── BacklinksPanel.tsx · LinkBubbleMenu.tsx · TableBubbleMenu.tsx · TableGridPicker.tsx
+    │   ├── BacklinksPanel.tsx · linkBubbleMenu/index.tsx · tableBubbleMenu/index.tsx · tableGridPicker/index.tsx
     │   ├── Dialogs.tsx · ConfirmDialog.tsx · Toast.tsx · ErrorBoundary.tsx
-    │   ├── CodeBlockWithCopy.tsx · CodeBlockCopyButton.tsx · AdUnit.tsx (placeholder slots, development builds only)
-    │   ├── Icons.tsx · search-colors.ts
+    │   ├── codeBlockWithCopy/index.tsx · codeBlockCopyButton/index.tsx · AdUnit.tsx (placeholder slots, development builds only)
+    │   ├── icons/index.tsx · search-colors.ts
     │   └── pages/                  # routed interior pages (About, Help, PageChrome)
     │
     ├── components/ui/         # shadcn/ui primitives — generated, rarely edited
@@ -146,7 +146,7 @@ markdown-studio/
 | Wiki links / graph data | [src/store/links/link-index.ts](../src/store/links/link-index.ts) |
 | Import / export / clipboard | [src/store/importExport/import-export.ts](../src/store/importExport/import-export.ts), [src/store/importExport/ingest.ts](../src/store/importExport/ingest.ts) |
 | Keyboard shortcuts | [src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts) |
-| Toolbar buttons → commands | [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) → [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts) |
+| Toolbar buttons → commands | [src/ui/chrome/toolbar/index.tsx](../src/ui/chrome/toolbar/index.tsx) → [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts) |
 | Custom Tiptap nodes | [src/extensions/](../src/extensions/) |
 | Embedding / iframe API | [src/integration/](../src/integration/) |
 | Shared types (document, link, fidelity) | colocated in their store/ files; no central types file |
@@ -173,7 +173,7 @@ markdown-studio/
 ## Files you'll touch often
 
 - [src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx) — anything cross-cutting (new action, new panel).
-- [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) + [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts) — new formatting commands.
+- [src/ui/chrome/toolbar/index.tsx](../src/ui/chrome/toolbar/index.tsx) + [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts) — new formatting commands.
 - [src/hooks/useDocumentLifecycle.ts](../src/hooks/useDocumentLifecycle.ts) — document open/close/save behavior.
 - [src/store/documents/documentStore.ts](../src/store/documents/documentStore.ts) — state and persistence behavior.
 

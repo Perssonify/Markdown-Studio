@@ -7,8 +7,8 @@ import {
   INITIAL_ANNOUNCER,
   RECOVERED_MESSAGE,
   nextAnnouncement,
-} from "../ui/save-announcer";
-import { StatusBar } from "../ui/StatusBar";
+} from "../ui/chrome/statusBar/save-announcer";
+import { StatusBar } from "../ui/chrome/statusBar";
 
 /**
  * A096. The save indicator WAS the live region, and it walks

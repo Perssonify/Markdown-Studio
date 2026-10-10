@@ -20,7 +20,7 @@ import { act, render } from "@testing-library/react";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
 import { useUIStore } from "../store/preferences/uiStore";
 
 const mounted = [];

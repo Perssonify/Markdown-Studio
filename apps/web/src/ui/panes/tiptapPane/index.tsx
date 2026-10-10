@@ -2,12 +2,12 @@ import { ChainedCommands, Editor, Extension } from "@tiptap/core";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TaskList } from "@tiptap/extension-list";
-import { WikiLink as Link } from "../extensions/WikiLink";
+import { WikiLink as Link } from "@/extensions/WikiLink";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { Subscript } from "@tiptap/extension-subscript";
 import { Superscript } from "@tiptap/extension-superscript";
 import { Table } from "@tiptap/extension-table";
-import { TableCellFast as TableCell, TableHeaderFast as TableHeader } from "../engine/table-colwidth";
+import { TableCellFast as TableCell, TableHeaderFast as TableHeader } from "@/engine/table-colwidth";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -18,38 +18,38 @@ import { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, JSONContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
-import { COMPOSITION_STALL_MS } from "../constants";
-import type { HighlightSpec } from "../formatting/find-engine";
-import { useUIStore } from "../store/preferences/uiStore";
-import { useT } from "../i18n";
+import { COMPOSITION_STALL_MS } from "@/constants";
+import type { HighlightSpec } from "@/formatting/find-engine";
+import { useUIStore } from "@/store/preferences/uiStore";
+import { useT } from "@/i18n";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { BackgroundColor } from "../extensions/BackgroundColor";
-import { BidiAuto, TaskItemAutoDir } from "../extensions/BidiAuto";
-import { ReactSelectionShield } from "../extensions/ReactSelectionShield";
-import { EmojiNode } from "../extensions/EmojiNode";
-import { FrontmatterBlock } from "../extensions/FrontmatterBlock";
-import { Callout } from "../extensions/Callout";
-import { Details, Summary } from "../extensions/Details";
-import { MathBlock, MathInline } from "../extensions/MathNodes";
-import { SizedImage } from "../extensions/SizedImage";
-import { TableCellAlign } from "../extensions/TableCellAlign";
-import { ThemeImage } from "../extensions/ThemeImage";
-import { UnresolvedWikiLinks } from "../extensions/UnresolvedWikiLinks";
-import { ListKeymapNoTab } from "../extensions/ListKeymapNoTab";
-import { AltGraphPassthrough } from "../extensions/AltGraphPassthrough";
-import { AssetImages } from "../extensions/AssetImages";
-import { fragmentToHtml } from "../engine/inert-html";
-import { parseHtmlDoc } from "../engine/incremental-rich";
-import { CodeBlockWithCopy } from "./CodeBlockWithCopy";
-import { LinkBubbleMenu } from "./LinkBubbleMenu";
-import { TableBubbleMenu } from "./TableBubbleMenu";
+import { BackgroundColor } from "@/extensions/BackgroundColor";
+import { BidiAuto, TaskItemAutoDir } from "@/extensions/BidiAuto";
+import { ReactSelectionShield } from "@/extensions/ReactSelectionShield";
+import { EmojiNode } from "@/extensions/EmojiNode";
+import { FrontmatterBlock } from "@/extensions/FrontmatterBlock";
+import { Callout } from "@/extensions/Callout";
+import { Details, Summary } from "@/extensions/Details";
+import { MathBlock, MathInline } from "@/extensions/MathNodes";
+import { SizedImage } from "@/extensions/SizedImage";
+import { TableCellAlign } from "@/extensions/TableCellAlign";
+import { ThemeImage } from "@/extensions/ThemeImage";
+import { UnresolvedWikiLinks } from "@/extensions/UnresolvedWikiLinks";
+import { ListKeymapNoTab } from "@/extensions/ListKeymapNoTab";
+import { AltGraphPassthrough } from "@/extensions/AltGraphPassthrough";
+import { AssetImages } from "@/extensions/AssetImages";
+import { fragmentToHtml } from "@/engine/inert-html";
+import { parseHtmlDoc } from "@/engine/incremental-rich";
+import { CodeBlockWithCopy } from "../codeBlockWithCopy";
+import { LinkBubbleMenu } from "../linkBubbleMenu";
+import { TableBubbleMenu } from "../tableBubbleMenu";
 import {
   HIGHLIGHT_STYLE,
   MAX_PREVIEW_WIDGETS,
   REPLACE_NEW_STYLE,
   REPLACE_OLD_STYLE,
   GROUP_STYLES as TP_GROUP_STYLES,
-} from "./search-colors";
+} from "@/ui/search-colors";
 
 /**
  * Search highlights, drawn from the RANGES the Find panel computed — the same

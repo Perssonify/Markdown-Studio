@@ -2,10 +2,10 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { cn } from "@/lib/utils";
 import { Columns, FileCode2 } from "lucide-react";
-import { MODES } from "../constants";
-import { useUIStore } from "../store/preferences/uiStore";
-import { Icons } from "./Icons";
-import { t, useT } from "../i18n";
+import { MODES } from "@/constants";
+import { useUIStore } from "@/store/preferences/uiStore";
+import { Icons } from "../icons";
+import { t, useT } from "@/i18n";
 
 interface ModeSwitcherProps {
   mode: string;

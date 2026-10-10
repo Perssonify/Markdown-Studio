@@ -158,7 +158,7 @@ describe("rich pane: dir=auto on text blocks", () => {
   });
 
   it("is registered in the live editor", () => {
-    const pane = readFileSync(join(process.cwd(), "src/ui/TiptapPane.tsx"), "utf8");
+    const pane = readFileSync(join(process.cwd(), "src/ui/panes/tiptapPane/index.tsx"), "utf8");
     expect(pane).toMatch(/\bBidiAuto\b.*dir="auto"/);
     expect(pane).toMatch(/TaskItemAutoDir\.configure\(\{ nested: true \}\)/);
     expect(pane).not.toMatch(/\bTaskItem\.configure/);
@@ -185,7 +185,7 @@ describe("markdown pane: per-line direction", () => {
   });
 
   it("is registered in the live editor", () => {
-    const pane = readFileSync(join(process.cwd(), "src/ui/CodeMirrorPane.tsx"), "utf8");
+    const pane = readFileSync(join(process.cwd(), "src/ui/panes/codeMirrorPane/index.tsx"), "utf8");
     expect(pane).toMatch(/\n\s+perLineTextDirection,/);
   });
 });

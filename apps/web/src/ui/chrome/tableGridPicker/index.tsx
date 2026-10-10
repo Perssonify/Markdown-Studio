@@ -1,6 +1,6 @@
 import { Grid3X3 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useT } from "../i18n";
+import { useT } from "@/i18n";
 
 /**
  * TableGridPicker — Interactive grid for selecting table dimensions.

@@ -1,6 +1,6 @@
-import type { SaveStatus } from "../store/documents/documentStore";
-import { t } from "../i18n";
-import { en } from "../i18n/en";
+import type { SaveStatus } from "@/store/documents/documentStore";
+import { t } from "@/i18n";
+import { en } from "@/i18n/en";
 
 /**
  * What the status bar's live region should SAY, as opposed to what it shows.

@@ -54,7 +54,7 @@ describe("no absolute 'nothing ever leaves' claims", () => {
     "src/ui/pages/help-content.ts",
     "src/constants.ts",
     "src/data/starter-documents.ts",
-    "src/ui/MenuBar.tsx",
+    "src/ui/chrome/menuBar/index.tsx",
     "vite.app.config.ts", // the install prompt's description (PWA manifest)
     // Since A099 the copy itself lives in the About content module and the
     // interface catalog, so the claims are checked where they are written.

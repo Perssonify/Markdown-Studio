@@ -1,6 +1,6 @@
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
-import { useT } from "../i18n";
+import { useT } from "@/i18n";
 
 interface CodeBlockCopyButtonProps {
   code: string;

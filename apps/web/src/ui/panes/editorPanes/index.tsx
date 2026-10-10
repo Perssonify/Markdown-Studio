@@ -3,18 +3,18 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { FileCode2, Mouse, MouseOff } from "lucide-react";
-import { useThemeMode } from "../theme/useThemeMode";
+import { useThemeMode } from "@/theme/useThemeMode";
 import React, { forwardRef, type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
-import { MODES } from "../constants";
-import { useUIStore } from "../store/preferences/uiStore";
-import { CodeMirrorPane, type CodeMirrorPaneHandle } from "./CodeMirrorPane";
-import { isHandledImageDrop } from "../extensions/AssetImages";
-import { Icons } from "./Icons";
-import { TiptapPane, type TiptapPaneHandle } from "./TiptapPane";
-import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
+import { MODES } from "@/constants";
+import { useUIStore } from "@/store/preferences/uiStore";
+import { CodeMirrorPane, type CodeMirrorPaneHandle } from "../codeMirrorPane";
+import { isHandledImageDrop } from "@/extensions/AssetImages";
+import { Icons } from "@/ui/chrome/icons";
+import { TiptapPane, type TiptapPaneHandle } from "../tiptapPane";
+import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "@/ui/use-divider-drag";
 import { markdownHeadings } from "./scroll-anchors";
 import { currentSplitShouldStack } from "./split-layout";
-import { useT } from "../i18n";
+import { useT } from "@/i18n";
 
 interface PaneHeaderProps {
   /** Only the topmost header sits under the floating workspace trigger. */

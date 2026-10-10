@@ -66,7 +66,7 @@ singleton) so flavors can toggle at runtime. See
 
 - ```` ```mermaid ```` and ```` ```abc ```` fenced blocks render in one framed
   card — label, Edit/Copy, the (still-editable) source and a live preview — via
-  `src/ui/DiagramPreview.tsx`, which lazy-loads Mermaid / abcjs only when such a
+  `src/ui/panes/diagramPreview/index.tsx`, which lazy-loads Mermaid / abcjs only when such a
   block appears. They re-render on theme change. A renderer that fails to load
   is tried again next time, and the preview says it could not be loaded.
 - Mermaid's configuration keys that paste CSS into the page (`themeCSS`, font

@@ -5,9 +5,9 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DialogProvider } from "../ui/DialogProvider";
-import { ModeSwitcher, modeAccessibleName } from "../ui/ModeSwitcher";
-import { StatusBar } from "../ui/StatusBar";
-import { EditorToolbar } from "../ui/Toolbar";
+import { ModeSwitcher, modeAccessibleName } from "../ui/chrome/modeSwitcher";
+import { StatusBar } from "../ui/chrome/statusBar";
+import { EditorToolbar } from "../ui/chrome/toolbar";
 import { en } from "../i18n/en";
 
 /**
@@ -50,7 +50,7 @@ describe("label in name", () => {
   });
 
   it("the pane switches are named by their visible labels, explained by a description", () => {
-    const panes = codeOnly(readFileSync(join(process.cwd(), "src/ui/EditorPanes.tsx"), "utf8"));
+    const panes = codeOnly(readFileSync(join(process.cwd(), "src/ui/panes/editorPanes/index.tsx"), "utf8"));
     // Since A099 the names come from the catalog: the visible label and the
     // switch's name are the SAME key, so they agree in every language.
     expect(panes).toContain('{t("panes.styledPaste")}\n    </Label>');

@@ -1,8 +1,8 @@
 import { act, render } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
-import { TiptapPane } from "../ui/TiptapPane";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 
 /**
  * A089. Both editors were unnamed. CodeMirror gives its content element
