@@ -1,8 +1,8 @@
 import { useTheme } from "next-themes";
 import React, { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { accountsEnabled, useAccount } from "./app/account";
-import { AccountCheckScreen } from "./app/AccountCheckScreen";
-import { AccountMenu } from "./app/AccountMenu";
+import { accountsEnabled, useAccount } from "./app/account/account";
+import { AccountCheckScreen } from "./app/account/accountCheckScreen";
+import { AccountMenu } from "./app/account/accountMenu";
 import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud";
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";

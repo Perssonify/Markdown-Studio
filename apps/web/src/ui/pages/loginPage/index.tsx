@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { FileText } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAccount } from "@/app/account";
-import { AccountAvatar } from "@/app/AccountAvatar";
+import { useAccount } from "@/app/account/account";
+import { AccountAvatar } from "@/app/account/accountAvatar";
 import { APP_NAME } from "@/constants";
 import { useT } from "@/i18n";
 import { PageChrome } from "../pageChrome";

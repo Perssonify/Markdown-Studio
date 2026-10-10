@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { useT } from "@/i18n";
 
 /**
  * Shown while the app asks whether the visitor is signed in (at most
