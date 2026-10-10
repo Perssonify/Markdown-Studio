@@ -1,18 +1,18 @@
 import { type MutableRefObject, useCallback } from "react";
 import { canonicalToHtml, canonicalToMarkdown, canonicalToPortableMarkdown } from "../engine/serialize-doc";
-import { resolveDocTitle, type DocumentRecord } from "../store/document";
-import { useDocumentStore } from "../store/documentStore";
-import { collectFolderExport, useFolderStore } from "../store/folders";
-import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, toExportEnvelope } from "../store/import-export";
-import { printHtmlDocument } from "../store/print-export";
-import { recordFullBackup } from "../store/storage-durability";
-import { buildZipAsync, readDocuments } from "../store/zip-builder";
-import { buildShareUrl, SHARE_URL_SOFT_LIMIT, type ShareDoc } from "../store/share-link";
+import { resolveDocTitle, type DocumentRecord } from "../store/documents/document";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { collectFolderExport, useFolderStore } from "../store/documents/folders";
+import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimestamp, toExportEnvelope } from "../store/importExport/import-export";
+import { printHtmlDocument } from "../store/importExport/print-export";
+import { recordFullBackup } from "../store/persistence/storage-durability";
+import { buildZipAsync, readDocuments } from "../store/importExport/zip-builder";
+import { buildShareUrl, SHARE_URL_SOFT_LIMIT, type ShareDoc } from "../store/importExport/share-link";
 import { t } from "../i18n";
-import { extForMime, replaceRefsInText } from "../store/asset-refs";
+import { extForMime, replaceRefsInText } from "../store/assets/asset-refs";
 import {
   collectAssetsFor, encodeEnvelopeAssets, inlineAssetRefsInText, missingImagesNote, relativeAssetPath,
-} from "../store/assets";
+} from "../store/assets/assets";
 import type { CmRef, DocStore, Engine, SyncEngine, TiptapRef, Toast } from "./types";
 import type { useAutosave } from "./useAutosave";
 
@@ -196,7 +196,7 @@ export function useExportActions({
             (engine ? canonicalToMarkdown(docForExport.canonical, engine.htmlToCleanMd) : "") ?? "";
           const inlined = await inlineAssetRefsInText(md);
           missing = inlined.missing;
-          const { exportAsDocx } = await import("../store/docx-export");
+          const { exportAsDocx } = await import("../store/importExport/docx-export");
           await exportAsDocx(docForExport.title || "Untitled", inlined.text);
         }
         toast.show(t("editor.documentExported"), "success");
@@ -246,7 +246,7 @@ export function useExportActions({
   }, [engine, getCanonical]);
 
   // Build a self-contained share link (content packed INTO the URL — see
-  // store/share-link.ts), copy it to the clipboard, and tell the user. The
+  // store/importExport/share-link.ts), copy it to the clipboard, and tell the user. The
   // caller inlines each doc's images as `data:` URLs first (inlineAssetRefsInText),
   // so pictures travel in the link and the recipient's import restores them to
   // the asset store — at the cost of a bigger link, which the length warning
@@ -415,7 +415,7 @@ export async function exportActiveDocAsDocx(
     const title = resolveDocTitle(activeDoc, canonical).title;
     // The docx writer embeds `data:` images as pictures (A086).
     const inlined = await inlineAssetRefsInText(md);
-    const { exportAsDocx } = await import("../store/docx-export");
+    const { exportAsDocx } = await import("../store/importExport/docx-export");
     await exportAsDocx(title, inlined.text);
     toast.show(t("editor.wordExported"), "success");
     const note = missingImagesNote(inlined.missing.length);

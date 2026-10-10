@@ -20,8 +20,8 @@
  * only its CONFIG is persisted via the storage adapter's prefs.
  */
 
-import { quickHash } from "../utils";
-import { t } from "../i18n/core";
+import { quickHash } from "@/utils";
+import { t } from "@/i18n/core";
 
 export interface HistoryCacheConfig {
   /** Master switch. Off = pre-feature behavior (fresh history per switch). */

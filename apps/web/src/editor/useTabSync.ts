@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { createDocument, type DocumentRecord } from "../store/document";
-import { describeUncommittedSave, useDocumentStore } from "../store/documentStore";
-import { useFolderStore, type FolderRecord } from "../store/folders";
-import { historyCache } from "../store/history-cache";
-import { snapshotStore } from "../store/snapshot-store";
+import { createDocument, type DocumentRecord } from "../store/documents/document";
+import { describeUncommittedSave, useDocumentStore } from "../store/documents/documentStore";
+import { useFolderStore, type FolderRecord } from "../store/documents/folders";
+import { historyCache } from "../store/history/history-cache";
+import { snapshotStore } from "../store/history/snapshot-store";
 import {
   decideOpenDocChange,
   folderStructureSignature,
@@ -18,8 +18,8 @@ import {
   type OpenDocState,
   type TabNotice,
   type TabSyncEvent,
-} from "../store/tab-sync";
-import { useUIStore } from "../store/uiStore";
+} from "../store/persistence/tab-sync";
+import { useUIStore } from "../store/preferences/uiStore";
 import { t } from "../i18n";
 import type { CmRef, Lifecycle, TiptapRef, Toast } from "./types";
 
@@ -68,7 +68,7 @@ function scrollerOf(el: Element | null | undefined): HTMLElement | null {
 
 /**
  * Live sync between tabs: what THIS tab does when another tab writes to the
- * library it shares (the messages and the pure decisions are store/tab-sync.ts).
+ * library it shares (the messages and the pure decisions are store/persistence/tab-sync.ts).
  *
  * - Every message refreshes the library listing and, when it changed, the
  *   folder tree — the Files tab, Cards and the map read those; the link index

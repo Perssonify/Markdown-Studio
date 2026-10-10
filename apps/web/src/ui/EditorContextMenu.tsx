@@ -12,7 +12,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { selectMenuBody, type MenuPrimitives } from "./SelectMenuContent";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import {
   Bold, CaseSensitive, Clipboard, Code, Copy, Eraser, Hash, Heading1, Heading2, Heading3, Highlighter,
   Image as ImageIcon, Italic, Link2, List, ListOrdered, Minus, Quote, Redo2,

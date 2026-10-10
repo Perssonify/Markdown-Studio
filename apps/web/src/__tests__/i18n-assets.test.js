@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLocale, _registerLocaleForTests, _resetLocaleForTests } from "../i18n/core";
 import { PSEUDO_LOCALE } from "../i18n";
-import { missingImagesNote } from "../store/assets";
+import { missingImagesNote } from "../store/assets/assets";
 import { missingImageAlt, missingImageTitle, missingSvg } from "../extensions/AssetImages";
 
 /**

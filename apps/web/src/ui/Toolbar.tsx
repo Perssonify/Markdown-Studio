@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SaveStatus } from "@/store/documentStore";
+import { SaveStatus } from "@/store/documents/documentStore";
 import {
   AlignCenter,
   AlignLeft,
@@ -51,8 +51,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { TOOLBAR_COMPACT_BP } from '../constants';
 import { useDialog } from "./DialogProvider";
-import { useEditorStore } from '../store/editorStore';
-import { useUIStore } from '../store/uiStore';
+import { useEditorStore } from '../store/editor/editorStore';
+import { useUIStore } from '../store/preferences/uiStore';
 import { TableGridPicker } from './TableGridPicker';
 import { Icons } from "./Icons";
 import { useRovingFocus } from "./use-roving-focus";

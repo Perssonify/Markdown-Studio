@@ -1,8 +1,8 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GraphView } from "../ui/GraphView";
-import { LARGE_MAP_MIN } from "../store/graph-metrics";
-import { parseCircles } from "../store/graph-draw";
+import { LARGE_MAP_MIN } from "../store/graph/graph-metrics";
+import { parseCircles } from "../store/graph/graph-draw";
 
 /**
  * A088 — the relationship map at library scale. Above LARGE_MAP_MIN notes the

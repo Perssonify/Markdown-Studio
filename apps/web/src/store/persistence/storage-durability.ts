@@ -31,10 +31,10 @@
  *
  * Every `pf:` key below is an on-disk contract once shipped — do not rename.
  */
-import { LEGACY_APP_HOST } from "../constants";
-import { safeStorage } from "../utils/safe-storage";
+import { LEGACY_APP_HOST } from "@/constants";
+import { safeStorage } from "@/utils/safe-storage";
 import { MemoryStorageAdapter, type StorageAdapter } from "./storage-adapter";
-import { t } from "../i18n/core";
+import { t } from "@/i18n/core";
 
 // ── Keys & timings ─────────────────────────────────────────────────────────
 

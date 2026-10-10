@@ -5,7 +5,7 @@ import {
   htmlToCanonical,
   asCanonicalDoc,
   appendHtmlToCanonical,
-} from "../store/canonical-ops";
+} from "../store/documents/canonical-ops";
 
 // A Tiptap schema, which is what these helpers receive in the app. (The test
 // used prosemirror's basic schema via `@tiptap/pm/schema-basic`; Tiptap 3.31's

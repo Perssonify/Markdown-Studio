@@ -1,6 +1,6 @@
 import { ClipboardCopy } from "lucide-react";
 import { useState } from "react";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 import { buildDiagnosticsReport, copyText } from "../utils/diagnostics";
 import { useT } from "../i18n";
 

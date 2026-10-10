@@ -14,9 +14,9 @@
  */
 
 import { Marked, type Token, type Tokens } from "marked";
-import { emStrongMaskFix } from "../engine/marked-emphasis-mask";
+import { emStrongMaskFix } from "@/engine/marked-emphasis-mask";
 import { downloadBlob, sanitizeFilename } from "./import-export";
-import { parseDataUrl } from "./asset-refs";
+import { parseDataUrl } from "../assets/asset-refs";
 
 // Our own instance rather than marked's shared default: in the library build
 // marked is the HOST's copy, and anything the host registered on the default

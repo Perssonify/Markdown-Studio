@@ -2,12 +2,12 @@ import { gzipSync, strToU8, zipSync } from 'fflate';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { sanitizePastedHtml } from '../engine/html-cleaner.ts';
 import { createHostBridge } from '../integration/host-bridge.ts';
-import { extractArchive } from '../store/archive.ts';
-import { sanitizeForIngest } from '../store/ingest.ts';
-import { deserializeFromStorage, serializeForStorage, createDocument } from '../store/document.ts';
-import { ingest } from '../store/ingest.ts';
-import { StorageQuotaError } from '../store/idb-storage-adapter.ts';
-import { useDocumentStore } from '../store/documentStore.ts';
+import { extractArchive } from '../store/importExport/archive.ts';
+import { sanitizeForIngest } from '../store/importExport/ingest.ts';
+import { deserializeFromStorage, serializeForStorage, createDocument } from '../store/documents/document.ts';
+import { ingest } from '../store/importExport/ingest.ts';
+import { StorageQuotaError } from '../store/persistence/idb-storage-adapter.ts';
+import { useDocumentStore } from '../store/documents/documentStore.ts';
 
 function fileFromBytes(bytes, name) {
   return new File([bytes], name);

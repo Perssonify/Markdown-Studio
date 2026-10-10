@@ -12,11 +12,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { snapshotStore } from "../store/snapshot-store";
-import { useDocumentStore } from "../store/documentStore";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
-import { useUIStore } from "../store/uiStore";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
+import { useUIStore } from "../store/preferences/uiStore";
 import { DialogProvider } from "../ui/DialogProvider";
 import { VersionHistorySheet, snapshotDeleteConfirm } from "../ui/VersionHistorySheet";
 import { en } from "../i18n/en";

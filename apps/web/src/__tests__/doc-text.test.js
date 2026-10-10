@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { docSearchText, docSearchTextLower } from "../store/doc-text";
+import { docSearchText, docSearchTextLower } from "../store/documents/doc-text";
 
 /**
  * The library filter's text source. It memoizes per document, keyed by

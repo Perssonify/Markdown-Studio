@@ -14,7 +14,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { _setDevBuildForTests, adminSettingsAvailable, sessionAdsFromParam } from "../utils/build-gates";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { AdUnit } from "../ui/AdUnit";
 import { DialogProvider } from "../ui/DialogProvider";
 import { LinkBuilder } from "../ui/LinkBuilder";

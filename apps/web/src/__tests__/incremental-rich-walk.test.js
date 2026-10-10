@@ -2,7 +2,7 @@ import { Lexer, Marked } from "marked";
 import { describe, expect, it } from "vitest";
 import { buildMarked } from "../engine/build-marked";
 import { walkTokensLinear } from "../engine/incremental-rich";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 /**
  * The incremental markdown→rich projection walks every token of the document

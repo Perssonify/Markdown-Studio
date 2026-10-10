@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "../i18n";
 import { _resetLocaleForTests } from "../i18n/core";
-import { printHtmlDocument } from "../store/print-export";
+import { printHtmlDocument } from "../store/importExport/print-export";
 
 /**
  * A099: Print / Save as PDF wrote `<html lang="en">` around every document.

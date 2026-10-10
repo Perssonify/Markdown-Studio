@@ -18,7 +18,7 @@ import {
   transformCaseTiptap,
 } from "./case-transform";
 import { selectScopeCM, selectBlockRich } from "./select-scope";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import {
   mdDeleteTable as _mdDeleteTable,
   mdAddColumnAfter,

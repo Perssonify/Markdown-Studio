@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { clearLocalData } from "../store/documentStore";
+import { clearLocalData } from "../store/documents/documentStore";
 import { useDialog } from "./DialogProvider";
 import { useT } from "../i18n";
 

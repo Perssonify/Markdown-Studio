@@ -8,7 +8,7 @@ import { runVercelHandler, type VercelLikeHandler } from "../../../utils/vercelH
 
 /**
  * GET /api/import?url=… — the frontend's URL-import relay, the same path the
- * frontend already calls (apps/web/src/store/url-import.ts). It answers its
+ * frontend already calls (apps/web/src/store/importExport/url-import.ts). It answers its
  * own CORS and OPTIONS, so the app-wide CORS middleware is NOT applied here:
  * widening the relay's origins would loosen a security control.
  */

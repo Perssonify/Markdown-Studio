@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { safeStorage } from "../utils/safe-storage";
-import { adminSettingsAvailable } from "../utils/build-gates";
-import { MODES } from "../constants";
+import { safeStorage } from "@/utils/safe-storage";
+import { adminSettingsAvailable } from "@/utils/build-gates";
+import { MODES } from "@/constants";
 import {
   DEFAULT_MARKDOWN_FEATURES,
   type MarkdownFeatureSettings,

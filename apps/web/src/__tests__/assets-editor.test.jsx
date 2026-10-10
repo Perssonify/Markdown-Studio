@@ -3,8 +3,8 @@ import { act, render } from "@testing-library/react";
 import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TiptapPane } from "../ui/TiptapPane";
-import { assetStore, sha256Hex } from "../store/asset-store";
-import { assetRef, bytesToDataUrl, collectImageSrcs } from "../store/asset-refs";
+import { assetStore, sha256Hex } from "../store/assets/asset-store";
+import { assetRef, bytesToDataUrl, collectImageSrcs } from "../store/assets/asset-refs";
 import { assetImagesKey, isHandledImageDrop } from "../extensions/AssetImages";
 
 /**

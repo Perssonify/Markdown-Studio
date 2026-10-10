@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestorHeadingIndices, buildHeadingTree, extractHeadings } from "../store/doc-outline";
+import { ancestorHeadingIndices, buildHeadingTree, extractHeadings } from "../store/documents/doc-outline";
 
 const heading = (level, text) => ({
   type: "heading",

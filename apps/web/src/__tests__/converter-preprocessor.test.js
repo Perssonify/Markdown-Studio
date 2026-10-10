@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { findFencedCodeRanges, normalizeMarkdown, preprocessMarkdown } from "../engine/preprocessor";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 import { engineFor, roundTrip } from "./converter-harness";
 
 const expectFixedPoint = (md, opts) => {

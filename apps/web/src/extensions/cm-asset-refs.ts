@@ -1,8 +1,8 @@
 import { type Extension, type Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
-import { MAX_ASSET_BYTES, assetRef, bytesToDataUrl, isRasterMime } from "../store/asset-refs";
-import { assetStore } from "../store/asset-store";
-import { useDocumentStore } from "../store/documentStore";
+import { MAX_ASSET_BYTES, assetRef, bytesToDataUrl, isRasterMime } from "../store/assets/asset-refs";
+import { assetStore } from "../store/assets/asset-store";
+import { useDocumentStore } from "../store/documents/documentStore";
 import { markHandledImageDrop } from "./AssetImages";
 import { t } from "../i18n/core";
 

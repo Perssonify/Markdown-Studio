@@ -15,7 +15,7 @@ import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { exportEmergencyBackup } from "../utils/emergency-backup";
 import { CHUNK_RELOAD_KEY, pageActions } from "../utils/app-health";
 import { _resetDiagnosticsForTests, getDiagnostics } from "../utils/diagnostics";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 const realReload = pageActions.reload;
 let onLine = true;

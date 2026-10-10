@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { createWikiResolver, type DocRecord, type WikiResolution } from "../store/link-index";
+import { createWikiResolver, type DocRecord, type WikiResolution } from "../store/links/link-index";
 
 /**
  * Marks wiki links whose target does not exist, as a ProseMirror DECORATION.

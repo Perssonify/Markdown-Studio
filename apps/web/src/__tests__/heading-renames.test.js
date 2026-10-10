@@ -1,6 +1,6 @@
 /**
  * Renaming a heading keeps the links to it working (backlog #122) — the pure
- * half: which headings were renamed (store/heading-renames.ts), which links
+ * half: which headings were renamed (store/links/heading-renames.ts), which links
  * point at them, and the rewrite in a stored canonical and as a transaction
  * on a live editor state. The editor's side is behave-heading-renames.test.jsx.
  */
@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import { headlessSchema } from "../engine/serialize-doc";
-import { createWikiResolver } from "../store/link-index";
-import { findHeadingByAnchor } from "../store/doc-outline";
+import { createWikiResolver } from "../store/links/link-index";
+import { findHeadingByAnchor } from "../store/documents/doc-outline";
 import {
   alignHeadingRenames,
   buildHeadingLinkTransaction,
@@ -21,7 +21,7 @@ import {
   rebaselineHeadings,
   renameTable,
   rewriteHeadingLinks,
-} from "../store/heading-renames";
+} from "../store/links/heading-renames";
 
 const h = (level, text) => ({ level, text });
 const renamesOf = (before, after) => alignHeadingRenames(before, after).map((r) => `${r.oldText} → ${r.newText}`);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONSOLE_COMMANDS, runConsoleCommand } from "../store/console-commands.ts";
+import { CONSOLE_COMMANDS, runConsoleCommand } from "../store/diagnostics/console-commands.ts";
 
 // A fake read-only context — the registry must only touch these accessors.
 const ctx = {

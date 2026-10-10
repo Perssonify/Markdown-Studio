@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, beforeEach } from "vitest";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
 /** Source with comments removed, so a pin asserts on code and not on prose. */

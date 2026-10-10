@@ -1,4 +1,4 @@
-import { sha256Hex } from "../../store/asset-store";
+import { sha256Hex } from "@/store/assets/asset-store";
 import { buildBackupZip, type BackupSources } from "../../utils/emergency-backup";
 import type { AccountArchiveApi } from "./api";
 

@@ -15,7 +15,7 @@ import {
   para, richEditor, seededAdapter, store, storedDoc, textOf, tick, toastText, typeMd, typeRich, until,
   untilHydrated, untilMdHas, untilRichHas,
 } from "./behave-harness";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 vi.setConfig({ testTimeout: 30000 });
 

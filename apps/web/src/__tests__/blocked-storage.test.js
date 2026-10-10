@@ -46,14 +46,14 @@ describe("safeStorage never throws", () => {
   });
 
   it("the crash-recovery stash degrades instead of throwing", async () => {
-    const { stashUnsaved, takeStashed, clearStash } = await import("../store/crash-recovery");
+    const { stashUnsaved, takeStashed, clearStash } = await import("../store/persistence/crash-recovery");
     expect(stashUnsaved([{ docId: "a", canonical: { type: "doc" }, at: Date.now() }])).toBe(0);
     expect(takeStashed()).toEqual([]);
     expect(() => clearStash()).not.toThrow();
   });
 
   it("choosing a storage adapter does not throw", async () => {
-    const { createStorageAdapter } = await import("../store/storage-adapter");
+    const { createStorageAdapter } = await import("../store/persistence/storage-adapter");
     expect(() => createStorageAdapter()).not.toThrow();
   });
 
@@ -69,7 +69,7 @@ describe("no module reads localStorage unguarded at module scope", () => {
     // The boot-blocker: these run inside the store initialiser, at import time.
     const restore = blockSiteData();
     try {
-      const mod = await import("../store/uiStore");
+      const mod = await import("../store/preferences/uiStore");
       expect(typeof mod.useUIStore.getState().mode).toBe("string");
       expect(mod.useUIStore.getState().editorFontSize).toBe(15);
     } finally {

@@ -9,9 +9,9 @@ import {
   shouldFreeze,
   stepLayout,
   twoLevel,
-} from "../store/graph-physics";
-import { crossesForeignContainer, folderBounds, placeLabels, truncateLabel } from "../store/graph-metrics";
-import { groupDocsByFolder } from "../store/folders";
+} from "../store/graph/graph-physics";
+import { crossesForeignContainer, folderBounds, placeLabels, truncateLabel } from "../store/graph/graph-metrics";
+import { groupDocsByFolder } from "../store/documents/folders";
 import { mapLibrary } from "../../e2e/map-library.mjs";
 
 /**

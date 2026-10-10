@@ -13,9 +13,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useDocumentStore } from "@/store/documentStore";
-import { useFolderStore } from "@/store/folders";
-import type { OutlineHeading } from "@/store/doc-outline";
+import { useDocumentStore } from "@/store/documents/documentStore";
+import { useFolderStore } from "@/store/documents/folders";
+import type { OutlineHeading } from "@/store/documents/doc-outline";
 import {
   CheckSquareIcon,
   ClockIcon,
@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import type { DocumentSummary } from "@/store/document";
+import type { DocumentSummary } from "@/store/documents/document";
 import { AdUnit } from "./AdUnit";
 import { useDialog } from "./DialogProvider";
 import { FolderTree } from "./FolderTree";
@@ -48,7 +48,7 @@ import { timeAgo } from "./relative-time";
 import { TocList } from "./DocNavPanel";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "./use-divider-drag";
 import { useFocusRowAfterRender, useWindowedList } from "./use-windowed-list";
-import { DOCNAV_WIDTH_MIN, docNavWidthMax } from "@/store/uiStore";
+import { DOCNAV_WIDTH_MIN, docNavWidthMax } from "@/store/preferences/uiStore";
 import { t, useT } from "../i18n";
 
 /** Keyboard resize step for the panel separator. */

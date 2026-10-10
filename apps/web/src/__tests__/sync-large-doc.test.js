@@ -17,7 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
 import { useSyncEngine } from "../engine/useSyncEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 import { CodeMirrorPane } from "../ui/CodeMirrorPane";
 
 function rig(md) {

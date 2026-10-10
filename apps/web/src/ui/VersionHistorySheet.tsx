@@ -13,15 +13,15 @@ import { AlertCircle, Cloud, History, RotateCcw, Trash2, FilePlus2 } from "lucid
 import React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTickWhileActive } from "../hooks/useTickWhileActive";
-import { useAccountVersions, type AccountVersion, type AccountVersionsProvider } from "../store/account-versions";
-import { useDocumentStore } from "../store/documentStore";
+import { useAccountVersions, type AccountVersion, type AccountVersionsProvider } from "../store/history/account-versions";
+import { useDocumentStore } from "../store/documents/documentStore";
 import {
   formatSnapshotBytes,
   snapshotStore,
   type SnapshotMeta,
   type SnapshotReason,
-} from "../store/snapshot-store";
-import { useUIStore } from "../store/uiStore";
+} from "../store/history/snapshot-store";
+import { useUIStore } from "../store/preferences/uiStore";
 import { useDialog, type ConfirmOptions } from "./DialogProvider";
 import { t, useT } from "../i18n";
 

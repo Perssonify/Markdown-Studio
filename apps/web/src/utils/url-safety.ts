@@ -1,4 +1,4 @@
-import { isAssetRef } from "../store/asset-refs";
+import { isAssetRef } from "../store/assets/asset-refs";
 
 const CONTROL_AND_SPACE = /[\u0000-\u0020]+/g;
 

@@ -62,7 +62,7 @@ Inject an adapter so the editor persists *through you* instead of IndexedDB:
 />
 ```
 
-`storageConfig` (`IDBStorageConfig`, [src/store/idb-storage-adapter.ts](../src/store/idb-storage-adapter.ts)):
+`storageConfig` (`IDBStorageConfig`, [src/store/persistence/idb-storage-adapter.ts](../src/store/persistence/idb-storage-adapter.ts)):
 
 | Field | Default | Effect |
 | --- | --- | --- |

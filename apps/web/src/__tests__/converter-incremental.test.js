@@ -31,7 +31,7 @@ import { normalizeMarkdown } from "../engine/preprocessor";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 import { addBaseRules, installEscape, turndownLinear } from "../engine/turndown-rules";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 import { quickHash } from "../utils/index";
 
 /** mulberry32 — a small seeded PRNG, so a failing sequence can be replayed. */

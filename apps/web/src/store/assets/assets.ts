@@ -9,7 +9,7 @@
  * WITH the content (a backup, a JSON export) is inlined as a `data:` URL
  * rather than left pointing at nothing.
  */
-import type { DocumentRecord } from "./document";
+import type { DocumentRecord } from "../documents/document";
 import {
   assetRef,
   bytesToBase64,
@@ -23,7 +23,7 @@ import {
   replaceRefsInText,
 } from "./asset-refs";
 import { assetStore } from "./asset-store";
-import { t } from "../i18n/core";
+import { t } from "@/i18n/core";
 
 /** An asset's bytes and type, travelling with an import or an export. */
 export interface AssetPayload {

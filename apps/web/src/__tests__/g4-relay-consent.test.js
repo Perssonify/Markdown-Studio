@@ -14,7 +14,7 @@ import {
   getRelayConsent,
   relayConsentPrompt,
   setRelayConsent,
-} from "../store/url-import";
+} from "../store/importExport/url-import";
 
 const URL_ = "https://example.com/notes.md";
 

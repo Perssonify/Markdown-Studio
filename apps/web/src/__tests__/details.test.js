@@ -6,7 +6,7 @@ import { buildMarked } from "../engine/build-marked";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
 import { addBaseRules } from "../engine/turndown-rules.ts";
 import { Details, Summary } from "../extensions/Details.ts";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 // Collapsible <details><summary> round-trips as raw HTML: marked passes the
 // block through, the Details/Summary nodes parse it, turndown re-emits outerHTML.

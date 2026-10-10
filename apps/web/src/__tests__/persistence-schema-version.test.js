@@ -4,12 +4,12 @@ import { Schema } from "@tiptap/pm/model";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CURRENT_SCHEMA_VERSION, canonicalMisfit, coerceToSchema, isNewerSchema,
-} from "../store/schema-version";
-import { createDocument, deserializeFromStorage, serializeForStorage } from "../store/document";
-import { ingest } from "../store/ingest";
-import { IndexedDBStorageAdapter } from "../store/idb-storage-adapter";
-import { SCHEMA_LOCK_ERROR, useDocumentStore } from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
+} from "../store/documents/schema-version";
+import { createDocument, deserializeFromStorage, serializeForStorage } from "../store/documents/document";
+import { ingest } from "../store/importExport/ingest";
+import { IndexedDBStorageAdapter } from "../store/persistence/idb-storage-adapter";
+import { SCHEMA_LOCK_ERROR, useDocumentStore } from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { useDocumentLifecycle } from "../hooks/useDocumentLifecycle";
 
 /**
@@ -158,7 +158,7 @@ describe("hydration of content that does not fit", () => {
   });
 
   it("restoring over a locked document keeps its REAL content as the pre-restore copy", async () => {
-    const { snapshotStore } = await import("../store/snapshot-store");
+    const { snapshotStore } = await import("../store/history/snapshot-store");
     snapshotStore._resetForTests();
     await snapshotStore.record("f", "Future", { type: "doc", content: [para("an old version")] }, "manual");
     const [old] = await snapshotStore.listForDoc("f");

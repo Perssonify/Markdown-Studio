@@ -1,7 +1,7 @@
 /**
  * A108 — the import/export pipeline below the editor: reading files
- * (`store/import-export.ts`), archives of every kind including an encrypted
- * ZIP and the limits that stop a bomb (`store/archive.ts`), the file-picker
+ * (`store/importExport/import-export.ts`), archives of every kind including an encrypted
+ * ZIP and the limits that stop a bomb (`store/importExport/archive.ts`), the file-picker
  * expansion with its password prompt (`collectImportItems`), and a Word
  * document written by the app's own exporter read back by its importer.
  *
@@ -12,13 +12,13 @@ import { gzipSync, strToU8 } from "fflate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ArchiveEncryptedError, ArchiveWrongPasswordError, buildZip, extractArchive, isZipEncrypted,
-} from "../store/archive";
-import { exportAsDocx } from "../store/docx-export";
-import { convertDocxToHtml } from "../store/docx-import";
+} from "../store/importExport/archive";
+import { exportAsDocx } from "../store/importExport/docx-export";
+import { convertDocxToHtml } from "../store/importExport/docx-import";
 import {
   downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, getFileContentAndFormat, importFile,
   importFiles, importImage,
-} from "../store/import-export";
+} from "../store/importExport/import-export";
 import { collectImportItems } from "../editor/useImportPipeline";
 
 /** Every download, with its text. */

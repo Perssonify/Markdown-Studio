@@ -87,12 +87,12 @@ On top of editing, it provides:
 | Channel | Used for | Where |
 |---|---|---|
 | Function calls, props, imperative refs | Orchestrator ↔ hooks ↔ panes. Pane handles such as `getValue`, `setValue`, `setHTML`, `getJSON` and `isComposing`. | `src/PerssonifyEditor.tsx`, `src/ui/EditorPanes.tsx` |
-| Zustand stores | Document state and save status, UI preferences, derived link index, folder tree | `src/store/documentStore.ts`, `uiStore.ts`, `editorStore.ts`, `folders.ts` |
-| IndexedDB | Documents, the manifest, prefs; the version-history snapshot ring | `src/store/idb-storage-adapter.ts`, `src/store/snapshot-store.ts` |
-| localStorage / sessionStorage | UI preferences (`pf:*`), the crash-recovery stash, the diagnostics ring, the durability canary, one-shot handoffs | `src/store/uiStore.ts`, `src/store/crash-recovery.ts`, `src/utils/diagnostics.ts`, `src/store/storage-durability.ts` |
+| Zustand stores | Document state and save status, UI preferences, derived link index, folder tree | `src/store/documents/documentStore.ts`, `uiStore.ts`, `editorStore.ts`, `folders.ts` |
+| IndexedDB | Documents, the manifest, prefs; the version-history snapshot ring | `src/store/persistence/idb-storage-adapter.ts`, `src/store/history/snapshot-store.ts` |
+| localStorage / sessionStorage | UI preferences (`pf:*`), the crash-recovery stash, the diagnostics ring, the durability canary, one-shot handoffs | `src/store/preferences/uiStore.ts`, `src/store/persistence/crash-recovery.ts`, `src/utils/diagnostics.ts`, `src/store/persistence/storage-durability.ts` |
 | `window.postMessage` | Iframe host ↔ embed | `src/integration/host-bridge.ts` |
 | Web Worker | Find & Replace regular expressions: a Worker built from a Blob, terminated after 1.5 s; a guarded main-thread fallback where a CSP forbids `blob:` workers | `src/formatting/find-worker.ts` |
-| HTTP (`fetch`) | "Import from URL": a direct fetch first, then — only with the user's consent — the `/api/import` relay. Otherwise only the app's own files (lazy chunks, the service worker's precache and hourly update check). | `src/store/url-import.ts`, `api/import.js`, `src/pwa/sw-updates.ts` |
+| HTTP (`fetch`) | "Import from URL": a direct fetch first, then — only with the user's consent — the `/api/import` relay. Otherwise only the app's own files (lazy chunks, the service worker's precache and hourly update check). | `src/store/importExport/url-import.ts`, `api/import.js`, `src/pwa/sw-updates.ts` |
 | Service worker | Offline copy of the standalone app: every chunk precached, navigations network-first, prompted updates | `vite.app.config.ts:27-124`, `public/sw-recover.js`, `src/pwa/sw-updates.ts` |
 
 There are no message queues, websockets, background jobs, server databases or auth providers.
@@ -182,7 +182,7 @@ flowchart TB
    - Lazy-loads `/about`, `/help` and the tour. Routes are `/`, `/about`, `/help` and `/graph` (`src/app/router.tsx:14-20`).
 4. **`PerssonifyEditor`'s one-shot init effect (`src/PerssonifyEditor.tsx:1496-1679`):**
    1. Loads prefs: sync mode, markdown features, folder tree, and view mode (with the one-shot `pf:session-view-mode` handoff).
-   2. Calls `documentStore.initialize()` (`src/store/documentStore.ts:763-878`), which:
+   2. Calls `documentStore.initialize()` (`src/store/documents/documentStore.ts:763-878`), which:
       - reads the document list (rebuilt from the stored documents when it is missing or out of step);
       - adopts any `pf:recovery` stash as unsaved drafts, each with the revision it was written against;
       - activates the last open document. If another tab has since overtaken that document's draft, it opens in the terminal `conflict` status.
@@ -197,7 +197,7 @@ flowchart TB
 ### 3.5 End-to-end flow: a keystroke in the rich pane until it is on disk
 
 1. TipTap `onUpdate` (`src/ui/TiptapPane.tsx:278`) → `EditorLayout` → `PerssonifyEditor.handleHtmlChange` (`src/PerssonifyEditor.tsx:761-764`). That also starts the host's 300 ms `onContentChange` timer (`:651-662`).
-2. `useDocumentLifecycle.handleHtmlChange` (`src/hooks/useDocumentLifecycle.ts:285-303`) calls `documentStore.setDirty()` (`src/store/documentStore.ts:1168-1173`, status becomes `editing`). It also schedules a projection. The wait comes from `src/hooks/sync-schedule.ts:62-80`:
+2. `useDocumentLifecycle.handleHtmlChange` (`src/hooks/useDocumentLifecycle.ts:285-303`) calls `documentStore.setDirty()` (`src/store/documents/documentStore.ts:1168-1173`, status becomes `editing`). It also schedules a projection. The wait comes from `src/hooks/sync-schedule.ts:62-80`:
    - idle delay = `clamp(120, 1.5 × cost, 800)` ms
    - max-wait ceiling = `clamp(250, 8 × cost, 1200)` ms
    - "cost" is a moving average of how long recent projections actually took.
@@ -205,9 +205,9 @@ flowchart TB
    - It skips if the ProseMirror doc node is unchanged, or if the HTML hash matches the last one.
    - Otherwise it converts with `htmlToMd` (Styled) or `htmlToCleanMd` (Clean): `cleanHtmlForTurndown` → `turndownLinear` (Turndown plus the escaper, in runs of 64 top-level blocks) → `normalizeMarkdown` (`src/engine/useMarkdownEngine.ts:238-239`).
 4. `CodeMirrorPane.setValue` applies a minimal diff. The change is kept out of undo history and change events are suppressed, so it does not echo back (`src/ui/CodeMirrorPane.tsx:441-482`).
-5. `onCanonicalChange(editor.getJSON())` calls `documentStore.updateDerived`, which recomputes counts and fidelity (`src/store/documentStore.ts:1567-1585`). In library mode it also emits the host `onChange`.
+5. `onCanonicalChange(editor.getJSON())` calls `documentStore.updateDerived`, which recomputes counts and fidelity (`src/store/documents/documentStore.ts:1567-1585`). In library mode it also emits the host `onChange`.
 6. The **transition** into `editing` arms a 5-second autosave timer (`src/PerssonifyEditor.tsx:1844-1858`; `AUTOSAVE_MS`, `src/constants.ts:63`). Because it is armed on the transition, a save lands about 5 s after the first unsaved keystroke, not 5 s after typing stops.
-7. `autosave` (`src/PerssonifyEditor.tsx:1738-1805`) flushes pending projections, then calls `saveActiveDoc` (`src/store/documentStore.ts:969-1165`), which runs these steps in order:
+7. `autosave` (`src/PerssonifyEditor.tsx:1738-1805`) flushes pending projections, then calls `saveActiveDoc` (`src/store/documents/documentStore.ts:969-1165`), which runs these steps in order:
    1. Refuses a document locked read-only (content from a newer build, or content the schema cannot load) with a terminal `blocked`.
    2. The hydration chokepoint: refuse unless the editor holds the active document.
    3. `storage.get` plus a multi-tab drift check. If the stored copy is more than 2 s newer than this tab's base, it parks a terminal `conflict`. A read that fails (a `StorageReadError`, as opposed to a missing record) writes nothing, reports `error`, and is retried.
@@ -217,7 +217,7 @@ flowchart TB
    7. Re-reads the latest title and metadata, then calls `storage.save`.
 
    It resolves `true` only when the write committed. A `StorageQuotaError` parks the terminal `full` ("Storage full — not saving").
-8. `IndexedDBStorageAdapter.save` (`src/store/idb-storage-adapter.ts:554-651`), all in **one transaction**:
+8. `IndexedDBStorageAdapter.save` (`src/store/persistence/idb-storage-adapter.ts:554-651`), all in **one transaction**:
    - stamps `updated` (unless `_preserveUpdated` is set)
    - reads the record's previous size, or walks every document when a host has set a `maxBytes` cap
    - `put`s the record and rewrites the manifest, rebuilding the manifest from the documents first if it is missing or unreadable
@@ -257,7 +257,7 @@ sequenceDiagram
 
 1. A library row's selection (`src/ui/FolderTree.tsx:860, 954`) → `handleSelectDocFromPanel` (`src/PerssonifyEditor.tsx:947-950`) → `handleSwitchDoc` (`src/hooks/useDocumentLifecycle.ts:509-561`).
 2. `handleSwitchDoc` bumps `switchGenRef`, ends any IME composition, caches a dirty draft, captures undo history and runs `autosaveOnLeave`.
-3. `documentStore.switchToDoc` (`src/store/documentStore.ts:1203-1273`):
+3. `documentStore.switchToDoc` (`src/store/documents/documentStore.ts:1203-1273`):
    - bumps its own `switchSeq`
    - optimistically sets `activeDocId` and sets `hydratedDocId = null`, so saves are refused in the meantime
    - reads the record and prefers a cached draft. A record that cannot be read is treated like a missing one, and the user is told "That document could not be opened".
@@ -270,7 +270,7 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 
 ### 3.7 The only server call: Import from URL
 
-1. `UrlImportDialog` → `fetchImportResource` (`src/store/url-import.ts:362-455`). First it rewrites provider share links (`src/store/import-url-normalize.ts`).
+1. `UrlImportDialog` → `fetchImportResource` (`src/store/importExport/url-import.ts:362-455`). First it rewrites provider share links (`src/store/importExport/import-url-normalize.ts`).
 2. It fetches directly, with `credentials: "omit"` and `no-referrer`. On a thrown network or CORS error, `fetchDirectOrProxy` (`:292-352`) considers the relay, but only with the user's consent (`:258-270`):
    - Consent is a stored answer in `pf:import-relay`, or the one-time question the dialog asks through `confirmRelay`.
    - Without consent it stops with the download-and-drop guidance.
@@ -298,7 +298,7 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 - `hydratedDocId` is the save chokepoint. Every path that pushes content into the editor must call `markHydrated`.
 - Two generation guards work together: `switchGenRef` protects editor hydration and `switchSeq` protects the store's `activeDocId`. Every async path that hydrates the editor must re-check after each await.
 - The terminal save statuses (`blocked`, `conflict`, `full`) never re-arm autosave. A real edit resumes saving; for `full`, so does freeing space.
-- Schema parity. A node or mark added to `TiptapPane` must also be added to `SERIALIZE_EXTENSIONS` (`src/engine/serialize-doc.ts`), to `KNOWN_ELEMENTS` (`src/store/ingest.ts`), and given a Turndown rule. With no rule, Turndown silently strips the tag.
+- Schema parity. A node or mark added to `TiptapPane` must also be added to `SERIALIZE_EXTENSIONS` (`src/engine/serialize-doc.ts`), to `KNOWN_ELEMENTS` (`src/store/importExport/ingest.ts`), and given a Turndown rule. With no rule, Turndown silently strips the tag.
 - `pf:*` / `perssonify-*` identifiers are on-disk contracts. Do not rename them.
 
 ---
@@ -345,13 +345,13 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 | 2 | `src/PerssonifyEditor.tsx` | The hub. Navigate it by line range: props 100-241, store selectors 280-425, sync engine 565-573, lifecycle 672-765, imperative handle 1188-1358, import pipeline 1417-1495, init 1496-1679, save and autosave 1688-1858, unload stash 1860-1923, `handleAction` 1979-2178, cards 2455-2668, render 2678-2989. |
 | 3 | `src/engine/useSyncEngine.ts` | The core idea in about 300 lines: two projections, their gates, and the force variants with empty dependencies. |
 | 4 | `src/hooks/useDocumentLifecycle.ts` | Projection scheduling, plus every path that leaves a document and the generation guard on each. |
-| 5 | `src/store/documentStore.ts` | `saveActiveDoc`, `switchToDoc`, `initialize`, `patchDocById` and `clearLocalData`: the data-integrity core. |
-| 6 | `src/store/document.ts` | The `DocumentRecord` shape, title resolution (`resolveDocTitle`), and what gets serialized. |
-| 7 | `src/store/idb-storage-adapter.ts`, `src/store/storage-adapter.ts` | Persistence, adapter selection, the self-healing manifest, quota handling. |
+| 5 | `src/store/documents/documentStore.ts` | `saveActiveDoc`, `switchToDoc`, `initialize`, `patchDocById` and `clearLocalData`: the data-integrity core. |
+| 6 | `src/store/documents/document.ts` | The `DocumentRecord` shape, title resolution (`resolveDocTitle`), and what gets serialized. |
+| 7 | `src/store/persistence/idb-storage-adapter.ts`, `src/store/persistence/storage-adapter.ts` | Persistence, adapter selection, the self-healing manifest, quota handling. |
 | 8 | `src/engine/useMarkdownEngine.ts`, `build-marked.ts`, `turndown-rules.ts`, `html-cleaner.ts` | The two converters and their pre- and post-passes. |
 | 9 | `src/ui/TiptapPane.tsx` | The live schema (extension list at 220-245), the paste hook (262-276) and the pane handle. |
 | 10 | `src/ui/CodeMirrorPane.tsx` | The Markdown pane: compartments, composition handling, minimal-diff `setValue`. |
-| 11 | `src/store/ingest.ts` | Import formats, the HTML sanitizer, and residual analysis. |
+| 11 | `src/store/importExport/ingest.ts` | Import formats, the HTML sanitizer, and residual analysis. |
 | 12 | `src/integration/PerssonifyEditorIntegration.tsx`, `src/integration/host-bridge.ts`, `src/integration/embed-origins.ts` | The public API, the iframe protocol and who the embed will talk to. |
 | 13 | `src/main.tsx`, `src/App.tsx`, `src/embed.tsx`, `index.html`, `src/pwa/sw-updates.ts` | Boot, routing, URL params, the boot watchdog and updates. |
 | 14 | `api/import.js` | The only server code, and it is internet-facing. |
@@ -361,7 +361,7 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 
 ## 6. Data
 
-### 6.1 The document record (`src/store/document.ts:32-61`)
+### 6.1 The document record (`src/store/documents/document.ts:32-61`)
 
 `serializeForStorage` (`:418-438`) persists these fields:
 
@@ -370,7 +370,7 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 | `id` | From `generateId()` (`:96`). |
 | `title`, `userTitle`, `titlePinnedByUser` | `title` is the display title; `userTitle` holds an explicit rename, and `titlePinnedByUser` records whether a real user action set it. `resolveDocTitle` (`:211-226`) picks: a pinned rename, otherwise the first heading, otherwise the first paragraph (up to 60 characters). |
 | `origin` | **Layer 1, immutable.** `{format, raw, source, timestamp, alternates}`. It keeps the **full raw imported input**. |
-| `canonical` | **Layer 2.** ProseMirror JSON, the source of truth. `sanitizeCanonicalNode` (`src/store/canonical-sanitize.ts`) strips dangerous URLs and validates colours, fonts, alignment and theme-image sources at the import and storage-load boundary. |
+| `canonical` | **Layer 2.** ProseMirror JSON, the source of truth. `sanitizeCanonicalNode` (`src/store/documents/canonical-sanitize.ts`) strips dangerous URLs and validates colours, fonts, alignment and theme-image sources at the import and storage-load boundary. |
 | `residuals` | **Layer 3.** `ResidualItem[]`: what ingest could not represent. Shown in `ResidualsDialog`. |
 | `ingestReport` | Fidelity summary. May include `preIngestHtml` (up to 50K characters). |
 | `metadata`, `tags` | Values from `:::fields:::` blocks, the card fields `cardColor`/`cardPinned`, and tags. |
@@ -387,9 +387,9 @@ The manifest row, `DocumentSummary` (`:83-92`), is `{id, title, updated, created
 
 | Database | Version | Object store | Key | Index | Value |
 |---|---|---|---|---|---|
-| `perssonify-docs` (`src/store/idb-storage-adapter.ts:126-133`) | 1 | `documents` | out-of-line: the document id | — | JSON string of a `DocumentRecord` |
+| `perssonify-docs` (`src/store/persistence/idb-storage-adapter.ts:126-133`) | 1 | `documents` | out-of-line: the document id | — | JSON string of a `DocumentRecord` |
 | | | `meta` | `"__manifest"`, `"__prefs"` | — | JSON strings |
-| `perssonify-snapshots` (`src/store/snapshot-store.ts:60-63`) | 1 | `snapshots` | `id`, auto-increment | `byDoc` on `docId` | `{id, docId, ts, reason, title, bytes, words, hash, canonical}` plus an ordering `seq` |
+| `perssonify-snapshots` (`src/store/history/snapshot-store.ts:60-63`) | 1 | `snapshots` | `id`, auto-increment | `byDoc` on `docId` | `{id, docId, ts, reason, title, bytes, words, hash, canonical}` plus an ordering `seq` |
 
 - **No app-level cap.** The limit is the browser's quota, read from `navigator.storage.estimate()`. A host can set a hard `maxBytes`, which is checked inside the write transaction.
 - **The document list heals itself.** `list()` compares the manifest with the ids actually stored and rebuilds it from the documents when it is missing, unreadable or out of step. Writes rebuild it first as well.
@@ -405,7 +405,7 @@ The manifest row, `DocumentSummary` (`:83-92`), is `{id, title, updated, created
   - The newest snapshot of a document that still exists is never evicted. A deleted document's `pre-delete` copy expires with the 30-day limit like any other.
   - Throttled to one per 90 s per document, except a large shrink, which is always recorded as `pre-clear`. Also records `pre-delete`, `pre-restore` and `manual`.
   - An in-memory fallback ring uses negative ids; a session-wide `seq` orders snapshots taken in the same millisecond.
-- **Fallback when `indexedDB` is undefined** (`src/store/storage-adapter.ts:485-535`): a `window.storage` shim, then a localStorage adapter (keys `doc:{id}`, `doc:__manifest`, `doc:__prefs`), then memory. The choice is made by feature detection only; see DI-10.
+- **Fallback when `indexedDB` is undefined** (`src/store/persistence/storage-adapter.ts:485-535`): a `window.storage` shim, then a localStorage adapter (keys `doc:{id}`, `doc:__manifest`, `doc:__prefs`), then memory. The choice is made by feature detection only; see DI-10.
 
 ### 6.3 Prefs (`meta.__prefs`)
 
@@ -421,9 +421,9 @@ The manifest row, `DocumentSummary` (`:83-92`), is `{id, title, updated, created
 These are on-disk contracts. Do not rename them.
 
 - **localStorage:**
-  - `pf:*` UI prefs in `src/store/uiStore.ts`: workspace, paste-styled, case-content-only, show-ads (it has an effect only in development builds), read-only, context-menu, console, keyboard-shortcuts, font-size, line-height, reading-width, spellcheck, focus-mode, docnav-width, workspace-tab.
+  - `pf:*` UI prefs in `src/store/preferences/uiStore.ts`: workspace, paste-styled, case-content-only, show-ads (it has an effect only in development builds), read-only, context-menu, console, keyboard-shortcuts, font-size, line-height, reading-width, spellcheck, focus-mode, docnav-width, workspace-tab.
   - Find/Replace `pf:fr-*`, `pf:card-view`, `pf:tour-seen-v1`.
-  - Durability (`src/store/storage-durability.ts`): `pf:library-canary`, `pf:last-full-backup`, `pf:content-since`, `pf:backup-nudge-snoozed-until`, `pf:persist-requested-at`, `pf:install-tip-snoozed-until`.
+  - Durability (`src/store/persistence/storage-durability.ts`): `pf:library-canary`, `pf:last-full-backup`, `pf:content-since`, `pf:backup-nudge-snoozed-until`, `pf:persist-requested-at`, `pf:install-tip-snoozed-until`.
   - Privacy and gates: `pf:import-relay` (the relay consent), `pf:block-remote-images`, `pf:admin` (shows the Admin settings in a production build).
   - Diagnostics: `pf:diagnostics` (the redacted error ring, no document content) and `pf:boot-recovered` (written by the watchdog).
   - **Document text:** `pf:recovery` (the unload stash) and `pf:card-draft` (the Cards composer's unsaved note).
@@ -432,30 +432,30 @@ These are on-disk contracts. Do not rename them.
 
 ### 6.5 Migrations
 
-There is no migration framework; both databases are at version 1. Records carry a `schemaVersion` (`CURRENT_SCHEMA_VERSION = 1`, `src/store/schema-version.ts:27`). Content from a newer version, or content the schema cannot load, opens as a read-only copy.
+There is no migration framework; both databases are at version 1. Records carry a `schemaVersion` (`CURRENT_SCHEMA_VERSION = 1`, `src/store/documents/schema-version.ts:27`). Content from a newer version, or content the schema cannot load, opens as a read-only copy.
 
 A few fixes are applied as records and prefs are read:
-- `titlePinnedByUser` back-fill (`src/store/document.ts:133-135`)
-- workspace tab `map` → `outline` (`src/store/uiStore.ts:210-211`)
+- `titlePinnedByUser` back-fill (`src/store/documents/document.ts:133-135`)
+- workspace tab `map` → `outline` (`src/store/preferences/uiStore.ts:210-211`)
 - reading width px → ch (`migrateReadingWidth`, `uiStore.ts:142`)
 - legacy `pf:fr-headings` → `pf:fr-scope` (`src/ui/FindReplace.tsx:106`)
 
 ### 6.6 Export and backup formats
 
-- **`perssonify-document` envelope**, `_version "1.1.0"`, built by `toExportEnvelope` (`src/store/import-export.ts:283-301`):
+- **`perssonify-document` envelope**, `_version "1.1.0"`, built by `toExportEnvelope` (`src/store/importExport/import-export.ts:283-301`):
   - Fields: `{_format, _version, schemaVersion, id, title, canonical, origin, residuals, ingestReport, metadata, tags, created, updated}`.
   - `origin.raw` and the clipboard `alternates` are left out.
   - It does **not** carry `titlePinnedByUser` (see DI-8).
 - **Full backup:**
   - `perssonify-backup-YYYYMMDD-HHMMSSmmm.zip`, one envelope per document at `<folder path>/<title>.json`.
-  - On import it is treated as a backup only if **every** entry is an envelope (`src/store/archive.ts:362-366`).
+  - On import it is treated as a backup only if **every** entry is an envelope (`src/store/importExport/archive.ts:362-366`).
   - The crash screen's **Export my documents** builds the same kind of ZIP without the editor (`src/utils/emergency-backup.ts`). Its envelope differs; see IMP-3.
 - **Other exports:** Markdown (Clean or Styled), standalone HTML, DOCX (generated from Markdown by `docx`), PDF (browser print), a zip of `.md` files, and graph JSON.
 
 ### 6.7 External APIs and integrations
 
 - **Import relay** `/api/import` (§3.7). It is the only server endpoint, and it is used only with the user's consent.
-- **Provider link rewriting** (`src/store/import-url-normalize.ts`):
+- **Provider link rewriting** (`src/store/importExport/import-url-normalize.ts`):
   - Google Drive → `drive.usercontent.google.com/download`
   - Google Docs → `/export?format=html`. This path is broken; see IMP-2.
   - Google Sheets → CSV
@@ -599,32 +599,32 @@ This revision re-checked every item from the 1.77.0 pass:
   - A029 fixed this for the built-in IndexedDB and localStorage adapters: their `get()` throws on a failed read, and `saveActiveDoc` then writes nothing.
   - `WindowStorageAdapter.get` still turns any rejection into "absent". This is deliberate, because that API also rejects for a missing key.
   - The same adapter cannot enumerate keys. It sets an unreadable document list aside under `doc:__manifest.unreadable` and starts a fresh one.
-  - Evidence: `src/store/storage-adapter.ts:104-122, 146-153, 161-176`.
+  - Evidence: `src/store/persistence/storage-adapter.ts:104-122, 146-153, 161-176`.
 - **DI-7: Full backups above the import limits cannot be restored.** `Medium–High` · `Confirmed`
   - Restore uses the default archive limits: 5 MB compressed, 5 MB per entry, 20 MB total, 500 entries. Neither the full-backup export nor the crash-screen export has a matching limit.
   - An over-limit backup is reported only as "Skipped 1 file(s)".
   - Non-text zip entries also count toward the limits.
-  - Evidence: `src/store/archive.ts:100-105, 238-241, 258-270, 304-313`, `src/PerssonifyEditor.tsx:2109, 2121, 2161`.
+  - Evidence: `src/store/importExport/archive.ts:100-105, 238-241, 258-270, 304-313`, `src/PerssonifyEditor.tsx:2109, 2121, 2161`.
 - **DI-8: Restoring a backup does not reproduce the library exactly.** `Medium` · `Confirmed`
   - `updated` is read from the envelope, then re-stamped when the document is saved.
   - Every restored title becomes a pinned user rename, because the envelope carries no `titlePinnedByUser`. Editing the H1 therefore no longer renames the document.
   - Documents under a folder whose name starts with "." are skipped.
   - Empty folders, manual ordering and expand state are not exported.
-  - Evidence: `src/store/ingest.ts:550-551, 570-578`, `src/store/documentStore.ts:961-966`, `src/store/document.ts:537-543`, `src/store/archive.ts:293-300`.
+  - Evidence: `src/store/importExport/ingest.ts:550-551, 570-578`, `src/store/documents/documentStore.ts:961-966`, `src/store/documents/document.ts:537-543`, `src/store/importExport/archive.ts:293-300`.
 - **DI-10: No storage fallback when IndexedDB exists but won't open.** `Medium` · `Confirmed`
   - This happens with blocked site data and in some private modes. The adapter is chosen by feature detection only; nothing falls back when `open` fails.
   - Init fails with a 4-second "Failed to initialize" toast. After that, autosave and ⌘S do nothing for the session, because `initDoneRef` never becomes true.
   - What changed (A022): a persistent, non-dismissible strip now says "Not saving — browser storage is unavailable in this window". It is not shown when a host injects its own adapter or mounts with `chrome="none"`.
-  - Evidence: `src/store/storage-adapter.ts:502-506`, `src/PerssonifyEditor.tsx:1671-1676, 1695, 1741, 2914-2921`, `src/store/storage-durability.ts:415-426`, `src/ui/DurabilityNotices.tsx:192-204`.
+  - Evidence: `src/store/persistence/storage-adapter.ts:502-506`, `src/PerssonifyEditor.tsx:1671-1676, 1695, 1741, 2914-2921`, `src/store/persistence/storage-durability.ts:415-426`, `src/ui/DurabilityNotices.tsx:192-204`.
 - **DI-15: "Content only" case change can corrupt HTML next to a URL.** `Low–Medium` · `Confirmed` (the option is on by default)
   - The URL mask swallows an adjacent tag placeholder, and the single-pass restore leaves a private-use token in the text.
-  - Evidence: `src/formatting/case-transform.ts:111-118`, `src/store/uiStore.ts:178-179`.
+  - Evidence: `src/formatting/case-transform.ts:111-118`, `src/store/preferences/uiStore.ts:178-179`.
 - **DI-16: Smaller gaps.** `Low` · `Confirmed`
   - `renameDoc` and `patchDocById` overwrite content without taking a snapshot. These paths serve host `updateDocument`/`appendToDocument`, the unload draft flush, and the unmount write-through. Card saves now snapshot when the note holds something a card cannot carry, and when the save is refused.
   - A rename that lands while `saveActiveDoc` awaits its write and the listing is reverted in memory. The store's `activeDoc` and tab title are replaced by the record built before the rename, and the next save can write the old title back.
   - Prefs writes do read-modify-write from a stale copy.
   - The `$` escaping this item used to list is fixed (A040).
-  - Evidence: `src/store/documentStore.ts:1097-1136, 1338-1504`, `src/PerssonifyEditor.tsx:1291-1294, 1337, 1901-1908`, `src/hooks/useDocumentLifecycle.ts:357-360, 1023-1030`, `src/store/history-cache.ts:128-130`.
+  - Evidence: `src/store/documents/documentStore.ts:1097-1136, 1338-1504`, `src/PerssonifyEditor.tsx:1291-1294, 1337, 1901-1908`, `src/hooks/useDocumentLifecycle.ts:357-360, 1023-1030`, `src/store/history/history-cache.ts:128-130`.
 
 ### 8.2 Library, embed and host API
 
@@ -638,14 +638,14 @@ This revision re-checked every item from the 1.77.0 pass:
   - Importing the store opens `perssonify-docs` when the module loads.
   - Snapshots go to `perssonify-snapshots`, and the unload stash to `localStorage["pf:recovery"]`, unless the host also passes `storageConfig` with a `namespace`, or with `snapshots: false` / `crashRecovery: false` (A103). UI preferences still write `pf:*` keys.
   - A remount ignores a different `storageAdapter` and logs a warning. One editor per page is supported, and switching storage needs a page load (A106).
-  - Evidence: `src/store/documentStore.ts:393, 520-533, 744-748`, `src/store/idb-storage-adapter.ts:252-257`, `src/PerssonifyEditor.tsx:106-117, 1364-1370`.
+  - Evidence: `src/store/documents/documentStore.ts:393, 520-533, 744-748`, `src/store/persistence/idb-storage-adapter.ts:252-257`, `src/PerssonifyEditor.tsx:106-117, 1364-1370`.
 - **API-5: The in-app embed snippet points at a page that isn't deployed.** `Medium` · `Confirmed`
   - The Share/embed builder targets `/embed.html`, but the Vercel build emits only the app.
   - On markdownstudio.com the rewrite therefore serves the **full app** inside the iframe: there is no bridge, the `theme`/`accent`/`chrome`/`bg` params are ignored, and it registers the PWA worker. That path is also exempt from anti-framing (SEC-5).
   - Evidence: `src/ui/LinkBuilder.tsx:205-206`, `vite.app.config.ts:134-135`, `vercel.json:2, 9-11, 13-14, 24-31`.
 - **API-7: A host's `setMode` value is not validated.** `Low–Medium` · `Confirmed`
   - An unknown value hides both panes and is persisted to prefs.
-  - Evidence: `src/integration/host-bridge.ts:130-133`, `src/store/uiStore.ts:222`, `src/ui/EditorPanes.tsx:301-303`, `src/PerssonifyEditor.tsx:449-453`.
+  - Evidence: `src/integration/host-bridge.ts:130-133`, `src/store/preferences/uiStore.ts:222`, `src/ui/EditorPanes.tsx:301-303`, `src/PerssonifyEditor.tsx:449-453`.
 - **API-8: `ready` is emitted twice, before initialization finishes.** `Low–Medium` · `Confirmed`
   - It is sent when the bridge is created and again from a 500 ms timer, both before `initialize()` completes.
   - A host that seeds when `getDocuments()` returns an empty list can therefore re-seed on every load.
@@ -657,41 +657,41 @@ This revision re-checked every item from the 1.77.0 pass:
 - **API-12: `clearLocalData()` leaves the Cards draft behind.** `Low–Medium` (shared devices) · `Confirmed`
   - `clearLocalData()` is the documented call for a host's logout. It erases documents, history, the stash, drafts and the canary.
   - Only `clearLocalData({ preferences: true })` removes `pf:*` keys, and `pf:card-draft` is one of them. That key holds the Cards composer's unsaved note text, and it is not namespaced by `storageConfig`.
-  - Evidence: `src/store/documentStore.ts:540, 555-591`, `src/ui/CardsView.tsx:97-111`.
+  - Evidence: `src/store/documents/documentStore.ts:540, 555-591`, `src/ui/CardsView.tsx:97-111`.
 
 ### 8.3 Import, export and the relay
 
 - **IMP-1: A crafted `.tar` or `.tgz` hangs the tab.** `Medium` · `Confirmed` (reproduced on a copy of `parseTar`)
   - A negative size field (for example `-1000`) makes `parseTar` step back to the same header forever.
   - The main thread is blocked, so the unload stash cannot run either.
-  - Evidence: `src/store/archive.ts:159-193` (`:166, 168, 170`).
+  - Evidence: `src/store/importExport/archive.ts:159-193` (`:166, 168, 170`).
 - **IMP-2: Google Docs URL import can never succeed.** `Medium` · `Confirmed`
   - The normalizer requests `/export?format=html`. The guard against Google sign-in pages then rejects any HTML response from a provider whose name starts with `google`.
-  - Evidence: `src/store/import-url-normalize.ts:95-101`, `src/store/url-import.ts:435-443`.
+  - Evidence: `src/store/importExport/import-url-normalize.ts:95-101`, `src/store/importExport/url-import.ts:435-443`.
 - **IMP-3: Exports still carry imported content the user may have deleted.** `Medium` (privacy) · `Confirmed`
   - Fixed by A079: File ▸ Export JSON and the full backup now omit `origin.raw` and the clipboard alternates.
   - Still open: the crash screen's **Export my documents** builds its own envelope and exports the full `origin`, raw input and alternates included. It also has no `schemaVersion`.
   - Still open: every envelope carries `ingestReport.preIngestHtml`, up to 50,000 characters of the original import.
   - The raw input, the alternates and `preIngestHtml` are still stored with each record and count against the browser quota.
-  - Evidence: `src/store/import-export.ts:283-301`, `src/utils/emergency-backup.ts:77-93`, `src/store/ingest.ts:496, 598-599`, `src/store/document.ts:418-438`.
+  - Evidence: `src/store/importExport/import-export.ts:283-301`, `src/utils/emergency-backup.ts:77-93`, `src/store/importExport/ingest.ts:496, 598-599`, `src/store/documents/document.ts:418-438`.
 - **IMP-5: Direct-fetch timeouts are misclassified.** `Low` · `Confirmed`
   - `AbortSignal.timeout()` rejects with `TimeoutError`, but the code checks for `AbortError`.
   - A slow host is therefore treated as a CORS failure. The user is asked the relay question first (if it is unanswered), then gets a "blocks direct browser access" message instead of "timed out".
-  - Evidence: `src/store/url-import.ts:273-283, 315, 322-350`.
+  - Evidence: `src/store/importExport/url-import.ts:273-283, 315, 322-350`.
 - **IMP-6: URL import of `.tar`, `.tgz` and `.gz` is broken.** `Low–Medium` · `Confirmed`
   - The extension is stripped from the name, gzip is renamed `.zip`, and tar is decoded as text.
   - A `.docx` URL yields "no importable text documents".
   - A relayed download never recovers its file name, because the relay sends `Content-Disposition: attachment` with no filename.
-  - Evidence: `src/store/url-import.ts:133-137, 179-185, 403-405, 420-430`, `api/import.js:351`.
+  - Evidence: `src/store/importExport/url-import.ts:133-137, 179-185, 403-405, 420-430`, `api/import.js:351`.
 - **IMP-7: Extension handling differs by import path.** `Low` · `Confirmed`
   - `.mdown` is plain text via file import, but Markdown via archive or URL.
   - `.txt` is text via file import, but Markdown via URL.
-  - Evidence: `src/store/import-export.ts:66-76`, `src/store/archive.ts:142-149`, `src/store/url-import.ts:115-123`.
+  - Evidence: `src/store/importExport/import-export.ts:66-76`, `src/store/importExport/archive.ts:142-149`, `src/store/importExport/url-import.ts:115-123`.
 - **IMP-8: Decompression limits aren't enforced while inflating.** `Low–Medium` · `Confirmed` (measured)
   - gzip decompression is described as bounded, but the whole input is pushed in one call before the limit is checked. A 204,682-byte gzip produced one 209,715,200-byte chunk before the guard could fire.
   - Limits for encrypted zips trust the sizes the archive declares.
   - Plain zips are bounded, because the output is allocated from declared sizes that have already been checked.
-  - Evidence: `src/store/archive.ts:83-89, 208-223`.
+  - Evidence: `src/store/importExport/archive.ts:83-89, 208-223`.
 
 ### 8.4 Security
 
@@ -723,12 +723,12 @@ This revision re-checked every item from the 1.77.0 pass:
   - Every `dangerouslySetInnerHTML` that renders document content is escaped or sanitized. That covers the card faces and the opened card.
   - Mermaid runs with `securityLevel: "strict"`, and its CSS-bearing config keys can be set only by `initialize()`. KaTeX uses its default `trust: false`.
   - Links open with `noopener,noreferrer`, and only for http(s), mailto, tel and protocol-relative URLs.
-  - Evidence: `src/store/ingest.ts:446-483, 536-538`, `src/ui/CardsView.tsx:548, 578, 1038`, `src/PerssonifyEditor.tsx:2509-2514`, `src/ui/DiagramPreview.tsx:49-60`, `src/hooks/useLinkIndex.ts:322-334`, `src/utils/url-safety.ts:17-22`.
+  - Evidence: `src/store/importExport/ingest.ts:446-483, 536-538`, `src/ui/CardsView.tsx:548, 578, 1038`, `src/PerssonifyEditor.tsx:2509-2514`, `src/ui/DiagramPreview.tsx:49-60`, `src/hooks/useLinkIndex.ts:322-334`, `src/utils/url-safety.ts:17-22`.
 - **SEC-4: The public `ingest()` can return unsanitized HTML.** `Low–Medium` · `Confirmed`
   - It is exported from `@perssonify/editor/store`. For Markdown input it returns marked's output unsanitized: `<img onerror>` and `javascript:` links pass through.
   - A consumer that renders `result.html` gets XSS.
   - Fixed (A073): without a DOM, its fallback now escapes everything.
-  - Evidence: `src/store/ingest.ts:475-482, 500-502`, `src/store/index.ts:2`.
+  - Evidence: `src/store/importExport/ingest.ts:475-482, 500-502`, `src/store/index.ts:2`.
 - **SEC-5: Security headers are in place, with two gaps.** `Low–Medium` · `Confirmed`
   - Fixed (A068):
     - A hash-pinned CSP ships report-only on every page. `e2e/cases/csp.mjs` runs the app with it enforced; switching it to enforcing is an owner decision.
@@ -736,12 +736,12 @@ This revision re-checked every item from the 1.77.0 pass:
     - nosniff, `Referrer-Policy: no-referrer` and a restrictive Permissions-Policy apply to every path.
   - Still open: on the app's domain, `/embed.html` serves the full app (API-5), so the full app can be framed at that path.
   - Still open: print export writes into an unsandboxed same-origin iframe. Its content is the schema-constrained rich-pane HTML.
-  - Evidence: `vercel.json:9-43`, `src/store/print-export.ts:14-38`.
+  - Evidence: `vercel.json:9-43`, `src/store/importExport/print-export.ts:14-38`.
 - **SEC-6: The client's pre-check misses IPv4-mapped addresses.** `Low` · `Confirmed`
   - Fixed on the server (A074): the relay fetches only global-unicast addresses, which covers every range this item used to list.
   - Still open on the client: the direct-fetch pre-check misses IPv4-mapped and IPv4-compatible literals. The URL parser rewrites `[::ffff:127.0.0.1]` to `::ffff:7f00:1` before `isPrivateHost` sees it.
   - The server check applies only to the relay path; the direct browser fetch runs first.
-  - Evidence: `api/import.js:55-142`, `src/store/url-import.ts:54, 73-94`.
+  - Evidence: `api/import.js:55-142`, `src/store/importExport/url-import.ts:54, 73-94`.
 - **SEC-7: Host `themeVars` are not sanitized.** `Low` · `Confirmed`
   - They are merged into CSS variables without going through `sanitizeCssColor`. The host controls this value, and the iframe embed builds it only from a sanitized `bg`, so this affects library hosts only.
   - Evidence: `src/integration/PerssonifyEditorIntegration.tsx:401-406`.
@@ -753,7 +753,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - The welcome document's title is derived from its first heading, `# Markdown Studio`. `App.tsx` passes `title: "Welcome"` only as a fallback, and it is deliberately not pinned.
   - The resolver matches exact titles only, so every new user starts with three broken links. Since A058 they are also drawn as broken.
   - The starter test hard-codes `WELCOME_TITLE = "Welcome"`, so it cannot catch this.
-  - Evidence: `src/data/starter-documents.ts:39, 280, 374`, `src/constants.ts:93-95`, `src/App.tsx:168-171`, `src/PerssonifyEditor.tsx:1594-1604`, `src/store/link-index.ts:193-221`, `src/__tests__/starter-documents.test.js:38`.
+  - Evidence: `src/data/starter-documents.ts:39, 280, 374`, `src/constants.ts:93-95`, `src/App.tsx:168-171`, `src/PerssonifyEditor.tsx:1594-1604`, `src/store/links/link-index.ts:193-221`, `src/__tests__/starter-documents.test.js:38`.
 - **UI-4: Notes can't be edited from the board on narrow phones.** `Medium` · `Confirmed`
   - Below 480 px, a card with no saved view preference opens in Preview, and the Preview/Write toggle is hidden.
   - Evidence: `src/ui/CardsView.tsx:922-928, 1099-1110`, `src/styles.css:254`.
@@ -763,7 +763,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - Evidence: `src/hooks/useKeyboardShortcuts.ts:123`, `src/PerssonifyEditor.tsx:1946-1949, 2763-2768`, `src/ui/FindReplace.tsx:926-933`.
 - **UI-13: The "Collapsible details" feature flag does nothing.** `Low` · `Confirmed`
   - Nothing reads it.
-  - Evidence: `src/store/settings.ts:39-40, 85`, `src/ui/SettingsSheet.tsx:55`.
+  - Evidence: `src/store/preferences/settings.ts:39-40, 85`, `src/ui/SettingsSheet.tsx:55`.
 - **UI-14: Most lazy chunks have no local error boundary.** `Low` · `Confirmed`
   - Only Find/Replace has one. A failed WorkspacePanel, GraphView or CardsView chunk falls through to the top-level boundary, which replaces the whole editor with the crash screen.
   - Evidence: `src/PerssonifyEditor.tsx:86-89, 2764-2768, 2785-2809, 2876-2906`.
@@ -870,7 +870,7 @@ This revision re-checked every item from the 1.77.0 pass:
 |---|---|---|
 | `src/PerssonifyEditor.tsx:106-110` | With `storageAdapter`, no localStorage or IndexedDB is touched | See API-3 |
 | `src/PerssonifyEditor.tsx:113-116`, `src/integration/PerssonifyEditorIntegration.tsx:79` | `storageConfig` is ignored when an adapter is given | It still configures the snapshot database and the crash stash (`src/PerssonifyEditor.tsx:1364-1370`) |
-| `api/import.js:5-6`, `src/store/url-import.ts:151-153, 191-192` | "No third party ever sees the request"; `viaProxy` means "the public CORS proxy (content transited a third party)" | `viaProxy` means the first-party relay. The hosting provider handles, and may log, the request (§3.7) |
+| `api/import.js:5-6`, `src/store/importExport/url-import.ts:151-153, 191-192` | "No third party ever sees the request"; `viaProxy` means "the public CORS proxy (content transited a third party)" | `viaProxy` means the first-party relay. The hosting provider handles, and may log, the request (§3.7) |
 | `src/ui/FindReplace.tsx:926-933` | The global shortcut listener cannot see the panel's keys | It can; ⌘F in the panel closes it (UI-6) |
 | `src/PerssonifyEditor.tsx:1943` | `frWithReplace` | The state is `frMode` |
 | `src/PerssonifyEditor.tsx:92, 778, 786`, `src/ui/WorkspacePanel.tsx:129, 155, 162` | A `DocNavPanel` component | `src/ui/DocNavPanel.tsx` exports only `TocList` and `EmptyOutline` |

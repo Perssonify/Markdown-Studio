@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { buildMarked } from "../engine/build-marked";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
 import { addBaseRules } from "../engine/turndown-rules.ts";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 // Interactive task lists round-trip: markdown `- [ ]`/`- [x]` → TaskList/TaskItem
 // nodes (via the marked renderer override) → back to markdown (turndown rule).

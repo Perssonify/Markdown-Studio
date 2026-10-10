@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ingest } from "../store/ingest";
+import { ingest } from "../store/importExport/ingest";
 
 /**
  * The residual analyzer must reflect the schema the editor ACTUALLY has.

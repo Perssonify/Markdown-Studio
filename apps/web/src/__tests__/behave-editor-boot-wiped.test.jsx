@@ -13,8 +13,8 @@ import {
   act, fireEvent, installBrowserStubs, mountEditor, onDisk, seededAdapter, store, textOf, tick, until,
   untilHydrated,
 } from "./behave-harness";
-import { buildZip } from "../store/archive";
-import { CANARY_KEY } from "../store/storage-durability";
+import { buildZip } from "../store/importExport/archive";
+import { CANARY_KEY } from "../store/persistence/storage-durability";
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -78,7 +78,7 @@ describe("a library the browser emptied", () => {
 describe("Start fresh", () => {
   it("is the explicit way to accept an empty library", async () => {
     // Simulate the wipe again for this origin, as a later visit would find it.
-    const { noteLibraryAtBoot } = await import("../store/storage-durability");
+    const { noteLibraryAtBoot } = await import("../store/persistence/storage-durability");
     localStorage.setItem(CANARY_KEY, JSON.stringify({ count: 5, at: Date.now() - 3600 * 1000 }));
     await act(async () => { noteLibraryAtBoot(0); });
     const shown = await until(() => notice(), "the notice again");

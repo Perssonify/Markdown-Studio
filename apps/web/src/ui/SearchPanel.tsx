@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { FileTextIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SearchResult } from "@/store/search";
+import type { SearchResult } from "@/store/search/search";
 import { useT } from "../i18n";
 
 interface SearchPanelProps {

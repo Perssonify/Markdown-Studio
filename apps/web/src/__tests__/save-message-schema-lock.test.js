@@ -7,7 +7,7 @@
  * editor is empty" — for a document that was intact and shown read-only.
  */
 import { describe, expect, it } from "vitest";
-import { describeUncommittedSave, SCHEMA_LOCK_ERROR } from "../store/documentStore";
+import { describeUncommittedSave, SCHEMA_LOCK_ERROR } from "../store/documents/documentStore";
 
 describe("describeUncommittedSave", () => {
   it("names the newer-version lock for what it is", () => {

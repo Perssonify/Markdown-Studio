@@ -12,9 +12,9 @@ import React, { createRef } from "react";
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
-import { useDocumentStore } from "../store/documentStore";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 const para = (text) => ({ type: "paragraph", content: [{ type: "text", text }] });
 const text = (c) => JSON.stringify(c);

@@ -27,7 +27,7 @@ Configured in the **Settings** panel (gear in the menu bar / File ▸ Settings) 
 persisted under `__prefs.markdownFeatures`.
 
 - **Flavor presets** — CommonMark / GitHub Flavored / Markdown Extra. Choosing a
-  preset applies its feature defaults (`src/store/settings.ts`).
+  preset applies its feature defaults (`src/store/preferences/settings.ts`).
 - **Per-feature toggles** (Settings ▸ Features) — tables, task lists,
   strikethrough, autolink, footnotes (footnotes are on only in the Markdown
   Extra preset). Implemented in `src/engine/build-marked.ts` via `marked`
@@ -96,13 +96,13 @@ singleton) so flavors can toggle at runtime. See
 - The Workspace panel's **Files** tab renders a **folder tree** (`src/ui/FolderTree.tsx`):
   create/rename/delete folders, "Move to…" for docs and folders (cycle-guarded), expand/collapse.
 - **Design:** folders are an organizational overlay persisted under
-  `__prefs.folderTree` (`src/store/folders.ts`) — documents stay flat in storage,
+  `__prefs.folderTree` (`src/store/documents/folders.ts`) — documents stay flat in storage,
   their tree position is metadata. This keeps the document save-path and the
   IndexedDB schema untouched. Orphan metadata is pruned when docs are deleted.
 
 ## Archive import / export
 
-- **Import** (`src/store/archive.ts`, fflate): drop or pick a `.zip` / `.tar` /
+- **Import** (`src/store/importExport/archive.ts`, fflate): drop or pick a `.zip` / `.tar` /
   `.tar.gz` / `.gz`; text docs (md/html/txt/json) are extracted and their
   directory paths become folders. Junk is skipped — `__MACOSX`, anything inside a
   hidden directory, and non-text files — but a dot-prefixed file name (a note

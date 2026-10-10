@@ -7,7 +7,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { ResidualItem } from "../store/ingest";
+import type { ResidualItem } from "../store/importExport/ingest";
 import { t, useT } from "../i18n";
 
 /**

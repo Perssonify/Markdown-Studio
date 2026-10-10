@@ -17,7 +17,7 @@ async function freshStore({ dev, admin, stored }) {
   if (admin) localStorage.setItem("pf:admin", "1");
   const gates = await import("../utils/build-gates");
   gates._setDevBuildForTests(dev);
-  const { useUIStore } = await import("../store/uiStore");
+  const { useUIStore } = await import("../store/preferences/uiStore");
   return useUIStore.getState();
 }
 

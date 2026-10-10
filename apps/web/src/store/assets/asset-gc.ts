@@ -23,10 +23,10 @@
  */
 import { collectAssetRefs, refsInText } from "./asset-refs";
 import { assetStore, type AssetMeta } from "./asset-store";
-import type { DocumentRecord } from "./document";
-import { peekLiveCanonical, useDocumentStore } from "./documentStore";
-import { snapshotStore } from "./snapshot-store";
-import { readDocuments } from "./zip-builder";
+import type { DocumentRecord } from "../documents/document";
+import { peekLiveCanonical, useDocumentStore } from "../documents/documentStore";
+import { snapshotStore } from "../history/snapshot-store";
+import { readDocuments } from "../importExport/zip-builder";
 
 /** An unreferenced image younger than this (by storing or showing) is kept. */
 export const GC_GRACE_MS = 24 * 60 * 60 * 1000;

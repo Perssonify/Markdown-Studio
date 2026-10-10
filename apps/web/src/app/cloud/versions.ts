@@ -1,6 +1,6 @@
-import type { AccountVersionsProvider } from "../../store/account-versions";
-import { resolveDocTitle } from "../../store/document";
-import type { SnapshotReason } from "../../store/snapshot-store";
+import type { AccountVersionsProvider } from "@/store/history/account-versions";
+import { resolveDocTitle } from "@/store/documents/document";
+import type { SnapshotReason } from "@/store/history/snapshot-store";
 import type { AccountArchiveApi } from "./api";
 import { SYNCABLE_ID } from "./engine";
 

@@ -11,7 +11,7 @@
  * document schema, the storage adapter, and the save path stay untouched.
  */
 
-import { t } from "../i18n/core";
+import { t } from "@/i18n/core";
 
 /** Metadata keys owned by the Cards view. */
 export const CARD_COLOR_KEY = "cardColor";

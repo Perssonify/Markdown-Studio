@@ -16,12 +16,12 @@ import React from "react";
 import { useSyncExternalStore } from "react";
 import { displayKeys } from "../data/shortcuts";
 import { useTickWhileActive } from "../hooks/useTickWhileActive";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 import {
   formatEstBytes,
   HISTORY_CACHE_LIMITS,
   historyCache,
-} from "../store/history-cache";
+} from "../store/history/history-cache";
 import { useT } from "../i18n";
 
 interface MemorySheetProps {

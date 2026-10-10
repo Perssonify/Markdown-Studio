@@ -20,7 +20,7 @@ import { EditorContent, JSONContent, useEditor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { COMPOSITION_STALL_MS } from "../constants";
 import type { HighlightSpec } from "../formatting/find-engine";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { useT } from "../i18n";
 import { CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { BackgroundColor } from "../extensions/BackgroundColor";

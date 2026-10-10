@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFolderTree } from "../store/folders";
+import { buildFolderTree } from "../store/documents/folders";
 import { docRowDrop, flattenTree, treeKeyAction } from "../ui/FolderTree";
 import {
   computeOffsets,

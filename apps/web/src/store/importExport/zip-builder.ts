@@ -6,8 +6,8 @@
  * library entry, and this one pulls in fflate at runtime.
  */
 import { Zip, ZipDeflate, ZipPassThrough, strToU8 } from "fflate";
-import type { DocumentRecord } from "./document";
-import type { StorageAdapter } from "./storage-adapter";
+import type { DocumentRecord } from "../documents/document";
+import type { StorageAdapter } from "../persistence/storage-adapter";
 
 /**
  * Read many documents without awaiting them one after another.

@@ -2,7 +2,7 @@
  * The folder tree across devices: a THREE-WAY merge — pure, unit-tested
  * (cloud-folder-merge.test.js).
  *
- * The tree (store/folders.ts) is folders, which folder each note is in
+ * The tree (store/documents/folders.ts) is folders, which folder each note is in
  * (`docParents`) and manual order (`docOrder`); which folders are EXPANDED is
  * each browser's own business and never synced. Last-writer-wins on the whole
  * tree would drop a folder made on one device whenever another device changed

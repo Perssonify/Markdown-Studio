@@ -11,7 +11,7 @@
  * allowed while online — the editor's own beforeunload guard still warns about
  * unsaved work, and the unload stash still keeps it.
  */
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 import { recordDiagnostic } from "./diagnostics";
 
 /** The slice of document-store state the oracle reads (never writes). */

@@ -21,10 +21,10 @@ import {
   resolveDocTitle,
   type DocumentRecord,
   type PMNode,
-} from "./document";
-import { sanitizeCanonicalNode } from "./canonical-sanitize";
-import { isDangerousUrl } from "../utils/url-safety";
-import { sanitizeStyleDeclarations } from "../engine/css-safety";
+} from "../documents/document";
+import { sanitizeCanonicalNode } from "../documents/canonical-sanitize";
+import { isDangerousUrl } from "@/utils/url-safety";
+import { sanitizeStyleDeclarations } from "@/engine/css-safety";
 
 // --- Types ---
 

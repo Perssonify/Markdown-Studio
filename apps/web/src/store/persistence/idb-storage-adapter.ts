@@ -16,7 +16,7 @@ import {
   serializeForStorage,
   toSummary,
   type DocumentRecord,
-  type DocumentSummary, stampUpdated } from "./document";
+  type DocumentSummary, stampUpdated } from "../documents/document";
 import type { StorageAdapter } from "./storage-adapter";
 
 // ─── Public types ────────────────────────────────────────────────────────────

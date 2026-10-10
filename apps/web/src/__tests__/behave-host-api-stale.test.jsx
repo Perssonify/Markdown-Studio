@@ -28,7 +28,7 @@ import {
   richEditor, seededAdapter, storedDoc, until, untilHydrated,
 } from "./behave-harness";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 vi.setConfig({ testTimeout: 30000 });
 

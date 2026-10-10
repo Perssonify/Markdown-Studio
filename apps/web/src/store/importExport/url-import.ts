@@ -20,8 +20,8 @@
 import type { IngestFormat } from "./ingest";
 import { ArchiveEncryptedError, ArchiveWrongPasswordError, extractArchive, isArchiveName, type ArchiveAsset, type ArchiveEntry, type ExtractedArchive } from "./archive";
 import { normalizeImportUrl } from "./import-url-normalize";
-import { safeStorage } from "../utils/safe-storage";
-import { t } from "../i18n/core";
+import { safeStorage } from "@/utils/safe-storage";
+import { t } from "@/i18n/core";
 
 /** Same 5 MB ceiling used for file imports (import-export.ts). */
 export const MAX_URL_BYTES = 5_000_000;

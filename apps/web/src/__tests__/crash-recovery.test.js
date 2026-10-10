@@ -8,7 +8,7 @@
  * The in-memory draft cache does not survive a reload either.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { RECOVERY_KEY, clearStash, stashUnsaved, takeStashed } from "../store/crash-recovery";
+import { RECOVERY_KEY, clearStash, stashUnsaved, takeStashed } from "../store/persistence/crash-recovery";
 
 const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 

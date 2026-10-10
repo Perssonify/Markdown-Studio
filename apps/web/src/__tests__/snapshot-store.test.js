@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { snapshotStore } from "../store/snapshot-store";
+import { snapshotStore } from "../store/history/snapshot-store";
 
 /**
  * Recoverable snapshot net. Under jsdom there is no IndexedDB, so the store runs

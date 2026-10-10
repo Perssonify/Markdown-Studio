@@ -15,8 +15,8 @@ import {
   applyFlavor,
   type MarkdownFeatureSettings,
   type MarkdownFlavor,
-} from "../store/settings";
-import { useUIStore } from "../store/uiStore";
+} from "../store/preferences/settings";
+import { useUIStore } from "../store/preferences/uiStore";
 import { MODES } from "../constants";
 import { adminSettingsAvailable, adsAvailable } from "../utils/build-gates";
 import { PrivacySection } from "./SettingsPrivacy";

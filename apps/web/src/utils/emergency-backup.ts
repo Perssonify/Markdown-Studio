@@ -11,13 +11,13 @@
  * What it can NOT include: text typed into the editor after its last autosave.
  * That lived in the editor instance the crash destroyed.
  */
-import { buildZip } from "../store/archive";
-import { extForMime } from "../store/asset-refs";
-import { collectAssetsFor } from "../store/assets";
-import { resolveDocTitle, type DocumentRecord } from "../store/document";
-import { isBlankCanonical, useDocumentStore } from "../store/documentStore";
-import { useFolderStore } from "../store/folders";
-import { downloadBlob, exportTimestamp, toExportEnvelope } from "../store/import-export";
+import { buildZip } from "../store/importExport/archive";
+import { extForMime } from "../store/assets/asset-refs";
+import { collectAssetsFor } from "../store/assets/assets";
+import { resolveDocTitle, type DocumentRecord } from "../store/documents/document";
+import { isBlankCanonical, useDocumentStore } from "../store/documents/documentStore";
+import { useFolderStore } from "../store/documents/folders";
+import { downloadBlob, exportTimestamp, toExportEnvelope } from "../store/importExport/import-export";
 
 export interface BackupSources {
   storage: {

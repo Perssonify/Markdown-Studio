@@ -6,7 +6,7 @@ import { FileCode2, Mouse, MouseOff } from "lucide-react";
 import { useThemeMode } from "../theme/useThemeMode";
 import React, { forwardRef, type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
 import { MODES } from "../constants";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { CodeMirrorPane, type CodeMirrorPaneHandle } from "./CodeMirrorPane";
 import { isHandledImageDrop } from "../extensions/AssetImages";
 import { Icons } from "./Icons";

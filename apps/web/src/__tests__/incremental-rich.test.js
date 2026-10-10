@@ -21,7 +21,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 import {
   CORPUS, CUTTABLE, FEATURE_TOGGLES, LOCAL_SNIPPETS, SNIPPETS,
   expectSame, mdEdit, newEditor, project, richEdit, rng,

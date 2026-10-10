@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useState } from "react";
 import { missingImageTitle, missingSvg } from "../extensions/AssetImages";
-import { parseAssetRef } from "../store/asset-refs";
-import { assetStore } from "../store/asset-store";
+import { parseAssetRef } from "../store/assets/asset-refs";
+import { assetStore } from "../store/assets/asset-store";
 
 /**
  * Showing images stored as assets (A086) OUTSIDE the rich pane's own node

@@ -1,10 +1,10 @@
 import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
-import { canonicalOf } from "../store/canonical-json";
-import { createDocument, serializeForStorage } from "../store/document";
-import { readRevision } from "../store/idb-storage-adapter";
-import { CURRENT_SCHEMA_VERSION } from "../store/schema-version";
+import { canonicalOf } from "../store/documents/canonical-json";
+import { createDocument, serializeForStorage } from "../store/documents/document";
+import { readRevision } from "../store/persistence/idb-storage-adapter";
+import { CURRENT_SCHEMA_VERSION } from "../store/documents/schema-version";
 
 /**
  * serializeForStorage writes the record field by field so the canonical's text

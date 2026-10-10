@@ -7,7 +7,7 @@
  */
 
 import { create } from "zustand";
-import type { LinkIndex, GraphNode, GraphEdge } from "./link-index";
+import type { LinkIndex, GraphNode, GraphEdge } from "../links/link-index";
 
 export interface ActiveFormats {
   bold?: boolean;

@@ -23,7 +23,7 @@ import {
   LARGE_MAP_MIN,
   BoxGrid,
   crossesForeignContainer,
-} from "../store/graph-metrics";
+} from "../store/graph/graph-metrics";
 import { legacyFolderRects, legacyPlaceLabels } from "./graph-legacy";
 
 const nodes = [

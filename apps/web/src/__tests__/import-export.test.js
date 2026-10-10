@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exportTimestamp, sanitizeFilename } from '../store/import-export.ts';
+import { exportTimestamp, sanitizeFilename } from '../store/importExport/import-export.ts';
 
 describe('exportTimestamp', () => {
   it('formats a date as YYYYMMDD-HHMMSSmmm (zero-padded)', () => {

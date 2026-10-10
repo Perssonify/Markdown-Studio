@@ -5,9 +5,9 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { SyncEngine } from "../app/cloud/engine";
-import { sha256Hex } from "../store/asset-store";
-import { createDocument } from "../store/document";
-import { IndexedDBStorageAdapter } from "../store/idb-storage-adapter";
+import { sha256Hex } from "../store/assets/asset-store";
+import { createDocument } from "../store/documents/document";
+import { IndexedDBStorageAdapter } from "../store/persistence/idb-storage-adapter";
 
 const T = (m) => `2026-10-05T10:${String(m).padStart(2, "0")}:00.000Z`;
 const para = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });

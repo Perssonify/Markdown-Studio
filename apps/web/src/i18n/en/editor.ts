@@ -2,7 +2,7 @@ import type { Message } from "../types";
 
 /** Editor actions, toasts and prompts: src/editor/*, hooks/useDocumentLifecycle.ts, hooks/useLinkIndex.ts and the store messages that reach the screen. */
 export const editor = {
-  // Share links (useExportActions, useEditorBoot — store/share-link.ts)
+  // Share links (useExportActions, useEditorBoot — store/importExport/share-link.ts)
   "editor.shareLinkCopied": "Share link copied to clipboard.",
   "editor.shareLinkCopiedLong": "Share link copied — but it's long, so some apps may cut it off. If it won't open, export and send the file instead.",
   "editor.shareLinkCopyFailed": "Couldn't copy the share link to the clipboard.",
@@ -170,7 +170,7 @@ export const editor = {
   "editor.versionRestored": "Version restored",
   "editor.restoredAs": "Restored as \"{title}\"",
 
-  // Import from URL (store/url-import.ts — the error line in the importer)
+  // Import from URL (store/importExport/url-import.ts — the error line in the importer)
   "editor.urlInvalid": "That doesn't look like a valid URL.",
   "editor.urlOnlyHttp": "Only http and https URLs can be imported.",
   "editor.urlLocalAddress": "Local and internal addresses can't be imported.",

@@ -1,10 +1,10 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildZipAsync, readDocuments } from "../store/zip-builder";
-import { extractArchive, isZipEncrypted } from "../store/archive";
-import { IndexedDBStorageAdapter } from "../store/idb-storage-adapter";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
+import { buildZipAsync, readDocuments } from "../store/importExport/zip-builder";
+import { extractArchive, isZipEncrypted } from "../store/importExport/archive";
+import { IndexedDBStorageAdapter } from "../store/persistence/idb-storage-adapter";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
 
 /**
  * A088 (export half) — a library export must not read one document at a time

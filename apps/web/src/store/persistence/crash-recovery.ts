@@ -15,7 +15,7 @@
  * cache so every existing path — the dirty flag, the close prompt, the next
  * autosave — treats it like any other unsaved edit.
  */
-import { safeStorage } from "../utils/safe-storage";
+import { safeStorage } from "@/utils/safe-storage";
 
 export const RECOVERY_KEY = "pf:recovery";
 

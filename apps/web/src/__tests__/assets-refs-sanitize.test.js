@@ -11,10 +11,10 @@ import {
   parseAssetRef,
   parseDataUrl,
   replaceRefsInText,
-} from "../store/asset-refs";
+} from "../store/assets/asset-refs";
 import { isDangerousUrl } from "../utils/url-safety";
-import { sanitizeForIngest } from "../store/ingest";
-import { sanitizeCanonicalNode } from "../store/canonical-sanitize";
+import { sanitizeForIngest } from "../store/importExport/ingest";
+import { sanitizeCanonicalNode } from "../store/documents/canonical-sanitize";
 import { sanitizePastedHtml } from "../engine/html-cleaner";
 import { neutralizeAssetSrcs } from "../ui/asset-dom";
 

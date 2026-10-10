@@ -6,8 +6,8 @@ import { AccountMenu } from "./app/AccountMenu";
 import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud";
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
-import { useUIStore } from "./store/uiStore";
-import { readSharePayloadFromHash } from "./store/share-link";
+import { useUIStore } from "./store/preferences/uiStore";
+import { readSharePayloadFromHash } from "./store/importExport/share-link";
 import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
@@ -17,7 +17,7 @@ import { SkipToEditor } from "./ui/SkipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/Toast";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
-import { assetStore } from "./store/asset-store";
+import { assetStore } from "./store/assets/asset-store";
 
 // Settings ▸ Privacy ▸ "Block remote images" is enforced as an img-src policy
 // for THIS page, and must be in force before any document renders — hence

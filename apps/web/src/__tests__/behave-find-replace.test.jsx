@@ -21,7 +21,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { BackgroundColor } from "../extensions/BackgroundColor";
 import { __resetFindWorkerForTests, __setFindWorkerFactoryForTests, findWorkerSource } from "../formatting/find-worker";
 import { MAX_FIND_MATCHES } from "../formatting/find-engine";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { FindReplaceBar } from "../ui/FindReplace";
 
 beforeAll(() => {

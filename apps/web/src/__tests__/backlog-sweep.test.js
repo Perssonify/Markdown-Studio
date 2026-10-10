@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { EXPORT_CONTENT_CSS } from "../store/import-export";
+import { EXPORT_CONTENT_CSS } from "../store/importExport/import-export";
 
 /**
  * The remaining backlog items, revalidated at HEAD and fixed where real. Their

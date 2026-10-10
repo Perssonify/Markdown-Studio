@@ -26,7 +26,7 @@ import {
   SLICE_MS,
   truncateLabel,
   type LabelBox,
-} from "../store/graph-metrics";
+} from "../store/graph/graph-metrics";
 import {
   ALPHA_DECAY,
   clampToRegion,
@@ -40,8 +40,8 @@ import {
   worldFor,
   type FolderPlan,
   type SimPoint,
-} from "../store/graph-physics";
-import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry } from "../store/graph-draw";
+} from "../store/graph/graph-physics";
+import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry } from "../store/graph/graph-draw";
 import { useT } from "../i18n";
 
 export interface GraphNode {
@@ -106,7 +106,7 @@ type Pt = SimPoint;
 // The force layout itself — its constants, its world-space (`worldFor`), the
 // exact small-map loop, the Barnes–Hut large-map path and the two-level layout
 // of a large folder map (`planFolderLayout`) — lives in
-// `store/graph-physics.ts`, pure and unit-tested. This component owns the ONE
+// `store/graph/graph-physics.ts`, pure and unit-tested. This component owns the ONE
 // position map it mutates (`posRef`), the plan it steps it with, and the loop
 // that drives it.
 
