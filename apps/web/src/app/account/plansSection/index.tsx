@@ -10,7 +10,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { useT, type MessageKey } from "../i18n";
+import { useT, type MessageKey } from "@/i18n";
 
 interface Feature {
   key: MessageKey;

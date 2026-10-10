@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { LogIn, LogOut } from "lucide-react";
 import { useState } from "react";
-import { useAccount } from "@/app/account";
-import { AccountAvatar } from "@/app/AccountAvatar";
-import { CloudStatusLine } from "@/app/CloudStatusLine";
-import { PlansSection } from "@/app/PlansSection";
+import { useAccount } from "@/app/account/account";
+import { AccountAvatar } from "@/app/account/accountAvatar";
+import { CloudStatusLine } from "@/app/account/cloudStatusLine";
+import { PlansSection } from "@/app/account/plansSection";
 import { useLocale, useT } from "@/i18n";
 import { PageChrome } from "../pageChrome";
 

@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { AccountUser } from "./account";
+import type { AccountUser } from "../account";
 
 /** First letters of the first two words: "Syed Moinuddin" → "SM". */
 export function initialsOf(name: string): string {

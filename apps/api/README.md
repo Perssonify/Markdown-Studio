@@ -19,7 +19,7 @@ File storage is `src/lib/storage/index.ts` (put / get / remove / ping on one S3 
 No feature endpoints yet. The editor signs in through these routes: a signed-out
 visitor sees its sign-in screen instead of the editor; once signed in, the
 account menu (right of the menu bar) has Profile and Sign out
-(`apps/web/src/app/account.ts`). It calls them at its OWN origin — in
+(`apps/web/src/app/account/account.ts`). It calls them at its OWN origin — in
 development Vite forwards `/api` to this server — so sign-in runs on one
 address, as it does behind CloudFront.
 

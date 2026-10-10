@@ -1118,11 +1118,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   checking screen while the session is unknown (`SESSION_CHECK_TIMEOUT_MS`), so
   neither flashes. **`unavailable` (no answer: offline, an outage) opens the editor**
   — documents live in this browser and must stay reachable offline.
-  `src/app/account.ts` is the session state (`useAccount`), calling same-origin
+  `src/app/account/account.ts` is the session state (`useAccount`), calling same-origin
   `/api/auth/*` — CloudFront routes `/api/*` to the API on AWS, and
   `vite.app.config.ts` proxies `/api` to `:4000` in dev and preview, so local sign-in
   also runs on ONE origin (`PUBLIC_URL` is the editor's address; a cookie set on
-  another port is not reliably sent back). Signed in: `src/app/AccountMenu.tsx` at the
+  another port is not reliably sent back). Signed in: `src/app/account/accountMenu/index.tsx` at the
   right end of the menu bar after Settings (Profile, Sign out), handed in through PE's
   `accountControl` prop (App.tsx only — the library and the embed never pass it,
   pinned by `account.test.jsx`); `/login` and `/profile` are routed interior pages

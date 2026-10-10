@@ -1,11 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Archive, Download, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useLocale, useT } from "../i18n";
-import { formatSnapshotBytes } from "../store/history/snapshot-store";
-import { browserNav } from "./account";
-import { httpAccountArchive, type AccountArchiveApi, type BackupInfo } from "./cloud/api";
-import type { BackupOutcome } from "./cloud/backup";
+import { useLocale, useT } from "@/i18n";
+import { formatSnapshotBytes } from "@/store/history/snapshot-store";
+import { browserNav } from "../account";
+import { httpAccountArchive, type AccountArchiveApi, type BackupInfo } from "@/app/cloud/api";
+import type { BackupOutcome } from "@/app/cloud/backup";
 
 type Listing = { state: "loading" } | { state: "failed" } | { state: "ready"; backups: BackupInfo[] };
 

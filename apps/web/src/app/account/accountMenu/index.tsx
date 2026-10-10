@@ -10,11 +10,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogIn, LogOut, UserRound } from "lucide-react";
 import { useCallback } from "react";
-import { useT } from "../i18n";
-import { useToast } from "../ui/shared/toast";
-import { useAccount } from "./account";
-import { AccountAvatar } from "./AccountAvatar";
-import { CloudStatusLine } from "./CloudStatusLine";
+import { useT } from "@/i18n";
+import { useToast } from "@/ui/shared/toast";
+import { useAccount } from "../account";
+import { AccountAvatar } from "../accountAvatar";
+import { CloudStatusLine } from "../cloudStatusLine";
 
 interface AccountMenuProps {
   /** Open the sign-in page. */

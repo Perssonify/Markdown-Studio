@@ -1,7 +1,7 @@
 import { AlertTriangle, CloudCheck, CloudOff, Loader2, Lock } from "lucide-react";
-import { useT } from "../i18n";
+import { useT } from "@/i18n";
 import { cn } from "@/lib/utils";
-import { useCloudStatus, type CloudPhase } from "./cloud";
+import { useCloudStatus, type CloudPhase } from "@/app/cloud";
 
 const ICON: Record<CloudPhase, React.ElementType> = {
   off: CloudOff,
