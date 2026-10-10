@@ -1,7 +1,7 @@
 import { ThemeProvider } from "next-themes";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { ErrorBoundary } from "../ui/ErrorBoundary";
+import { ErrorBoundary } from "../ui/shared/errorBoundary";
 import type { StorageAdapter, StorageQuotaError } from "../store/persistence/storage-adapter";
 import type { IDBStorageConfig, StorageMetrics } from "../store/persistence/idb-storage-adapter";
 import type { InternalEditorHandle } from "../editor/props";

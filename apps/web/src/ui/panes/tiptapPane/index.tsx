@@ -49,7 +49,7 @@ import {
   REPLACE_NEW_STYLE,
   REPLACE_OLD_STYLE,
   GROUP_STYLES as TP_GROUP_STYLES,
-} from "@/ui/search-colors";
+} from "@/ui/find/utils/search-colors";
 
 /**
  * Search highlights, drawn from the RANGES the Find panel computed — the same

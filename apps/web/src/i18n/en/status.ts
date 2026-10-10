@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Status bar and bottom tray: statusBar/index.tsx, bottomTray/index.tsx, BacklinksPanel.tsx, ResidualsDialog.tsx, ConsolePanel.tsx, editor/useBottomTray.tsx. */
+/** Status bar and bottom tray: statusBar/index.tsx, bottomTray/index.tsx, backlinksPanel/index.tsx, residualsDialog/index.tsx, consolePanel/index.tsx, editor/useBottomTray.tsx. */
 export const status = {
   // Status bar: the tray toggle and the document context.
   "status.panel": "Panel",

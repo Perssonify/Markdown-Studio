@@ -50,7 +50,7 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { TOOLBAR_COMPACT_BP } from '@/constants';
-import { useDialog } from "@/ui/DialogProvider";
+import { useDialog } from "@/ui/dialogs/dialogProvider";
 import { useEditorStore } from '@/store/editor/editorStore';
 import { useUIStore } from '@/store/preferences/uiStore';
 import { TableGridPicker } from '../tableGridPicker';

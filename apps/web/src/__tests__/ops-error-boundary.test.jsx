@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../utils/emergency-backup", () => ({ exportEmergencyBackup: vi.fn(async () => 3) }));
 
-import { ErrorBoundary } from "../ui/ErrorBoundary";
+import { ErrorBoundary } from "../ui/shared/errorBoundary";
 import { exportEmergencyBackup } from "../utils/emergency-backup";
 import { CHUNK_RELOAD_KEY, pageActions } from "../utils/app-health";
 import { _resetDiagnosticsForTests, getDiagnostics } from "../utils/diagnostics";

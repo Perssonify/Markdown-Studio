@@ -13,8 +13,8 @@ import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
 import { localeDir, setLocale, useLocale, useT } from "./i18n";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
-import { SkipToEditor } from "./ui/SkipToEditor";
-import { setToastsMutedForInteriorPage } from "./ui/Toast";
+import { SkipToEditor } from "./ui/shared/skipToEditor";
+import { setToastsMutedForInteriorPage } from "./ui/shared/toast";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
 import { assetStore } from "./store/assets/asset-store";
@@ -43,12 +43,12 @@ try {
 // would otherwise refer to images it cannot resolve (see configureLocalStores).
 assetStore.configure({ enabled: true });
 
-const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
-const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
-const LoginPage = React.lazy(() => import("./ui/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
-const ProfilePage = React.lazy(() => import("./ui/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
-const SignInScreen = React.lazy(() => import("./ui/pages/LoginPage").then((m) => ({ default: m.SignInScreen })));
-const Walkthrough = React.lazy(() => import("./ui/Walkthrough").then((m) => ({ default: m.Walkthrough })));
+const AboutPage = React.lazy(() => import("./ui/pages/aboutPage").then((m) => ({ default: m.AboutPage })));
+const HelpPage = React.lazy(() => import("./ui/pages/helpPage").then((m) => ({ default: m.HelpPage })));
+const LoginPage = React.lazy(() => import("./ui/pages/loginPage").then((m) => ({ default: m.LoginPage })));
+const ProfilePage = React.lazy(() => import("./ui/pages/profilePage").then((m) => ({ default: m.ProfilePage })));
+const SignInScreen = React.lazy(() => import("./ui/pages/loginPage").then((m) => ({ default: m.SignInScreen })));
+const Walkthrough = React.lazy(() => import("./ui/tour/walkthrough").then((m) => ({ default: m.Walkthrough })));
 
 const TOUR_SEEN_KEY = "pf:tour-seen-v1";
 

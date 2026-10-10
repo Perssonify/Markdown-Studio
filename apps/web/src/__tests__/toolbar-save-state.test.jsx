@@ -9,7 +9,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { DialogProvider } from "../ui/DialogProvider";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
 import { EditorToolbar } from "../ui/chrome/toolbar";
 
 const dialogApi = { confirm: async () => true, prompt: async () => null, equation: async () => null, confirmUnsaved: async () => "cancel" };

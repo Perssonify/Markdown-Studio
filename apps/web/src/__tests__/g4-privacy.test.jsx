@@ -11,9 +11,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DialogProvider } from "../ui/DialogProvider";
-import { UrlImportDialog } from "../ui/UrlImportDialog";
-import { PrivacySection } from "../ui/SettingsPrivacy";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { UrlImportDialog } from "../ui/importExport/urlImportDialog";
+import { PrivacySection } from "../ui/settings/settingsPrivacy";
 import { getRelayConsent } from "../store/importExport/url-import";
 import {
   BLOCK_REMOTE_IMAGES_KEY,
@@ -50,15 +50,15 @@ describe("no absolute 'nothing ever leaves' claims", () => {
   // The surfaces a visitor reads. An absolute claim here is a promise the
   // relay and remote images break.
   const FILES = [
-    "src/ui/pages/AboutPage.tsx",
-    "src/ui/pages/help-content.ts",
+    "src/ui/pages/aboutPage/index.tsx",
+    "src/ui/pages/helpPage/help-content.ts",
     "src/constants.ts",
     "src/data/starter-documents.ts",
     "src/ui/chrome/menuBar/index.tsx",
     "vite.app.config.ts", // the install prompt's description (PWA manifest)
     // Since A099 the copy itself lives in the About content module and the
     // interface catalog, so the claims are checked where they are written.
-    "src/ui/pages/about-content.ts",
+    "src/ui/pages/aboutPage/about-content.ts",
     ...readdirSync(join(process.cwd(), "src/i18n/en")).map((f) => `src/i18n/en/${f}`),
   ];
   const ABSOLUTE = [
@@ -80,7 +80,7 @@ describe("no absolute 'nothing ever leaves' claims", () => {
   });
 
   it("Help explains both features that do go online, and where to control them", () => {
-    const help = read("src/ui/pages/help-content.ts");
+    const help = read("src/ui/pages/helpPage/help-content.ts");
     const privacy = help.slice(help.indexOf('id: "offline-privacy"'));
     expect(privacy).toMatch(/its own server/);
     expect(privacy).toMatch(/asks you first/);

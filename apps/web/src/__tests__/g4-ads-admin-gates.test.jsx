@@ -15,11 +15,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { _setDevBuildForTests, adminSettingsAvailable, sessionAdsFromParam } from "../utils/build-gates";
 import { useUIStore } from "../store/preferences/uiStore";
-import { AdUnit } from "../ui/AdUnit";
-import { DialogProvider } from "../ui/DialogProvider";
-import { LinkBuilder } from "../ui/LinkBuilder";
+import { AdUnit } from "../ui/shared/adUnit";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { LinkBuilder } from "../ui/share/linkBuilder";
 import { MenuBar } from "../ui/chrome/menuBar";
-import { SettingsSheet } from "../ui/SettingsSheet";
+import { SettingsSheet } from "../ui/settings/settingsSheet";
 
 beforeAll(() => {
   // jsdom has no matchMedia; next-themes and the sheet primitives probe it.

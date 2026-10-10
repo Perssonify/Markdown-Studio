@@ -1,6 +1,6 @@
 /**
  * graph-metrics.ts — pure, render-less helpers for the knowledge-graph overlay
- * (src/ui/GraphView.tsx): the workspace metrics, label placement, the folder
+ * (src/ui/graph/graphView/index.tsx): the workspace metrics, label placement, the folder
  * containers' ONE geometry, the spatial index both of those use, and the
  * loop's pacing. Kept free of React/DOM so the map's logic layer is
  * unit-testable (graph-metrics.test.js); the force layout itself is in

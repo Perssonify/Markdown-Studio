@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { act, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "../ui/use-divider-drag";
+import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "../ui/shared/hooks/use-divider-drag";
 
 /**
  * The two resize separators shipped the same defect because they were the same
@@ -198,7 +198,7 @@ describe("both separators are wired to the shared hook", () => {
   const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
   const files = {
     "EditorPanes.tsx": read("src/ui/panes/editorPanes/index.tsx"),
-    "WorkspacePanel.tsx": read("src/ui/WorkspacePanel.tsx"),
+    "WorkspacePanel.tsx": read("src/ui/workspace/workspacePanel/index.tsx"),
   };
 
   for (const [name, src] of Object.entries(files)) {

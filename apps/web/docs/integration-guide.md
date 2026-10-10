@@ -445,7 +445,7 @@ The repo ships a ready-made iframe shell so hosts don't hand-roll one.
   > anything until the visitor presses Fetch) and then strips them from the
   > address bar. The `ads` parameter only means something in a development build
   > (placeholder ad slots); the embed ignores it. **Tools ▸ Share / embed link**
-  > ([src/ui/LinkBuilder.tsx](../src/ui/LinkBuilder.tsx)) generates both a
+  > ([src/ui/share/linkBuilder/index.tsx](../src/ui/share/linkBuilder/index.tsx)) generates both a
   > standalone link and this iframe snippet for you.
 
 - **Vendoring:** copy `dist-embed/` into your app and serve it same-origin (and,

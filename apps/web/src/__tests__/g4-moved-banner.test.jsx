@@ -13,8 +13,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useDocumentStore } from "../store/documents/documentStore";
 import { _resetDurabilityForTests, noteLibraryAtBoot, recordFullBackup } from "../store/persistence/storage-durability";
-import { DurabilityNotices } from "../ui/DurabilityNotices";
-import { HELP_SECTIONS } from "../ui/pages/help-content";
+import { DurabilityNotices } from "../ui/notices/durabilityNotices";
+import { HELP_SECTIONS } from "../ui/pages/helpPage/help-content";
 
 beforeAll(() => {
   if (typeof window.matchMedia !== "function") {

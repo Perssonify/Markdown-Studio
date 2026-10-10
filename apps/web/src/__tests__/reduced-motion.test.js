@@ -66,7 +66,7 @@ describe("prefersReducedMotion", () => {
 });
 
 describe("the graph simulation consults it", () => {
-  const graph = readFileSync(join(process.cwd(), "src/ui/GraphView.tsx"), "utf8");
+  const graph = readFileSync(join(process.cwd(), "src/ui/graph/graphView/index.tsx"), "utf8");
 
   it("settles immediately instead of animating under reduced motion", () => {
     expect(graph).toContain("prefersReducedMotion");

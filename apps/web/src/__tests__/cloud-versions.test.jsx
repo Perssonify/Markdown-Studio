@@ -11,8 +11,8 @@ import { getAccountVersions, setAccountVersions } from "../store/history/account
 import { snapshotStore } from "../store/history/snapshot-store";
 import { useDocumentStore } from "../store/documents/documentStore";
 import { useUIStore } from "../store/preferences/uiStore";
-import { DialogProvider } from "../ui/DialogProvider";
-import { VersionHistorySheet } from "../ui/VersionHistorySheet";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { VersionHistorySheet } from "../ui/history/versionHistorySheet";
 import { en } from "../i18n/en";
 
 const para = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });

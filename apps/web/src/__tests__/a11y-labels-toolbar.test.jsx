@@ -4,7 +4,7 @@ import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { DialogProvider } from "../ui/DialogProvider";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
 import { ModeSwitcher, modeAccessibleName } from "../ui/chrome/modeSwitcher";
 import { StatusBar } from "../ui/chrome/statusBar";
 import { EditorToolbar } from "../ui/chrome/toolbar";

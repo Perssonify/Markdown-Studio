@@ -64,14 +64,14 @@ markdown-studio/
     │   ├── codeMirrorPane/index.tsx     # CM6 markdown editor wrapper
     │   ├── tiptapPane/index.tsx         # Tiptap rich-text editor wrapper (+ extensions list)
     │   ├── toolbar/index.tsx            # formatting buttons → dispatch()
-    │   ├── WorkspacePanel.tsx     # left-docked Files / Outline tabs
-    │   ├── CardsView.tsx          # cards board over the whole library (overlay)
+    │   ├── workspacePanel/index.tsx     # left-docked Files / Outline tabs
+    │   ├── cardsView/index.tsx          # cards board over the whole library (overlay)
     │   ├── statusBar/index.tsx · modeSwitcher/index.tsx · menuBar/index.tsx
-    │   ├── FindReplace.tsx        # Find & Replace panel (matching lives in formatting/find-engine.ts)
-    │   ├── GraphView.tsx          # force-directed SVG graph (custom physics)
-    │   ├── BacklinksPanel.tsx · linkBubbleMenu/index.tsx · tableBubbleMenu/index.tsx · tableGridPicker/index.tsx
-    │   ├── Dialogs.tsx · ConfirmDialog.tsx · Toast.tsx · ErrorBoundary.tsx
-    │   ├── codeBlockWithCopy/index.tsx · codeBlockCopyButton/index.tsx · AdUnit.tsx (placeholder slots, development builds only)
+    │   ├── findReplace/index.tsx        # Find & Replace panel (matching lives in formatting/find-engine.ts)
+    │   ├── graphView/index.tsx          # force-directed SVG graph (custom physics)
+    │   ├── backlinksPanel/index.tsx · linkBubbleMenu/index.tsx · tableBubbleMenu/index.tsx · tableGridPicker/index.tsx
+    │   ├── dialogs/index.tsx · confirmDialog/index.tsx · toast/index.tsx · errorBoundary/index.tsx
+    │   ├── codeBlockWithCopy/index.tsx · codeBlockCopyButton/index.tsx · adUnit/index.tsx (placeholder slots, development builds only)
     │   ├── icons/index.tsx · search-colors.ts
     │   └── pages/                  # routed interior pages (About, Help, PageChrome)
     │

@@ -104,7 +104,7 @@ describe("library stylesheet scoping", () => {
     // primitive, so nothing else would place them inside the scope.
     const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
     expect(read("src/extensions/emoji-suggestion.ts")).toContain('setAttribute("data-pf-portal"');
-    expect(read("src/ui/FindReplace.tsx")).toContain("data-pf-portal");
+    expect(read("src/ui/find/findReplace/index.tsx")).toContain("data-pf-portal");
   });
 });
 

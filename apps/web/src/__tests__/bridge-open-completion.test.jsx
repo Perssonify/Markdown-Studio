@@ -23,7 +23,7 @@ vi.mock("../PerssonifyEditor", async () => {
   } };
 });
 vi.mock("next-themes", () => ({ ThemeProvider: ({ children }) => children }));
-vi.mock("../ui/ErrorBoundary", () => ({ ErrorBoundary: ({ children }) => children }));
+vi.mock("../ui/shared/errorBoundary", () => ({ ErrorBoundary: ({ children }) => children }));
 
 function deferred() {
   let resolve; let reject;

@@ -194,7 +194,7 @@ Defined in [src/integration/host-bridge.ts](../src/integration/host-bridge.ts) â
 This system deliberately does **not** do these things (and where the concern lives instead):
 
 - **No multi-user / collaboration.** Single browser, single user. (Would need a backend + CRDT/OT.)
-- **No two editors on one page.** The stores are module singletons shared by every editor in the same page, so the editor claims the page's slot before it touches any of them (`claimEditorInstance` in `documentStore.ts`, `ui/OneEditorPerPage.tsx`): a second editor mounted while one is running renders a message and a console error instead of an editor, and takes over only if the first unmounts. Mount one per page, or one per iframe (the embed build) (A106).
+- **No two editors on one page.** The stores are module singletons shared by every editor in the same page, so the editor claims the page's slot before it touches any of them (`claimEditorInstance` in `documentStore.ts`, `ui/shared/oneEditorPerPage/index.tsx`): a second editor mounted while one is running renders a message and a console error instead of an editor, and takes over only if the first unmounts. Mount one per page, or one per iframe (the embed build) (A106).
 - **No authentication or authorization.** Removed; see [auth.md](auth.md). Any access control must live in the *embedding* host app.
 - **No server-side persistence or cross-device sync.** IndexedDB only.
 - **No server-rendered output / SEO.** It's an SPA (`rsc: false` in [components.json](../components.json)).

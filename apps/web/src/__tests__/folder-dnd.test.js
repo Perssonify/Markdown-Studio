@@ -3,7 +3,7 @@ import {
   DND_MIME,
   getDragPayload,
   hasDragItem,
-} from "../ui/folder-dnd.ts";
+} from "../ui/workspace/folderTree/folder-dnd.ts";
 
 /**
  * Regression guard for the folder-tree drag-and-drop.

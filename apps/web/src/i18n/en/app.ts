@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** App shell and editor chrome: App.tsx, EditorHeader.tsx, PerssonifyEditor.tsx, SkipToEditor.tsx. */
+/** App shell and editor chrome: App.tsx, EditorHeader.tsx, PerssonifyEditor.tsx, skipToEditor/index.tsx. */
 export const app = {
   "app.initializingEngine": "Initializing Engine...",
   "app.findAndReplace": "Find & Replace",

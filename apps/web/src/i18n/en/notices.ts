@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Notices, banners and error screens: DurabilityNotices.tsx, TabSyncNotice.tsx, ErrorBoundary.tsx, LazyChunkBoundary.tsx, DiagnosticsActions.tsx, OneEditorPerPage.tsx, AdUnit.tsx, Toast.tsx, pwa/sw-updates.ts. */
+/** Notices, banners and error screens: durabilityNotices/index.tsx, tabSyncNotice/index.tsx, errorBoundary/index.tsx, lazyChunkBoundary/index.tsx, diagnosticsActions/index.tsx, oneEditorPerPage/index.tsx, adUnit/index.tsx, toast/index.tsx, pwa/sw-updates.ts. */
 export const notices = {
   // DurabilityNotices — storage unavailable
   "notices.notSaving": "Not saving",

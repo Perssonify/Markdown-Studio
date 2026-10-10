@@ -10,7 +10,7 @@ import { useUIStore } from "../store/preferences/uiStore";
 import { createDocument } from "../store/documents/document";
 import { snapshotStore, type SnapshotMeta } from "../store/history/snapshot-store";
 import { canonicalMisfit, coerceToSchema, isNewerSchema } from "../store/documents/schema-version";
-import type { UnsavedChangesResult } from "../ui/ConfirmDialog";
+import type { UnsavedChangesResult } from "../ui/dialogs/confirmDialog";
 import { t } from "../i18n";
 
 interface DocumentLifecycleParams {

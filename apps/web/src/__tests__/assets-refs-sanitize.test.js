@@ -16,7 +16,7 @@ import { isDangerousUrl } from "../utils/url-safety";
 import { sanitizeForIngest } from "../store/importExport/ingest";
 import { sanitizeCanonicalNode } from "../store/documents/canonical-sanitize";
 import { sanitizePastedHtml } from "../engine/html-cleaner";
-import { neutralizeAssetSrcs } from "../ui/asset-dom";
+import { neutralizeAssetSrcs } from "../ui/shared/utils/asset-dom";
 
 /** The reference format and its place in the sanitizers (A086). */
 

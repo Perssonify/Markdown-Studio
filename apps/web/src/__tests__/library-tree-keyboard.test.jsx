@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useDocumentStore } from "../store/documents/documentStore";
 import { useFolderStore } from "../store/documents/folders";
-import { DialogProvider } from "../ui/DialogProvider";
-import { DND_MIME } from "../ui/folder-dnd";
-import { FolderTree } from "../ui/FolderTree";
-import { WorkspacePanel } from "../ui/WorkspacePanel";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { DND_MIME } from "../ui/workspace/folderTree/folder-dnd";
+import { FolderTree } from "../ui/workspace/folderTree";
+import { WorkspacePanel } from "../ui/workspace/workspacePanel";
 
 /**
  * A094 (the tree claimed role="tree" but its arrow keys did nothing; the phone

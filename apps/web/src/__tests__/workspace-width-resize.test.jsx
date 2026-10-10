@@ -63,7 +63,7 @@ describe("setDocNavWidth clamps against the CURRENT viewport", () => {
 });
 
 describe("the panel re-clamps on window resize", () => {
-  const panel = readFileSync(join(process.cwd(), "src/ui/WorkspacePanel.tsx"), "utf8");
+  const panel = readFileSync(join(process.cwd(), "src/ui/workspace/workspacePanel/index.tsx"), "utf8");
 
   it("listens for resize and re-applies the width", () => {
     expect(panel).toContain('window.addEventListener("resize"');

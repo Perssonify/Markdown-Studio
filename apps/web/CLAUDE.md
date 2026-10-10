@@ -38,7 +38,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   interior pages, and the first-run guided tour.
 - `src/ui/pages/` — routed interior pages (`AboutPage`, `HelpPage`, shared
   `PageChrome`); copy/data in `help-content.ts`, `src/data/credits.ts`.
-- `src/ui/Walkthrough.tsx` — custom spotlight tour targeting `data-tour="…"`
+- `src/ui/tour/walkthrough/index.tsx` — custom spotlight tour targeting `data-tour="…"`
   anchors on real UI (menubar / mode-switcher / settings / toolbar / editor).
 - **First-run library** (`src/data/starter-documents.ts` + `DEFAULT_CONTENT`): the app
   seeds **three** cross-linked documents, not one — **Welcome** (the `initialDocument`),
@@ -63,11 +63,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   hard-code "Welcome", so it agreed with `[[Welcome]]` links that resolved to
   nothing and were drawn as broken on first run.
 - `src/store/documents/doc-outline.ts` — `extractHeadings(canonical)` + `buildHeadingTree()`
-  (stack-nesting), consumed by the Workspace Outline tab. **`src/ui/GraphView.tsx`
+  (stack-nesting), consumed by the Workspace Outline tab. **`src/ui/graph/graphView/index.tsx`
   is the MAP-ONLY knowledge-graph overlay** — the force-directed relationship graph
   of the whole workspace (documents + wiki-links + folder clusters).
   **There is NO in-graph document-structure view** — single-doc structure lives in
-  the **Workspace panel's Outline tab** (`WorkspacePanel.tsx`, visible beside the
+  the **Workspace panel's Outline tab** (`workspacePanel/index.tsx`, visible beside the
   overlay, which only covers `<main>`); an in-graph structure pane + Document⇄Map
   toggle were REMOVED (they duplicated that Outline). `DocumentGraph.tsx` was
   DELETED. The graph tracks `activeDocId` and never carries its own library tree
@@ -340,7 +340,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   rather than just `setGraphVisible(false)`. The switcher stays visible because the
   overlay only covers `<main>`. Pinned by `src/__tests__/workspace-views.test.js`.
   **Escape belongs to what it was pressed in** (A057): Cards and the map listen in
-  the BUBBLE phase through `overlayShouldHandleEscape` (`ui/overlay-escape.ts`: not
+  the BUBBLE phase through `overlayShouldHandleEscape` (`ui/shared/utils/overlay-escape.ts`: not
   `defaultPrevented`, not composing, pressed inside the overlay or with nothing
   focused, and no VISIBLE modal, menu or listbox open outside it). The old
   capture-phase close shut the board when Escape was meant for a card's delete
@@ -360,7 +360,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   Callout, …) stay as Base UI sub-flyouts. **`DropdownMenuLabel` (Base UI
   GroupLabel) MUST sit inside a `DropdownMenuGroup` — a bare label throws Base UI
   error #31 and crashed the whole app on the first mobile ☰ tap once.**
-- **`src/ui/LinkBuilder.tsx` is the ONE share/embed builder**, rendered both in
+- **`src/ui/share/linkBuilder/index.tsx` is the ONE share/embed builder**, rendered both in
   Tools ▸ Share / embed link (`LinkBuilderDialog`, now just dialog chrome) and
   inline on the Help page under "Sharing & embedding". Help used to carry a
   cut-down copy that could only produce `?import_url=` links, so the reference
@@ -387,9 +387,9 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   **"Keyboard navigation" group** documents keys that are not chords (skip link,
   Esc-then-Tab out of the markdown pane, the roving toolbar and library tree) —
   a navigation key nobody can discover does not exist for a keyboard user (A094).
-- **Appearance controls live once in `src/ui/ThemeControls.tsx`** (`ThemeSwatch`,
+- **Appearance controls live once in `src/ui/settings/themeControls/index.tsx`** (`ThemeSwatch`,
   `ThemeCircleRow`, `AccentCircleRow`, `THEME_OPTIONS`) and are reused by the
-  View ▸ Appearance menu (`menuBar/index.tsx`) and the Settings sheet (`SettingsSheet.tsx`).
+  View ▸ Appearance menu (`menuBar/index.tsx`) and the Settings sheet (`settingsSheet/index.tsx`).
   Theme radios bind next-themes' **raw `theme`** (NOT `resolvedTheme`) so "System"
   is a genuine selectable value; app default is `system` (`main.tsx`). Embeds stay
   host-controlled (`embed.tsx` keeps its `theme` param / dark default).
@@ -450,7 +450,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   only). **While the section is hidden those switches read their DEFAULTS**
   (`uiStore`), or a value stored before the gate existed would stick with no control
   left to change it — `admin-prefs-fallback.test.js`. Add new admin-only modules here.
-- **Diagnostics console** (`src/ui/ConsolePanel.tsx` + `src/store/diagnostics/console-commands.ts`):
+- **Diagnostics console** (`src/ui/diagnostics/consolePanel/index.tsx` + `src/store/diagnostics/console-commands.ts`):
   an admin-gated (`consoleEnabled`) bottom-tray tab running a **CURATED, READ-ONLY**
   command registry (`CONSOLE_COMMANDS` + `runConsoleCommand`) over EXISTING read
   APIs — `diag.lifecycle` (`getLifecycleState`), `diag.storage` (`getStorageMetrics`),
@@ -462,7 +462,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   adding a vetted entry, never a general escape hatch. `console-commands.ts` is PURE
   (tests inject a fake context). If a mutating command is ever added it MUST route
   through `dispatch`/`patchDocById` and honor read-only — never a raw storage write.
-- **Unified Workspace panel** (`src/ui/WorkspacePanel.tsx`): a single **left-docked
+- **Unified Workspace panel** (`src/ui/workspace/workspacePanel/index.tsx`): a single **left-docked
   tabbed tray** that consolidates the former left library Sidebar and the document
   **Outline** into ONE surface — **Files / Outline** tabs (`WorkspaceTab =
   "files"|"outline"`). Document-first: the Files tab is the single library (search,
@@ -470,7 +470,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   drag-to-import, `FolderTree` when unfiltered / a flat per-doc list when
   searching or in select mode, per-doc export DropdownMenu, footer count, AdUnit
   in dev builds); selecting a doc updates the Outline live. **Both lists are
-  WINDOWED** (`ui/use-windowed-list.ts`: measured variable heights, with the focused
+  WINDOWED** (`ui/workspace/hooks/use-windowed-list.ts`: measured variable heights, with the focused
   row, a rename and an open menu PINNED so focus never drops to `<body>`), rows are
   memoized on PRIMITIVES (`storage.list()` returns fresh summary objects on every
   save, so a memo on the object never bailed out) and the search filter runs on
@@ -479,13 +479,13 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`aria-level`/`aria-posinset`, one roving tab stop, arrows/Home/End/Enter, F2
   rename, Shift+F10 menu) and the flat list a listbox (A094).
   Outline reuses **`TocList`**
-  (exported FROM `DocNavPanel.tsx`, along with `EmptyOutline`; the `DocNavPanel`
+  (exported FROM `docNavPanel/index.tsx`, along with `EmptyOutline`; the `DocNavPanel`
   component itself is now dead but retained as their home). **There is NO in-panel
   graph tab** — an earlier "Map" tab (a horizontal `DocumentGraph`, then a vertical
   `StructureMap`) was tried and REMOVED: the outline covers document navigation, and
   the knowledge graph is the full-screen **relationship-map overlay** toggled from
   the View menu / graph button (`graphVisible` from `useWorkspaceViews`,
-  `src/ui/GraphView.tsx`) — do not
+  `src/ui/graph/graphView/index.tsx`) — do not
   re-add a graph into the narrow dock. `StructureMap.tsx` was deleted; a persisted
   `pf:workspace-tab==="map"` migrates to `"outline"` in `uiStore`. This **replaced
   the shadcn Sidebar + DocNavPanel + the old `docNav` "closed|toc|split|full" expand
@@ -510,7 +510,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`MenuBar.onOutline` → `setShowSidebar(true)` + `setWorkspaceTab("outline")`).
   The `useActiveHeading` tracker is gated to `showSidebar && workspaceTab==="outline"
   && mode!=="md"`.
-- **Cards board** (`src/ui/CardsView.tsx` + pure helpers in `src/store/cards/cards.ts`): a
+- **Cards board** (`src/ui/cards/cardsView/index.tsx` + pure helpers in `src/store/cards/cards.ts`): a
   Google-Keep-style board over the WHOLE library — every document is a card. Opened
   from the **top-bar surface switcher** / View ▸ Cards / **⌘⇧K** / a **launcher button
   in the Workspace panel header** (`onOpenCards` — a launcher, deliberately NOT a third
@@ -625,7 +625,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   ProseMirror maintains for its OWN plain-text-paste branch, and hands it to
   `handleHtmlPaste` as an explicit `{ shiftKey }` argument. Pinned by
   `paste-styled.test.js` and `e2e/cases/journeys.mjs`.
-- **Import fidelity is READABLE, not just counted** (`src/ui/ResidualsDialog.tsx`).
+- **Import fidelity is READABLE, not just counted** (`src/ui/importExport/residualsDialog/index.tsx`).
   The status bar's residual chip is a BUTTON that opens a grouped, plain-language
   list of what the import could not represent (`ResidualItem` carries type / tag /
   attribute / reason / location — the detail was always recorded, it just had
@@ -753,7 +753,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   shell (landscape notches). The embed stays host-controlled — these live on the standalone
   chrome only.
 - **Library row actions live once, rendered into two menu primitives**
-  (`FolderTree.tsx`). A `MenuFam` object (`{Item,Sub,SubTrigger,SubContent,Separator}`)
+  (`folderTree/index.tsx`). A `MenuFam` object (`{Item,Sub,SubTrigger,SubContent,Separator}`)
   lets ONE body renderer (`DocMenuBody`/`FolderMenuBody`, + generic `MoveToMenu`/
   `ExportDocSubmenu`) drive BOTH the hover **⋮ dropdown** and a **right-click /
   long-press context menu** (Base UI `components/ui/context-menu.tsx`). **There is
@@ -785,7 +785,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `serialize-doc.test.js` round-trips the known nodes and `converter-roundtrip.test.js`
   pins `TableCellAlign` in both lists, but NO test compares the two schemas' full
   node/mark sets — keep them in step by hand.
-- **Find/Replace (`FindReplace.tsx`) is a floating draggable panel** (`position:fixed`,
+- **Find/Replace (`findReplace/index.tsx`) is a floating draggable panel** (`position:fixed`,
   translucent `bg-card/80 backdrop-blur`), not a docked bar. PE passes the panel mode
   live (`initialMode={frMode}`) so ⌘H switches an already-open panel to Replace.
   Drag is pointer-events on the header handle, clamped to the viewport. **Panel mode is a Find|Replace segmented control** (`panelMode`,
@@ -843,7 +843,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`pf:fr-*`). **Panel position**: `pos` state is set in a `useLayoutEffect` on mount
   (before paint) — it restores the last dragged position (`pf:fr-pos`, written in
   `endDrag`) or **centers on the viewport**, always clamped on-screen.
-- **Placeholder ad slots are a DEVELOPMENT-build surface** (`src/ui/AdUnit.tsx`).
+- **Placeholder ad slots are a DEVELOPMENT-build surface** (`src/ui/shared/adUnit/index.tsx`).
   `adsAvailable()` (`utils/build-gates.ts`, `import.meta.env.DEV`) is checked where
   the slots RENDER, not only at the toggles, so a `pf:show-ads=true` stored by an
   older version or a crafted `?ads=1` link cannot paint "Your Ad Here" over the
@@ -1016,7 +1016,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     per-block converter all do (`inert-html.test.jsx`). Never call
     `editor.getHTML()`/`generateHTML()` directly for content. Every surface
     that SHOWS document HTML resolves through the node view, `useAssetSrc`, or
-    `neutralizeAssetSrcs` + `useResolvedAssetImages` (`ui/asset-dom.ts`). `e2e:csp`
+    `neutralizeAssetSrcs` + `useResolvedAssetImages` (`ui/shared/utils/asset-dom.ts`). `e2e:csp`
     pins it.
   - **Exports are self-contained.** HTML, markdown, PDF/print, Word and Copy as
     MD/HTML inline the bytes (`inlineAssetRefsInText`); the JSON export's envelope
@@ -1126,7 +1126,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   right end of the menu bar after Settings (Profile, Sign out), handed in through PE's
   `accountControl` prop (App.tsx only — the library and the embed never pass it,
   pinned by `account.test.jsx`); `/login` and `/profile` are routed interior pages
-  (`ui/pages/LoginPage.tsx`, `ProfilePage.tsx`). Signing out unmounts the editor (the
+  (`ui/pages/loginPage/index.tsx`, `profilePage/index.tsx`). Signing out unmounts the editor (the
   gate takes over) — unmount is a document-leaving path (`releaseEditor`). Signing in
   is a full navigation to Google, covered by the unload safety net, and does not touch
   documents. Google returns to `/` on success and `/login?error=<code>` on failure
@@ -1426,7 +1426,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   tabs used to keep only the second tab's stash (A027). `configureRecovery()` lets a
   host namespace or disable it (A103).
 - **The library is defended against the BROWSER deleting it** (A017, A022, A004;
-  `store/persistence/storage-durability.ts`, one notice at a time in `ui/DurabilityNotices.tsx`,
+  `store/persistence/storage-durability.ts`, one notice at a time in `ui/notices/durabilityNotices/index.tsx`,
   and Settings ▸ Storage & backup). Documents live only in this origin's IndexedDB,
   which Safari clears after seven days without a visit. `navigator.storage.persist()`
   is requested after the first save (re-asked at most weekly), and a full backup
@@ -1597,7 +1597,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   it (next bullet); the save-status machine itself was not rewritten and the
   terminal statuses are unchanged.
 - **Live sync between tabs** (`store/persistence/tab-sync.ts`, `editor/useTabSync.ts`,
-  `ui/TabSyncNotice.tsx`). Every COMMITTED write announces `{type, id, updated}` —
+  `ui/notices/tabSyncNotice/index.tsx`). Every COMMITTED write announces `{type, id, updated}` —
   never content — from `documentStore`, right after the adapter resolves and never
   for a refused write: **any new commit path must add its own `announce`**. The
   channel is named after the database or namespace (`pf-tab-sync:idb:<dbName>`,
@@ -2408,7 +2408,7 @@ The product ships three ways from one codebase: the standalone app
   `dist/*.cjs` after `bun run build` in CI and before `npm publish`.
 - **One editor per page** (A106): the stores are module singletons, so a SECOND
   editor mounted while one is running refuses to start. `PerssonifyEditor` is a gate
-  (`ui/OneEditorPerPage.tsx`) around `PerssonifyEditorInstance`: it claims the page's
+  (`ui/shared/oneEditorPerPage/index.tsx`) around `PerssonifyEditorInstance`: it claims the page's
   slot (`claimEditorInstance`, documentStore.ts) in a LAYOUT effect before anything
   below it renders and releases it in that effect's cleanup, so a keyed remount never
   shows the refusal (a passive release would). A refused editor renders a message,
@@ -2426,7 +2426,7 @@ The product ships three ways from one codebase: the standalone app
 ## Feature architecture notes
 - **Markdown flavors/features** live in `src/store/preferences/settings.ts` (persisted under
   `__prefs.markdownFeatures`), consumed by `build-marked.ts`. The Settings panel
-  (`SettingsSheet.tsx`) drives them; `useMarkdownEngine` rebuilds marked on change.
+  (`settingsSheet/index.tsx`) drives them; `useMarkdownEngine` rebuilds marked on change.
   **Toggling a feature must not strip rich formatting** (A033): the `configVersion`
   effect re-parses the markdown over the rich document ONLY when `computeFidelity`
   says the document is lossless in the current sync mode; otherwise the rich
@@ -2439,7 +2439,7 @@ The product ships three ways from one codebase: the standalone app
   else stays exactly as written, and escaped braces are honoured.
 - **Math** (`$…$`/`$$…$$`) → `math-marked.ts` emits data-attribute placeholders →
   TipTap `MathNodes.tsx` renders KaTeX (lazy) → turndown rules restore the source.
-  **Insertion uses an equation dialog with a live KaTeX preview** (`Dialogs.tsx`
+  **Insertion uses an equation dialog with a live KaTeX preview** (`dialogs/index.tsx`
   `EquationDialog`, wired through `useDialog().equation` — a promise-based method on
   the shared `DialogApi` mirroring `prompt`). Insert ▸ Formula/Inline (MenuBar) and
   the toolbar Sigma menu call `equation(...)` then `dispatch("insertMathBlock"/

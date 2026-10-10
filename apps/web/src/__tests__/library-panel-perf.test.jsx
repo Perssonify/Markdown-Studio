@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useDocumentStore } from "../store/documents/documentStore";
 import { useFolderStore } from "../store/documents/folders";
-import { DialogProvider } from "../ui/DialogProvider";
-import { timeAgo } from "../ui/relative-time";
-import { WorkspacePanel } from "../ui/WorkspacePanel";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { timeAgo } from "../ui/workspace/utils/relative-time";
+import { WorkspacePanel } from "../ui/workspace/workspacePanel";
 
 // Every document row calls timeAgo exactly once per render, so wrapping it in
 // a counter measures ROW RENDERS without a test hook in production code.
-vi.mock("../ui/relative-time", async (importOriginal) => {
+vi.mock("../ui/workspace/utils/relative-time", async (importOriginal) => {
   const mod = await importOriginal();
   return { ...mod, timeAgo: vi.fn(mod.timeAgo) };
 });
@@ -132,7 +132,7 @@ describe("A082 — one shared row menu per list, mounted on open", () => {
   const code = (p) => readFileSync(join(process.cwd(), p), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
   it("rows carry detached triggers; ONE root per list", () => {
-    const tree = code("src/ui/FolderTree.tsx");
+    const tree = code("src/ui/workspace/folderTree/index.tsx");
     // The row components render no menu ROOT of either kind…
     const rowsSrc = tree.slice(tree.indexOf("const FolderRow = React.memo"), tree.indexOf("export function FolderTree"));
     expect(rowsSrc).not.toMatch(/<DropdownMenu[\s>]/);
@@ -141,7 +141,7 @@ describe("A082 — one shared row menu per list, mounted on open", () => {
     // …and the tree renders exactly one of each.
     expect(tree.match(/<DropdownMenu handle=/g)).toHaveLength(1);
     expect(tree.match(/<ContextMenu /g)).toHaveLength(1);
-    const panel = code("src/ui/WorkspacePanel.tsx");
+    const panel = code("src/ui/workspace/workspacePanel/index.tsx");
     expect(panel.match(/<DropdownMenu handle=/g)).toHaveLength(1);
   });
 
@@ -161,7 +161,7 @@ describe("A082 — one shared row menu per list, mounted on open", () => {
   it("defers the search filter so typing never waits for the whole library", () => {
     // Not observable in jsdom — act() flushes deferred renders synchronously —
     // so this is a source pin, like the other scheduling pins in this repo.
-    const panel = code("src/ui/WorkspacePanel.tsx");
+    const panel = code("src/ui/workspace/workspacePanel/index.tsx");
     expect(panel).toContain("const query = useDeferredValue(filter);");
     expect(panel).toMatch(/const q = query\.toLowerCase\(\);/);
   });

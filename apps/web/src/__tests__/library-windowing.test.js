@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildFolderTree } from "../store/documents/folders";
-import { docRowDrop, flattenTree, treeKeyAction } from "../ui/FolderTree";
+import { docRowDrop, flattenTree, treeKeyAction } from "../ui/workspace/folderTree";
 import {
   computeOffsets,
   indexesToRender,
   rowAt,
   scrollIntoRange,
   visibleRange,
-} from "../ui/use-windowed-list";
+} from "../ui/workspace/hooks/use-windowed-list";
 
 /**
  * The pure halves of the library rework (A082 windowing, A094 tree keys, A066

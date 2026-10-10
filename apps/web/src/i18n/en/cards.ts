@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Cards board: CardsView.tsx, store/cards/cards.ts. */
+/** Cards board: cardsView/index.tsx, store/cards/cards.ts. */
 export const cards = {
   "cards.boardTitle": "Cards",
   "cards.searchNotes": "Search notes…",

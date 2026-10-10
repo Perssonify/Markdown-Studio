@@ -11,7 +11,7 @@ import {
 import { LogIn, LogOut, UserRound } from "lucide-react";
 import { useCallback } from "react";
 import { useT } from "../i18n";
-import { useToast } from "../ui/Toast";
+import { useToast } from "../ui/shared/toast";
 import { useAccount } from "./account";
 import { AccountAvatar } from "./AccountAvatar";
 import { CloudStatusLine } from "./CloudStatusLine";

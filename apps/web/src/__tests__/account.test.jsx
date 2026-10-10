@@ -12,8 +12,8 @@ import { App } from "../App";
 import { AccountMenu } from "../app/AccountMenu";
 import { initialsOf } from "../app/AccountAvatar";
 import { AccountBackups } from "../app/AccountBackups";
-import { LoginPage } from "../ui/pages/LoginPage";
-import { ProfilePage } from "../ui/pages/ProfilePage";
+import { LoginPage } from "../ui/pages/loginPage";
+import { ProfilePage } from "../ui/pages/profilePage";
 
 const USER = {
   id: "u1",
