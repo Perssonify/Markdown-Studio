@@ -7,7 +7,7 @@ import { useEditorStore } from "../store/editor/editorStore";
 import { exportGraph, getBacklinks, getForwardLinks } from "../store/links/link-index";
 import { BacklinksPanel } from "../ui/BacklinksPanel";
 import { ConsolePanel } from "../ui/ConsolePanel";
-import { trayFits } from "../ui/tray-fit";
+import { trayFits } from "../ui/chrome/bottomTray/tray-fit";
 import type { EditorStore, LinkIndexApi, SyncEngine, Toast } from "./types";
 import { t, useT } from "../i18n";
 

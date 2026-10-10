@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { cachedImport, isChunkLoadError } from "../utils/lazy-import";
-import { useT } from "../i18n";
+import { cachedImport, isChunkLoadError } from "@/utils/lazy-import";
+import { useT } from "@/i18n";
 
 /**
  * Lazy-loaded live preview for fenced code blocks whose language is a diagram

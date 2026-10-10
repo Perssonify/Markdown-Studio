@@ -87,7 +87,7 @@ Authoritative reading, in order:
 | Persistence | `src/store/persistence/storage-adapter.ts`, `idb-storage-adapter.ts` | Pluggable; IndexedDB default. |
 | Snapshots | `src/store/history/snapshot-store.ts` | **Sidecar** IndexedDB version-history ring (recovery net). Independent of the doc adapter. |
 | Sync engine | `src/engine/useSyncEngine.ts`, `useMarkdownEngine.ts`, `build-marked.ts`, `turndown-rules.ts` | Bidi MD↔canonical. Ref-based, empty-dep callbacks (see invariants). |
-| Panes | `src/ui/CodeMirrorPane.tsx`, `TiptapPane.tsx`, `EditorPanes.tsx` | The two editors + split/scroll-sync. |
+| Panes | `src/ui/panes/codeMirrorPane/index.tsx`, `tiptapPane/index.tsx`, `editorPanes/index.tsx` | The two editors + split/scroll-sync. |
 | Workspace panel | `src/ui/WorkspacePanel.tsx`, `FolderTree.tsx` | Left-docked Files / Outline tabs (the library + single-doc outline). |
 | Graph | `src/ui/GraphView.tsx`, `src/store/graph/graph-metrics.ts`, `doc-outline.ts` | **Map-only** full-screen relationship overlay + orphan/broken-link metrics. |
 | Find/Replace | `src/ui/FindReplace.tsx`, `src/formatting/find-engine.ts`, `find-worker.ts` | Floating draggable panel; ONE matcher; a regex runs in a terminable Web Worker. |
@@ -218,7 +218,7 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   deletions on blur. Recoverability is the save backstop's job.
 - **CodeMirror multi-range selection needs BOTH `allowMultipleSelections` AND
   `drawSelection()`** — without the latter only one range renders.
-- **Any node/mark added to `TiptapPane.tsx` must also be registered in
+- **Any node/mark added to `tiptapPane/index.tsx` must also be registered in
   `src/engine/serialize-doc.ts` `SERIALIZE_EXTENSIONS`** — else headless/bulk export
   silently drops or corrupts it (a missing node made `generateHTML` throw).
 - **Vitest only picks up `*.test.{js,jsx}`** — test files MUST be `.js`/`.jsx`.

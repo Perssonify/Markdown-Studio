@@ -1,8 +1,8 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView, type NodeView, type ViewMutationRecord } from "@tiptap/pm/view";
-import { subscribeLocale, t } from "../i18n/core";
-import { useUIStore } from "../store/preferences/uiStore";
+import { subscribeLocale, t } from "@/i18n/core";
+import { useUIStore } from "@/store/preferences/uiStore";
 
 /**
  * An ordinary code block's node view, in plain DOM (A083).

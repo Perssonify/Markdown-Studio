@@ -48,7 +48,7 @@ The denormalized list of document summaries in the IndexedDB `meta` store, power
 Layer 1 of the document model: the **immutable** original input — `{ format, raw, source, timestamp, alternates }`. Provenance for everything downstream. JSON and backup exports keep the provenance but leave out `raw` and `alternates` — text the user may have deleted since. → `OriginRecord` ([src/store/documents/document.ts:17](../src/store/documents/document.ts#L17)).
 
 ### Paste Styled
-A **persisted preference, on by default** (`pf:paste-styled`): pasting keeps the source's formatting. Holding **⇧ inverts it for one paste**. It was once a one-shot toggle that disarmed itself, which stopped making sense when styled became the default. → [src/ui/EditorPanes.tsx](../src/ui/EditorPanes.tsx).
+A **persisted preference, on by default** (`pf:paste-styled`): pasting keeps the source's formatting. Holding **⇧ inverts it for one paste**. It was once a one-shot toggle that disarmed itself, which stopped making sense when styled became the default. → [src/ui/panes/editorPanes/index.tsx](../src/ui/panes/editorPanes/index.tsx).
 
 ### PM JSON (ProseMirror JSON)
 The serialized form of a ProseMirror/Tiptap document — nodes and marks as nested JSON. This codebase's [canonical](#canonical-canonical-document) format.

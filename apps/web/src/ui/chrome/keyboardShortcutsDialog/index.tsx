@@ -7,8 +7,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { displayKeys, SHORTCUT_GROUPS } from "../data/shortcuts";
-import { useT } from "../i18n";
+import { displayKeys, SHORTCUT_GROUPS } from "@/data/shortcuts";
+import { useT } from "@/i18n";
 
 /**
  * A discoverable cheat-sheet of the editor's keyboard shortcuts, shown with

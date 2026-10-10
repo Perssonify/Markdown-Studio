@@ -10,14 +10,14 @@ import {
   GROUP_STYLES, MAX_PREVIEW_WIDGETS,
   REPLACE_NEW_STYLE,
   REPLACE_OLD_STYLE,
-} from "./search-colors";
-import { COMPOSITION_STALL_MS } from "../constants";
-import { perLineTextDirection } from "../extensions/cm-bidi";
-import { assetRefsInMarkdown } from "../extensions/cm-asset-refs";
-import type { HighlightSpec } from "../formatting/find-engine";
-import { useUIStore } from "../store/preferences/uiStore";
-import { dropAltGraphChords } from "../utils/alt-graph";
-import { t } from "../i18n";
+} from "@/ui/search-colors";
+import { COMPOSITION_STALL_MS } from "@/constants";
+import { perLineTextDirection } from "@/extensions/cm-bidi";
+import { assetRefsInMarkdown } from "@/extensions/cm-asset-refs";
+import type { HighlightSpec } from "@/formatting/find-engine";
+import { useUIStore } from "@/store/preferences/uiStore";
+import { dropAltGraphChords } from "@/utils/alt-graph";
+import { t } from "@/i18n";
 
 /** Read-only extension pair for the editability compartment. */
 const roExt = (ro: boolean): Extension[] => [EditorState.readOnly.of(ro), EditorView.editable.of(!ro)];

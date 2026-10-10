@@ -2,12 +2,12 @@ import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { Check, Pencil } from "lucide-react";
 import { useState } from "react";
-import { useUIStore } from "../store/preferences/uiStore";
-import { CodeBlockCopyButton } from "./CodeBlockCopyButton";
+import { useUIStore } from "@/store/preferences/uiStore";
+import { CodeBlockCopyButton } from "../codeBlockCopyButton";
 import { codeBlockRebuildPlugin, isDiagramBlock, PlainCodeBlockView } from "./code-block-plain-view";
-import { DiagramPreview } from "./DiagramPreview";
+import { DiagramPreview } from "../diagramPreview";
 import { common, createLowlight } from "lowlight";
-import { useT } from "../i18n";
+import { useT } from "@/i18n";
 
 interface CodeBlockComponentProps {
   node: {

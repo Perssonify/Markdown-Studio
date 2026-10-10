@@ -277,7 +277,7 @@ describe("accounts are the standalone app's alone", () => {
     // Lives at the right end of the top brand header, not in the menu bar.
     expect(read("src/App.tsx")).toMatch(/<EditorHeader accountControl=\{accountControl\}/);
     expect(read("src/EditorHeader.tsx")).toMatch(/accountControl/);
-    expect(read("src/ui/MenuBar.tsx")).not.toMatch(/accountControl/);
+    expect(read("src/ui/chrome/menuBar/index.tsx")).not.toMatch(/accountControl/);
   });
 
   it.each(["src/embed.tsx", "src/index.tsx", "src/integration/PerssonifyEditorIntegration.tsx"])("%s never mounts it", (file) => {

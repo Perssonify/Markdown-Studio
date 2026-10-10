@@ -1,8 +1,8 @@
 import { createRef } from "react";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
-import { TiptapPane } from "../ui/TiptapPane";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 
 /**
  * A067 / A061. Both panes' search highlighters used to re-run the query

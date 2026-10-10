@@ -72,7 +72,7 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 
 ### Add a formatting command (e.g. a new toolbar button)
 
-1. Add the button in [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) calling `dispatch("myCmd")`.
+1. Add the button in [src/ui/chrome/toolbar/index.tsx](../src/ui/chrome/toolbar/index.tsx) calling `dispatch("myCmd")`.
 2. Handle `"myCmd"` in **both** branches of [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts): `dispatchToTiptap` ([:344](../src/formatting/useFormatDispatcher.ts#L344)) for the rich-text pane and `dispatchToMd` ([:512](../src/formatting/useFormatDispatcher.ts#L512)) for the markdown pane.
 3. If it should reflect active state, add detection in the format-state query, `queryState` ([:689](../src/formatting/useFormatDispatcher.ts#L689)).
 4. Optional shortcut: add to [src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts) — a document chord acts only with the caret in a pane and the Editor view showing, and never on AltGr input — and document it in [src/data/shortcuts.ts](../src/data/shortcuts.ts), the single source for the Help page and the shortcut dialogs.
@@ -86,7 +86,7 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 ### Add a custom Tiptap node
 
 1. Create the extension in [src/extensions/](../src/extensions/), export from [src/extensions/index.ts](../src/extensions/index.ts).
-2. Register it in the Tiptap extensions list in [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx) **and** in `SERIALIZE_EXTENSIONS` in [src/engine/serialize-doc.ts](../src/engine/serialize-doc.ts) — miss the second and headless/bulk export (and headless import) silently drops or throws on the node. Add the tags it renders to `KNOWN_ELEMENTS` in [src/store/importExport/ingest.ts](../src/store/importExport/ingest.ts), or imports report it as unmappable.
+2. Register it in the Tiptap extensions list in [src/ui/panes/tiptapPane/index.tsx](../src/ui/panes/tiptapPane/index.tsx) **and** in `SERIALIZE_EXTENSIONS` in [src/engine/serialize-doc.ts](../src/engine/serialize-doc.ts) — miss the second and headless/bulk export (and headless import) silently drops or throws on the node. Add the tags it renders to `KNOWN_ELEMENTS` in [src/store/importExport/ingest.ts](../src/store/importExport/ingest.ts), or imports report it as unmappable.
 3. If it has a markdown form: the markdown → HTML side is a marked extension or renderer override in [src/engine/build-marked.ts](../src/engine/build-marked.ts) (wiki links, maths, footnotes, task lists and callouts work this way — a marked extension never fires inside code), and the HTML → markdown side a Turndown rule in [src/engine/turndown-rules.ts](../src/engine/turndown-rules.ts). If literal text could read as the new syntax, teach the escaper (`escapeMarkdownText`) to escape it. [src/engine/preprocessor.ts](../src/engine/preprocessor.ts) is only for rewrites of the raw source that must happen before marked tokenizes it (front matter, a wiki-link alias's `|`, the opt-in curly syntax).
 4. If it can be lost on markdown export, teach [src/store/documents/fidelity.ts](../src/store/documents/fidelity.ts) about it.
 5. If older builds could not load documents that use it, bump `CURRENT_SCHEMA_VERSION` ([src/store/documents/schema-version.ts](../src/store/documents/schema-version.ts)) — they then open such documents read-only instead of blank.

@@ -26,22 +26,22 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { APP_NAME, MODES, VERSION } from "../constants";
+import { APP_NAME, MODES, VERSION } from "@/constants";
 import { ChevronLeft, ChevronRight, FileText, Menu as MenuIcon, Network, PenLine, SettingsIcon, StickyNote } from "lucide-react";
 import { useTheme } from "next-themes";
 import React, { type ReactNode, useEffect, useRef, useState } from "react";
-import { useIsMobile } from "../hooks/use-mobile";
-import { COMMON_SHORTCUTS, displayKeys } from "../data/shortcuts";
-import { getStoredPalette, PALETTES, setPalette } from "../theme/palette";
-import { useUIStore } from "../store/preferences/uiStore";
-import { adsAvailable } from "../utils/build-gates";
-import { useDialog } from "./DialogProvider";
-import { ModeSwitcher } from "./ModeSwitcher";
-import { TableGridPicker } from "./TableGridPicker";
-import { THEME_OPTIONS, ThemeSwatch } from "./ThemeControls";
-import { selectMenuBody, type MenuPrimitives } from "./SelectMenuContent";
-import { promptImage } from "../formatting/image-insert";
-import { t, useT } from "../i18n";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { COMMON_SHORTCUTS, displayKeys } from "@/data/shortcuts";
+import { getStoredPalette, PALETTES, setPalette } from "@/theme/palette";
+import { useUIStore } from "@/store/preferences/uiStore";
+import { adsAvailable } from "@/utils/build-gates";
+import { useDialog } from "@/ui/DialogProvider";
+import { ModeSwitcher } from "../modeSwitcher";
+import { TableGridPicker } from "../tableGridPicker";
+import { THEME_OPTIONS, ThemeSwatch } from "@/ui/ThemeControls";
+import { selectMenuBody, type MenuPrimitives } from "../selectMenuContent";
+import { promptImage } from "@/formatting/image-insert";
+import { t, useT } from "@/i18n";
 
 // Primitive family for the shared Select ▸ … renderer (dropdown variant).
 const DROPDOWN_SELECT_PRIMS = {

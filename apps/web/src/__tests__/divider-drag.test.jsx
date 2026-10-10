@@ -197,7 +197,7 @@ describe("separator classes", () => {
 describe("both separators are wired to the shared hook", () => {
   const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
   const files = {
-    "EditorPanes.tsx": read("src/ui/EditorPanes.tsx"),
+    "EditorPanes.tsx": read("src/ui/panes/editorPanes/index.tsx"),
     "WorkspacePanel.tsx": read("src/ui/WorkspacePanel.tsx"),
   };
 

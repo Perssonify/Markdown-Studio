@@ -162,7 +162,7 @@ describe("A044 — tables keep alignment and in-cell formatting", () => {
   });
 
   it("is registered in BOTH schemas (the headless export mirrors the live editor)", () => {
-    const pane = readFileSync(join(process.cwd(), "src/ui/TiptapPane.tsx"), "utf8");
+    const pane = readFileSync(join(process.cwd(), "src/ui/panes/tiptapPane/index.tsx"), "utf8");
     const headless = readFileSync(join(process.cwd(), "src/engine/serialize-doc.ts"), "utf8");
     expect(pane).toMatch(/TableHeader, TableCellAlign/);
     expect(headless).toMatch(/\n\s+TableCellAlign,\r?\n/);

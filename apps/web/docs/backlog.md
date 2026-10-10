@@ -280,7 +280,7 @@ Fully fixed and not ported: `A2`, `A3`, `A4`, `B1`, `B5`, `C3`, `D2`,
 The floors alone could not fix this: because the editor's `min-h-[10rem]` is not
 shrinkable inside an `overflow-hidden` column, the overflow moved to the tray and
 the status bar — the app was clipped rather than the editor zeroed. `trayFits`
-(`src/ui/tray-fit.ts`, unit-tested) now refuses to open the tray, with a toast,
+(`src/ui/chrome/bottomTray/tray-fit.ts`, unit-tested) now refuses to open the tray, with a toast,
 when the region the editor, tray and status bar share is under 280px (the 160px
 editor floor plus a nominal 120px tray); both the status-bar chevron and the
 links chip consult it, and closing is never blocked. It is a threshold, not an
@@ -292,11 +292,11 @@ standalone app a window under 450px tall now scrolls instead (audit A091).
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`BottomTray.tsx:29` now has `min-h-0 max-h-[min(35dvh,16rem)]`; `PerssonifyEditor.tsx:2111` has `min-h-[10rem]`. This prevents disappearance, but the audit’s documented ≤360px residual remains: no refusal/auto-collapse guard exists.
+`bottomTray/index.tsx:29` now has `min-h-0 max-h-[min(35dvh,16rem)]`; `PerssonifyEditor.tsx:2111` has `min-h-[10rem]`. This prevents disappearance, but the audit’s documented ≤360px residual remains: no refusal/auto-collapse guard exists.
 
 #### Original independently verified finding
 
-**Files:** `src/ui/BottomTray.tsx:28-29`; no floor on the editor column in `src/PerssonifyEditor.tsx`
+**Files:** `src/ui/chrome/bottomTray/index.tsx:28-29`; no floor on the editor column in `src/PerssonifyEditor.tsx`
 **Source:** [22]
 The tray is `shrink-0 flex h-64 max-h-[35dvh]` and nothing reserves a minimum height for `<main>`. Measured at 740×360: `.cm-scroller` goes 65px → **2px**; at 360×360 → **0px**. The user sees two pane headers stacked with nothing between them — the document is gone and uneditable until the tray is collapsed again.
 **Repro:** viewport 740×360 → tap the status-bar `Panel` chevron.
@@ -317,7 +317,7 @@ The folder row and BOTH document lists (the tree and the flat search/select list
 carry `title` now — pinned by `truncated-titles.test.js`, which covers both so
 the tooltip cannot appear and disappear depending on whether the user has typed
 in the search box — and so does the map's details-rail heading. Still clipped
-with no tooltip: the link bubble's href (`max-w-[220px]`, `LinkBubbleMenu.tsx`);
+with no tooltip: the link bubble's href (`max-w-[220px]`, `linkBubbleMenu/index.tsx`);
 the map's node labels, cut by `truncateLabel` with no SVG `<title>` (the node's
 `aria-label` does carry the full name); the Document Links tray's titles and its
 one-line context preview (`BacklinksPanel.tsx`); search-result titles
@@ -327,11 +327,11 @@ one-line context preview (`BacklinksPanel.tsx`); search-result titles
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-Truncation remains without comprehensive titles: e.g. `FolderTree.tsx:503-512` folder name truncates without `title`; `LinkBubbleMenu.tsx:44` remains `max-w-[220px]`; audit’s graph/list surfaces remain only partially addressed.
+Truncation remains without comprehensive titles: e.g. `FolderTree.tsx:503-512` folder name truncates without `title`; `linkBubbleMenu/index.tsx:44` remains `max-w-[220px]`; audit’s graph/list surfaces remain only partially addressed.
 
 #### Original independently verified finding
 
-**Files:** `src/ui/FolderTree.tsx:503` (folder name), `:659` (doc title); `src/ui/LinkBubbleMenu.tsx:44,46`; `src/ui/GraphView.tsx:744-753` (node label hard-sliced at 22 chars), `:785` (detail `<h3>`); `src/ui/BacklinksPanel.tsx:86,89,115,131`; `src/ui/SearchPanel.tsx:120`; `src/ui/MemorySheet.tsx:189`
+**Files:** `src/ui/FolderTree.tsx:503` (folder name), `:659` (doc title); `src/ui/panes/linkBubbleMenu/index.tsx:44,46`; `src/ui/GraphView.tsx:744-753` (node label hard-sliced at 22 chars), `:785` (detail `<h3>`); `src/ui/BacklinksPanel.tsx:86,89,115,131`; `src/ui/SearchPanel.tsx:120`; `src/ui/MemorySheet.tsx:189`
 **Source:** [8, 9, 10, 11]
 The default (unfiltered) Files tree is the only list without `title=` — the search list has it (`WorkspacePanel.tsx:528`) and the outline has it (`DocNavPanel.tsx:106`), so hovering the same row behaves differently depending on whether you typed in the search box. The backlink **context preview** is the one with real substance: it exists to show *which sentence links here* and single-line `truncate` + no tooltip defeats its only purpose. The link bubble caps the href at `max-w-[220px]` inside a `max-w-[400px]` bubble — 180px of unused room. Graph node labels are sliced in JS with no `<title>` child, so SVG has no tooltip path at all.
 **Fix:** add `title=` at each cited line; give the graph node `<g>` a child `<title>{node.title}</title>`; raise the bubble's URL cap to the bubble width; use `line-clamp-2` for the backlink context.
@@ -373,7 +373,7 @@ primitive's `w-(--anchor-width)` (`src/components/ui/dropdown-menu.tsx`) — the
 then stops content widening it: every top-level menu is a fixed box of
 max(trigger width, 200px), and a longer row wraps (View ▸ "Toggle workspace
 panel" + `Ctrl+Shift+D` on Windows/Linux). Fix: `w-auto` at the call site in
-`MenuBar.tsx` — tailwind-merge lets it replace the primitive's width, and
+`menuBar/index.tsx` — tailwind-merge lets it replace the primitive's width, and
 `src/components/ui` is generated, not hand-edited.
 
 
@@ -385,7 +385,7 @@ panel" + `Ctrl+Shift+D` on Windows/Linux). Fix: `w-auto` at the call site in
 
 #### Original independently verified finding
 
-**Files:** `src/components/ui/dropdown-menu.tsx:42` (`w-(--anchor-width) … overflow-x-hidden`), `src/ui/MenuBar.tsx:106` (`min-w-[200px]`)
+**Files:** `src/components/ui/dropdown-menu.tsx:42` (`w-(--anchor-width) … overflow-x-hidden`), `src/ui/chrome/menuBar/index.tsx:106` (`min-w-[200px]`)
 **Source:** [12]
 `--anchor-width` is the ~38px "File" button, floored to 200px, and `overflow-x-hidden` means no item can ever widen it. With `displayKeys()` expanding ⌘⇧D → `Ctrl+Shift+D`, the View menu's "Toggle workspace panel" row is 47px tall (two lines) next to 27px siblings. Text wraps, it is not clipped.
 **Fix:** drop `w-(--anchor-width)` from the menu popup base class (it belongs to Select-style anchored popups), keeping `min-w-32`; or add `w-auto` at the call site.
@@ -404,11 +404,11 @@ pixel of leading it needed.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`MenuBar.tsx:587` still uses `truncate text-[13px] ... leading-none`, not `leading-tight`.
+`menuBar/index.tsx:587` still uses `truncate text-[13px] ... leading-none`, not `leading-tight`.
 
 #### Original independently verified finding
 
-**File:** `src/ui/MenuBar.tsx:544` (`truncate text-[13px] leading-none`)
+**File:** `src/ui/chrome/menuBar/index.tsx:544` (`truncate text-[13px] leading-none`)
 **Source:** [16]
 `line-height:1` = 13px on a 15px glyph box under `overflow:hidden`.
 **Verifier correction:** the "descenders are cut" half of the original claim is **false** — measured baseline 11px + descent 2px = exactly 13px, `clippedBottomPx 0`, and g/j/p/y are pixel-identical with overflow visible. Only the **top** clips, ~1px, and only for stacked diacritics (Ẫ, Ẵ). Also note `scrollHeight 15` is reported even for "Welcome", so scrollHeight≠clientHeight is not itself evidence of clipped ink.
@@ -436,11 +436,11 @@ follow the visible top-left pane. (At 768px and up no header clears the button �
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`EditorPanes.tsx:26-28` retains unconditional `pl-11` for every pane header; no per-pane `needsTriggerClearance` logic.
+`editorPanes/index.tsx:26-28` retains unconditional `pl-11` for every pane header; no per-pane `needsTriggerClearance` logic.
 
 #### Original independently verified finding
 
-**File:** `src/ui/EditorPanes.tsx:28`
+**File:** `src/ui/panes/editorPanes/index.tsx:28`
 **Source:** [30]
 `pl-11` clears the floating reopen button (`PerssonifyEditor.tsx:2101`), which exists only over the *first* pane and only when the panel is closed. Both stacked headers pay for it.
 **Verifier correction:** the claimed knock-on clipping does **not** occur — at 360×640 and 740×360 both headers measure `clientWidth == scrollWidth` and the right-hand controls end at x=344/360. Purely dead space.
@@ -551,7 +551,7 @@ Measured: toast `[900,722.5,356,53.5]`, close button `[894,716.5,20,20]` — ~30
 **Priority:** high · **Audit severity:** high · **Status:** ✅ **RESOLVED (1.75.0)**
 
 The markdown side asks CodeMirror's parse tree (`markdownHeadings`,
-`src/ui/scroll-anchors.ts`) instead of scanning lines, so setext, blockquoted and
+`src/ui/panes/editorPanes/scroll-anchors.ts`) instead of scanning lines, so setext, blockquoted and
 list-nested headings are collected like the rich side's rendered `h1`-`h6`. It
 also retires the hand-rolled fence tracker and picks up a case neither had:
 indented code blocks, whose `#` lines the old scanner counted as headings.
@@ -560,11 +560,11 @@ indented code blocks, whose `#` lines the old scanner counted as headings.
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`EditorPanes.tsx:389-452` now ignores fenced code and pairs anchors by normalized heading text rather than array index, fixing the audit's primary drift path. The Markdown-side scanner at `:404` still accepts only ATX headings matching `^#{1,6}\s+`; setext headings (`===` / `---`) and blockquote headings (`> # Heading`) are omitted while the rich pane includes their rendered `h1`–`h6` elements. Those unmatched anchors are skipped, so interpolation can still span across real headings.
+`editorPanes/index.tsx:389-452` now ignores fenced code and pairs anchors by normalized heading text rather than array index, fixing the audit's primary drift path. The Markdown-side scanner at `:404` still accepts only ATX headings matching `^#{1,6}\s+`; setext headings (`===` / `---`) and blockquote headings (`> # Heading`) are omitted while the rich pane includes their rendered `h1`–`h6` elements. Those unmatched anchors are skipped, so interpolation can still span across real headings.
 
 #### Original independently verified finding
 
-**File:** `src/ui/EditorPanes.tsx:385-412`
+**File:** `src/ui/panes/editorPanes/index.tsx:385-412`
 **Source:** [1]
 The original implementation detected Markdown headings with a raw `^#{1,6}\s` line regex, collected rendered rich-pane `h1..h6` nodes, and paired the arrays by index. A `# comment` inside fenced code shifted every later pair; setext headings and blockquote headings also existed only on the rendered side.
 
@@ -645,11 +645,11 @@ measurement.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`EditorPanes.tsx:523-527` still translates reading widths into fixed px `--reading-width`; `SettingsSheet.tsx:304` still persists/selects those values. No relative-width or unavailable-state behavior.
+`editorPanes/index.tsx:523-527` still translates reading widths into fixed px `--reading-width`; `SettingsSheet.tsx:304` still persists/selects those values. No relative-width or unavailable-state behavior.
 
 #### Original independently verified finding
 
-**Files:** `src/ui/SettingsSheet.tsx:294-296` (640/800/1000 px options), `src/ui/EditorPanes.tsx:489`, `src/styles.css:612`
+**Files:** `src/ui/SettingsSheet.tsx:294-296` (640/800/1000 px options), `src/ui/panes/editorPanes/index.tsx:489`, `src/styles.css:612`
 **Source:** [103]
 At 1280×800 in Split with the panel open, after choosing Narrow: `{pm: maxWidth "640px", width 442}`, `{cm: maxWidth "640px", width 420}` — the cap is 45% wider than the column, so it never binds. All three options are indistinguishable from "Full" below ~1320px, i.e. the default layout. The segment highlights and persists, so the control looks functional.
 **Fix:** express the options relatively (`65ch` / `80ch` / `none`), and/or disable the group with a hint when the pane is already narrower than the smallest option.
@@ -679,7 +679,7 @@ means — until audit A096 routed them through `scrollBehavior()`
 
 **Files:** `src/styles.css` (0 occurrences ✅ verified), `tw-animate-css` (0 occurrences), built CSS (0 occurrences)
 **Source:** [32]
-Confirmed at runtime with Chromium `reducedMotion:'reduce'`: `matchMedia(...).matches === true` while `toolbarTransition "0.3s"`, `bodyTransition "0.3s, 0.3s"`, and opening a menu still yields running animations. Affected: boot-splash `animate-pulse` (`PerssonifyEditor.tsx:1824`), autosave spinner + pulsing text (`StatusBar.tsx:181-182`), infinite `animate-bounce` on the library drop overlay (`WorkspacePanel.tsx:386`), every `animate-in fade-in zoom-in-95` menu/dialog/bubble/page, the 200ms `pf-mode-fade` (`styles.css:1182-1186`), the 450ms graph camera fly (`GraphView.tsx:632`), the 500ms ad slide (`AdUnit.tsx:137`), the 200ms tour spotlight glide, scrollbar-thumb `scale(1.1)`, and all sonner motion.
+Confirmed at runtime with Chromium `reducedMotion:'reduce'`: `matchMedia(...).matches === true` while `toolbarTransition "0.3s"`, `bodyTransition "0.3s, 0.3s"`, and opening a menu still yields running animations. Affected: boot-splash `animate-pulse` (`PerssonifyEditor.tsx:1824`), autosave spinner + pulsing text (`statusBar/index.tsx:181-182`), infinite `animate-bounce` on the library drop overlay (`WorkspacePanel.tsx:386`), every `animate-in fade-in zoom-in-95` menu/dialog/bubble/page, the 200ms `pf-mode-fade` (`styles.css:1182-1186`), the 450ms graph camera fly (`GraphView.tsx:632`), the 500ms ad slide (`AdUnit.tsx:137`), the 200ms tour spotlight glide, scrollbar-thumb `scale(1.1)`, and all sonner motion.
 **Fix:** global guard at the end of `styles.css`:
 ```css
 @media (prefers-reduced-motion: reduce) {
@@ -706,16 +706,16 @@ gradient is gone.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`styles.css:505-515` still transitions `background-color` while rendering the page background through `--noise-bg`; CodeMirror still sets `transition: "background-color 300ms, color 300ms"` at `CodeMirrorPane.tsx:209,237`; root still has `transition-colors duration-300` at `PerssonifyEditor.tsx:2022`.
+`styles.css:505-515` still transitions `background-color` while rendering the page background through `--noise-bg`; CodeMirror still sets `transition: "background-color 300ms, color 300ms"` at `codeMirrorPane/index.tsx:209,237`; root still has `transition-colors duration-300` at `PerssonifyEditor.tsx:2022`.
 
 #### Original independently verified finding
 
-**Files:** `src/styles.css:513-514` (`body { transition: background-color 300ms, color 300ms }` over a gradient `--noise-bg`), `src/PerssonifyEditor.tsx:1833`, `src/ui/CodeMirrorPane.tsx:208,236`, `src/ui/Toolbar.tsx:598`, `src/EditorHeader.tsx:10`
+**Files:** `src/styles.css:513-514` (`body { transition: background-color 300ms, color 300ms }` over a gradient `--noise-bg`), `src/PerssonifyEditor.tsx:1833`, `src/ui/panes/codeMirrorPane/index.tsx:208,236`, `src/ui/chrome/toolbar/index.tsx:598`, `src/EditorHeader.tsx:10`
 **Source:** [34, 38]
 Two compounding defects:
 - **The declared transition on `body` is a no-op.** The page surface is a `linear-gradient` background *image*; `getComputedStyle(document.body).backgroundColor === "rgba(0,0,0,0)"`, and `background-image` is neither in the transition list nor interpolable. So the outermost layer hard-cuts in one frame while everything layered on top fades for 300ms — the opposite of the intent.
 - **The 300ms paint-bound fade competes with a 622ms main-thread block.** Instrumented on the real path (View ▸ Appearance ▸ Light): longtasks `[146,74,56,56,78,52,57,51,52]` = 622ms across 9 tasks; **8 frames in the first 500ms**; frame deltas include 153ms and 135ms stalls. The 300ms transition resolves in 5 painted colour steps.
-**Fix:** the honest option is (a) drop the fade — remove `transition: background-color 300ms, color 300ms` from `styles.css:514` and `cmTheme()` at `:208`/`:236`, and drop `transition-colors duration-300` at `PerssonifyEditor.tsx:1833` — so the swap is one clean frame. If it is kept, give `body` a real `background-color: var(--background)` so the declaration has a target, and schedule `setTheme` behind `startTransition`/rAF so the React + Tiptap/CodeMirror theme work isn't in the same frame. Separately, narrow `transition-all duration-300` (`Toolbar.tsx:598`, `EditorHeader.tsx:10`) to an explicit property list.
+**Fix:** the honest option is (a) drop the fade — remove `transition: background-color 300ms, color 300ms` from `styles.css:514` and `cmTheme()` at `:208`/`:236`, and drop `transition-colors duration-300` at `PerssonifyEditor.tsx:1833` — so the swap is one clean frame. If it is kept, give `body` a real `background-color: var(--background)` so the declaration has a target, and schedule `setTheme` behind `startTransition`/rAF so the React + Tiptap/CodeMirror theme work isn't in the same frame. Separately, narrow `transition-all duration-300` (`toolbar/index.tsx:598`, `EditorHeader.tsx:10`) to an explicit property list.
 
 ### D4. Exiting Focus mode un-dims the chrome asymmetrically
 
@@ -733,7 +733,7 @@ while the class did. It now sits on the unqualified selectors, with only
 
 #### Original independently verified finding
 
-**File:** `src/styles.css:1192-1199` (transition declared *inside* `.pf-focus`), colliding with `src/ui/Toolbar.tsx:598` `transition-all duration-300`
+**File:** `src/styles.css:1192-1199` (transition declared *inside* `.pf-focus`), colliding with `src/ui/chrome/toolbar/index.tsx:598` `transition-all duration-300`
 **Source:** [35]
 On class removal each element falls back to its own declaration: the menu bar and pane headers have `0s`, the footer has `transition-colors` (no `opacity`), and only the toolbar animates. Measured after removing `.pf-focus`: +30ms `{menubar:1, toolbar:0.255, footer:1, pane:1}`, +100ms `{toolbar:0.593}`, +300ms all 1. Entering fades all four together, so exit is visibly torn — a ghosted strip in the middle of the chrome for a third of a second.
 **Fix:** move the transition to a base rule so it applies in both directions and keep only `opacity: .25` inside `.pf-focus`:
@@ -785,11 +785,11 @@ stays mounted while collapsed.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`BottomTray.tsx:25-29` still conditionally mounts the tray and gives it `h-64`; no mounted grid-row animation.
+`bottomTray/index.tsx:25-29` still conditionally mounts the tray and gives it `h-64`; no mounted grid-row animation.
 
 #### Original independently verified finding
 
-**File:** `src/ui/BottomTray.tsx:25` (`if (!open …) return null`), `:28` (`h-64`)
+**File:** `src/ui/chrome/bottomTray/index.tsx:25` (`if (!open …) return null`), `:28` (`h-64`)
 **Source:** [37]
 Measured at 1100×700: `[data-tour="editor"]` height 500 → 255 within 30ms, `document.getAnimations()` empty. The reader's text jumps out of view with no motion cue, while every other expandable surface animates.
 **Fix:** keep the node mounted and animate `grid-template-rows`: outer `grid shrink-0 transition-[grid-template-rows] duration-200 ease-out` with `style={{gridTemplateRows: open ? "1fr" : "0fr"}}`, inner `min-h-0 overflow-hidden` wrapping the existing panel. Keep the `tabs.length === 0` early return. Covered by the D1 guard.
@@ -891,11 +891,11 @@ gives a ≥24px hit area without touching the separator's own box.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`EditorPanes.tsx:285-300` and `WorkspacePanel.tsx:153-168` attach only `pointermove`/`pointerup`, not `pointercancel`; pane divider remains `h-1/w-1` without `touch-none` at `EditorPanes.tsx:546-564`.
+`editorPanes/index.tsx:285-300` and `WorkspacePanel.tsx:153-168` attach only `pointermove`/`pointerup`, not `pointercancel`; pane divider remains `h-1/w-1` without `touch-none` at `editorPanes/index.tsx:546-564`.
 
 #### Original independently verified finding
 
-**Files:** `src/ui/EditorPanes.tsx:293-300` (only `pointermove`/`pointerup`), `:509-518` (separator, no `touch-action`), `:517`/`:525` (`h-1` / 6px pullout); `src/ui/WorkspacePanel.tsx:143-159` (same omission)
+**Files:** `src/ui/panes/editorPanes/index.tsx:293-300` (only `pointermove`/`pointerup`), `:509-518` (separator, no `touch-action`), `:517`/`:525` (`h-1` / 6px pullout); `src/ui/WorkspacePanel.tsx:143-159` (same omission)
 **Source:** [45, 84, 46]
 `GraphView.tsx:507` is the only place in the repo that registers `pointercancel`, and `touch-action` appears exactly once (`GraphView.tsx:613`).
 **Measured stuck drag (1280×800):** `pointerdown` → `pointercancel` (no `pointerup`) leaves `document.body.style = {userSelect:"none", cursor:"col-resize"}` permanently, and the divider then tracks the bare pointer — a single subsequent `pointermove` with a **different** pointerId moved it from x=932 to x=505 and panes from `[640,4,636]` to `[300,4,976]`. Until some unrelated click fires `pointerup`, no text anywhere in the app can be selected and the split thrashes with the mouse.
@@ -973,11 +973,11 @@ touch viewport clears 24px, asserted rather than counted
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-Scroll-sync control remains a small `h-4`/16px control at `EditorPanes.tsx:118-127`; no coarse-pointer target expansion.
+Scroll-sync control remains a small `h-4`/16px control at `editorPanes/index.tsx:118-127`; no coarse-pointer target expansion.
 
 #### Original independently verified finding
 
-**File:** `src/ui/EditorPanes.tsx:118-127` (`h-4 … [&_svg]:size-4`, no width, no padding, no `pointer-coarse:`)
+**File:** `src/ui/panes/editorPanes/index.tsx:118-127` (`h-4 … [&_svg]:size-4`, no width, no padding, no `pointer-coarse:`)
 **Source:** [49, 109]
 Measured 390×844: `{x:358, y:142.3, width:16, height:16}` — right edge at 374 of 390. Roughly a third of the 44px minimum, its hover tooltip can never fire on touch, and it sits next to the sync-mode pills so mis-taps hit a neighbour. CLAUDE.md's own responsive invariant mandates `pointer-coarse:` bumps to ≥32px for exactly this class of control.
 **Fix:** `size-6 pointer-coarse:size-9` (or `p-2 pointer-coarse:p-2.5`) plus right margin to clear the pane edge.
@@ -999,11 +999,11 @@ Format ▸ "Clear all formatting".
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`EditorContextMenu.tsx:104` dispatches `clearFormatting`; Markdown dispatcher has `removeFormat` but no `clearFormatting` case (`useFormatDispatcher.ts:428-464`).
+`editorContextMenu/index.tsx:104` dispatches `clearFormatting`; Markdown dispatcher has `removeFormat` but no `clearFormatting` case (`useFormatDispatcher.ts:428-464`).
 
 #### Original independently verified finding
 
-**Files:** `src/ui/MenuBar.tsx:228` (`dispatch("clearFormatting")`), `:413` (`dispatch("removeFormat")`), `src/ui/EditorContextMenu.tsx:104`; `src/formatting/useFormatDispatcher.ts:360,368,428,462`
+**Files:** `src/ui/chrome/menuBar/index.tsx:228` (`dispatch("clearFormatting")`), `:413` (`dispatch("removeFormat")`), `src/ui/chrome/editorContextMenu/index.tsx:104`; `src/formatting/useFormatDispatcher.ts:360,368,428,462`
 **Source:** [61]
 `dispatchToMd` implements only `removeFormat`; `clearFormatting` falls to `default: console.warn("Unknown MD command: clearFormatting")`. So with the cursor in the Markdown pane, **Edit ▸ Clear formatting** and **right-click ▸ Clear formatting** do nothing while the identically-named **Format ▸ Clear formatting** one menu over works. In the rich pane the two do different things (`unsetAllMarks()` vs `unsetAllMarks().clearNodes()`).
 **Fix:** add a `clearFormatting` case to `dispatchToMd`, and rename so the two read differently — Edit ▸ "Clear character formatting", Format ▸ "Clear all formatting".
@@ -1023,13 +1023,13 @@ written an `![alt text](image-url)` placeholder.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`EditorContextMenu.tsx:148,151-152` invokes image/math commands without a value; rich dispatcher only acts when `value` is supplied (`useFormatDispatcher.ts:321-343`).
+`editorContextMenu/index.tsx:148,151-152` invokes image/math commands without a value; rich dispatcher only acts when `value` is supplied (`useFormatDispatcher.ts:321-343`).
 
 #### Original independently verified finding
 
-**File:** `src/ui/EditorContextMenu.tsx:148,151,152` (value-less `d("insertImage")` / `d("insertMathInline")` / `d("insertMathBlock")`) against `src/formatting/useFormatDispatcher.ts:321-324,339,342` (all guarded by `if (value)`)
+**File:** `src/ui/chrome/editorContextMenu/index.tsx:148,151,152` (value-less `d("insertImage")` / `d("insertMathInline")` / `d("insertMathBlock")`) against `src/formatting/useFormatDispatcher.ts:321-324,339,342` (all guarded by `if (value)`)
 **Source:** [78]
-The toolbar (`Toolbar.tsx:524`) and menu bar (`MenuBar.tsx:258`) prompt first; the context menu does not. Measured: image count stayed at 7 and zero dialogs opened after clicking "Image…" — no dialog, no insert, no error, despite the promising ellipsis. (In the MD pane the same command drops a literal `![alt text](image-url)` placeholder, so the panes also disagree.)
+The toolbar (`toolbar/index.tsx:524`) and menu bar (`menuBar/index.tsx:258`) prompt first; the context menu does not. Measured: image count stayed at 7 and zero dialogs opened after clicking "Image…" — no dialog, no insert, no error, despite the promising ellipsis. (In the MD pane the same command drops a literal `![alt text](image-url)` placeholder, so the panes also disagree.)
 **Fix:** move the prompt/equation dialog **inside** the `insertImage`/`insertMath*` cases so all three call sites behave identically, or `await` the same prompt in the context menu before dispatching.
 
 ### E12. Guided tour: four defects
@@ -1079,11 +1079,11 @@ announced as unoperable even once focusable.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-Both separators have role/orientation but no `tabIndex`, keyboard handler, or range ARIA: `EditorPanes.tsx:547-555`; `WorkspacePanel.tsx:188-194`.
+Both separators have role/orientation but no `tabIndex`, keyboard handler, or range ARIA: `editorPanes/index.tsx:547-555`; `WorkspacePanel.tsx:188-194`.
 
 #### Original independently verified finding
 
-**Files:** `src/ui/EditorPanes.tsx:511`, `src/ui/WorkspacePanel.tsx:179-184`
+**Files:** `src/ui/panes/editorPanes/index.tsx:511`, `src/ui/WorkspacePanel.tsx:179-184`
 **Source:** [52]
 `role="separator"` with no `tabIndex`, no `onKeyDown`, no `aria-valuenow/valuemin/valuemax`. Confirmed: tabbing through the entire chrome never stops on either. The split ratio and the panel width are pointer-exclusive.
 **Fix:** `tabIndex={0}`, `aria-valuenow/min/max`, and an `onKeyDown` adjusting on Arrow keys (Up/Down when stacked) with Home/End for the clamps.
@@ -1101,11 +1101,11 @@ there.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`EditorPanes.tsx:32` still applies `text-muted-foreground!`; focus code at `:309-316` toggles non-important classes that cannot override it.
+`editorPanes/index.tsx:32` still applies `text-muted-foreground!`; focus code at `:309-316` toggles non-important classes that cannot override it.
 
 #### Original independently verified finding
 
-**Files:** `src/ui/EditorPanes.tsx:32` (`text-muted-foreground!`), `:305-317` (`classList.add("text-primary")`, `classList.remove("text-muted-foreground")`)
+**Files:** `src/ui/panes/editorPanes/index.tsx:32` (`text-muted-foreground!`), `:305-317` (`classList.add("text-primary")`, `classList.remove("text-muted-foreground")`)
 **Source:** [110]
 The code removes a class that was never applied (the applied one is `text-muted-foreground!`) and adds one that cannot beat `!important`. Measured after focusing either pane: `cls "… text-muted-foreground! … text-primary", color rgb(107,114,128)` — unchanged in both directions. The only surviving cue is a 6px dot, and the `transition-colors` on the label implies an animation that never plays.
 **Fix:** drop the `!` at `:32` (nothing else overrides it), or toggle a `data-focused` attribute styled in CSS instead of racing Tailwind specificity.
@@ -1189,7 +1189,7 @@ still say "Toggle relationship graph".
 
 **Status:** PARTIAL at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-Import/help copy is updated (`MenuBar.tsx:494`, `help-content.ts:138-141,200`), but inconsistent terms remain: `ModeSwitcher.tsx:20-21` “HTML Text”/“Split View”; `GraphView.tsx:586` “Knowledge Graph”; `CardsView.tsx:442` “Colour”.
+Import/help copy is updated (`menuBar/index.tsx:494`, `help-content.ts:138-141,200`), but inconsistent terms remain: `modeSwitcher/index.tsx:20-21` “HTML Text”/“Split View”; `GraphView.tsx:586` “Knowledge Graph”; `CardsView.tsx:442` “Colour”.
 
 #### Original independently verified finding
 
@@ -1197,12 +1197,12 @@ Import/help copy is updated (`MenuBar.tsx:494`, `help-content.ts:138-141,200`), 
 | Where | Says | Reality |
 |---|---|---|
 | `src/constants.ts:166` | "explore backlinks… in **View → Graph view**" | Menu item is **"Relationship map"** |
-| `src/constants.ts:168` | imports `.md .txt .html .json .zip/.tar/.gz` | picker also accepts **`.docx`** (`MenuBar.tsx:471`) |
-| `help-content.ts:79` | Select ▸ "can act on every heading… — Copy, Delete, or apply a style" | `SelectMenuContent.tsx:5-8` is **selection-only**; label is "Select by type…" |
+| `src/constants.ts:168` | imports `.md .txt .html .json .zip/.tar/.gz` | picker also accepts **`.docx`** (`menuBar/index.tsx:471`) |
+| `help-content.ts:79` | Select ▸ "can act on every heading… — Copy, Delete, or apply a style" | `selectMenuContent/index.tsx:5-8` is **selection-only**; label is "Select by type…" |
 | `help-content.ts` | (nothing about Cards) | ⌘⇧K + View ▸ Cards ship a 700-line board with quick capture, pin, colours, checklists |
-| `ModeSwitcher.tsx:20` | aria-label **"HTML Text"**, "Split View" | everywhere else: **"Rich text"**, "Split" (`MenuBar.tsx:281`, `SettingsSheet.tsx:198`, `StatusBar.tsx:48`) |
-| `Toolbar.tsx:367` | "Search & Replace (Ctrl+F)" | ⌘F opens **Find** mode; also Title-Case tooltips ("Strike", "Bullet List", "Clear Format", "Del Row") vs sentence-case menu items |
-| `GraphView.tsx:537` / `MenuBar.tsx:303,557` / `StatusBar.tsx:260` | "Knowledge Graph" / "Relationship map" / "graph view" / "relationship graph" | five names for one feature |
+| `modeSwitcher/index.tsx:20` | aria-label **"HTML Text"**, "Split View" | everywhere else: **"Rich text"**, "Split" (`menuBar/index.tsx:281`, `SettingsSheet.tsx:198`, `statusBar/index.tsx:48`) |
+| `toolbar/index.tsx:367` | "Search & Replace (Ctrl+F)" | ⌘F opens **Find** mode; also Title-Case tooltips ("Strike", "Bullet List", "Clear Format", "Del Row") vs sentence-case menu items |
+| `GraphView.tsx:537` / `menuBar/index.tsx:303,557` / `statusBar/index.tsx:260` | "Knowledge Graph" / "Relationship map" / "graph view" / "relationship graph" | five names for one feature |
 | `CardsView.tsx:369,370,381` | "Colour" (visible title + 2 aria-labels) | American "Color" everywhere else; `help-content.ts:198` "neighbours" |
 **Fix:** correct the two welcome-doc pointers and add `.docx`; rewrite the Select bullet as selection-only and point bulk styling at Find ▸ Format matches; add a Cards section; settle on **"Relationship map"** and **"Rich text"** everywhere; retitle the toolbar magnifier to `Find (⌘F)` and normalise toolbar tooltips to the menu wording; one locale.
 
@@ -1226,7 +1226,7 @@ Mac replace key fixed at `src/data/shortcuts.ts:53`, but duplicate Cards rows re
 **File:** `src/data/shortcuts.ts` — *"THE single source of truth"* per its own header
 **Source:** [50, 58, 51, 59]
 - `:57-58` — **"Toggle cards board ⌘⇧K" is listed twice**, byte-identical apart from indentation. It renders as a duplicated row in the Help page and both shortcuts dialogs, and since `HelpPage.tsx:259` keys rows on `r.action` it also throws a duplicate-React-key warning. → delete `:57`.
-- `:100` — `COMMON_SHORTCUTS` says **"Find & Replace ⌘F"**, contradicting `:52-53` (`Find ⌘F` / `Find & Replace ⌘H`) and the handler. ⌘H is absent from that list entirely. It surfaces only in the MenuBar fallback dialog (`MenuBar.tsx:600`) used by library embeds that don't supply `onHelp`. → `{ action: "Find", keys: "⌘F" }` + add the ⌘H row.
+- `:100` — `COMMON_SHORTCUTS` says **"Find & Replace ⌘F"**, contradicting `:52-53` (`Find ⌘F` / `Find & Replace ⌘H`) and the handler. ⌘H is absent from that list entirely. It surfaces only in the MenuBar fallback dialog (`menuBar/index.tsx:600`) used by library embeds that don't supply `onHelp`. → `{ action: "Find", keys: "⌘F" }` + add the ⌘H row.
 
 **Fix:** delete the duplicate Cards shortcut row; correct `COMMON_SHORTCUTS` to list Find as `⌘F`; and add the distinct Find & Replace shortcut using the current platform-correct key.
 
@@ -1271,7 +1271,7 @@ name is still unpluralised ("2 documents, 1 links").
 **File:** `src/ui/GraphView.tsx:539`
 **Source:** [31]
 A brand-new user opening the graph reads **"KNOWLEDGE GRAPH · 1 docs, 0 links"**.
-**Fix:** `doc{n === 1 ? "" : "s"}` / `link{e === 1 ? "" : "s"}`, matching `StatusBar.tsx:164`.
+**Fix:** `doc{n === 1 ? "" : "s"}` / `link{e === 1 ? "" : "s"}`, matching `statusBar/index.tsx:164`.
 
 ### F10. About page's credits omit two shipped dependencies and mis-state the licenses
 
@@ -1428,7 +1428,7 @@ transparent; `theme_color`/`background_color` are still `#0a0a0a`, and
 
 Split stacks only below 768px wide AND when there is room for two panes: a touch
 device held upright, or a viewport at least 500px tall (`splitShouldStack`,
-`src/ui/split-layout.ts`). A landscape phone keeps the panes side by side; unit
+`src/ui/panes/editorPanes/split-layout.ts`). A landscape phone keeps the panes side by side; unit
 tests and the `surfaces` e2e tier (667×375, each editor over 150px) pin it. An
 upright phone ignores its keyboard-shrunk height, so opening the keyboard does not
 flip the layout.
@@ -1437,11 +1437,11 @@ flip the layout.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`src/ui/EditorPanes.tsx:266-276` remains width-only `matchMedia("(max-width: 767px)")`; no viewport-height condition.
+`src/ui/panes/editorPanes/index.tsx:266-276` remains width-only `matchMedia("(max-width: 767px)")`; no viewport-height condition.
 
 #### Original independently verified finding
 
-**File:** `src/ui/EditorPanes.tsx:270` (`matchMedia("(max-width: 767px)")`), consumed at `:280`, `:471`, `:512`, `:517`
+**File:** `src/ui/panes/editorPanes/index.tsx:270` (`matchMedia("(max-width: 767px)")`), consumed at `:280`, `:471`, `:512`, `:517`
 **Source:** [14, 23]
 A landscape phone is wide *and short* — precisely where stacking is worst. Measured pane geometry:
 | Viewport | `.cm-scroller` height | Rich viewport / content |
@@ -1558,7 +1558,7 @@ CSS custom properties inherit down the tree; portaled content is not a descendan
 
 #### Original independently verified finding
 
-**Files:** `src/store/documents/documentStore.ts:884-886` (`updateCounts` no-ops on a null canonical), `:711` (`closeTab` resets only identity); `src/ui/StatusBar.tsx:80,86`
+**Files:** `src/store/documents/documentStore.ts:884-886` (`updateCounts` no-ops on a null canonical), `:711` (`closeTab` resets only identity); `src/ui/chrome/statusBar/index.tsx:80,86`
 **Source:** [93]
 Delete the last document: `<main>` correctly shows *"No document open"* and `.ProseMirror` unmounts, but the footer still reads `Panel | Split | 1 other not in MD | 672w | 4613c` — statistics and a fidelity warning for a document that no longer exists.
 **Fix:** in `closeTab`'s empty branch also `set({ counts: { words: 0, chars: 0 }, fidelityReport: null })`, and make `updateCounts` reset to zero on a null canonical rather than early-returning.
@@ -1579,11 +1579,11 @@ still get captions over an unmarked UI.
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-No forced-colors rule in `src/`; color-only mode variant remains `ModeSwitcher.tsx:32`; switch thumb has no forced-colors border at `components/ui/switch.tsx:17-24`; tour remains box-shadow-driven.
+No forced-colors rule in `src/`; color-only mode variant remains `modeSwitcher/index.tsx:32`; switch thumb has no forced-colors border at `components/ui/switch.tsx:17-24`; tour remains box-shadow-driven.
 
 #### Original independently verified finding
 
-**Files:** `src/ui/ModeSwitcher.tsx:32`, `src/components/ui/switch.tsx:17,24`, `src/ui/Walkthrough.tsx:170`
+**Files:** `src/ui/chrome/modeSwitcher/index.tsx:32`, `src/components/ui/switch.tsx:17,24`, `src/ui/Walkthrough.tsx:170`
 **Source:** [96, 97, 98]
 - **Mode switcher.** `variant={mode === id ? "default" : "outline"}` — the *only* difference is background/foreground colour, which the UA overrides. Measured with `forcedColors:'active'`: MD `{ap:false, bg:rgb(255,255,255), color:rgb(0,0,0), fontWeight:500}`, HTML identical, Split `{ap:true, …identical}`. The app's primary navigation control gives no visual clue which mode is active. (`aria-pressed` is correct, so SR users are fine — this hits *sighted* HCM users.)
 - **Switches.** Track is colour-only (`data-checked:bg-primary data-unchecked:bg-input`) and the thumb is `bg-background … ring-0` with no border. Measured: checked → `{track:#fff, thumb:#fff, thumbX:13}`; unchecked → `{track:#fff, thumb:#fff, thumbX:1}` — the thumb is invisible against its own track, so the pane-header Styled/Images/Styled-paste toggles and *every* Settings switch read as identical empty pills with no confirmation after toggling.
@@ -1597,18 +1597,18 @@ No forced-colors rule in `src/`; color-only mode variant remains `ModeSwitcher.t
 The `<footer>` carries no role or live region, so it keeps its `contentinfo`
 landmark and the counters are silent. The one live region is a visually hidden
 `role="status"` that speaks only when saving starts failing, fails differently or
-recovers (`src/ui/save-announcer.ts`); `a11y-save-announcer.test.jsx` asserts it
+recovers (`src/ui/chrome/statusBar/save-announcer.ts`); `a11y-save-announcer.test.jsx` asserts it
 is the only live region and stays quiet through routine autosaves.
 
 #### v1.70.0 revalidation (history — the Status line above is current)
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`src/ui/StatusBar.tsx:88-91` still wraps all status-bar content in `role="status" aria-live="polite"`.
+`src/ui/chrome/statusBar/index.tsx:88-91` still wraps all status-bar content in `role="status" aria-live="polite"`.
 
 #### Original independently verified finding
 
-**File:** `src/ui/StatusBar.tsx:90-92` (`<footer role="status" aria-live="polite">`) wrapping `:222-225`
+**File:** `src/ui/chrome/statusBar/index.tsx:90-92` (`<footer role="status" aria-live="polite">`) wrapping `:222-225`
 **Source:** [60]
 `counts` updates on every sync debounce, so a screen-reader user typing hears the whole bar re-announced continuously — title, view mode, link count, save state, storage %, word count, char count. Dictation and SR editing become effectively unusable. Separately `role="status"` on `<footer>` overrides the implicit `contentinfo` landmark, removing the status bar from landmark navigation.
 **Fix:** drop `role="status" aria-live="polite"` from the `<footer>` (restoring `contentinfo`) and put a narrow `role="status" aria-live="polite"` only on the save-state cluster (`:170-207`) — the one genuinely announce-worthy value. Leave the counters silent.
@@ -1653,7 +1653,7 @@ keep `opacity-70` on muted text — about 3:1 by the token values, unmeasured.
 | # | Tokens | Ratio | Scope |
 |---|---|---|---|
 | a | `--primary-foreground` #fff on `--primary` — **emerald** `hsl(160,84%,39%)` / **blue** `hsl(201,90%,48%)` (`styles.css:181`) | **2.59:1** / **3.04:1** | every primary button + selected segment of every segmented control (`button.tsx:12`, `SettingsSheet.tsx:208`) |
-| b | `--primary-strong: var(--primary)` in dark (`styles.css:102`) — **violet** / **rose** | **3.31:1** / **4.01:1** | all MD-pane H4–H6, inline links, list markers (`CodeMirrorPane.tsx:141-154`) |
+| b | `--primary-strong: var(--primary)` in dark (`styles.css:102`) — **violet** / **rose** | **3.31:1** / **4.01:1** | all MD-pane H4–H6, inline links, list markers (`codeMirrorPane/index.tsx:141-154`) |
 | c | `text-muted-foreground` + `opacity-70` at 11–12px (`DocNavPanel.tsx:26`, `GraphView.tsx:606`) | **2.74:1** light | the two empty-state hints that tell a new user what to do next |
 | d | `--muted-foreground` on `--muted` (`styles.css:46-47`) | **4.04:1** | About page's permanent 10px license chips; segmented-control hover |
 **Honesty:** (a) and (b) only appear after the user explicitly picks a non-default accent — `DEFAULT_PALETTE` is **amber** (`theme/palette.ts:26`), which passes at ~9.4:1 / ~10:1. (b)'s H1–H3 clear the 3:1 large-text allowance. The often-quoted `--muted-foreground` vs `--background` = **4.47:1** is a 0.7% miss no user can perceive and is **not** worth listing as a defect; the `--muted` pairing is.
@@ -1672,11 +1672,11 @@ with arrow keys that move and activate; the collapsed tray is `inert`. Pinned by
 
 **Status:** OPEN at imported predecessor SHA `41e831e44b4a8830168b94d13e74c962e3bb0626`.
 
-`src/ui/BottomTray.tsx:34-45` still uses `aria-selected` on implicit buttons without tablist/tab semantics.
+`src/ui/chrome/bottomTray/index.tsx:34-45` still uses `aria-selected` on implicit buttons without tablist/tab semantics.
 
 #### Original independently verified finding
 
-**File:** `src/ui/BottomTray.tsx:37-40` (no `role="tab"`, container has no `role="tablist"`)
+**File:** `src/ui/chrome/bottomTray/index.tsx:37-40` (no `role="tab"`, container has no `role="tablist"`)
 **Source:** [69]
 `aria-selected` is not permitted on the implicit `button` role, so AT ignores it (axe `aria-allowed-attr`); the selected state is conveyed by background colour only. `WorkspacePanel.tsx:200` gets this right with `aria-pressed`.
 **Scope caveat:** the tray ships with **one** tab by default — the Console tab is spread in only when the admin `consoleEnabled` flag is on (`PerssonifyEditor.tsx:2116-2124`, defaulted false at `uiStore.ts:133-135`) — so the ambiguity only materialises for operators.

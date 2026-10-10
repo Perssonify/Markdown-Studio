@@ -86,7 +86,7 @@ On top of editing, it provides:
 
 | Channel | Used for | Where |
 |---|---|---|
-| Function calls, props, imperative refs | Orchestrator ↔ hooks ↔ panes. Pane handles such as `getValue`, `setValue`, `setHTML`, `getJSON` and `isComposing`. | `src/PerssonifyEditor.tsx`, `src/ui/EditorPanes.tsx` |
+| Function calls, props, imperative refs | Orchestrator ↔ hooks ↔ panes. Pane handles such as `getValue`, `setValue`, `setHTML`, `getJSON` and `isComposing`. | `src/PerssonifyEditor.tsx`, `src/ui/panes/editorPanes/index.tsx` |
 | Zustand stores | Document state and save status, UI preferences, derived link index, folder tree | `src/store/documents/documentStore.ts`, `uiStore.ts`, `editorStore.ts`, `folders.ts` |
 | IndexedDB | Documents, the manifest, prefs; the version-history snapshot ring | `src/store/persistence/idb-storage-adapter.ts`, `src/store/history/snapshot-store.ts` |
 | localStorage / sessionStorage | UI preferences (`pf:*`), the crash-recovery stash, the diagnostics ring, the durability canary, one-shot handoffs | `src/store/preferences/uiStore.ts`, `src/store/persistence/crash-recovery.ts`, `src/utils/diagnostics.ts`, `src/store/persistence/storage-durability.ts` |
@@ -196,7 +196,7 @@ flowchart TB
 
 ### 3.5 End-to-end flow: a keystroke in the rich pane until it is on disk
 
-1. TipTap `onUpdate` (`src/ui/TiptapPane.tsx:278`) → `EditorLayout` → `PerssonifyEditor.handleHtmlChange` (`src/PerssonifyEditor.tsx:761-764`). That also starts the host's 300 ms `onContentChange` timer (`:651-662`).
+1. TipTap `onUpdate` (`src/ui/panes/tiptapPane/index.tsx:278`) → `EditorLayout` → `PerssonifyEditor.handleHtmlChange` (`src/PerssonifyEditor.tsx:761-764`). That also starts the host's 300 ms `onContentChange` timer (`:651-662`).
 2. `useDocumentLifecycle.handleHtmlChange` (`src/hooks/useDocumentLifecycle.ts:285-303`) calls `documentStore.setDirty()` (`src/store/documents/documentStore.ts:1168-1173`, status becomes `editing`). It also schedules a projection. The wait comes from `src/hooks/sync-schedule.ts:62-80`:
    - idle delay = `clamp(120, 1.5 × cost, 800)` ms
    - max-wait ceiling = `clamp(250, 8 × cost, 1200)` ms
@@ -204,7 +204,7 @@ flowchart TB
 3. The timer fires. While the Markdown pane is mid-IME-composition it retries every 120 ms. Then it calls `useSyncEngine.syncHtmlToMd` (`src/engine/useSyncEngine.ts:108-178`):
    - It skips if the ProseMirror doc node is unchanged, or if the HTML hash matches the last one.
    - Otherwise it converts with `htmlToMd` (Styled) or `htmlToCleanMd` (Clean): `cleanHtmlForTurndown` → `turndownLinear` (Turndown plus the escaper, in runs of 64 top-level blocks) → `normalizeMarkdown` (`src/engine/useMarkdownEngine.ts:238-239`).
-4. `CodeMirrorPane.setValue` applies a minimal diff. The change is kept out of undo history and change events are suppressed, so it does not echo back (`src/ui/CodeMirrorPane.tsx:441-482`).
+4. `CodeMirrorPane.setValue` applies a minimal diff. The change is kept out of undo history and change events are suppressed, so it does not echo back (`src/ui/panes/codeMirrorPane/index.tsx:441-482`).
 5. `onCanonicalChange(editor.getJSON())` calls `documentStore.updateDerived`, which recomputes counts and fidelity (`src/store/documents/documentStore.ts:1567-1585`). In library mode it also emits the host `onChange`.
 6. The **transition** into `editing` arms a 5-second autosave timer (`src/PerssonifyEditor.tsx:1844-1858`; `AUTOSAVE_MS`, `src/constants.ts:63`). Because it is armed on the transition, a save lands about 5 s after the first unsaved keystroke, not 5 s after typing stops.
 7. `autosave` (`src/PerssonifyEditor.tsx:1738-1805`) flushes pending projections, then calls `saveActiveDoc` (`src/store/documents/documentStore.ts:969-1165`), which runs these steps in order:
@@ -349,8 +349,8 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 | 6 | `src/store/documents/document.ts` | The `DocumentRecord` shape, title resolution (`resolveDocTitle`), and what gets serialized. |
 | 7 | `src/store/persistence/idb-storage-adapter.ts`, `src/store/persistence/storage-adapter.ts` | Persistence, adapter selection, the self-healing manifest, quota handling. |
 | 8 | `src/engine/useMarkdownEngine.ts`, `build-marked.ts`, `turndown-rules.ts`, `html-cleaner.ts` | The two converters and their pre- and post-passes. |
-| 9 | `src/ui/TiptapPane.tsx` | The live schema (extension list at 220-245), the paste hook (262-276) and the pane handle. |
-| 10 | `src/ui/CodeMirrorPane.tsx` | The Markdown pane: compartments, composition handling, minimal-diff `setValue`. |
+| 9 | `src/ui/panes/tiptapPane/index.tsx` | The live schema (extension list at 220-245), the paste hook (262-276) and the pane handle. |
+| 10 | `src/ui/panes/codeMirrorPane/index.tsx` | The Markdown pane: compartments, composition handling, minimal-diff `setValue`. |
 | 11 | `src/store/importExport/ingest.ts` | Import formats, the HTML sanitizer, and residual analysis. |
 | 12 | `src/integration/PerssonifyEditorIntegration.tsx`, `src/integration/host-bridge.ts`, `src/integration/embed-origins.ts` | The public API, the iframe protocol and who the embed will talk to. |
 | 13 | `src/main.tsx`, `src/App.tsx`, `src/embed.tsx`, `index.html`, `src/pwa/sw-updates.ts` | Boot, routing, URL params, the boot watchdog and updates. |
@@ -594,7 +594,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - It goes through regex sanitizers that remove `class="…"`, `id="…"`, `data-*="…"` and ` on…=` from the **raw HTML string, including text content**. The result is inserted with `insertContent`. (`lang` and `dir` are no longer stripped.)
   - Copying and pasting within the editor loses the `data-*` identity of wiki links, task items, math, callouts and front matter.
   - Pasted code such as `<div class="x">` or `onClick={f}` silently loses those substrings.
-  - Evidence: `src/ui/TiptapPane.tsx:262-276`, `src/hooks/useDocumentLifecycle.ts:305-335`, `src/engine/html-cleaner.ts:176-184`.
+  - Evidence: `src/ui/panes/tiptapPane/index.tsx:262-276`, `src/hooks/useDocumentLifecycle.ts:305-335`, `src/engine/html-cleaner.ts:176-184`.
 - **DI-5: The blank-save backstop cannot fail closed on the `window.storage` shim.** `Low` · `Confirmed`
   - A029 fixed this for the built-in IndexedDB and localStorage adapters: their `get()` throws on a failed read, and `saveActiveDoc` then writes nothing.
   - `WindowStorageAdapter.get` still turns any rejection into "absent". This is deliberate, because that API also rejects for a missing key.
@@ -645,7 +645,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - Evidence: `src/ui/LinkBuilder.tsx:205-206`, `vite.app.config.ts:134-135`, `vercel.json:2, 9-11, 13-14, 24-31`.
 - **API-7: A host's `setMode` value is not validated.** `Low–Medium` · `Confirmed`
   - An unknown value hides both panes and is persisted to prefs.
-  - Evidence: `src/integration/host-bridge.ts:130-133`, `src/store/preferences/uiStore.ts:222`, `src/ui/EditorPanes.tsx:301-303`, `src/PerssonifyEditor.tsx:449-453`.
+  - Evidence: `src/integration/host-bridge.ts:130-133`, `src/store/preferences/uiStore.ts:222`, `src/ui/panes/editorPanes/index.tsx:301-303`, `src/PerssonifyEditor.tsx:449-453`.
 - **API-8: `ready` is emitted twice, before initialization finishes.** `Low–Medium` · `Confirmed`
   - It is sent when the bridge is created and again from a 500 ms timer, both before `initialize()` completes.
   - A host that seeds when `getDocuments()` returns an empty list can therefore re-seed on every load.
@@ -723,7 +723,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - Every `dangerouslySetInnerHTML` that renders document content is escaped or sanitized. That covers the card faces and the opened card.
   - Mermaid runs with `securityLevel: "strict"`, and its CSS-bearing config keys can be set only by `initialize()`. KaTeX uses its default `trust: false`.
   - Links open with `noopener,noreferrer`, and only for http(s), mailto, tel and protocol-relative URLs.
-  - Evidence: `src/store/importExport/ingest.ts:446-483, 536-538`, `src/ui/CardsView.tsx:548, 578, 1038`, `src/PerssonifyEditor.tsx:2509-2514`, `src/ui/DiagramPreview.tsx:49-60`, `src/hooks/useLinkIndex.ts:322-334`, `src/utils/url-safety.ts:17-22`.
+  - Evidence: `src/store/importExport/ingest.ts:446-483, 536-538`, `src/ui/CardsView.tsx:548, 578, 1038`, `src/PerssonifyEditor.tsx:2509-2514`, `src/ui/panes/diagramPreview/index.tsx:49-60`, `src/hooks/useLinkIndex.ts:322-334`, `src/utils/url-safety.ts:17-22`.
 - **SEC-4: The public `ingest()` can return unsanitized HTML.** `Low–Medium` · `Confirmed`
   - It is exported from `@perssonify/editor/store`. For Markdown input it returns marked's output unsanitized: `<img onerror>` and `javascript:` links pass through.
   - A consumer that renders `result.html` gets XSS.
@@ -853,7 +853,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - `BlockId`, `FieldBlock` and `TransclusionBlock`: exported but not wired into the editor or the serializer. They are now `@deprecated` with a development warning (A105). `nanoid` is a dependency only for `BlockId`.
 - **Unused constants:** `THEME_KEYS`, `STORAGE_KEY`, `SYNC_MODE_KEY` and `FONT_SIZE_MAP` (`src/constants.ts:40-43, 77-78, 84-91`).
 - **Unused within other modules:**
-  - 12 of the 15 icons in `src/ui/Icons.tsx`
+  - 12 of the 15 icons in `src/ui/chrome/icons/index.tsx`
   - `Dialogs.tsx` `ConfirmDialog`; `useNewDocPrompt`; the `useDialogs` confirm
   - the AdUnit `right-rail` variant
   - `StorageAdapter.search`, and the `markdownCache`/`htmlCache` fields, which are read with fallbacks but never written

@@ -136,7 +136,7 @@ Almost everything runs on the main thread, and "concurrency" mostly means **asyn
 
 ## Custom Tiptap extensions
 
-The rich-text engine is Tiptap StarterKit plus a stack of standard extensions (see [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx)) and the custom nodes/marks in [src/extensions/](../src/extensions/). **Any node the live editor gains must ALSO be registered in [src/engine/serialize-doc.ts](../src/engine/serialize-doc.ts) `SERIALIZE_EXTENSIONS`**, or headless/bulk export silently drops or corrupts it — this is the #1 silent-failure mode (pinned by `serialize-doc.test.js`).
+The rich-text engine is Tiptap StarterKit plus a stack of standard extensions (see [src/ui/panes/tiptapPane/index.tsx](../src/ui/panes/tiptapPane/index.tsx)) and the custom nodes/marks in [src/extensions/](../src/extensions/). **Any node the live editor gains must ALSO be registered in [src/engine/serialize-doc.ts](../src/engine/serialize-doc.ts) `SERIALIZE_EXTENSIONS`**, or headless/bulk export silently drops or corrupts it — this is the #1 silent-failure mode (pinned by `serialize-doc.test.js`).
 
 Live custom extensions (registered in TiptapPane + serialize-doc):
 

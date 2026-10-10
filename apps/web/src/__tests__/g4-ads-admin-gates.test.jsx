@@ -18,7 +18,7 @@ import { useUIStore } from "../store/preferences/uiStore";
 import { AdUnit } from "../ui/AdUnit";
 import { DialogProvider } from "../ui/DialogProvider";
 import { LinkBuilder } from "../ui/LinkBuilder";
-import { MenuBar } from "../ui/MenuBar";
+import { MenuBar } from "../ui/chrome/menuBar";
 import { SettingsSheet } from "../ui/SettingsSheet";
 
 beforeAll(() => {

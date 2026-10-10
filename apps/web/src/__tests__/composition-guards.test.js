@@ -16,7 +16,7 @@ import { renderHook, act, render } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
 import { COMPOSITION_STALL_MS } from "../constants";
 import { useDocumentLifecycle } from "../hooks/useDocumentLifecycle";
 import { useFormatDispatcher } from "../formatting/useFormatDispatcher";

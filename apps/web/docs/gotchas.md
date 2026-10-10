@@ -110,7 +110,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 ## Decorative formatting silently lost in Clean mode
 
 - **Symptom:** You apply text color/highlight/font, switch to Clean mode, and it vanishes from the markdown.
-- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:38](../src/engine/useSyncEngine.ts#L38)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/Toolbar.tsx:430](../src/ui/Toolbar.tsx#L430)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
+- **Cause:** Clean mode strips non-GFM styling by design (the `convert` choice, [src/engine/useSyncEngine.ts:38](../src/engine/useSyncEngine.ts#L38)). The toolbar warns (`DECORATIVE_CMDS`, [src/ui/chrome/toolbar/index.tsx:430](../src/ui/chrome/toolbar/index.tsx#L430)) and the fidelity report records the loss, but the markdown genuinely won't carry it.
 - **Fix/Workaround:** Use Styled mode to preserve styling, or export as JSON for a lossless copy.
 - **Related:** [domain-glossary.md#clean-mode--styled-mode](domain-glossary.md#clean-mode--styled-mode), [src/store/documents/fidelity.ts](../src/store/documents/fidelity.ts).
 
@@ -191,7 +191,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   (`[...cm.querySelectorAll(".cm-line")].map(el => el.textContent)`), which is
   the document's real line structure. This cost a full investigation into a
   fenced-code "bug" that did not exist.
-- **Related:** [src/ui/CodeMirrorPane.tsx](../src/ui/CodeMirrorPane.tsx).
+- **Related:** [src/ui/panes/codeMirrorPane/index.tsx](../src/ui/panes/codeMirrorPane/index.tsx).
 
 ## The split-pane scroll sync watches `scrollHeight` on purpose — it is not a heuristic to replace
 
@@ -211,7 +211,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   is also not a measurable cost to begin with — 60 wheel steps on a 50KB note
   produced 0–10ms of total blocking on every build tested — so there is nothing
   to win here and alignment to lose.
-- **Related:** [src/ui/EditorPanes.tsx](../src/ui/EditorPanes.tsx).
+- **Related:** [src/ui/panes/editorPanes/index.tsx](../src/ui/panes/editorPanes/index.tsx).
 
 ## An incremental WRITE of a whole-document parse buys nothing — parse less instead
 
@@ -242,7 +242,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
   never the problem.
 - **Related:** [src/engine/incremental-rich.ts](../src/engine/incremental-rich.ts),
   [src/engine/useSyncEngine.ts](../src/engine/useSyncEngine.ts),
-  [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx).
+  [src/ui/panes/tiptapPane/index.tsx](../src/ui/panes/tiptapPane/index.tsx).
 
 ## A transaction's step count, and a decoration set's size, are costs of their own
 
@@ -374,7 +374,7 @@ Non-obvious traps, stale docs, dead code, and "don't touch that" knowledge. Each
 
 - **Symptom:** Read-only mode hides the toolbar and blocks typing, yet the table and link bubble menus still appear and still mutate the document.
 - **Cause:** TipTap's `BubbleMenu` has a default `shouldShow` that includes an editability check. Passing your own does not compose with it — it replaces it wholesale. `CommandManager` has no editability check either, so a chain run from the bubble applies to a "read-only" document.
-- **Fix:** every caller-supplied `shouldShow` starts with `ed.isEditable &&`, and every mutating chain goes through `runBubbleCommand` ([src/ui/bubble-menu-command.ts](../src/ui/bubble-menu-command.ts)), which bails when the editor is not editable and blurs first when a composition is live.
+- **Fix:** every caller-supplied `shouldShow` starts with `ed.isEditable &&`, and every mutating chain goes through `runBubbleCommand` ([src/ui/panes/utils/bubble-menu-command.ts](../src/ui/panes/utils/bubble-menu-command.ts)), which bails when the editor is not editable and blurs first when a composition is live.
 - **Watch for:** the same shape anywhere native editability is assumed to be the whole guard. CLAUDE.md's read-only section is explicit: native editability blocks typing and paste, and **every programmatic mutation must be gated separately**.
 - **Guard:** `bubble-menu-guard.test.js`.
 

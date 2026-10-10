@@ -32,16 +32,16 @@ import { VersionHistorySheet } from "./ui/VersionHistorySheet";
 import { LinkBuilderDialog } from "./ui/LinkBuilderDialog";
 import { groupDocsByFolder, useFolderStore } from "./store/documents/folders";
 import { useUIStore } from "./store/preferences/uiStore";
-import { MenuBar } from "./ui/MenuBar";
+import { MenuBar } from "./ui/chrome/menuBar";
 import { AdUnit } from "./ui/AdUnit";
 import { DurabilityNotices } from "./ui/DurabilityNotices";
-import { BottomTray } from "./ui/BottomTray";
-import { EditorLayout } from "./ui/EditorPanes";
-import { EditorContextMenu } from "./ui/EditorContextMenu";
-import { Icons } from "./ui/Icons";
-import { StatusBar } from "./ui/StatusBar";
+import { BottomTray } from "./ui/chrome/bottomTray";
+import { EditorLayout } from "./ui/panes/editorPanes";
+import { EditorContextMenu } from "./ui/chrome/editorContextMenu";
+import { Icons } from "./ui/chrome/icons";
+import { StatusBar } from "./ui/chrome/statusBar";
 import { ToastType, useToast } from "./ui/Toast";
-import { EditorToolbar } from "./ui/Toolbar";
+import { EditorToolbar } from "./ui/chrome/toolbar";
 
 // Handle types for the sub-panes
 import { FileTextIcon } from "lucide-react";
@@ -49,7 +49,7 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { Button } from "./components/ui/button";
 import { PanelLeft } from "lucide-react";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { CodeMirrorPaneHandle } from "./ui/CodeMirrorPane";
+import { CodeMirrorPaneHandle } from "./ui/panes/codeMirrorPane";
 import { useConfirm, useUnsavedChangesConfirm } from "./ui/ConfirmDialog";
 import { useDialogs } from "./hooks/useDialogs";
 import { EquationDialog, PromptDialog } from "./ui/Dialogs";
@@ -57,7 +57,7 @@ import { UrlImportDialog } from "./ui/UrlImportDialog";
 import { SearchPanel } from "./ui/SearchPanel";
 import { DialogProvider, type DialogApi } from "./ui/DialogProvider";
 import { SettingsSheet } from "./ui/SettingsSheet";
-import { TiptapPaneHandle } from "./ui/TiptapPane";
+import { TiptapPaneHandle } from "./ui/panes/tiptapPane";
 
 // Lazy-loaded panels (bundle splitting - load only when feature is used)
 import { LazyChunkBoundary } from "./ui/LazyChunkBoundary";

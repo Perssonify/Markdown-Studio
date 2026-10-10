@@ -60,12 +60,12 @@ flowchart TD
 
 ### Stage 2 — Paste cleaning (clipboard → editor)
 
-- **Code:** [src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts); paste handling in `handlePaste` ([src/ui/TiptapPane.tsx:268](../src/ui/TiptapPane.tsx#L268)) → `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:314](../src/hooks/useDocumentLifecycle.ts#L314)).
+- **Code:** [src/engine/html-cleaner.ts](../src/engine/html-cleaner.ts); paste handling in `handlePaste` ([src/ui/panes/tiptapPane/index.tsx:268](../src/ui/panes/tiptapPane/index.tsx#L268)) → `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:314](../src/hooks/useDocumentLifecycle.ts#L314)).
 - **Input:** `text/html` from the clipboard (Word, Google Docs, web pages — i.e. hostile HTML).
 - **What happens:** with **Paste Styled** on (the default), `sanitizePastedHtml()` ([src/engine/html-cleaner.ts:165](../src/engine/html-cleaner.ts#L165)) removes comments, meta/script/style blocks and Office/VML junk, strips `class`/`id`/`data-*` and event handlers (keeping `dir` and `lang`), and keeps an allow-list of CSS properties; with it off, `cleanPasteHtml()` ([:244](../src/engine/html-cleaner.ts#L244)) additionally turns CSS like `font-weight:bold` into semantic `<strong>`/`<em>`/`<u>`/`<del>` and drops the decorative styling.
 - **Output:** clean HTML safe to hand to Tiptap.
 - **Guarantee:** only allow-listed CSS survives; styling is normalized to semantic tags where possible.
-- **Failure mode:** over-aggressive cleaning can drop intentional styling. **Paste Styled** is on by default and keeps more; hold **⇧** while pasting to invert it for that one paste ([src/ui/EditorPanes.tsx](../src/ui/EditorPanes.tsx)).
+- **Failure mode:** over-aggressive cleaning can drop intentional styling. **Paste Styled** is on by default and keeps more; hold **⇧** while pasting to invert it for that one paste ([src/ui/panes/editorPanes/index.tsx](../src/ui/panes/editorPanes/index.tsx)).
 
 ### Stage 3 — Bidirectional sync (the heart)
 
@@ -156,7 +156,7 @@ flowchart LR
 
 ## Worked example — paste a styled paragraph and watch it land
 
-1. User pastes Google-Docs HTML into the rich-text pane → Tiptap's `handlePaste` ([src/ui/TiptapPane.tsx:268](../src/ui/TiptapPane.tsx#L268)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:314](../src/hooks/useDocumentLifecycle.ts#L314)).
+1. User pastes Google-Docs HTML into the rich-text pane → Tiptap's `handlePaste` ([src/ui/panes/tiptapPane/index.tsx:268](../src/ui/panes/tiptapPane/index.tsx#L268)) hands the `text/html` to `handleHtmlPaste` ([src/hooks/useDocumentLifecycle.ts:314](../src/hooks/useDocumentLifecycle.ts#L314)).
 2. With Paste Styled on (the default), `sanitizePastedHtml()` ([src/engine/html-cleaner.ts:165](../src/engine/html-cleaner.ts#L165)) strips Office junk and keeps only allow-listed CSS; with it off (or ⇧ held), `cleanPasteHtml()` ([:244](../src/engine/html-cleaner.ts#L244)) also converts `font-weight:700` → `<strong>`.
 3. Cleaned HTML is inserted into Tiptap; the editor normalizes it to canonical PM JSON.
 4. The change handler debounces, then `syncHtmlToMd` ([src/engine/useSyncEngine.ts:179](../src/engine/useSyncEngine.ts#L179)) runs: the doc node and the hash differ → in Styled mode `engine.htmlToMd` (Turndown `tdInline`) emits markdown with surviving `<span style>`; in Clean mode `engine.htmlToCleanMd` drops it. CM6 updates.

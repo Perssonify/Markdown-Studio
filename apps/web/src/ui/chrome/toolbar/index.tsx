@@ -1,4 +1,4 @@
-import { displayKeys } from "../data/shortcuts";
+import { displayKeys } from "@/data/shortcuts";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Separator } from "@/components/ui/separator";
@@ -49,15 +49,15 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { TOOLBAR_COMPACT_BP } from '../constants';
-import { useDialog } from "./DialogProvider";
-import { useEditorStore } from '../store/editor/editorStore';
-import { useUIStore } from '../store/preferences/uiStore';
-import { TableGridPicker } from './TableGridPicker';
-import { Icons } from "./Icons";
-import { useRovingFocus } from "./use-roving-focus";
-import { type ImageInsert, promptImage } from "../formatting/image-insert";
-import { t, useT } from "../i18n";
+import { TOOLBAR_COMPACT_BP } from '@/constants';
+import { useDialog } from "@/ui/DialogProvider";
+import { useEditorStore } from '@/store/editor/editorStore';
+import { useUIStore } from '@/store/preferences/uiStore';
+import { TableGridPicker } from '../tableGridPicker';
+import { Icons } from "../icons";
+import { useRovingFocus } from "../hooks/use-roving-focus";
+import { type ImageInsert, promptImage } from "@/formatting/image-insert";
+import { t, useT } from "@/i18n";
 
 /**
  * Arrow-key order is VISUAL order. Save floats right, so it comes FIRST in the

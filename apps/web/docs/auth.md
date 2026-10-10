@@ -53,8 +53,8 @@ There is no browser→server→token handshake to diagram, because there is no s
 
 No roles, no permissions, no scopes, no per-row checks. The only access *modulation* in the product is by **UI mode / device / build**, not by identity:
 
-- On a narrow viewport (under 768px wide) Split view stacks its panes only when there is height for two, or on a touch device held upright ([src/ui/split-layout.ts](../src/ui/split-layout.ts)).
-- Decorative commands are gated by **Clean vs Styled** sync mode, not permissions ([src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx), `DECORATIVE_CMDS`).
+- On a narrow viewport (under 768px wide) Split view stacks its panes only when there is height for two, or on a touch device held upright ([src/ui/panes/editorPanes/split-layout.ts](../src/ui/panes/editorPanes/split-layout.ts)).
+- Decorative commands are gated by **Clean vs Styled** sync mode, not permissions ([src/ui/chrome/toolbar/index.tsx](../src/ui/chrome/toolbar/index.tsx), `DECORATIVE_CMDS`).
 - The Settings ▸ **Admin** section (diagnostics console, context-menu switch) shows only in a development build, or where `localStorage["pf:admin"]` is `"1"` — a per-browser opt-in for support sessions, not a security boundary ([src/utils/build-gates.ts](../src/utils/build-gates.ts)).
 
 ## Service-to-service / internal auth

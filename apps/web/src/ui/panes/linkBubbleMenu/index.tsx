@@ -1,8 +1,8 @@
 import { Editor } from "@tiptap/core";
 import { BubbleMenu } from '@tiptap/react/menus';
 import { ExternalLink, Link2Off, Pencil } from "lucide-react";
-import { runBubbleCommand } from "./bubble-menu-command";
-import { useT } from "../i18n";
+import { runBubbleCommand } from "../utils/bubble-menu-command";
+import { useT } from "@/i18n";
 
 export interface LinkBubbleMenuProps {
   editor: Editor | null;

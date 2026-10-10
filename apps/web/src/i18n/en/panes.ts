@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Editor panes and node views: EditorPanes.tsx, CodeMirrorPane.tsx, TiptapPane.tsx, CodeBlockWithCopy.tsx, CodeBlockCopyButton.tsx, DiagramPreview.tsx, extensions/MathNodes.tsx. */
+/** Editor panes and node views: editorPanes/index.tsx, codeMirrorPane/index.tsx, tiptapPane/index.tsx, codeBlockWithCopy/index.tsx, codeBlockCopyButton/index.tsx, diagramPreview/index.tsx, extensions/MathNodes.tsx. */
 export const panes = {
   "panes.styled": "Styled",
   "panes.styledMarkdown": "Styled Markdown",

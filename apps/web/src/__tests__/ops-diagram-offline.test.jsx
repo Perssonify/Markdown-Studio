@@ -12,7 +12,7 @@ vi.mock("mermaid", () => ({
   },
 }));
 
-import { DiagramPreview } from "../ui/DiagramPreview";
+import { DiagramPreview } from "../ui/panes/diagramPreview";
 
 describe("DiagramPreview when the renderer chunk cannot be fetched", () => {
   it("says the renderer could not be loaded, not that the diagram is wrong", async () => {

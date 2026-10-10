@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mdLinkDestination } from "../formatting/md-format-utils";
 import { useFormatDispatcher } from "../formatting/useFormatDispatcher";
 import { useUIStore } from "../store/preferences/uiStore";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
 
 let unmount;
 beforeEach(() => useUIStore.setState({ readOnly: false }));

@@ -1,7 +1,7 @@
 import { act, render } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it } from "vitest";
-import { TiptapPane } from "../ui/TiptapPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 
 /**
  * jsdom does not lay anything out, and it does not implement the geometry of a

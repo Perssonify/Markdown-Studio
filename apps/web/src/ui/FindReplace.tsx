@@ -11,8 +11,8 @@ import { RefObject, useCallback, useEffect, useId, useLayoutEffect, useRef, useS
 import { createPortal } from "react-dom";
 import { EditorSelection } from "@codemirror/state";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import type { CodeMirrorPaneHandle } from "./CodeMirrorPane";
-import type { TiptapPaneHandle } from "./TiptapPane";
+import type { CodeMirrorPaneHandle } from "./panes/codeMirrorPane";
+import type { TiptapPaneHandle } from "./panes/tiptapPane";
 import { MODES } from "../constants";
 import { applyCase, type CaseMode } from "../formatting/case-transform";
 import {
