@@ -1,16 +1,19 @@
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
+import { FileText, HardDrive, RefreshCw, ShieldCheck, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAccount } from "@/app/account/account";
 import { AccountAvatar } from "@/app/account/accountAvatar";
-import { APP_NAME } from "@/constants";
-import { useT } from "@/i18n";
+import { APP_BRAND, APP_NAME } from "@/constants";
+import { useT, type MessageKey } from "@/i18n";
 import { PageChrome } from "../pageChrome";
 
 interface SignInPanelProps {
   /** Shown to a visitor who is already signed in (the /login page only). */
   onClose?: () => void;
   onProfile?: () => void;
+  /** When false, the brand icon + heading are omitted so a host layout (the
+   * front door) can supply its own. The interactive body is unchanged. */
+  showHeader?: boolean;
 }
 
 /** Google's "G" mark, in its own colours (it is the provider's brand, so it is not themed). */
@@ -39,7 +42,7 @@ function readReturnedError(): string | null {
  * returns a failed attempt to /login with `?error=<code>`: shown once, then
  * removed from the address bar.
  */
-export function SignInPanel({ onClose, onProfile }: SignInPanelProps) {
+export function SignInPanel({ onClose, onProfile, showHeader = true }: SignInPanelProps) {
   const t = useT();
   const status = useAccount((s) => s.status);
   const user = useAccount((s) => s.user);
@@ -115,6 +118,9 @@ export function SignInPanel({ onClose, onProfile }: SignInPanelProps) {
     );
   }
 
+  // Embedded in a custom layout (the front door) that supplies its own brand.
+  if (!showHeader) return <div className="w-full text-center">{body}</div>;
+
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col items-center px-4 py-14 text-center sm:py-20">
       <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 shadow-sm shadow-primary/20">
@@ -136,14 +142,59 @@ export function LoginPage({ onClose, onProfile }: { onClose: () => void; onProfi
   );
 }
 
+/** What signing in gives you — shown under the button on the front door. */
+const LOGIN_POINTS: { key: MessageKey; Icon: LucideIcon }[] = [
+  { key: "account.loginPointSync", Icon: RefreshCw },
+  { key: "account.loginPointLocal", Icon: HardDrive },
+  { key: "account.loginPointPrivate", Icon: ShieldCheck },
+];
+
 /**
- * The front door: what a signed-out visitor sees INSTEAD of the app (App.tsx).
- * No way past it but signing in — there is no editor behind it to go back to.
+ * The front door: what a signed-out visitor sees INSTEAD of the app (App.tsx,
+ * at /login). No way past it but signing in — there is no editor behind it to
+ * go back to. A split layout: the sign-in content on the left, a branded image
+ * panel on the right (hidden on narrow viewports, where the left fills).
  */
 export function SignInScreen() {
+  const t = useT();
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-background text-foreground">
-      <SignInPanel />
+    <main className="flex min-h-dvh flex-col bg-background text-foreground lg:grid lg:grid-cols-2">
+      {/* Left — the sign-in content. */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 sm:px-10">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/10 shadow-sm shadow-primary/20">
+            <FileText className="size-7 text-primary" />
+          </div>
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight">{t("account.loginHeading", { app: APP_NAME })}</h1>
+          <p className="mt-1 text-[11px] font-bold tracking-wider text-muted-foreground/60 uppercase">{APP_BRAND}</p>
+          <SignInPanel showHeader={false} />
+          <p className="mt-8 text-xs text-muted-foreground/70">{t("account.loginPrivacyNote")}</p>
+        </div>
+      </div>
+
+      {/* Right — branded image panel (desktop only). */}
+      <div className="relative hidden overflow-hidden bg-gradient-to-br from-primary to-primary/75 lg:flex lg:items-center lg:justify-center">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 -left-16 size-120 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute right-[-10%] -bottom-24 size-120 rounded-full bg-black/10 blur-3xl" />
+        </div>
+        <div className="relative z-10 flex max-w-md flex-col items-center px-12 text-center text-primary-foreground">
+          <div className="flex items-center justify-center rounded-3xl bg-white/95 p-6 shadow-xl shadow-black/10">
+            <img src="/brand/markdown.webp" alt={APP_NAME} className="h-20 w-auto" />
+          </div>
+          <p className="mt-8 text-2xl font-semibold tracking-tight">{t("account.loginTagline")}</p>
+          <ul className="mt-8 space-y-3.5 text-left">
+            {LOGIN_POINTS.map(({ key, Icon }) => (
+              <li key={key} className="flex items-center gap-3 text-sm text-primary-foreground/90">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white/15">
+                  <Icon className="size-4" aria-hidden />
+                </span>
+                <span>{t(key)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </main>
   );
 }

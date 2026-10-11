@@ -173,6 +173,15 @@ export function App() {
     useEffect(() => {
         if (!accounts && (route === "login" || route === "profile")) navigate("editor", { replace: true });
     }, [accounts, route, navigate]);
+    // A signed-out visitor belongs on /login, so the sign-in front door has its
+    // own address — a deep link, a refresh and the browser Back all land there
+    // rather than on "/". The share-link guest flow is exempt: it opens straight
+    // into the editor (see the signed-out gate below).
+    useEffect(() => {
+        if (accounts && accountStatus === "signed-out" && !shareSeed && route !== "login") {
+            navigate("login", { replace: true });
+        }
+    }, [accounts, accountStatus, shareSeed, route, navigate]);
 
     // The account control at the right end of the top header. One element for
     // the life of the shell: a fresh element each render would needlessly
