@@ -1,8 +1,8 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IndexedDBStorageAdapter, StorageQuotaError, utf8Bytes } from "../store/idb-storage-adapter";
-import { useDocumentStore } from "../store/documentStore";
-import { createDocument } from "../store/document";
+import { IndexedDBStorageAdapter, StorageQuotaError, utf8Bytes } from "../store/persistence/idb-storage-adapter";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { createDocument } from "../store/documents/document";
 
 /**
  * A086 — the storage ceiling is the browser's, measured in real bytes, and a
@@ -14,7 +14,7 @@ import { createDocument } from "../store/document";
  * "Save failed — retrying" indefinitely with no way to free space.
  */
 
-vi.mock("../store/snapshot-store", () => ({
+vi.mock("../store/history/snapshot-store", () => ({
   snapshotStore: { maybeRecordOnSave: vi.fn(), record: vi.fn(async () => null) },
 }));
 

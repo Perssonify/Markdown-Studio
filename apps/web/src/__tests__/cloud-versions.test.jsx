@@ -7,12 +7,12 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { accountVersionsProvider } from "../app/cloud/versions";
-import { getAccountVersions, setAccountVersions } from "../store/account-versions";
-import { snapshotStore } from "../store/snapshot-store";
-import { useDocumentStore } from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
-import { DialogProvider } from "../ui/DialogProvider";
-import { VersionHistorySheet } from "../ui/VersionHistorySheet";
+import { getAccountVersions, setAccountVersions } from "../store/history/account-versions";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { VersionHistorySheet } from "../ui/history/versionHistorySheet";
 import { en } from "../i18n/en";
 
 const para = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });

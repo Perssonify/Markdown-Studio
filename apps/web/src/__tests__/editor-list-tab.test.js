@@ -14,7 +14,7 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
-import { TiptapPane } from "../ui/TiptapPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 
 const tab = () => new KeyboardEvent("keydown", { key: "Tab", code: "Tab", bubbles: true, cancelable: true });
 const LIST_THEN_PARA = "<ul><li><p>alpha</p></li></ul><p>bravo</p>";

@@ -45,7 +45,7 @@ describe("the rich pane is shielded while its document is large", () => {
 });
 
 it("is registered in the live editor", () => {
-  const pane = readFileSync(join(process.cwd(), "src/ui/TiptapPane.tsx"), "utf8");
+  const pane = readFileSync(join(process.cwd(), "src/ui/panes/tiptapPane/index.tsx"), "utf8");
   expect(pane).toMatch(/\n\s+ReactSelectionShield,/);
 });
 

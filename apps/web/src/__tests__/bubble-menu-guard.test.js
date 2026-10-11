@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { runBubbleCommand } from "../ui/bubble-menu-command";
+import { runBubbleCommand } from "../ui/panes/utils/bubble-menu-command";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
 
@@ -61,7 +61,7 @@ describe("runBubbleCommand", () => {
 });
 
 describe("both bubble menus route through the guard", () => {
-  for (const file of ["src/ui/TableBubbleMenu.tsx", "src/ui/LinkBubbleMenu.tsx"]) {
+  for (const file of ["src/ui/panes/tableBubbleMenu/index.tsx", "src/ui/panes/linkBubbleMenu/index.tsx"]) {
     it(`${file} restores the isEditable test its own shouldShow replaced`, () => {
       const src = read(file);
       expect(src).toMatch(/shouldShow=\{\(\{ editor: ed \}\) => ed\.isEditable/);
@@ -79,7 +79,7 @@ describe("both bubble menus route through the guard", () => {
   it("the link menu no longer reaches for window.prompt as its primary path", () => {
     // Chrome blocks JS dialogs invoked from a cross-origin iframe — which is
     // exactly the shipped /embed.html, where Edit did nothing at all.
-    const src = read("src/ui/LinkBubbleMenu.tsx")
+    const src = read("src/ui/panes/linkBubbleMenu/index.tsx")
       .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(src).toMatch(/onEditLink/);
     const editFn = src.slice(src.indexOf("const handleEdit"), src.indexOf("const handleUnlink"));

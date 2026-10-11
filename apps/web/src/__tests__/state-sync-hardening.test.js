@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { useDocumentStore, sameMetrics } from "../store/documentStore";
+import { useDocumentStore, sameMetrics } from "../store/documents/documentStore";
 
 /**
  * State/sync hardening:

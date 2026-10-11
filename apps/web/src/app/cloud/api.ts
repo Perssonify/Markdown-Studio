@@ -1,4 +1,4 @@
-import type { DocumentRecord } from "../../store/document";
+import type { DocumentRecord } from "@/store/documents/document";
 import type { SyncedTree } from "./folder-merge";
 
 /** The account's view of one document (or its tombstone). */
@@ -25,7 +25,7 @@ export interface PresignedTransfer {
 }
 
 /**
- * The account's side of sync (apps/api/src/routes/sync.ts). An interface, so
+ * The account's side of sync (apps/api/src/modules/sync/routes/index.ts). An interface, so
  * the sync engine is tested against an in-memory account
  * (cloud-sync.test.js) and runs against the real one here.
  */

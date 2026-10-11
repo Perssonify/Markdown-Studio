@@ -1,10 +1,10 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assetStore } from "../store/asset-store";
-import { assetRef } from "../store/asset-refs";
-import { GC_GRACE_MS, cleanUpUnusedAssets, defaultReferenceSources, findUnusedAssets } from "../store/asset-gc";
-import { snapshotStore } from "../store/snapshot-store";
-import { useDocumentStore } from "../store/documentStore";
+import { assetStore } from "../store/assets/asset-store";
+import { assetRef } from "../store/assets/asset-refs";
+import { GC_GRACE_MS, cleanUpUnusedAssets, defaultReferenceSources, findUnusedAssets } from "../store/assets/asset-gc";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 /**
  * "Clean up unused images" must never delete an image anything can still

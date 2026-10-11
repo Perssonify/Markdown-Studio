@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { buildFolderTree, docOrderKey, useFolderStore } from "../store/folders";
-import { spliceOrder } from "../ui/folder-dnd";
+import { buildFolderTree, docOrderKey, useFolderStore } from "../store/documents/folders";
+import { spliceOrder } from "../ui/workspace/folderTree/folder-dnd";
 
 const doc = (id, updated) => ({
   id,

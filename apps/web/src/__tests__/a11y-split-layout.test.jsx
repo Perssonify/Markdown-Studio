@@ -4,12 +4,12 @@ import { act, render } from "@testing-library/react";
 import postcss from "postcss";
 import React, { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EditorLayout } from "../ui/EditorPanes";
+import { EditorLayout } from "../ui/panes/editorPanes";
 import {
   SPLIT_STACK_MIN_HEIGHT,
   isUprightTouchDevice,
   splitShouldStack,
-} from "../ui/split-layout";
+} from "../ui/panes/editorPanes/split-layout";
 
 /**
  * A100. Split view stacked its panes on EVERY viewport under 768px wide. A
@@ -137,7 +137,7 @@ describe("the print stylesheet prints the document, not the app (A100)", () => {
   });
 
   it("marks the chrome it hides in the components that render it", () => {
-    for (const f of ["src/ui/Toolbar.tsx", "src/ui/StatusBar.tsx", "src/ui/BottomTray.tsx", "src/App.tsx"]) {
+    for (const f of ["src/ui/chrome/toolbar/index.tsx", "src/ui/chrome/statusBar/index.tsx", "src/ui/chrome/bottomTray/index.tsx", "src/App.tsx"]) {
       expect(readFileSync(join(process.cwd(), f), "utf8"), f).toContain("data-print-hide");
     }
   });

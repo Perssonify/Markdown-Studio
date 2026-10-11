@@ -29,7 +29,7 @@ function run(command: string, cwd = repo(), env: Record<string, string> = {}): v
 
 if (!args.has("--skip-build")) {
   // This deployment has the API, so the site is built WITH accounts: visitors
-  // sign in (apps/web/src/app/account.ts). A build without the flag — the
+  // sign in (apps/web/src/app/account/account.ts). A build without the flag — the
   // Vercel one — has no account UI and makes no account calls.
   run("bunx turbo run build:app --filter=@perssonify/editor", repo(), { VITE_ACCOUNTS: "on" });
   run("bunx turbo run build --filter=@markdown-studio/api");

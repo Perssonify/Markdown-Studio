@@ -3,7 +3,7 @@
 ## Symptoms
 - The status bar reads **"Storage full — not saving"** ("Storage full" on a
   narrow screen). That is the save status `full`
-  ([`SaveStatus`](../../src/store/documentStore.ts#L190)), and it is TERMINAL:
+  ([`SaveStatus`](../../src/store/documents/documentStore.ts#L190)), and it is TERMINAL:
   autosave stops retrying it on a timer.
 - A toast, at most once every 30 s: "Storage is full — your latest changes are
   NOT saved. Free space by deleting documents or old versions (Tools ▸ Version
@@ -16,10 +16,10 @@
 1. **Whose limit?** There is no app-level cap. The IndexedDB adapter's limit is
    the browser's quota for this site, read from `navigator.storage.estimate()`;
    a `QuotaExceededError` from the browser becomes a
-   [`StorageQuotaError`](../../src/store/idb-storage-adapter.ts#L76)
-   ([`isQuotaExceeded`](../../src/store/idb-storage-adapter.ts#L164)). A host can
+   [`StorageQuotaError`](../../src/store/persistence/idb-storage-adapter.ts#L76)
+   ([`isQuotaExceeded`](../../src/store/persistence/idb-storage-adapter.ts#L164)). A host can
    set an optional HARD cap, `storageConfig`'s
-   [`maxBytes`](../../src/store/idb-storage-adapter.ts#L71), which is checked
+   [`maxBytes`](../../src/store/persistence/idb-storage-adapter.ts#L71), which is checked
    inside the write transaction. The localStorage fallback (used only
    where IndexedDB is missing) is bounded by the browser's ~5 MB localStorage
    allowance.
@@ -35,14 +35,14 @@
    up to ~12 MB) and the service worker's precache of the app itself (~8 MB).
 3. **Find the large document.** Usually one with pasted or imported **images**:
    they are stored inside the document as base64 data URLs
-   ([src/store/import-export.ts](../../src/store/import-export.ts) `importImage`).
+   ([src/store/importExport/import-export.ts](../../src/store/importExport/import-export.ts) `importImage`).
    Storing images as separate blobs is not built yet (A086, partial).
 
 ## Remediation
 - **Keep a copy first:** File ▸ Export ▸ **Full backup (.zip) — restorable**.
   Exporting downloads a file and does not need space in browser storage.
 - **Free space:** delete documents you do not need. A delete retries the parked
-  save by itself ([`storageFreed`](../../src/store/documentStore.ts#L1180)); so
+  save by itself ([`storageFreed`](../../src/store/documents/documentStore.ts#L1180)); so
   does **Erase history** in the toast that follows a delete. Deleting old
   versions in Tools ▸ Version history also frees space; then press **Save**
   (the toolbar's Save is enabled in the `full` state) or keep typing.
@@ -62,8 +62,8 @@
 If saves are refused while the estimate shows plenty of room, file an issue
 with the `storageMetrics` values, the `navigator.storage.estimate()` output and
 the size of the failing document. The code is the save path in
-[src/store/idb-storage-adapter.ts](../../src/store/idb-storage-adapter.ts)
+[src/store/persistence/idb-storage-adapter.ts](../../src/store/persistence/idb-storage-adapter.ts)
 (`save`, `_refreshEstimate`, `isQuotaExceeded`) and the `full` handling in
-`saveActiveDoc` ([src/store/documentStore.ts](../../src/store/documentStore.ts)).
+`saveActiveDoc` ([src/store/documents/documentStore.ts](../../src/store/documents/documentStore.ts)).
 Note that a `full` save is not recorded in Copy diagnostics; only failed,
 refused and conflicted saves are.

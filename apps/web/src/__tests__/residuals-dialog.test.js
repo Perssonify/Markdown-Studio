@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { RESIDUAL_KINDS } from "../ui/ResidualsDialog";
+import { RESIDUAL_KINDS } from "../ui/importExport/residualsDialog";
 
 /**
  * Import fidelity used to be a bare number in the status bar: "3 residuals",
@@ -15,7 +15,7 @@ describe("residual reporting", () => {
     // A type with no entry renders as its raw slug ("dropped-attribute"), which
     // is the jargon this dialog exists to replace. Adding a residual type to
     // ingest.ts means adding its plain-language heading here.
-    const src = readFileSync(join(process.cwd(), "src/store/ingest.ts"), "utf8");
+    const src = readFileSync(join(process.cwd(), "src/store/importExport/ingest.ts"), "utf8");
     const emitted = new Set();
     // Only the types pushed as residuals — not `type: "doc"`/`"paragraph"`,
     // which are ProseMirror node names in the same file.

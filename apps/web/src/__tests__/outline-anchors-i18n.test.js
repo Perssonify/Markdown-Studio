@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { __setWordSegmenterForTests, computeCounts } from "../store/document";
-import { extractHeadings, findHeadingByAnchor, normalizeHeadingAnchor } from "../store/doc-outline";
-import { computeCanonicalStats } from "../store/fidelity";
+import { __setWordSegmenterForTests, computeCounts } from "../store/documents/document";
+import { extractHeadings, findHeadingByAnchor, normalizeHeadingAnchor } from "../store/documents/doc-outline";
+import { computeCanonicalStats } from "../store/documents/fidelity";
 
 const heading = (level, text) => ({ type: "heading", attrs: { level }, content: [{ type: "text", text }] });
 const text = (t) => ({ type: "text", text: t });

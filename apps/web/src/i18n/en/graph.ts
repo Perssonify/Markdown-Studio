@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Relationship map: GraphView.tsx. */
+/** Relationship map: graphView/index.tsx. */
 export const graph = {
   "graph.relationshipMap": "Relationship map",
   /** Header line under the title: `{notes}` is graph.noteCount, `{links}` graph.linkCount. */

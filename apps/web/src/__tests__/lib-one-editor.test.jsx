@@ -15,13 +15,13 @@ import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { OneEditorPerPage, SECOND_EDITOR_ERROR } from "../ui/OneEditorPerPage";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
+import { OneEditorPerPage, SECOND_EDITOR_ERROR } from "../ui/shared/oneEditorPerPage";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
 import {
   claimEditorInstance, onEditorInstanceReleased, releaseEditorInstance, useDocumentStore,
-} from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
+} from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 const body = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 const tick = (ms = 50) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });

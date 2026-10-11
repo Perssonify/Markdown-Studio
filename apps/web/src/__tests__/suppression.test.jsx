@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createRef } from "react";
 import { act, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TiptapPane } from "../ui/TiptapPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 
 /**
  * The rich pane's cross-pane projection must be SILENT.
@@ -122,7 +122,7 @@ describe("rich-pane projection (setHTML)", () => {
 });
 
 describe("source pin", () => {
-  const pane = readFileSync(join(process.cwd(), "src/ui/TiptapPane.tsx"), "utf8");
+  const pane = readFileSync(join(process.cwd(), "src/ui/panes/tiptapPane/index.tsx"), "utf8");
 
   it("setHTML passes emitUpdate: false", () => {
     const body = pane.slice(pane.indexOf("setHTML: (html)"));

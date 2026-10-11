@@ -4,7 +4,7 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHORTCUT_GROUPS } from "../data/shortcuts";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 /**
  * `useKeyboardShortcuts` had no tests at all, and one documented binding was

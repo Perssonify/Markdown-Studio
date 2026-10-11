@@ -12,13 +12,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { snapshotStore } from "../store/snapshot-store";
-import { useDocumentStore } from "../store/documentStore";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
-import { useUIStore } from "../store/uiStore";
-import { DialogProvider } from "../ui/DialogProvider";
-import { VersionHistorySheet, snapshotDeleteConfirm } from "../ui/VersionHistorySheet";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
+import { useUIStore } from "../store/preferences/uiStore";
+import { DialogProvider } from "../ui/dialogs/dialogProvider";
+import { VersionHistorySheet, snapshotDeleteConfirm } from "../ui/history/versionHistorySheet";
 import { en } from "../i18n/en";
 
 const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
@@ -168,7 +168,7 @@ describe("the document-delete dialogs tell the truth", () => {
     expect(said(single)).toMatch(/Version history/);
     expect(said(single)).not.toMatch(/cannot be undone/);
 
-    const panel = read("src/ui/WorkspacePanel.tsx");
+    const panel = read("src/ui/workspace/workspacePanel/index.tsx");
     const bulk = panel.slice(panel.indexOf("const handleBulkDelete"));
     const bulkConfirm = bulk.slice(0, bulk.indexOf("if (!ok) return;"));
     expect(said(bulkConfirm)).toMatch(/Version history/);

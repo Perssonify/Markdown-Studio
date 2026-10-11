@@ -14,7 +14,7 @@ import {
   isEmptyCapture,
   partitionPinned,
   sortCards,
-} from "../store/cards.ts";
+} from "../store/cards/cards.ts";
 
 const p = (text) => ({ type: "paragraph", content: [{ type: "text", text }] });
 const h = (text, level = 1) => ({

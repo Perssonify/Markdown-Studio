@@ -6,7 +6,7 @@ import { buildMarked } from "../engine/build-marked";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
 import { addBaseRules } from "../engine/turndown-rules.ts";
 import { Callout } from "../extensions/Callout.ts";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 // GitHub-style callouts: `> [!NOTE]` blockquotes render as callout cards and
 // round-trip back to `> [!NOTE]` markdown.

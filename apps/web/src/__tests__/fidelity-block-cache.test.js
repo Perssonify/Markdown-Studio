@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeCounts } from "../store/document";
-import { computeCanonicalStats, computeFidelity } from "../store/fidelity";
+import { computeCounts } from "../store/documents/document";
+import { computeCanonicalStats, computeFidelity } from "../store/documents/fidelity";
 
 /**
  * The status bar's word count and fidelity report are recomputed on every

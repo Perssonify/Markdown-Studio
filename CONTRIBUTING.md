@@ -63,7 +63,7 @@ bun run build        # the editor's app, library and embed builds, and the API b
   `textarea.tsx` are the documented exception: their `forwardRef` wrappers are
   deliberate while React 18 is in the library's peer range, and must be
   re-applied after any regeneration.)
-- **A node or mark added to `TiptapPane.tsx` must also be registered in
+- **A node or mark added to `tiptapPane/index.tsx` must also be registered in
   `apps/web/src/engine/serialize-doc.ts`** (`SERIALIZE_EXTENSIONS`), or headless
   export silently corrupts or throws on documents that use it.
 - **Style:** ESLint ([`apps/web/eslint.config.js`](apps/web/eslint.config.js))

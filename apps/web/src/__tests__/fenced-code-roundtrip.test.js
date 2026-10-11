@@ -20,7 +20,7 @@ import { buildMarked } from "../engine/build-marked";
 import { cleanHtmlForTurndown } from "../engine/html-cleaner";
 import { addBaseRules, addInlineStyleRule } from "../engine/turndown-rules.ts";
 import { preprocessMarkdown, normalizeMarkdown } from "../engine/preprocessor.ts";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 /** The engine's own turndown configuration — `codeBlockStyle: "fenced"` is not
  *  optional here: with turndown's default the same input comes back as an

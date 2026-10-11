@@ -16,7 +16,7 @@ import {
   watchSaveProblems,
 } from "../utils/app-health";
 import { _resetDiagnosticsForTests, getDiagnostics } from "../utils/diagnostics";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 const realReload = pageActions.reload;
 let onLine = true;

@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { EXPORT_CONTENT_CSS } from "../store/import-export";
+import { EXPORT_CONTENT_CSS } from "../store/importExport/import-export";
 
 /**
  * The remaining backlog items, revalidated at HEAD and fixed where real. Their
@@ -41,7 +41,7 @@ describe("A8 — the menu-bar document title does not clip its own letters", () 
     // cut off.
     // codeOnly: the comment beside the fix names `leading-none`, so the raw
     // source would satisfy the "not to contain" check for the wrong reason.
-    const menu = codeOnly(read("src/ui/MenuBar.tsx"));
+    const menu = codeOnly(read("src/ui/chrome/menuBar/index.tsx"));
     // Anchored on the title expression (its fallback is translated since A099).
     const anchor = '{props.docTitle || t("common.untitled")}';
     expect(menu).toContain(anchor);
@@ -52,7 +52,7 @@ describe("A8 — the menu-bar document title does not clip its own letters", () 
 });
 
 describe("A9 — only the header under the floating trigger pays for it", () => {
-  const panes = codeOnly(read("src/ui/EditorPanes.tsx"));
+  const panes = codeOnly(read("src/ui/panes/editorPanes/index.tsx"));
 
   it("makes the 44px clearance conditional", () => {
     // The trigger is absolutely positioned at the editor's top-left, so exactly
@@ -73,7 +73,7 @@ describe("A9 — only the header under the floating trigger pays for it", () => 
 
 describe("E8 — the scroll-sync toggle is reachable by finger", () => {
   it("grows the button on coarse pointers while the icon stays 16px", () => {
-    const panes = codeOnly(read("src/ui/EditorPanes.tsx"));
+    const panes = codeOnly(read("src/ui/panes/editorPanes/index.tsx"));
     expect(panes).toContain("pointer-coarse:h-8");
     expect(panes).toContain("pointer-coarse:w-8");
   });
@@ -94,7 +94,7 @@ describe("F3 — a broken wiki link looks broken", () => {
   // freshly typed link) is now held by links-resolution.test.js against a real
   // editor; what stays here is the wiring and the stylesheet.
   const hook = codeOnly(read("src/hooks/useLinkIndex.ts"));
-  const pane = codeOnly(read("src/ui/TiptapPane.tsx"));
+  const pane = codeOnly(read("src/ui/panes/tiptapPane/index.tsx"));
   const css = read("src/styles.css");
 
   it("marks unresolved links with a decoration fed the library, not by writing PM's DOM", () => {

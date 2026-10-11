@@ -199,7 +199,7 @@ describe("A097 — no lookbehind in the modules the entry chunk loads", () => {
   // Safari/iOS before 16.4: one in the entry chunk blanks the whole app.
   // Lazily loaded modules only fail when opened; they are listed so a new one
   // is a conscious decision, not an accident.
-  const LAZY_ALLOWED = new Set(["src/ui/FindReplace.tsx"]);
+  const LAZY_ALLOWED = new Set(["src/ui/find/findReplace/index.tsx"]);
 
   // Only regex LITERALS are parsed with the script. A lookbehind in a string
   // handed to `new RegExp` inside try/catch fails at run time, where it can be

@@ -10,8 +10,8 @@
  */
 import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EditorContextMenu } from "../ui/EditorContextMenu";
-import { useUIStore } from "../store/uiStore";
+import { EditorContextMenu } from "../ui/chrome/editorContextMenu";
+import { useUIStore } from "../store/preferences/uiStore";
 
 function apiWith(getHeadings) {
   return {

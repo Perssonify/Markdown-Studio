@@ -4,9 +4,9 @@ import StarterKit from "@tiptap/starter-kit";
 import { Copy, Check } from "lucide-react";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CodeBlockWithCopy } from "../ui/CodeBlockWithCopy";
-import { lucideIcon } from "../ui/code-block-plain-view";
-import { useUIStore } from "../store/uiStore";
+import { CodeBlockWithCopy } from "../ui/panes/codeBlockWithCopy";
+import { lucideIcon } from "../ui/panes/codeBlockWithCopy/code-block-plain-view";
+import { useUIStore } from "../store/preferences/uiStore";
 
 /**
  * A083: an ordinary code block is a PLAIN DOM node view — a React node view per

@@ -16,7 +16,7 @@ import {
   FOLDER_PAD,
   LABEL_GAP,
   LABEL_H,
-} from "../store/graph-metrics";
+} from "../store/graph/graph-metrics";
 
 const overlaps = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 const inside = (outer, inner) =>

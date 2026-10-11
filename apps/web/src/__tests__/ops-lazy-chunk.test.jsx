@@ -9,10 +9,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LazyChunkBoundary } from "../ui/LazyChunkBoundary";
+import { LazyChunkBoundary } from "../ui/shared/lazyChunkBoundary";
 import { pageActions } from "../utils/app-health";
 import { _resetDiagnosticsForTests, getDiagnostics } from "../utils/diagnostics";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 const realReload = pageActions.reload;
 let onLine = true;

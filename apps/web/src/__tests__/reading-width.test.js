@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { migrateReadingWidth } from "../store/uiStore";
+import { migrateReadingWidth } from "../store/preferences/uiStore";
 import { en } from "../i18n/en";
 
 /**
@@ -46,10 +46,10 @@ describe("migrateReadingWidth", () => {
 });
 
 describe("the measure reaches the panes as characters", () => {
-  const panes = readFileSync(join(process.cwd(), "src/ui/EditorPanes.tsx"), "utf8");
-  const settings = readFileSync(join(process.cwd(), "src/ui/SettingsSheet.tsx"), "utf8");
+  const panes = readFileSync(join(process.cwd(), "src/ui/panes/editorPanes/index.tsx"), "utf8");
+  const settings = readFileSync(join(process.cwd(), "src/ui/settings/settingsSheet/index.tsx"), "utf8");
   const css = readFileSync(join(process.cwd(), "src/styles.css"), "utf8");
-  const cm = readFileSync(join(process.cwd(), "src/ui/CodeMirrorPane.tsx"), "utf8");
+  const cm = readFileSync(join(process.cwd(), "src/ui/panes/codeMirrorPane/index.tsx"), "utf8");
 
   it("emits ch, not px", () => {
     expect(panes).toContain("`${readingWidth}ch`");

@@ -5,8 +5,8 @@
 import { createDatabase } from "@markdown-studio/db";
 import { runMigrations } from "@markdown-studio/db/migrate";
 import { fileURLToPath } from "node:url";
-import { loadEnv } from "./config/env.ts";
-import { resolveSecretsIntoEnv } from "./lib/aws-secrets.ts";
+import { loadEnv } from "./config/env/index.ts";
+import { resolveSecretsIntoEnv } from "./lib/awsSecrets/index.ts";
 
 export async function handler(): Promise<{ migrated: true }> {
   await resolveSecretsIntoEnv(process.env);

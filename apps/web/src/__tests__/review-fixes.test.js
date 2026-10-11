@@ -1,8 +1,8 @@
 import { gzipSync, strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { isDangerousUrl } from "../utils/url-safety.ts";
-import { sanitizeCanonicalNode } from "../store/canonical-sanitize.ts";
-import { extractArchive } from "../store/archive.ts";
+import { sanitizeCanonicalNode } from "../store/documents/canonical-sanitize.ts";
+import { extractArchive } from "../store/importExport/archive.ts";
 
 function fileFromBytes(bytes, name) {
   return new File([bytes], name);

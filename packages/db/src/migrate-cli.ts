@@ -11,7 +11,7 @@ if (!url) {
   process.exit(1);
 }
 const ssl = (process.env.DATABASE_SSL ?? "off") as DatabaseSsl;
-// DATABASE_CA as the API reads it (config/env.ts): literal "\n"s are line breaks.
+// DATABASE_CA as the API reads it (config/env/index.ts): literal "\n"s are line breaks.
 const ca = process.env.DATABASE_CA?.trim().replaceAll("\\n", "\n") || undefined;
 const handle = createDatabase({ url, ssl, max: 1, ca });
 try {

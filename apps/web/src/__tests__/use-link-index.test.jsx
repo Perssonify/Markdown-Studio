@@ -1,8 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLinkIndex } from "../hooks/useLinkIndex";
-import { useDocumentStore } from "../store/documentStore";
-import { useEditorStore } from "../store/editorStore";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useEditorStore } from "../store/editor/editorStore";
 
 /**
  * The link index's HOOK — the half that decides HOW to update.

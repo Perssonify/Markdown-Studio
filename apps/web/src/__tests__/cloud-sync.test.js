@@ -1,13 +1,13 @@
 // Cloud sync end to end on the device side (app/cloud/engine.ts): two devices,
 // each with its own real (fake-indexeddb) library, syncing through an
-// in-memory account that keeps the server's rules (apps/api routes/sync.ts:
+// in-memory account that keeps the server's rules (apps/api modules/sync/routes/index.ts:
 // conditional writes, tombstones, verified images).
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { SyncEngine } from "../app/cloud/engine";
-import { sha256Hex } from "../store/asset-store";
-import { createDocument } from "../store/document";
-import { IndexedDBStorageAdapter } from "../store/idb-storage-adapter";
+import { sha256Hex } from "../store/assets/asset-store";
+import { createDocument } from "../store/documents/document";
+import { IndexedDBStorageAdapter } from "../store/persistence/idb-storage-adapter";
 
 const T = (m) => `2026-10-05T10:${String(m).padStart(2, "0")}:00.000Z`;
 const para = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });

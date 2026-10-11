@@ -13,8 +13,8 @@ import React from "react";
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { useDocumentStore } from "../store/documentStore";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 const tick = (ms = 50) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 

@@ -10,7 +10,7 @@ import {
   act, click, fireEvent, heading, installBrowserStubs, key, mountEditor, para, scrolledTo, seededAdapter,
   storedDoc, toastText, typeMd, until, untilHydrated,
 } from "./behave-harness";
-import { useUIStore } from "../store/uiStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 vi.setConfig({ testTimeout: 30000 });
 

@@ -1,14 +1,14 @@
 import { useCallback } from "react";
 import { headlessSchema } from "../engine/serialize-doc";
-import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, extractArchive, isArchiveName, type ArchiveAsset, type ExtractedArchive } from "../store/archive";
-import { prepareImportedDocAssets, type AssetPayload } from "../store/assets";
-import type { DocumentRecord } from "../store/document";
-import { useDocumentStore } from "../store/documentStore";
-import { useFolderStore } from "../store/folders";
-import { captureIngestHeadless } from "../store/headless-ingest";
-import { getFileContentAndFormat } from "../store/import-export";
-import type { IngestFormat } from "../store/ingest";
-import type { ImportResource } from "../store/url-import";
+import { ArchiveEncryptedError, ArchiveWrongPasswordError, archiveEntriesToItems, extractArchive, isArchiveName, type ArchiveAsset, type ExtractedArchive } from "../store/importExport/archive";
+import { prepareImportedDocAssets, type AssetPayload } from "../store/assets/assets";
+import type { DocumentRecord } from "../store/documents/document";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useFolderStore } from "../store/documents/folders";
+import { captureIngestHeadless } from "../store/importExport/headless-ingest";
+import { getFileContentAndFormat } from "../store/importExport/import-export";
+import type { IngestFormat } from "../store/importExport/ingest";
+import type { ImportResource } from "../store/importExport/url-import";
 import { t } from "../i18n";
 import type { DocStore, Engine, Lifecycle, PromptText, TiptapRef, Toast } from "./types";
 
@@ -306,7 +306,7 @@ export async function collectImportItems(
     // mammoth) and feed the existing "html" ingest path (sanitize + analyze).
     if (/\.docx$/i.test(file.name)) {
       try {
-        const { convertDocxToHtml } = await import("../store/docx-import");
+        const { convertDocxToHtml } = await import("../store/importExport/docx-import");
         const { html } = await convertDocxToHtml(file);
         if (html.trim()) {
           items.push({ raw: html, format: "html", folderPath: [] });

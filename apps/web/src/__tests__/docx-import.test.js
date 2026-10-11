@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertDocxToHtml } from "../store/docx-import.ts";
+import { convertDocxToHtml } from "../store/importExport/docx-import.ts";
 
 // Build a minimal real .docx in-memory with the `docx` lib, then convert it back
 // via mammoth. Exercises the actual mammoth conversion (not a mock) and confirms

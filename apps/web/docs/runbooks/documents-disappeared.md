@@ -153,9 +153,9 @@ or localStorage — the watchdog only adds a `pf:boot-recovered` note.
 ## Escalation
 No on-call. File an issue with: browser + version, the address used, whether
 storage was cleared, the Copy-diagnostics text, and the console output of the
-snippet above. The write path is [src/store/documentStore.ts](../../src/store/documentStore.ts)
-(`saveActiveDoc`, `initialize`) + [src/store/idb-storage-adapter.ts](../../src/store/idb-storage-adapter.ts);
-the snapshot ring is [src/store/snapshot-store.ts](../../src/store/snapshot-store.ts);
-the unload stash is [src/store/crash-recovery.ts](../../src/store/crash-recovery.ts);
+snippet above. The write path is [src/store/documents/documentStore.ts](../../src/store/documents/documentStore.ts)
+(`saveActiveDoc`, `initialize`) + [src/store/persistence/idb-storage-adapter.ts](../../src/store/persistence/idb-storage-adapter.ts);
+the snapshot ring is [src/store/history/snapshot-store.ts](../../src/store/history/snapshot-store.ts);
+the unload stash is [src/store/persistence/crash-recovery.ts](../../src/store/persistence/crash-recovery.ts);
 persistence, the backup reminder and the canary are
-[src/store/storage-durability.ts](../../src/store/storage-durability.ts).
+[src/store/persistence/storage-durability.ts](../../src/store/persistence/storage-durability.ts).

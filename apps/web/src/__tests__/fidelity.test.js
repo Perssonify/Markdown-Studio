@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeFidelity } from '../store/fidelity';
+import { computeFidelity } from '../store/documents/fidelity';
 
 // --- PM JSON builders ---
 

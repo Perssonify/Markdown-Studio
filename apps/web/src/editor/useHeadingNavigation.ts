@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useActiveHeading } from "../hooks/useActiveHeading";
-import { extractHeadings, findHeadingByAnchor } from "../store/doc-outline";
-import { useDocumentStore } from "../store/documentStore";
+import { extractHeadings, findHeadingByAnchor } from "../store/documents/doc-outline";
+import { useDocumentStore } from "../store/documents/documentStore";
 import { scrollBehavior } from "../utils/reduced-motion";
 import { t } from "../i18n";
 import type { DocStore, Lifecycle, SyncEngine, TiptapRef, Toast, UIStore } from "./types";

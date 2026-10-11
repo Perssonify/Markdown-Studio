@@ -13,19 +13,19 @@ import { join } from "path";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import React, { createRef } from "react";
 import { renderHook, act, render } from "@testing-library/react";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
-import { useEditorStore } from "../store/editorStore";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
+import { useEditorStore } from "../store/editor/editorStore";
 import { useSyncEngine } from "../engine/useSyncEngine";
-import { computeCounts, extractText } from "../store/document";
-import { computeFidelity, computeCanonicalStats } from "../store/fidelity";
-import { useDocumentStore } from "../store/documentStore";
+import { computeCounts, extractText } from "../store/documents/document";
+import { computeFidelity, computeCanonicalStats } from "../store/documents/fidelity";
+import { useDocumentStore } from "../store/documents/documentStore";
 import { normalizeMarkdown, preprocessMarkdown } from "../engine/preprocessor";
-import { EditorLayout, MarkdownPane, HtmlPane } from "../ui/EditorPanes";
-import { SettingsSheet } from "../ui/SettingsSheet";
-import { MemorySheet } from "../ui/MemorySheet";
-import { LinkBuilderDialog } from "../ui/LinkBuilderDialog";
-import { VersionHistorySheet } from "../ui/VersionHistorySheet";
-import { WorkspacePanel } from "../ui/WorkspacePanel";
+import { EditorLayout, MarkdownPane, HtmlPane } from "../ui/panes/editorPanes";
+import { SettingsSheet } from "../ui/settings/settingsSheet";
+import { MemorySheet } from "../ui/diagnostics/memorySheet";
+import { LinkBuilderDialog } from "../ui/share/linkBuilderDialog";
+import { VersionHistorySheet } from "../ui/history/versionHistorySheet";
+import { WorkspacePanel } from "../ui/workspace/workspacePanel";
 import { useTickWhileActive } from "../hooks/useTickWhileActive";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
@@ -665,7 +665,7 @@ describe("panels that read a live value at render keep ticking", () => {
   });
 
   it("the two sheets that read live values actually use it", () => {
-    for (const [file, ms] of [["src/ui/MemorySheet.tsx", "1000"], ["src/ui/VersionHistorySheet.tsx", "30_000"]]) {
+    for (const [file, ms] of [["src/ui/diagnostics/memorySheet/index.tsx", "1000"], ["src/ui/history/versionHistorySheet/index.tsx", "30_000"]]) {
       const src = read(file);
       expect(src, `${file} must tick while open`).toMatch(
         new RegExp(`useTickWhileActive\\(open, ${ms}\\)`)

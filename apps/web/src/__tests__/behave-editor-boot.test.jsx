@@ -14,9 +14,9 @@ import {
   act, click, fireEvent, installBrowserStubs, mdText, menuClick, mountEditor, onDisk, seededAdapter, store,
   textOf, toastText, until, untilHydrated, untilMdHas,
 } from "./behave-harness";
-import { buildZip } from "../store/archive";
-import { useFolderStore } from "../store/folders";
-import { useUIStore } from "../store/uiStore";
+import { buildZip } from "../store/importExport/archive";
+import { useFolderStore } from "../store/documents/folders";
+import { useUIStore } from "../store/preferences/uiStore";
 
 vi.setConfig({ testTimeout: 30000 });
 

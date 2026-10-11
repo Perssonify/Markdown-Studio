@@ -13,7 +13,7 @@
 import React, { createRef } from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { EditorLayout } from "../ui/EditorPanes";
+import { EditorLayout } from "../ui/panes/editorPanes";
 
 function mount(onFileDrop) {
   const props = {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ingest, sanitizeForIngest } from "../store/ingest.ts";
+import { ingest, sanitizeForIngest } from "../store/importExport/ingest.ts";
 
 describe("sanitizeForIngest — XSS hardening", () => {
   it("removes <script> and its body (not dumped as text)", () => {

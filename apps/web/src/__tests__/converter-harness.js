@@ -13,7 +13,7 @@
 import { Editor } from "@tiptap/core";
 import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 export function engineFor(features = {}) {
   const f = { ...DEFAULT_MARKDOWN_FEATURES, ...features };

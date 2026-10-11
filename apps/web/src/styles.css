@@ -1597,7 +1597,7 @@ img[src$="#gh-light-mode-only"] { display: revert; }
    The size is. sonner draws it at 20x20, against WCAG 2.5.8's 24x24 minimum,
    on the one control whose entire job is dismissing something that covers the
    app. It is grown with a ::before rather than by resizing the button, exactly
-   as the resize separators are (DIVIDER_HIT_AREA in ui/use-divider-drag.ts):
+   as the resize separators are (DIVIDER_HIT_AREA in ui/shared/hooks/use-divider-drag.ts):
    sonner positions the button FROM its own box, so changing that box moves the
    glyph. A pseudo-element leaves the visual and the geometry untouched. */
 [data-sonner-toast] [data-close-button]::before {

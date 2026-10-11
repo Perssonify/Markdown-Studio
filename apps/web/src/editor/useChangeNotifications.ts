@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import type { PerssonifyEditorProps } from "./props";
-import type { DocumentRecord } from "../store/document";
+import type { DocumentRecord } from "../store/documents/document";
 import type { CmRef, DocStore, SyncEngine, TiptapRef } from "./types";
 
 /** The document JSON the sync engine hands over on every projection. */

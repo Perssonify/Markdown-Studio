@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect } from "vitest";
-import { fetchImportResource } from "../store/url-import";
+import { fetchImportResource } from "../store/importExport/url-import";
 
 const DRIVE_VIEW = "https://drive.google.com/file/d/12a4D7oHxJ7bKlkJV6hpQMS5FX8iPXSnD/view?usp=sharing";
 

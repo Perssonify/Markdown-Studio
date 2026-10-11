@@ -19,7 +19,7 @@ import { useBottomTray } from "../editor/useBottomTray";
 import { useContentChangeEmitter } from "../editor/useChangeNotifications";
 import { collectImportItems } from "../editor/useImportPipeline";
 import { useWorkspaceViews } from "../editor/useWorkspaceViews";
-import { EDITOR_FLOOR_PX, TRAY_MIN_PX } from "../ui/tray-fit";
+import { EDITOR_FLOOR_PX, TRAY_MIN_PX } from "../ui/chrome/bottomTray/tray-fit";
 
 describe("useWorkspaceViews", () => {
   /** The hook with a real store stand-in, so setShowGraph feeds back as showGraph. */

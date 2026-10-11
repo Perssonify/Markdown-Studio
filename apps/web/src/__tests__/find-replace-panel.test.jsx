@@ -8,7 +8,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackgroundColor } from "../extensions/BackgroundColor";
 import { __resetFindWorkerForTests, __setFindWorkerFactoryForTests, findWorkerSource } from "../formatting/find-worker";
-import { FindReplaceBar } from "../ui/FindReplace";
+import { FindReplaceBar } from "../ui/find/findReplace";
 
 /**
  * The Find & Replace panel against a REAL CodeMirror view and a REAL TipTap

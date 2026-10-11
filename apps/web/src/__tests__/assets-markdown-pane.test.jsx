@@ -2,9 +2,9 @@ import "fake-indexeddb/auto";
 import { act, render } from "@testing-library/react";
 import { createElement, createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CodeMirrorPane } from "../ui/CodeMirrorPane";
-import { useUIStore } from "../store/uiStore";
-import { assetStore, sha256Hex } from "../store/asset-store";
+import { CodeMirrorPane } from "../ui/panes/codeMirrorPane";
+import { useUIStore } from "../store/preferences/uiStore";
+import { assetStore, sha256Hex } from "../store/assets/asset-store";
 
 /**
  * Stored images in the MARKDOWN pane (A086): the reference folds to its first

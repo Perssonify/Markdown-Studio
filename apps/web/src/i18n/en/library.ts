@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Workspace panel: WorkspacePanel.tsx, FolderTree.tsx, DocNavPanel.tsx. */
+/** Workspace panel: workspacePanel/index.tsx, folderTree/index.tsx, docNavPanel/index.tsx. */
 export const library = {
   "library.workspace": "Workspace",
   "library.resizeWorkspacePanel": "Resize workspace panel",

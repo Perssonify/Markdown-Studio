@@ -16,10 +16,10 @@ import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
-import { useDocumentStore } from "../store/documentStore";
-import { carryBlockAttrs } from "../store/card-save";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { carryBlockAttrs } from "../store/cards/card-save";
 
 const tick = (ms = 50) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 

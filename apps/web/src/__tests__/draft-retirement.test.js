@@ -11,10 +11,10 @@
  * interleaving; there is no timing sleep or source-text assertion.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useDocumentStore } from "../store/documentStore";
-import { createDocument } from "../store/document";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { createDocument } from "../store/documents/document";
 
-vi.mock("../store/snapshot-store", () => ({
+vi.mock("../store/history/snapshot-store", () => ({
   snapshotStore: { maybeRecordOnSave: vi.fn(), record: vi.fn(async () => null) },
 }));
 const canonical = (text) => ({ type: "doc", content: [

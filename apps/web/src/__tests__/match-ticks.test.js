@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
  * wired.
  */
 
-const src = readFileSync(join(process.cwd(), "src/ui/FindReplace.tsx"), "utf8");
+const src = readFileSync(join(process.cwd(), "src/ui/find/findReplace/index.tsx"), "utf8");
 const codeOnly = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const code = codeOnly(src);
 

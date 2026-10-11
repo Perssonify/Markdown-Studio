@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { EDITOR_FLOOR_PX, TRAY_MIN_PX, trayFits } from "../ui/tray-fit";
+import { EDITOR_FLOOR_PX, TRAY_MIN_PX, trayFits } from "../ui/chrome/bottomTray/tray-fit";
 
 /**
  * A1. The bottom tray and the editor are siblings in one `overflow-hidden`
@@ -82,7 +82,7 @@ describe("the tray toggles consult it", () => {
 });
 
 describe("the tray collapses to zero height without a layout jump (D6)", () => {
-  const tray = readFileSync(join(process.cwd(), "src/ui/BottomTray.tsx"), "utf8");
+  const tray = readFileSync(join(process.cwd(), "src/ui/chrome/bottomTray/index.tsx"), "utf8");
 
   it("animates grid-template-rows instead of mounting a 256px block", () => {
     expect(tray).toContain("transition-[grid-template-rows]");

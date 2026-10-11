@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFolderTree, groupDocsByFolder, useFolderStore } from '../store/folders.ts';
+import { buildFolderTree, groupDocsByFolder, useFolderStore } from '../store/documents/folders.ts';
 
 const doc = (id, updated = '2026-01-01') => ({
   id,

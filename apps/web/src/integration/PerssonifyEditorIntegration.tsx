@@ -1,16 +1,16 @@
 import { ThemeProvider } from "next-themes";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { ErrorBoundary } from "../ui/ErrorBoundary";
-import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter";
-import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
+import { ErrorBoundary } from "../ui/shared/errorBoundary";
+import type { StorageAdapter, StorageQuotaError } from "../store/persistence/storage-adapter";
+import type { IDBStorageConfig, StorageMetrics } from "../store/persistence/idb-storage-adapter";
 import type { InternalEditorHandle } from "../editor/props";
 import { type AssociationStore, createAssociationStore, mergeGraphWithAssociations } from "./associations";
 import { createHostBridge, type EditorChromeLevel, type EditorViewMode, type HostBridge } from "./host-bridge";
 import { formatDocumentsForPrompt, linkedPromptItems, type PromptFormat, type PromptItem } from "./prompt-builder";
 import { sanitizeCssColor } from "../theme/palette";
 import { warnDeprecated } from "./deprecation";
-import { clearLocalData } from "../store/documentStore";
+import { clearLocalData } from "../store/documents/documentStore";
 
 /** Rich payload for a link activation inside the editor. Lets a host resolve
  *  deep links (custom scheme / relative path) into its own app while external

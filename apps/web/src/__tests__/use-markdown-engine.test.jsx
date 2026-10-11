@@ -1,8 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useMarkdownEngine } from "../engine/useMarkdownEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
-import { useUIStore } from "../store/uiStore";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
+import { useUIStore } from "../store/preferences/uiStore";
 
 /**
  * The conversion engine's HOOK. `build-marked`, the preprocessor and the

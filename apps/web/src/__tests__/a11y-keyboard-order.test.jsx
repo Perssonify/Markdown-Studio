@@ -3,8 +3,8 @@ import { join } from "path";
 import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SkipToEditor, findEditorFocusTarget } from "../ui/SkipToEditor";
-import { Walkthrough } from "../ui/Walkthrough";
+import { SkipToEditor, findEditorFocusTarget } from "../ui/shared/skipToEditor";
+import { Walkthrough } from "../ui/tour/walkthrough";
 
 /**
  * A094. Keyboard navigation was long and out of order: the library came last
@@ -26,7 +26,7 @@ describe("DOM order matches visual order", () => {
     expect(panel).toBeLessThan(main);
     // …and nothing re-orders it visually any more, so the two cannot disagree.
     expect(pe).not.toContain("md:order-first");
-    expect(codeOnly(read("src/ui/WorkspacePanel.tsx"))).not.toContain("order-first");
+    expect(codeOnly(read("src/ui/workspace/workspacePanel/index.tsx"))).not.toContain("order-first");
   });
 
   it("puts the skip link first in the app shell", () => {

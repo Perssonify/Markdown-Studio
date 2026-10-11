@@ -47,7 +47,7 @@ import { DOMParser as PMDOMParser, Fragment, type Node as PMNode, type Schema } 
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { StepMap } from "@tiptap/pm/transform";
 import { TableMap } from "@tiptap/pm/tables";
-import type { MarkdownFeatureSettings } from "../store/settings";
+import type { MarkdownFeatureSettings } from "../store/preferences/settings";
 import { frontmatterLength, preprocessMarkdown, type PreprocessFeatures } from "./preprocessor";
 import { resetFootnoteNumbering } from "./build-marked";
 

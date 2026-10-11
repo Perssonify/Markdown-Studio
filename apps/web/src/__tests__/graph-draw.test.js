@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry, parseCircles } from "../store/graph-draw";
+import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry, parseCircles } from "../store/graph/graph-draw";
 
 /** The per-element link geometry, as GraphView's small-map renderer computes it. */
 function elementGeometry(a, b, r1, r2, twoWay) {

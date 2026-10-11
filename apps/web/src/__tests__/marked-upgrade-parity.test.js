@@ -39,7 +39,7 @@ import { marked } from "marked";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { buildMarked } from "../engine/build-marked";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { exportAsDocx } from "../store/docx-export";
+import { exportAsDocx } from "../store/importExport/docx-export";
 import { throughRichPane } from "./converter-harness";
 
 const FIXTURE = join(process.cwd(), "src/__tests__/fixtures/marked-parity.json");

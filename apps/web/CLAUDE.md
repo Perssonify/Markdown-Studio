@@ -38,7 +38,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   interior pages, and the first-run guided tour.
 - `src/ui/pages/` — routed interior pages (`AboutPage`, `HelpPage`, shared
   `PageChrome`); copy/data in `help-content.ts`, `src/data/credits.ts`.
-- `src/ui/Walkthrough.tsx` — custom spotlight tour targeting `data-tour="…"`
+- `src/ui/tour/walkthrough/index.tsx` — custom spotlight tour targeting `data-tour="…"`
   anchors on real UI (menubar / mode-switcher / settings / toolbar / editor).
 - **First-run library** (`src/data/starter-documents.ts` + `DEFAULT_CONTENT`): the app
   seeds **three** cross-linked documents, not one — **Welcome** (the `initialDocument`),
@@ -62,12 +62,12 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   other starters link to it as `[[Markdown Studio|Welcome]]`. The test used to
   hard-code "Welcome", so it agreed with `[[Welcome]]` links that resolved to
   nothing and were drawn as broken on first run.
-- `src/store/doc-outline.ts` — `extractHeadings(canonical)` + `buildHeadingTree()`
-  (stack-nesting), consumed by the Workspace Outline tab. **`src/ui/GraphView.tsx`
+- `src/store/documents/doc-outline.ts` — `extractHeadings(canonical)` + `buildHeadingTree()`
+  (stack-nesting), consumed by the Workspace Outline tab. **`src/ui/graph/graphView/index.tsx`
   is the MAP-ONLY knowledge-graph overlay** — the force-directed relationship graph
   of the whole workspace (documents + wiki-links + folder clusters).
   **There is NO in-graph document-structure view** — single-doc structure lives in
-  the **Workspace panel's Outline tab** (`WorkspacePanel.tsx`, visible beside the
+  the **Workspace panel's Outline tab** (`workspacePanel/index.tsx`, visible beside the
   overlay, which only covers `<main>`); an in-graph structure pane + Document⇄Map
   toggle were REMOVED (they duplicated that Outline). `DocumentGraph.tsx` was
   DELETED. The graph tracks `activeDocId` and never carries its own library tree
@@ -177,7 +177,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     layout untouched, never reheats) and **orphan / broken-link filter chips** —
     orphans are already isolated nodes (`findOrphans`); broken links come from
     `linkIndex.unresolved` via the `unresolved` prop (`brokenSourceIds`/`brokenLinks`
-    in `src/store/graph-metrics.ts`, unit-tested), highlighted on demand with an
+    in `src/store/graph/graph-metrics.ts`, unit-tested), highlighted on demand with an
     OFF-by-default ghost-target overlay (ghost nodes are excluded from the sim).
     The chips are the FILTER; the rail lists the actual notes behind each count.
   - **The rail is the whole information layer.** With a node selected: title,
@@ -283,7 +283,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     maps are also capped by the clock (`SLICE_MS`, next bullet).
   - **Above `LARGE_MAP_MIN` (250) notes the map is drawn and paced for scale; at or
     below it nothing changes** (A088). Ordinary dots, links and arrowheads are batched
-    `<path>`s (`store/graph-draw.ts`, integer hundredths inside
+    `<path>`s (`store/graph/graph-draw.ts`, integer hundredths inside
     `scale(1/BATCH_UNITS)`), memoized on `layoutVersionRef` and the zoom, never on
     the camera position; open, selected, hovered and keyboard-focused notes are drawn
     in full on top, and the pointer is hit-tested in code against the copy that was
@@ -295,7 +295,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     carry `pf-node-dots` plus `data-doc-ids` in draw order (`parseCircles`,
     `e2e/map-measure.mjs`) — keep them measurable. Measured at 2,000 notes under 4×
     CPU: first frame 8.9 → 1.0 s, blocking 64 → 6 s, a frame 3.7 s → 83 ms.
-  - **The layout is `stepLayout` in `store/graph-physics.ts`.** At or below
+  - **The layout is `stepLayout` in `store/graph/graph-physics.ts`.** At or below
     `BARNES_HUT_MIN` (300) it is the exact loop — a FOLDERLESS map pinned
     bit-for-bit against `graph-legacy.js` (a frozen copy of the old loop — never
     "fix" it; folder maps changed on purpose, above); above it,
@@ -328,7 +328,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   through `setWorkspaceView` / `toggleWorkspaceView`; the graph half must keep routing
   via **`setGraphVisible`** (NOT `setShowGraph`) or the standalone app's `/graph` route
   control desyncs. Surfaced as a **three-way `ButtonGroup` beside the ModeSwitcher**
-  (`data-tour="workspace-views"`, `SURFACES` in `MenuBar.tsx`: **Editor · Cards · Map**,
+  (`data-tour="workspace-views"`, `SURFACES` in `menuBar/index.tsx`: **Editor · Cards · Map**,
   `aria-pressed`), mirrored by a radio group in the View menu. **Editor is a first-class
   option, NOT "both overlays off"** — leaving a view by un-toggling the button you
   entered through read as an escape hatch. So the switcher buttons SELECT
@@ -340,14 +340,14 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   rather than just `setGraphVisible(false)`. The switcher stays visible because the
   overlay only covers `<main>`. Pinned by `src/__tests__/workspace-views.test.js`.
   **Escape belongs to what it was pressed in** (A057): Cards and the map listen in
-  the BUBBLE phase through `overlayShouldHandleEscape` (`ui/overlay-escape.ts`: not
+  the BUBBLE phase through `overlayShouldHandleEscape` (`ui/shared/utils/overlay-escape.ts`: not
   `defaultPrevented`, not composing, pressed inside the overlay or with nothing
   focused, and no VISIBLE modal, menu or listbox open outside it). The old
   capture-phase close shut the board when Escape was meant for a card's delete
   confirmation, shut the map mid-rename (the blur then committed the rename being
   cancelled) and discarded the composer's draft; a hidden listbox parked on `<body>`
   (the emoji list) held every Escape until visibility counted.
-- `src/ui/MenuBar.tsx` defines its menu content once (`sections`) and renders it
+- `src/ui/chrome/menuBar/index.tsx` defines its menu content once (`sections`) and renders it
   as a desktop row or, on phones (`useIsMobile`), a single ☰ dropdown that
   **DRILLS DOWN**: level 0 is the collapsed group list (File, Edit, …), tapping a
   group slides into `sections[i].content` with a "‹ All menus" back row
@@ -360,7 +360,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   Callout, …) stay as Base UI sub-flyouts. **`DropdownMenuLabel` (Base UI
   GroupLabel) MUST sit inside a `DropdownMenuGroup` — a bare label throws Base UI
   error #31 and crashed the whole app on the first mobile ☰ tap once.**
-- **`src/ui/LinkBuilder.tsx` is the ONE share/embed builder**, rendered both in
+- **`src/ui/share/linkBuilder/index.tsx` is the ONE share/embed builder**, rendered both in
   Tools ▸ Share / embed link (`LinkBuilderDialog`, now just dialog chrome) and
   inline on the Help page under "Sharing & embedding". Help used to carry a
   cut-down copy that could only produce `?import_url=` links, so the reference
@@ -387,9 +387,9 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   **"Keyboard navigation" group** documents keys that are not chords (skip link,
   Esc-then-Tab out of the markdown pane, the roving toolbar and library tree) —
   a navigation key nobody can discover does not exist for a keyboard user (A094).
-- **Appearance controls live once in `src/ui/ThemeControls.tsx`** (`ThemeSwatch`,
+- **Appearance controls live once in `src/ui/settings/themeControls/index.tsx`** (`ThemeSwatch`,
   `ThemeCircleRow`, `AccentCircleRow`, `THEME_OPTIONS`) and are reused by the
-  View ▸ Appearance menu (`MenuBar.tsx`) and the Settings sheet (`SettingsSheet.tsx`).
+  View ▸ Appearance menu (`menuBar/index.tsx`) and the Settings sheet (`settingsSheet/index.tsx`).
   Theme radios bind next-themes' **raw `theme`** (NOT `resolvedTheme`) so "System"
   is a genuine selectable value; app default is `system` (`main.tsx`). Embeds stay
   host-controlled (`embed.tsx` keeps its `theme` param / dark default).
@@ -397,7 +397,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `spellcheck`/`focusMode`; persisted `pf:font-size`/`pf:line-height`/`pf:reading-width`/
   `pf:spellcheck`/`pf:focus-mode`). Font size / line height / reading width are pushed as
   **CSS custom properties** (`--editor-font-size`/`--editor-line-height`/`--reading-width`)
-  set inline on the editor split container (`EditorPanes.tsx` `splitRef`) and read by BOTH
+  set inline on the editor split container (`editorPanes/index.tsx` `splitRef`) and read by BOTH
   panes: `.ProseMirror`/`[data-md-preview]` (styles.css) and CodeMirror's `.cm-content`
   (`cmTheme()` — vars, NOT hardcoded 13px/1.6). **Reading width caps the CONTENT column**
   (`.ProseMirror`/`.cm-content` `max-width` + `margin-inline:auto`), never the flex pane —
@@ -411,7 +411,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   restoring full opacity. Surfaced in Settings ▸ "Reading & typography" + a View-menu Focus-mode
   checkbox.
 - **Structured "Select" engine** (`src/formatting/select-scope.ts`): the Select… ▸
-  submenu (Edit tab + right-click, shared renderer `src/ui/SelectMenuContent.tsx`).
+  submenu (Edit tab + right-click, shared renderer `src/ui/chrome/selectMenuContent/index.tsx`).
   **Selection-only** — every entry places a real selection, no act-on-all actions
   (those belong to the toolbar / Find▸Format). Contiguous: `selectAll`/`selectBlock`
   (active pane). Scattered scopes (all headings/H1-6, paragraphs, list items,
@@ -450,7 +450,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   only). **While the section is hidden those switches read their DEFAULTS**
   (`uiStore`), or a value stored before the gate existed would stick with no control
   left to change it — `admin-prefs-fallback.test.js`. Add new admin-only modules here.
-- **Diagnostics console** (`src/ui/ConsolePanel.tsx` + `src/store/console-commands.ts`):
+- **Diagnostics console** (`src/ui/diagnostics/consolePanel/index.tsx` + `src/store/diagnostics/console-commands.ts`):
   an admin-gated (`consoleEnabled`) bottom-tray tab running a **CURATED, READ-ONLY**
   command registry (`CONSOLE_COMMANDS` + `runConsoleCommand`) over EXISTING read
   APIs — `diag.lifecycle` (`getLifecycleState`), `diag.storage` (`getStorageMetrics`),
@@ -462,7 +462,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   adding a vetted entry, never a general escape hatch. `console-commands.ts` is PURE
   (tests inject a fake context). If a mutating command is ever added it MUST route
   through `dispatch`/`patchDocById` and honor read-only — never a raw storage write.
-- **Unified Workspace panel** (`src/ui/WorkspacePanel.tsx`): a single **left-docked
+- **Unified Workspace panel** (`src/ui/workspace/workspacePanel/index.tsx`): a single **left-docked
   tabbed tray** that consolidates the former left library Sidebar and the document
   **Outline** into ONE surface — **Files / Outline** tabs (`WorkspaceTab =
   "files"|"outline"`). Document-first: the Files tab is the single library (search,
@@ -470,7 +470,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   drag-to-import, `FolderTree` when unfiltered / a flat per-doc list when
   searching or in select mode, per-doc export DropdownMenu, footer count, AdUnit
   in dev builds); selecting a doc updates the Outline live. **Both lists are
-  WINDOWED** (`ui/use-windowed-list.ts`: measured variable heights, with the focused
+  WINDOWED** (`ui/workspace/hooks/use-windowed-list.ts`: measured variable heights, with the focused
   row, a rename and an open menu PINNED so focus never drops to `<body>`), rows are
   memoized on PRIMITIVES (`storage.list()` returns fresh summary objects on every
   save, so a memo on the object never bailed out) and the search filter runs on
@@ -479,13 +479,13 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`aria-level`/`aria-posinset`, one roving tab stop, arrows/Home/End/Enter, F2
   rename, Shift+F10 menu) and the flat list a listbox (A094).
   Outline reuses **`TocList`**
-  (exported FROM `DocNavPanel.tsx`, along with `EmptyOutline`; the `DocNavPanel`
+  (exported FROM `docNavPanel/index.tsx`, along with `EmptyOutline`; the `DocNavPanel`
   component itself is now dead but retained as their home). **There is NO in-panel
   graph tab** — an earlier "Map" tab (a horizontal `DocumentGraph`, then a vertical
   `StructureMap`) was tried and REMOVED: the outline covers document navigation, and
   the knowledge graph is the full-screen **relationship-map overlay** toggled from
   the View menu / graph button (`graphVisible` from `useWorkspaceViews`,
-  `src/ui/GraphView.tsx`) — do not
+  `src/ui/graph/graphView/index.tsx`) — do not
   re-add a graph into the narrow dock. `StructureMap.tsx` was deleted; a persisted
   `pf:workspace-tab==="map"` migrates to `"outline"` in `uiStore`. This **replaced
   the shadcn Sidebar + DocNavPanel + the old `docNav` "closed|toc|split|full" expand
@@ -510,7 +510,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`MenuBar.onOutline` → `setShowSidebar(true)` + `setWorkspaceTab("outline")`).
   The `useActiveHeading` tracker is gated to `showSidebar && workspaceTab==="outline"
   && mode!=="md"`.
-- **Cards board** (`src/ui/CardsView.tsx` + pure helpers in `src/store/cards.ts`): a
+- **Cards board** (`src/ui/cards/cardsView/index.tsx` + pure helpers in `src/store/cards/cards.ts`): a
   Google-Keep-style board over the WHOLE library — every document is a card. Opened
   from the **top-bar surface switcher** / View ▸ Cards / **⌘⇧K** / a **launcher button
   in the Workspace panel header** (`onOpenCards` — a launcher, deliberately NOT a third
@@ -547,7 +547,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   replaces the whole note with what that markdown parses back to, and the Clean
   converter has no carrier for colour, highlight or font, so ONE card edit stripped
   them from the entire note (A020). Alignment has no carrier at all:
-  `carryBlockAttrs` (`store/card-save.ts`) restores it on every block the edit left
+  `carryBlockAttrs` (`store/cards/card-save.ts`) restores it on every block the edit left
   unchanged and the user is told when edited ones lost it; a note holding anything
   the round trip cannot carry is snapshotted before it is replaced. The save passes
   the revision the card was read from (`expectedUpdated`), so another tab's newer
@@ -580,7 +580,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   function components: there every consumer ref read null — ⌘F typed the query INTO
   the document, and inline rename and prompt autofocus died. `forwardRef` works on
   both. Re-apply it after any regeneration while 18 is in the peer range.
-- **Bottom tray** (`src/ui/BottomTray.tsx`): an expandable, tabbed tray above the
+- **Bottom tray** (`src/ui/chrome/bottomTray/index.tsx`): an expandable, tabbed tray above the
   `StatusBar` (collapsed = zero height). Document Links is the first tab
   (`BacklinksPanel` has a `hideHeader` embed mode); a **Console** tab
   (`ConsolePanel`) appears as a second tab only when the admin `consoleEnabled`
@@ -625,7 +625,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   ProseMirror maintains for its OWN plain-text-paste branch, and hands it to
   `handleHtmlPaste` as an explicit `{ shiftKey }` argument. Pinned by
   `paste-styled.test.js` and `e2e/cases/journeys.mjs`.
-- **Import fidelity is READABLE, not just counted** (`src/ui/ResidualsDialog.tsx`).
+- **Import fidelity is READABLE, not just counted** (`src/ui/importExport/residualsDialog/index.tsx`).
   The status bar's residual chip is a BUTTON that opens a grouped, plain-language
   list of what the import could not represent (`ResidualItem` carries type / tag /
   attribute / reason / location — the detail was always recorded, it just had
@@ -633,7 +633,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `ingest.ts` pushes as a residual, or the dialog renders a raw slug — the jargon
   it exists to replace; `residuals-dialog.test.js` scrapes ingest.ts and pins it.
   `DocumentRecord.residuals` is typed `ResidualItem[]` (it was `unknown[]`).
-- **Status bar** (`src/ui/StatusBar.tsx`): a three-region footer. The **primary
+- **Status bar** (`src/ui/chrome/statusBar/index.tsx`): a three-region footer. The **primary
   tray toggle is a full-height, bordered, labeled chevron on the FAR LEFT** ("Panel"
   + `PanelBottom` + up/down chevron) — the obvious expand/collapse the user asked for.
   The interior surfaces contextual detail (active doc title, view mode + read-only,
@@ -650,7 +650,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (the schema lock). **The save indicator is not a live region**: it walks editing →
   saving → saved on every autosave (nine announcements in twelve seconds of typing).
   One visually hidden region speaks only when saving starts failing, fails in a new
-  way or recovers (`ui/save-announcer.ts`, A096).
+  way or recovers (`ui/chrome/statusBar/save-announcer.ts`, A096).
 - **The open document is marked in the library** (`FolderTree` doc rows + the flat
   search/select list in `WorkspacePanel`): `bg-sidebar-accent` + a primary left bar +
   primary icon + semibold title + `aria-current`. It was `bg-card` — the exact colour
@@ -724,7 +724,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   hover-only, or they become unreachable on phones. Small icon controls that stay
   visible on mobile (status bar, ModeSwitcher) get `pointer-coarse:` size bumps to
   ≥32px. **Split stacks by HEIGHT as well as width** (`splitShouldStack`,
-  `ui/split-layout.ts`): only below 768px wide (the ☰ breakpoint) AND with ≥500px of
+  `ui/panes/editorPanes/split-layout.ts`): only below 768px wide (the ☰ breakpoint) AND with ≥500px of
   height for two panes, or on a touch device held upright — whose ORIENTATION, unlike
   its keyboard-shrunk viewport under `interactive-widget=resizes-content`, does not
   flip while typing. Stacking on width alone gave a landscape phone two 37–69px
@@ -753,7 +753,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   shell (landscape notches). The embed stays host-controlled — these live on the standalone
   chrome only.
 - **Library row actions live once, rendered into two menu primitives**
-  (`FolderTree.tsx`). A `MenuFam` object (`{Item,Sub,SubTrigger,SubContent,Separator}`)
+  (`folderTree/index.tsx`). A `MenuFam` object (`{Item,Sub,SubTrigger,SubContent,Separator}`)
   lets ONE body renderer (`DocMenuBody`/`FolderMenuBody`, + generic `MoveToMenu`/
   `ExportDocSubmenu`) drive BOTH the hover **⋮ dropdown** and a **right-click /
   long-press context menu** (Base UI `components/ui/context-menu.tsx`). **There is
@@ -785,7 +785,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `serialize-doc.test.js` round-trips the known nodes and `converter-roundtrip.test.js`
   pins `TableCellAlign` in both lists, but NO test compares the two schemas' full
   node/mark sets — keep them in step by hand.
-- **Find/Replace (`FindReplace.tsx`) is a floating draggable panel** (`position:fixed`,
+- **Find/Replace (`findReplace/index.tsx`) is a floating draggable panel** (`position:fixed`,
   translucent `bg-card/80 backdrop-blur`), not a docked bar. PE passes the panel mode
   live (`initialMode={frMode}`) so ⌘H switches an already-open panel to Replace.
   Drag is pointer-events on the header handle, clamped to the viewport. **Panel mode is a Find|Replace segmented control** (`panelMode`,
@@ -843,7 +843,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`pf:fr-*`). **Panel position**: `pos` state is set in a `useLayoutEffect` on mount
   (before paint) — it restores the last dragged position (`pf:fr-pos`, written in
   `endDrag`) or **centers on the viewport**, always clamped on-screen.
-- **Placeholder ad slots are a DEVELOPMENT-build surface** (`src/ui/AdUnit.tsx`).
+- **Placeholder ad slots are a DEVELOPMENT-build surface** (`src/ui/shared/adUnit/index.tsx`).
   `adsAvailable()` (`utils/build-gates.ts`, `import.meta.env.DEV`) is checked where
   the slots RENDER, not only at the toggles, so a `pf:show-ads=true` stored by an
   older version or a crafted `?ads=1` link cannot paint "Your Ad Here" over the
@@ -879,7 +879,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **`view_mode=md|html|split`** URL param maps to `setMode` (App.tsx reader; embed.tsx
   aliases it to `mode`). The standalone app's URL-param reader (App.tsx) also applies
   `readonly` (and `ads`, in dev only) then strips them via `history.replaceState`.
-- **Password-protected ZIPs**: `isZipEncrypted(buf)` in `store/archive.ts` reads the
+- **Password-protected ZIPs**: `isZipEncrypted(buf)` in `store/importExport/archive.ts` reads the
   central-directory (fallback: local-header) general-purpose bit 0 with NO dependency;
   `extractArchive` throws `ArchiveEncryptedError` when encrypted+no password, and
   decrypts via a **lazy** `@zip.js/zip.js` import when a `password` option is given
@@ -887,7 +887,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `src/editor/useImportPipeline.ts`) and URL import
   (`fetchImportResource` + `UrlImportDialog`) prompt for a masked password (the shared
   `useDialog().prompt` gained a `type: "password"`) and retry.
-- **Archive path safety**: `normalizeArchivePath(path)` in `store/archive.ts` strips
+- **Archive path safety**: `normalizeArchivePath(path)` in `store/importExport/archive.ts` strips
   absolute roots, Windows drives (`C:`, incl. drive-relative `C:foo`), `..`/`.`/empty
   segments, AND prototype-pollution keys (`__proto__`/`constructor`/`prototype`);
   `extractArchive` runs every entry through it before the path is trusted anywhere
@@ -897,7 +897,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   "perssonify-backup", { canonical: true })` writes each doc as the full
   `perssonify-document` JSON envelope (canonical + title/id/tags/metadata/timestamps).
   Re-import restores the exact library state, which requires TWO cooperating paths:
-  (1) the `pmjson` ingest branch (`store/ingest.ts`) forwards
+  (1) the `pmjson` ingest branch (`store/importExport/ingest.ts`) forwards
   `tags/metadata/created/updated/origin/residuals` + pins `userTitle` from the envelope
   (NOT just id/canonical/title — omitting them silently drops the state and resets
   timestamps); (2) `archiveEntriesToItems` detects an all-envelope archive
@@ -908,7 +908,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   only, and they come back separately as `extractArchive(...).assets` (the returned
   entries array carries an `assets` property).
   **Every export ZIP filename carries an `exportTimestamp()` `YYYYMMDD-HHMMSSmmm` suffix**
-  (`store/import-export.ts`) for implicit version control. JSON and backup exports
+  (`store/importExport/import-export.ts`) for implicit version control. JSON and backup exports
   share **`toExportEnvelope`**, which stamps `schemaVersion` and LEAVES OUT
   `origin.raw` (the whole input as first imported) and the clipboard alternates —
   text the user may have deleted since, which nothing reads on import (A079). Large
@@ -960,18 +960,18 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   - Host-supplied CSS colors (`bg`/`accentColor` in `embed.tsx` +
     `PerssonifyEditorIntegration.tsx`) go through `sanitizeCssColor` (`theme/palette.ts`)
     — rejects `url(`/`expression(`/`var(`/`;{}` so a value can't become a tracking beacon.
-  - `htmlToCanonical` (`store/canonical-ops.ts`) parses via an inert `DOMParser`, never
+  - `htmlToCanonical` (`store/documents/canonical-ops.ts`) parses via an inert `DOMParser`, never
     `el.innerHTML` on a live element (avoids resource loads / mutation-XSS).
   - **Anything written into a `style` attribute goes through `engine/css-safety.ts`**
     — an allowlist; a CSS escape (`posit\ion`) walked past the old filter. Renderers
     concatenate canonical attrs into `style="…"`, so `sanitizeCanonicalNode`
-    (`store/canonical-sanitize.ts`) validates colour, highlight, font family,
+    (`store/documents/canonical-sanitize.ts`) validates colour, highlight, font family,
     alignment, cell align, column widths and theme-image sources wherever canonical
     JSON enters (import, storage load) — a crafted JSON document injected CSS (A070,
     A073). Ingest strips `class`/`id`/`name` except `language-*`, `sr-only`,
     `wiki-link` and `perssonify-link`, and without a DOM parser `sanitizeForIngest`
     fails CLOSED (everything becomes text).
-  - **Mermaid's CSS carriers are locked** (`MERMAID_SECURE_KEYS`, `DiagramPreview.tsx`):
+  - **Mermaid's CSS carriers are locked** (`MERMAID_SECURE_KEYS`, `diagramPreview/index.tsx`):
     `themeCSS`, font families, theme variables and `dompurifyConfig` may be set by
     `initialize()` only, never by a diagram's `%%{init}%%` or front matter. Mermaid
     pastes them into a `<style>` and checks only brace balance, so any opened
@@ -990,7 +990,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     (LF-normalised) and names the new one. Moving CSP to enforcing is an owner
     decision; `e2e:csp` runs the build under the ENFORCED policy and must stay at
     zero violations.
-- **Images are binary assets** (A086, `store/asset-store.ts`, `asset-refs.ts`,
+- **Images are binary assets** (A086, `store/assets/asset-store.ts`, `asset-refs.ts`,
   `assets.ts`, `asset-gc.ts`; `extensions/AssetImages.ts` and `cm-asset-refs.ts`).
   Pasted, dropped and imported images live ONCE in a sidecar IndexedDB,
   `perssonify-assets` (`perssonify-assets:<ns>` under a host namespace; stores
@@ -1016,7 +1016,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     per-block converter all do (`inert-html.test.jsx`). Never call
     `editor.getHTML()`/`generateHTML()` directly for content. Every surface
     that SHOWS document HTML resolves through the node view, `useAssetSrc`, or
-    `neutralizeAssetSrcs` + `useResolvedAssetImages` (`ui/asset-dom.ts`). `e2e:csp`
+    `neutralizeAssetSrcs` + `useResolvedAssetImages` (`ui/shared/utils/asset-dom.ts`). `e2e:csp`
     pins it.
   - **Exports are self-contained.** HTML, markdown, PDF/print, Word and Copy as
     MD/HTML inline the bytes (`inlineAssetRefsInText`); the JSON export's envelope
@@ -1033,7 +1033,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     before deleting it. **Any new place that can hold a document's content must be
     added to `defaultReferenceSources`**, or the clean-up deletes images it still
     uses. Erase all local data clears the store too.
-- **An ordinary code block is a PLAIN DOM node view** (`ui/code-block-plain-view.ts`,
+- **An ordinary code block is a PLAIN DOM node view** (`ui/panes/codeBlockWithCopy/code-block-plain-view.ts`,
   A083); only diagram and score blocks are React. TipTap mounts each React node view
   with a synchronous render that re-renders the ONE portal list holding every node
   view, so opening a document was quadratic in its code blocks. The plain view keeps
@@ -1046,7 +1046,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   structurally and never calls `update` (`code-block-plain-view.test.jsx`). Math
   nodes and theme images are still React node views: a formula-heavy document may
   open slowly for the same reason.
-- **Mermaid/ABC blocks render by default in ONE cohesive framed card** (`CodeBlockWithCopy.tsx`
+- **Mermaid/ABC blocks render by default in ONE cohesive framed card** (`codeBlockWithCopy/index.tsx`
   `.diagram-frame`: header label + Edit/Copy · source · live preview), mirroring the math
   nodes. The `<pre><NodeViewContent/></pre>` stays MOUNTED (hidden via `.diagram-source.is-hidden`)
   — never unmount it, ProseMirror owns that content and the fenced-code round-trip depends on it.
@@ -1076,10 +1076,10 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   pane) so casing never mangles syntax. The MD masker uses PUA delimiters (U+E000/E001), NOT bare
   digits, so it can't collide with numbers in the document.
 - **Archive imports wrap loose root files in a folder named after the archive** via
-  `archiveEntriesToItems(entries, zipBaseName)` in `store/archive.ts` (used by both the
+  `archiveEntriesToItems(entries, zipBaseName)` in `store/importExport/archive.ts` (used by both the
   file-upload and URL-import sites in `src/editor/useImportPipeline.ts`). A single top-level folder is kept as-is; a
   lone file imports at root.
-- **DOCX import** (`store/docx-import.ts` `convertDocxToHtml`): a `.docx` upload can't take
+- **DOCX import** (`store/importExport/docx-import.ts` `convertDocxToHtml`): a `.docx` upload can't take
   the text path (`getFileContentAndFormat` reads text → binary garbage), so the import loop
   (`collectImportItems`) branches on `.docx` BEFORE that call and routes through **lazy** `mammoth` (`await import`,
   own chunk — never in the main bundle) → HTML → the existing `format:"html"` ingest branch
@@ -1118,15 +1118,15 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   checking screen while the session is unknown (`SESSION_CHECK_TIMEOUT_MS`), so
   neither flashes. **`unavailable` (no answer: offline, an outage) opens the editor**
   — documents live in this browser and must stay reachable offline.
-  `src/app/account.ts` is the session state (`useAccount`), calling same-origin
+  `src/app/account/account.ts` is the session state (`useAccount`), calling same-origin
   `/api/auth/*` — CloudFront routes `/api/*` to the API on AWS, and
   `vite.app.config.ts` proxies `/api` to `:4000` in dev and preview, so local sign-in
   also runs on ONE origin (`PUBLIC_URL` is the editor's address; a cookie set on
-  another port is not reliably sent back). Signed in: `src/app/AccountMenu.tsx` at the
+  another port is not reliably sent back). Signed in: `src/app/account/accountMenu/index.tsx` at the
   right end of the menu bar after Settings (Profile, Sign out), handed in through PE's
   `accountControl` prop (App.tsx only — the library and the embed never pass it,
   pinned by `account.test.jsx`); `/login` and `/profile` are routed interior pages
-  (`ui/pages/LoginPage.tsx`, `ProfilePage.tsx`). Signing out unmounts the editor (the
+  (`ui/pages/loginPage/index.tsx`, `profilePage/index.tsx`). Signing out unmounts the editor (the
   gate takes over) — unmount is a document-leaving path (`releaseEditor`). Signing in
   is a full navigation to Google, covered by the unload safety net, and does not touch
   documents. Google returns to `/` on success and `/login?error=<code>` on failure
@@ -1158,7 +1158,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   presigned link whose SHA-256 S3 checks; first device that day stores it, a minute
   after sign-in, inside the sync lock; `pf:cloud-backup:<user>` is the day done;
   Profile ▸ Backups lists, downloads and "Back up now"), and Version history ▸ **In
-  your account** (`versions.ts` → `store/account-versions.ts`, a registry the editor
+  your account** (`versions.ts` → `store/history/account-versions.ts`, a registry the editor
   reads so the library and embed never import app code): the bucket's past versions
   of the open note, THINNED by the API (`thinVersions`) so they span the 30 days;
   bringing one back records an `"account-version"` snapshot and restores THAT, so it
@@ -1352,7 +1352,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **Stored content reaches the editor ONLY through `hydrateEditorWithDoc`** (the
   hydration ritual, `useDocumentLifecycle`) — boot, late boot, switches, the
   bridge's update/append and card saves all use it. It first checks the content
-  against the LIVE schema (`canonicalMisfit`, `store/schema-version.ts` — TipTap's
+  against the LIVE schema (`canonicalMisfit`, `store/documents/schema-version.ts` — TipTap's
   own `nodeFromJSON` check): `setContent` handed a node or mark the schema lacks
   loads an EMPTY document, and the next keystroke's autosave wrote that over the
   stored one. A misfit, or a record stamped with a newer `schemaVersion`, is shown
@@ -1371,7 +1371,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **Hydrating a different document must drop undo history** (`resetHistory()` on
   both panes — `setCanonical`/`setFromHtml` do it automatically). Without it,
   ⌘Z after a doc switch resurrects the previous doc's content into the new one.
-  The ONE sanctioned exception is `src/store/history-cache.ts` (per-doc undo
+  The ONE sanctioned exception is `src/store/history/history-cache.ts` (per-doc undo
   stacks): restores only go through `takeForRestore`, which validates the
   cached content hash against the just-hydrated content and discards on any
   mismatch. Never restore a cached pane state without that validation.
@@ -1401,7 +1401,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   path is synchronous and only runs on real edits, so it correctly propagates a
   clear; recoverability is the save backstop's job.
 - **Unload is a data-loss path, and `beforeunload` alone does not cover it**
-  (`src/store/crash-recovery.ts`). The handler fires a best-effort autosave, but
+  (`src/store/persistence/crash-recovery.ts`). The handler fires a best-effort autosave, but
   IndexedDB is ASYNCHRONOUS — `saveActiveDoc` awaits a read before it writes, so
   the page is gone before the write is issued, and the in-memory draft cache does
   not survive a reload either. Measured: type a sentence, reload inside the
@@ -1426,7 +1426,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   tabs used to keep only the second tab's stash (A027). `configureRecovery()` lets a
   host namespace or disable it (A103).
 - **The library is defended against the BROWSER deleting it** (A017, A022, A004;
-  `store/storage-durability.ts`, one notice at a time in `ui/DurabilityNotices.tsx`,
+  `store/persistence/storage-durability.ts`, one notice at a time in `ui/notices/durabilityNotices/index.tsx`,
   and Settings ▸ Storage & backup). Documents live only in this origin's IndexedDB,
   which Safari clears after seven days without a visit. `navigator.storage.persist()`
   is requested after the first save (re-asked at most weekly), and a full backup
@@ -1596,8 +1596,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   never re-attempts the conflicting write). Live sync between tabs sits on top of
   it (next bullet); the save-status machine itself was not rewritten and the
   terminal statuses are unchanged.
-- **Live sync between tabs** (`store/tab-sync.ts`, `editor/useTabSync.ts`,
-  `ui/TabSyncNotice.tsx`). Every COMMITTED write announces `{type, id, updated}` —
+- **Live sync between tabs** (`store/persistence/tab-sync.ts`, `editor/useTabSync.ts`,
+  `ui/notices/tabSyncNotice/index.tsx`). Every COMMITTED write announces `{type, id, updated}` —
   never content — from `documentStore`, right after the adapter resolves and never
   for a refused write: **any new commit path must add its own `announce`**. The
   channel is named after the database or namespace (`pf-tab-sync:idb:<dbName>`,
@@ -1673,7 +1673,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   `src/editor/` — re-check `activeDocId` after their awaits instead
   (`isEditorTargeting`, below); the source pin names the lifecycle hook's functions
   only, so a new site in `src/editor/` must be checked by hand.
-- **Recoverable snapshot net (`store/snapshot-store.ts`).** The LAST line of
+- **Recoverable snapshot net (`store/history/snapshot-store.ts`).** The LAST line of
   defence: a SIDECAR IndexedDB (`perssonify-snapshots`, its own DB — independent
   of the injected StorageAdapter, must survive reloads) keeps a bounded, per-doc
   ring of prior content versions so anything the prevention layers miss stays
@@ -1989,7 +1989,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`TableBubbleMenu`, `LinkBubbleMenu`) — it does not compose with it. Both
   bubble menus shipped mutating a read-only document because of that, and
   `CommandManager` has no editability check of its own to catch it. Every
-  mutating chain goes through **`runBubbleCommand`** (`ui/bubble-menu-command.ts`),
+  mutating chain goes through **`runBubbleCommand`** (`ui/panes/utils/bubble-menu-command.ts`),
   which bails when `!editor.isEditable` and blurs first when `view.composing`.
   Pinned by `bubble-menu-guard.test.js`.
 - **The embed's `allowedOrigins` is the PARENT's origin, never its own — and the
@@ -2122,7 +2122,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   navigation (`useLinkIndex`) and turndown round-trip (`turndown-rules.ts`
   `wikiLink` rule keys on those attrs; filter uses `hasAttribute`, since a
   same-doc anchor has `data-doc-link=""`).
-- **ONE resolver — `createWikiResolver` / `resolveWikiLink` (`store/link-index.ts`),
+- **ONE resolver — `createWikiResolver` / `resolveWikiLink` (`store/links/link-index.ts`),
   built once per library — serves the link index, the click handler and the
   broken-link decoration.** With an anchor it first tries the WHOLE `docLink#anchor`
   as a title (so `[[C# Tips]]` finds "C# Tips"), then an exact id, then an exact
@@ -2163,7 +2163,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   the classification is wrong; widen what routes to `rebuildLinks`.
 - **Heading anchors resolve in ONE place** — `scrollToHeadingByAnchor`
   (`src/editor/useHeadingNavigation.ts`) calls `findHeadingByAnchor` with THE normaliser,
-  `normalizeHeadingAnchor` (`store/doc-outline.ts`: NFKC, lowercase, keeps
+  `normalizeHeadingAnchor` (`store/documents/doc-outline.ts`: NFKC, lowercase, keeps
   `\p{L}\p{N}\p{M}`, collapses the rest); generation sites carry the raw heading
   text. The old `[^a-z0-9]` key turned every Cyrillic/CJK/Arabic heading into "", so
   any non-Latin anchor jumped to the FIRST non-Latin heading, and "Über" matched
@@ -2173,7 +2173,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   the long-removed in-graph structure view truncated the Outline, "Link to heading"
   and `doc.outline` (A063); the map rail keeps its own `HEADING_CAP`.
 - **Renaming a heading OFFERS to retarget the links to it** (#122): the pure half
-  is `store/heading-renames.ts`, timing and writes `editor/useHeadingRenameLinks.ts`.
+  is `store/links/heading-renames.ts`, timing and writes `editor/useHeadingRenameLinks.ts`.
   - **Baseline:** the heading texts at hydration (a `hydratedDocId` subscription).
   - **When it checks:** `HEADING_RENAME_CHECK_MS` after the caret LEAVES a heading
     (document `selectionchange`/`keyup`/`pointerup`, deferred one task, read from the
@@ -2206,7 +2206,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   - Known narrow race: a note opened while its `patchDocById` read is in flight
     can load the pre-rewrite copy and autosave the old links back (the snapshot
     keeps the rewrite recoverable).
-- **Right-click context menu** (`src/ui/EditorContextMenu.tsx` + generated
+- **Right-click context menu** (`src/ui/chrome/editorContextMenu/index.tsx` + generated
   `components/ui/context-menu.tsx`) wraps the panes and reuses `dispatch`; its
   "Link to heading" submenu inserts `[[#Heading]]` via `insertHeadingLink`, and the
   rich-pane link is built by `headingLinkHtml`, which ESCAPES the text — a heading
@@ -2215,7 +2215,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   and building the heading list there (a full `getJSON()` plus a walk) cost ~300 ms
   per key on a large document at 4× CPU; `HeadingLinkItems` reads them only when
   the submenu opens (A083).
-- **Split-pane scroll sync** (`EditorPanes.tsx`) uses value-based echo
+- **Split-pane scroll sync** (`editorPanes/index.tsx`) uses value-based echo
   suppression (remembers the exact scrollTop it wrote to the other pane and
   swallows that one echo) — never a timer. Do not reintroduce a setTimeout
   guard; it made the panes fight and dropped user scrolls. The mapping is
@@ -2240,7 +2240,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **View mode** (md / rich / split) is `uiStore.mode`/`setMode`, controlled by the
   `ModeSwitcher`, the View menu, a segmented control in `SettingsSheet`, and the
   `?view_mode=` param. Imposing a mode or read-only briefly runs the `pf-mode-fade`
-  animation on the editor container (`EditorPanes.tsx` restarts it via reflow;
+  animation on the editor container (`editorPanes/index.tsx` restarts it via reflow;
   opacity-only, no remount) for a graceful transition.
 - **Editor images carry NO border-radius** (`.ProseMirror img` in styles.css +
   `[data-md-preview] img` in `useMarkdownEngine.ts`) — rounding clips corner pixels
@@ -2408,7 +2408,7 @@ The product ships three ways from one codebase: the standalone app
   `dist/*.cjs` after `bun run build` in CI and before `npm publish`.
 - **One editor per page** (A106): the stores are module singletons, so a SECOND
   editor mounted while one is running refuses to start. `PerssonifyEditor` is a gate
-  (`ui/OneEditorPerPage.tsx`) around `PerssonifyEditorInstance`: it claims the page's
+  (`ui/shared/oneEditorPerPage/index.tsx`) around `PerssonifyEditorInstance`: it claims the page's
   slot (`claimEditorInstance`, documentStore.ts) in a LAYOUT effect before anything
   below it renders and releases it in that effect's cleanup, so a keyed remount never
   shows the refusal (a passive release would). A refused editor renders a message,
@@ -2424,9 +2424,9 @@ The product ships three ways from one codebase: the standalone app
   keep a host's version history and crash stash with its documents (A103).
 
 ## Feature architecture notes
-- **Markdown flavors/features** live in `src/store/settings.ts` (persisted under
+- **Markdown flavors/features** live in `src/store/preferences/settings.ts` (persisted under
   `__prefs.markdownFeatures`), consumed by `build-marked.ts`. The Settings panel
-  (`SettingsSheet.tsx`) drives them; `useMarkdownEngine` rebuilds marked on change.
+  (`settingsSheet/index.tsx`) drives them; `useMarkdownEngine` rebuilds marked on change.
   **Toggling a feature must not strip rich formatting** (A033): the `configVersion`
   effect re-parses the markdown over the rich document ONLY when `computeFidelity`
   says the document is lossless in the current sync mode; otherwise the rich
@@ -2439,7 +2439,7 @@ The product ships three ways from one codebase: the standalone app
   else stays exactly as written, and escaped braces are honoured.
 - **Math** (`$…$`/`$$…$$`) → `math-marked.ts` emits data-attribute placeholders →
   TipTap `MathNodes.tsx` renders KaTeX (lazy) → turndown rules restore the source.
-  **Insertion uses an equation dialog with a live KaTeX preview** (`Dialogs.tsx`
+  **Insertion uses an equation dialog with a live KaTeX preview** (`dialogs/index.tsx`
   `EquationDialog`, wired through `useDialog().equation` — a promise-based method on
   the shared `DialogApi` mirroring `prompt`). Insert ▸ Formula/Inline (MenuBar) and
   the toolbar Sigma menu call `equation(...)` then `dispatch("insertMathBlock"/
@@ -2480,7 +2480,7 @@ The product ships three ways from one codebase: the standalone app
   fixes the bug upstream, delete the module and keep the parity cases. The Word
   export uses its OWN `Marked` instance, never the global `marked`. `marked-emoji`
   stays on 2.x deliberately (its 3.x shortcode matching changed case sensitivity).
-- **Mermaid/ABC** render in the code-block node view (`DiagramPreview.tsx`, lazy),
+- **Mermaid/ABC** render in the code-block node view (`diagramPreview/index.tsx`, lazy),
   round-trip as fenced code for free.
 - **Highlight/background-color** is a `backgroundColor` attribute on the `textStyle`
   mark (`extensions/BackgroundColor.ts`), NOT the `<mark>` Highlight extension.
@@ -2505,7 +2505,7 @@ The product ships three ways from one codebase: the standalone app
   splits marked's HTML block). The MD pane shows the raw `<details>` HTML for this block.
 - **Interactive task lists** (`- [ ]`/`- [x]`) use `TaskList`/`TaskItem` from
   `@tiptap/extension-list` (no new dep; `TaskItem.configure({ nested: true })`),
-  registered in BOTH `TiptapPane.tsx` AND `serialize-doc.ts` `SERIALIZE_EXTENSIONS`.
+  registered in BOTH `tiptapPane/index.tsx` AND `serialize-doc.ts` `SERIALIZE_EXTENSIONS`.
   There is **NO preprocessor pass** — marked's gfm list tokenizer detects tasks
   natively, and `build-marked.ts` **overrides the RENDERER** (gated on `taskLists` +
   gfm) to emit `<ul data-type="taskList"><li data-type="taskItem" data-checked="…">…`
@@ -2573,7 +2573,7 @@ The product ships three ways from one codebase: the standalone app
   in per-locale maps (`HELP_CONTENT`, `ABOUT_CONTENT`), not catalog keys. The app
   shell and the embed set `<html lang dir>`; the library never does. `?lang=` is
   session-only; the `en-XA` pseudo-locale is development-only. See `docs/i18n.md`.
-- **MD pane list wrap hangs to the item text** (`CodeMirrorPane.tsx`
+- **MD pane list wrap hangs to the item text** (`codeMirrorPane/index.tsx`
   `listHangingIndent` ViewPlugin): with line wrapping on, each list line gets
   `text-indent:-Nch; padding-left:Nch` where N = the content offset (leading
   whitespace + marker + space via `LIST_MARKER`), so wrapped continuation lines
@@ -2638,7 +2638,7 @@ window-resize case passes against a media query too. `cases/surfaces.mjs`
 narrows `.perssonify-editor` inside a wide window instead, which is that
 geometry. Two related traps, both found by mutation-testing: the workspace
 panel does NOT narrow the toolbar (it is a full-width band above the row the
-panel shares — Toolbar.tsx claimed otherwise until 1.76.0, a comment stranded
+panel shares — toolbar/index.tsx claimed otherwise until 1.76.0, a comment stranded
 by the WorkspacePanel refactor), and the panel's width is re-clamped against
 the viewport, so it cannot be relied on to move a board across a threshold.
 

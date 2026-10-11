@@ -20,7 +20,7 @@ import { SERIALIZE_EXTENSIONS } from "../engine/serialize-doc";
 import { TableCellFast, TableHeaderFast } from "../engine/table-colwidth";
 import { buildMarked } from "../engine/build-marked";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 const LOREM = "Perssonify builds custom technology for teams that move fast.";
 

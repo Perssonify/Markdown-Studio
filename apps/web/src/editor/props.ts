@@ -2,12 +2,12 @@ import type { JSONContent } from "@tiptap/core";
 import type { RefObject } from "react";
 import type { LinkClickPayload } from "../hooks/useLinkIndex";
 import type { EditorChromeLevel, EditorViewMode } from "../integration/host-bridge";
-import type { DocumentRecord, DocumentSummary } from "../store/document";
-import type { FidelityReport } from "../store/fidelity";
-import type { IDBStorageConfig, StorageMetrics } from "../store/idb-storage-adapter";
-import type { GraphEdge, GraphNode } from "../store/link-index";
-import type { SharePayload } from "../store/share-link";
-import type { StorageAdapter, StorageQuotaError } from "../store/storage-adapter";
+import type { DocumentRecord, DocumentSummary } from "../store/documents/document";
+import type { FidelityReport } from "../store/documents/fidelity";
+import type { IDBStorageConfig, StorageMetrics } from "../store/persistence/idb-storage-adapter";
+import type { GraphEdge, GraphNode } from "../store/links/link-index";
+import type { SharePayload } from "../store/importExport/share-link";
+import type { StorageAdapter, StorageQuotaError } from "../store/persistence/storage-adapter";
 
 /** The document graph the editor exports (wiki links between documents). */
 export interface EditorGraph {
@@ -158,7 +158,7 @@ export interface PerssonifyEditorProps {
    * Standalone app only: storage-durability notices for the app's own library
    * (backup reminder, wiped-library explanation, moved-domain banner, Safari
    * install tip) plus the boot check that stops a library the browser has
-   * emptied from being re-seeded as if new. See store/storage-durability.ts.
+   * emptied from being re-seeded as if new. See store/persistence/storage-durability.ts.
    * The "not saving" warning shows without it.
    */
   durabilityNotices?: boolean;
@@ -176,7 +176,7 @@ export interface PerssonifyEditorProps {
   initialImportUrl?: string;
   /**
    * Standalone app only: documents decoded from a self-contained share link
-   * (`#share=…`, see store/share-link.ts). The editor imports them on boot
+   * (`#share=…`, see store/importExport/share-link.ts). The editor imports them on boot
    * through the normal import path. Omitted by the library / iframe embed.
    */
   initialShare?: SharePayload;

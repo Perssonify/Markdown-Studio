@@ -1,5 +1,5 @@
 /**
- * A108 — Find & Replace (`ui/FindReplace.tsx`) as a user drives it, against a
+ * A108 — Find & Replace (`ui/find/findReplace/index.tsx`) as a user drives it, against a
  * REAL CodeMirror view and a REAL TipTap editor: moving through matches in
  * both panes, regex groups and lookarounds, case and whole word, Replace and
  * Replace All (with the scope filter), Format matches in both panes, the
@@ -21,8 +21,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { BackgroundColor } from "../extensions/BackgroundColor";
 import { __resetFindWorkerForTests, __setFindWorkerFactoryForTests, findWorkerSource } from "../formatting/find-worker";
 import { MAX_FIND_MATCHES } from "../formatting/find-engine";
-import { useUIStore } from "../store/uiStore";
-import { FindReplaceBar } from "../ui/FindReplace";
+import { useUIStore } from "../store/preferences/uiStore";
+import { FindReplaceBar } from "../ui/find/findReplace";
 
 beforeAll(() => {
   const rect = { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 };
