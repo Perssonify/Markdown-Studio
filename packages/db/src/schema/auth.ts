@@ -1,4 +1,4 @@
-// Accounts: the four tables Better Auth (apps/api/src/lib/auth.ts) reads and
+// Accounts: the four tables Better Auth (apps/api/src/modules/auth/services/index.ts) reads and
 // writes. Column names and types follow Better Auth's core schema; the
 // property names are what its Drizzle adapter looks up, so rename neither
 // without changing the other. Sign-in is Google only — `account` holds the

@@ -5,7 +5,7 @@
 // X-Forwarded-For itself (a client-supplied value is not passed on), which the
 // relay's rate limit and the session record read.
 import { buildApp } from "./bootstrap.ts";
-import { loadEnv, withVercelSite } from "./config/env.ts";
+import { loadEnv, withVercelSite } from "./config/env/index.ts";
 
 // Fluid compute serves several requests at once from one instance.
 const { app } = buildApp(loadEnv(withVercelSite(process.env)), { poolSize: 5 });

@@ -19,7 +19,7 @@ import { TextSelection } from "@tiptap/pm/state";
 import { describe, expect, it } from "vitest";
 import { STEP_LIMIT } from "../engine/incremental-rich";
 import { createMarkdownEngine } from "../engine/useMarkdownEngine";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 import {
   CORPUS, CUTTABLE, LOCAL_SNIPPETS, SNIPPETS,
   expectSame, mdEdit, newEditor, oracle, project, richEdit, rng,

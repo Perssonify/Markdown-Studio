@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IndexedDBStorageAdapter } from "../store/idb-storage-adapter";
-import { LocalStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
-import { useFolderStore } from "../store/folders";
+import { IndexedDBStorageAdapter } from "../store/persistence/idb-storage-adapter";
+import { LocalStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
+import { useFolderStore } from "../store/documents/folders";
 
 /**
  * A030 — the document list must not be a single point of failure.

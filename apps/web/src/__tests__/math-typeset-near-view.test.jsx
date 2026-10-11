@@ -14,7 +14,7 @@
 import { act, render } from "@testing-library/react";
 import { createElement, createRef } from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { TiptapPane } from "../ui/TiptapPane";
+import { TiptapPane } from "../ui/panes/tiptapPane";
 
 class FakeObserver {
   static instances = [];

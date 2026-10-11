@@ -1,12 +1,12 @@
 import "fake-indexeddb/auto";
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { assetStore, sha256Hex } from "../store/asset-store";
-import { assetRef, bytesToDataUrl, collectImageSrcs } from "../store/asset-refs";
-import { ingest } from "../store/ingest";
+import { assetStore, sha256Hex } from "../store/assets/asset-store";
+import { assetRef, bytesToDataUrl, collectImageSrcs } from "../store/assets/asset-refs";
+import { ingest } from "../store/importExport/ingest";
 import { useImportPipeline } from "../editor/useImportPipeline";
-import { exportAsDocx } from "../store/docx-export";
-import { convertDocxToHtml } from "../store/docx-import";
+import { exportAsDocx } from "../store/importExport/docx-export";
+import { convertDocxToHtml } from "../store/importExport/docx-import";
 
 /**
  * Every way an image arrives through IMPORT ends as a reference to a stored

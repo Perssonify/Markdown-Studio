@@ -9,9 +9,9 @@
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useDocumentStore } from "../store/documentStore";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { snapshotStore } from "../store/snapshot-store";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { snapshotStore } from "../store/history/snapshot-store";
 import {
   CANARY_KEY,
   CONTENT_SINCE_KEY,
@@ -20,9 +20,9 @@ import {
   noteLibraryAtBoot,
   readCanary,
   recordFullBackup,
-} from "../store/storage-durability";
-import { DurabilityNotices } from "../ui/DurabilityNotices";
-import { StorageBackupSection } from "../ui/SettingsStorage";
+} from "../store/persistence/storage-durability";
+import { DurabilityNotices } from "../ui/notices/durabilityNotices";
+import { StorageBackupSection } from "../ui/settings/settingsStorage";
 
 /** A working, persistent adapter (no isReady ⇒ nothing to fail). */
 const workingAdapter = () => ({

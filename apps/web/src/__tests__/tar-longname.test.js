@@ -1,6 +1,6 @@
 import { strToU8 } from "fflate";
 import { describe, expect, it } from "vitest";
-import { extractArchive } from "../store/archive.ts";
+import { extractArchive } from "../store/importExport/archive.ts";
 
 /** Build a single 512-byte tar header block (unchecked checksum — parseTar
  *  doesn't validate it). */

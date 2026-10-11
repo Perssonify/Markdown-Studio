@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const css = readFileSync(join(process.cwd(), "src/styles.css"), "utf8");
-const panesRaw = readFileSync(join(process.cwd(), "src/ui/EditorPanes.tsx"), "utf8");
+const panesRaw = readFileSync(join(process.cwd(), "src/ui/panes/editorPanes/index.tsx"), "utf8");
 
 /** Comments stripped: every assertion below that an old shape is GONE would
  *  otherwise be satisfied by the comment explaining why it went — a check that

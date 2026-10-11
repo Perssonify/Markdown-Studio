@@ -1,5 +1,5 @@
-// Accounts in the standalone app: the session state (app/account.ts), the
-// menu-bar control (app/AccountMenu.tsx) and the /login and /profile pages.
+// Accounts in the standalone app: the session state (app/account/account.ts), the
+// menu-bar control (app/account/accountMenu/index.tsx) and the /login and /profile pages.
 // The backend is faked at fetch: these cases pin what the app SENDS and how it
 // reads each answer, including the ones that must hide every account control.
 import React from "react";
@@ -7,13 +7,13 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { accountsEnabled, browserNav, signInTargets, useAccount } from "../app/account";
+import { accountsEnabled, browserNav, signInTargets, useAccount } from "../app/account/account";
 import { App } from "../App";
-import { AccountMenu } from "../app/AccountMenu";
-import { initialsOf } from "../app/AccountAvatar";
-import { AccountBackups } from "../app/AccountBackups";
-import { LoginPage } from "../ui/pages/LoginPage";
-import { ProfilePage } from "../ui/pages/ProfilePage";
+import { AccountMenu } from "../app/account/accountMenu";
+import { initialsOf } from "../app/account/accountAvatar";
+import { AccountBackups } from "../app/account/accountBackups";
+import { LoginPage } from "../ui/pages/loginPage";
+import { ProfilePage } from "../ui/pages/profilePage";
 
 const USER = {
   id: "u1",
@@ -277,7 +277,7 @@ describe("accounts are the standalone app's alone", () => {
     // Lives at the right end of the top brand header, not in the menu bar.
     expect(read("src/App.tsx")).toMatch(/<EditorHeader accountControl=\{accountControl\}/);
     expect(read("src/EditorHeader.tsx")).toMatch(/accountControl/);
-    expect(read("src/ui/MenuBar.tsx")).not.toMatch(/accountControl/);
+    expect(read("src/ui/chrome/menuBar/index.tsx")).not.toMatch(/accountControl/);
   });
 
   it.each(["src/embed.tsx", "src/index.tsx", "src/integration/PerssonifyEditorIntegration.tsx"])("%s never mounts it", (file) => {

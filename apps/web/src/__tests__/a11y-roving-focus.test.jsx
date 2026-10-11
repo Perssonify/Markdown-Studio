@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from "@testing-library/react";
 import React, { useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { isRovingCandidate, rovingNextIndex, useRovingFocus } from "../ui/use-roving-focus";
+import { isRovingCandidate, rovingNextIndex, useRovingFocus } from "../ui/chrome/hooks/use-roving-focus";
 
 /**
  * A094. The formatting toolbar was ~40 tab stops, so the document was a long

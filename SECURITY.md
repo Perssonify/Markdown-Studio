@@ -103,10 +103,10 @@ hardened; anything that gets past one of these controls is a valid report:
 **The import / ingest path (client side).** Content arriving from a file, an
 archive, a URL import or a paste is untrusted:
 
-- HTML ingest sanitisation (`src/store/ingest.ts` `sanitizeForIngest`) and the
-  inert-`DOMParser` conversion in `src/store/canonical-ops.ts` — script
+- HTML ingest sanitisation (`src/store/importExport/ingest.ts` `sanitizeForIngest`) and the
+  inert-`DOMParser` conversion in `src/store/documents/canonical-ops.ts` — script
   execution, mutation-XSS or forced resource loads from imported content.
-- Archive extraction (`src/store/archive.ts`) — path traversal or
+- Archive extraction (`src/store/importExport/archive.ts`) — path traversal or
   prototype-pollution keys getting past `normalizeArchivePath` into the folder
   tree or a storage key, and anything that lets a crafted archive read or
   overwrite documents it should not touch.

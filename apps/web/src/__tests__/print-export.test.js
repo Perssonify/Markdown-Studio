@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { printHtmlDocument } from "../store/print-export";
+import { printHtmlDocument } from "../store/importExport/print-export";
 
 /**
  * "Print / Save as PDF". Untested, and it does two things worth holding: it

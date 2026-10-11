@@ -3,8 +3,8 @@
 import type { LambdaFunctionURLEvent, Context } from "aws-lambda";
 import { handle } from "hono/aws-lambda";
 import { buildApp } from "./bootstrap.ts";
-import { loadEnv } from "./config/env.ts";
-import { resolveSecretsIntoEnv } from "./lib/aws-secrets.ts";
+import { loadEnv } from "./config/env/index.ts";
+import { resolveSecretsIntoEnv } from "./lib/awsSecrets/index.ts";
 
 type Handler = (event: LambdaFunctionURLEvent, context: Context) => Promise<unknown>;
 

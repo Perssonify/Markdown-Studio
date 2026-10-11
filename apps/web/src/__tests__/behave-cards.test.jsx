@@ -1,5 +1,5 @@
 /**
- * A108 — the Cards board (`ui/CardsView.tsx`) as a user drives it: quick
+ * A108 — the Cards board (`ui/cards/cardsView/index.tsx`) as a user drives it: quick
  * capture as text and as a checklist, the draft kept and discarded, search,
  * what a card's face shows, pin and colour, the card editor's Preview · Split ·
  * Write views and when it saves, read-only, the Escape ladder, and the board's
@@ -10,7 +10,7 @@
  */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CardsView } from "../ui/CardsView";
+import { CardsView } from "../ui/cards/cardsView";
 
 const NOW = Date.now();
 const ago = (ms) => new Date(NOW - ms).toISOString();

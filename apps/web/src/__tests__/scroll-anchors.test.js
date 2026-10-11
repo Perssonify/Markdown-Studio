@@ -1,7 +1,7 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { markdownHeadings } from "../ui/scroll-anchors";
+import { markdownHeadings } from "../ui/panes/editorPanes/scroll-anchors";
 
 /**
  * C1. The split-pane scroll sync pairs headings on the two sides by normalised

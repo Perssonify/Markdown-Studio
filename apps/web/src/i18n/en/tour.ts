@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Guided tour: Walkthrough.tsx. */
+/** Guided tour: walkthrough/index.tsx. */
 export const tour = {
   "tour.menuBarTitle": "The menu bar",
   "tour.menuBarBodyPhone": "Every command lives behind this menu button — File, Edit, Insert, View, Format, Tools and Help.",

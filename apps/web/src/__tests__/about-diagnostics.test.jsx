@@ -7,7 +7,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { AboutPage } from "../ui/pages/AboutPage";
+import { AboutPage } from "../ui/pages/aboutPage";
 
 afterEach(cleanup);
 

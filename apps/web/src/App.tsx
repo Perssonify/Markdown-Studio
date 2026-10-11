@@ -1,23 +1,23 @@
 import { useTheme } from "next-themes";
 import React, { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { accountsEnabled, useAccount } from "./app/account";
-import { AccountCheckScreen } from "./app/AccountCheckScreen";
-import { AccountMenu } from "./app/AccountMenu";
+import { accountsEnabled, useAccount } from "./app/account/account";
+import { AccountCheckScreen } from "./app/account/accountCheckScreen";
+import { AccountMenu } from "./app/account/accountMenu";
 import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud";
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
-import { useUIStore } from "./store/uiStore";
-import { readSharePayloadFromHash } from "./store/share-link";
+import { useUIStore } from "./store/preferences/uiStore";
+import { readSharePayloadFromHash } from "./store/importExport/share-link";
 import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
 import { localeDir, setLocale, useLocale, useT } from "./i18n";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
-import { SkipToEditor } from "./ui/SkipToEditor";
-import { setToastsMutedForInteriorPage } from "./ui/Toast";
+import { SkipToEditor } from "./ui/shared/skipToEditor";
+import { setToastsMutedForInteriorPage } from "./ui/shared/toast";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
-import { assetStore } from "./store/asset-store";
+import { assetStore } from "./store/assets/asset-store";
 
 // Settings ▸ Privacy ▸ "Block remote images" is enforced as an img-src policy
 // for THIS page, and must be in force before any document renders — hence
@@ -43,12 +43,12 @@ try {
 // would otherwise refer to images it cannot resolve (see configureLocalStores).
 assetStore.configure({ enabled: true });
 
-const AboutPage = React.lazy(() => import("./ui/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
-const HelpPage = React.lazy(() => import("./ui/pages/HelpPage").then((m) => ({ default: m.HelpPage })));
-const LoginPage = React.lazy(() => import("./ui/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
-const ProfilePage = React.lazy(() => import("./ui/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
-const SignInScreen = React.lazy(() => import("./ui/pages/LoginPage").then((m) => ({ default: m.SignInScreen })));
-const Walkthrough = React.lazy(() => import("./ui/Walkthrough").then((m) => ({ default: m.Walkthrough })));
+const AboutPage = React.lazy(() => import("./ui/pages/aboutPage").then((m) => ({ default: m.AboutPage })));
+const HelpPage = React.lazy(() => import("./ui/pages/helpPage").then((m) => ({ default: m.HelpPage })));
+const LoginPage = React.lazy(() => import("./ui/pages/loginPage").then((m) => ({ default: m.LoginPage })));
+const ProfilePage = React.lazy(() => import("./ui/pages/profilePage").then((m) => ({ default: m.ProfilePage })));
+const SignInScreen = React.lazy(() => import("./ui/pages/loginPage").then((m) => ({ default: m.SignInScreen })));
+const Walkthrough = React.lazy(() => import("./ui/tour/walkthrough").then((m) => ({ default: m.Walkthrough })));
 
 const TOUR_SEEN_KEY = "pf:tour-seen-v1";
 
@@ -173,6 +173,15 @@ export function App() {
     useEffect(() => {
         if (!accounts && (route === "login" || route === "profile")) navigate("editor", { replace: true });
     }, [accounts, route, navigate]);
+    // A signed-out visitor belongs on /login, so the sign-in front door has its
+    // own address — a deep link, a refresh and the browser Back all land there
+    // rather than on "/". The share-link guest flow is exempt: it opens straight
+    // into the editor (see the signed-out gate below).
+    useEffect(() => {
+        if (accounts && accountStatus === "signed-out" && !shareSeed && route !== "login") {
+            navigate("login", { replace: true });
+        }
+    }, [accounts, accountStatus, shareSeed, route, navigate]);
 
     // The account control at the right end of the top header. One element for
     // the life of the shell: a fresh element each render would needlessly

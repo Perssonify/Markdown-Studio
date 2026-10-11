@@ -2,7 +2,7 @@
 // `bun run --cwd apps/api dev`. Reads apps/api/.env when it exists.
 import { serve } from "@hono/node-server";
 import { buildApp } from "./bootstrap.ts";
-import { loadEnv, missingAuthSettings } from "./config/env.ts";
+import { loadEnv, missingAuthSettings } from "./config/env/index.ts";
 
 const env = loadEnv();
 const { app, database } = buildApp(env, { poolSize: 10 });

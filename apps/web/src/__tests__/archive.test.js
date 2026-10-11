@@ -9,7 +9,7 @@ import {
   isZipEncrypted,
   normalizeArchivePath,
   sanitizeFolderName,
-} from '../store/archive.ts';
+} from '../store/importExport/archive.ts';
 
 const entry = (path) => ({ path, text: `content of ${path}`, format: formatForName(path) });
 

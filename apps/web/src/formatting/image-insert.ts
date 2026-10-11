@@ -1,4 +1,4 @@
-import type { PromptOptions } from "../ui/DialogProvider";
+import type { PromptOptions } from "../ui/dialogs/dialogProvider";
 import { mdLinkDestination } from "./md-format-utils";
 import { t } from "../i18n";
 

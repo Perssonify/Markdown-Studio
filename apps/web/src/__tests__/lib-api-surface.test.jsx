@@ -30,7 +30,7 @@ vi.mock("../PerssonifyEditor", async () => {
   };
 });
 vi.mock("next-themes", () => ({ ThemeProvider: ({ children }) => children }));
-vi.mock("../ui/ErrorBoundary", () => ({
+vi.mock("../ui/shared/errorBoundary", () => ({
   ErrorBoundary: ({ children }) => <div data-testid="error-boundary">{children}</div>,
 }));
 

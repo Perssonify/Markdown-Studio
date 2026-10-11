@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { snapshotStore } from "../store/snapshot-store";
+import { snapshotStore } from "../store/history/snapshot-store";
 
 /**
  * The snapshot net against a REAL database.

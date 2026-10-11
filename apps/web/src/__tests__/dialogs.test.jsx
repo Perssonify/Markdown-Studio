@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { useConfirm, useUnsavedChangesConfirm } from "../ui/ConfirmDialog.tsx";
-import { useDialog, DialogProvider } from "../ui/DialogProvider.tsx";
+import { useConfirm, useUnsavedChangesConfirm } from "../ui/dialogs/confirmDialog/index.tsx";
+import { useDialog, DialogProvider } from "../ui/dialogs/dialogProvider/index.tsx";
 import { useDialogs } from "../hooks/useDialogs.ts";
 
 /**

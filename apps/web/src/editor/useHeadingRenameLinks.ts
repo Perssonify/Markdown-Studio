@@ -3,11 +3,11 @@ import { toast as toastSonner } from "sonner";
 import { syntaxTree } from "@codemirror/language";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Editor } from "@tiptap/core";
-import { useDocumentStore } from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
-import { snapshotStore } from "../store/snapshot-store";
-import { isNewerSchema } from "../store/schema-version";
-import { createWikiResolver, type DocRecord } from "../store/link-index";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
+import { snapshotStore } from "../store/history/snapshot-store";
+import { isNewerSchema } from "../store/documents/schema-version";
+import { createWikiResolver, type DocRecord } from "../store/links/link-index";
 import {
   alignHeadingRenames,
   buildHeadingLinkTransaction,
@@ -20,7 +20,7 @@ import {
   type HeadingInfo,
   type HeadingLinkScope,
   type HeadingRename,
-} from "../store/heading-renames";
+} from "../store/links/heading-renames";
 import { getLocale, t } from "../i18n";
 import type { CmRef, DocStore, Lifecycle, LinkIndexApi, SyncEngine, TiptapRef } from "./types";
 

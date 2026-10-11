@@ -12,7 +12,7 @@ them:
 - **Real IndexedDB**, quota exhaustion, blocked storage, a second tab.
 - **Layout that is measured, not declared** — the toolbar compacts on its OWN
   width, the panes stack by the viewport's width AND height
-  (`src/ui/split-layout.ts`), `pointer-coarse:` rules need touch emulation.
+  (`src/ui/panes/editorPanes/split-layout.ts`), `pointer-coarse:` rules need touch emulation.
 - **Duration.** Listener churn and uncancelled timers only show up over time.
 
 ## Running it
@@ -206,7 +206,7 @@ suite asserts. Nothing runs them automatically, so a regression there shows up
 only when someone runs them.
 
 **Now reproduced in a browser that previously was not**
-- **Live sync between tabs** (`src/store/tab-sync.ts`, `src/editor/useTabSync.ts`):
+- **Live sync between tabs** (`src/store/persistence/tab-sync.ts`, `src/editor/useTabSync.ts`):
   two tabs of one real browser over one real IndexedDB and a real
   BroadcastChannel. A save in tab A reaches clean tab B's panes and library
   without a reload; B with unsaved typing parks the conflict and each of its

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { searchDocuments } from "../store/search";
+import { searchDocuments } from "../store/search/search";
 
 const docs = [
   { id: "a", title: "Meeting notes", text: "Discuss the roadmap and the budget. Budget is tight." },

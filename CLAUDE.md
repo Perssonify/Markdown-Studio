@@ -19,7 +19,7 @@ break). Every path in it is relative to `apps/web`.
   `bun.lock`, `node_modules/`) are read as `../../…`.
 - `apps/api` — Hono on Node 24. `src/app.ts` is the whole HTTP surface;
   `src/server.ts` serves it locally, `src/lambda.ts` on AWS Lambda. File storage is
-  `src/lib/storage.ts` (S3): Amazon S3 through the Lambda's role on AWS, Adobe
+  `src/lib/storage/index.ts` (S3): Amazon S3 through the Lambda's role on AWS, Adobe
   S3Mock locally (docker-compose; MinIO no longer publishes images). Keys are
   plain paths (`assertKey` refuses `..`, leading `/`, empty segments).
 - `packages/db` — Drizzle schema (`src/schema/`), committed SQL migrations
@@ -43,10 +43,10 @@ break). Every path in it is relative to `apps/web`.
   byte-identical (verified on the move, and again with every backend package
   installed).
 - **The import relay has ONE copy: `apps/web/api/import.js`.** Vercel serves
-  it there; the API runs that same file through `src/lib/vercel-handler.ts`.
+  it there; the API runs that same file through `src/utils/vercelHandler/index.ts`.
   The relay answers its own CORS (markdownstudio.com only), so the API's
   CORS middleware is registered AFTER the relay route — widening the relay's
-  origins would loosen a security control (`test/cors.test.ts`).
+  origins would loosen a security control (`tests/integration/cors.test.ts`).
 - **The root `vercel.json` is the one description of how the site is served**:
   its top-level `headers` (every response) and the `web` service's `headers` and
   SPA `rewrites`. infra reads it (`infra/lib/site-config.ts`): CloudFront's CSP and
@@ -73,7 +73,7 @@ break). Every path in it is relative to `apps/web`.
   imports carry `.ts`, and only erasable syntax is allowed (no enums,
   namespaces or parameter properties) — `tsconfig.node.json`.
 - **Better Auth's origin check is ON explicitly** (`advanced.disableOriginCheck:
-  false`, `apps/api/src/lib/auth.ts`). Its default turns the check off whenever
+  false`, `apps/api/src/modules/auth/services/index.ts`). Its default turns the check off whenever
   it detects a test run, so the suite would pass an open redirect.
 - **Users' files live in their own stack, `MarkdownStudioFiles`** (`infra/lib/files-stack.ts`,
   deployed): one production bucket, retained, termination-protected, versioned. The
@@ -83,7 +83,7 @@ break). Every path in it is relative to `apps/web`.
 - **Cloud sync never infers a deletion** (`apps/web/src/app/cloud/plan.ts`): a
   document is deleted in the account only from the editor's own delete event; one
   missing locally is downloaded again. Server writes are conditional on the client's
-  `base` revision under a row lock (`apps/api/src/routes/sync.ts`). The client half
+  `base` revision under a row lock (`apps/api/src/modules/sync/routes/index.ts`). The client half
   is tested against the real server half by `apps/web/src/__tests__/cloud-contract.test.js`.
 - **No code here may ever delete a database.** The RDS instance and the secret
   holding its password are `RemovalPolicy.RETAIN` with deletion protection
@@ -93,7 +93,7 @@ break). Every path in it is relative to `apps/web`.
   destroy or delete without the owner's explicit go-ahead; read-only checks are
   always fine.
 - **Secrets never sit in the Lambda's configuration**: it gets ARNs and reads
-  Secrets Manager at cold start (`src/lib/aws-secrets.ts`). The site's URL comes
+  Secrets Manager at cold start (`src/lib/awsSecrets/index.ts`). The site's URL comes
   from SSM because CloudFront depends on the function (a direct reference is a
   cycle).
 - **Behind CloudFront the API refuses requests without `x-origin-verify`**

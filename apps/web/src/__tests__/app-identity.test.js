@@ -64,8 +64,8 @@ describe("product name is single-sourced", () => {
       "src/constants.ts",
       "src/App.tsx",
       "src/EditorHeader.tsx",
-      "src/ui/pages/help-content.ts",
-      "src/ui/pages/AboutPage.tsx",
+      "src/ui/pages/helpPage/help-content.ts",
+      "src/ui/pages/aboutPage/index.tsx",
       "src/data/starter-documents.ts",
     ];
     for (const f of files) {
@@ -85,12 +85,12 @@ describe("product name is single-sourced", () => {
 
 describe("data identifiers survive the rename", () => {
   it("keeps the pf: preference namespace", () => {
-    expect(read("src/store/uiStore.ts")).toContain('"pf:');
+    expect(read("src/store/preferences/uiStore.ts")).toContain('"pf:');
   });
 
   it("keeps the export envelope, on both the write and the read side", () => {
-    expect(read("src/store/import-export.ts")).toContain('_format: "perssonify-document"');
-    expect(read("src/store/ingest.ts")).toContain("perssonify-document");
+    expect(read("src/store/importExport/import-export.ts")).toContain('_format: "perssonify-document"');
+    expect(read("src/store/importExport/ingest.ts")).toContain("perssonify-document");
   });
 
   it("keeps the full-backup archive name", () => {
@@ -99,7 +99,7 @@ describe("data identifiers survive the rename", () => {
   });
 
   it("keeps the snapshot database name", () => {
-    expect(read("src/store/snapshot-store.ts")).toContain("perssonify-snapshots");
+    expect(read("src/store/history/snapshot-store.ts")).toContain("perssonify-snapshots");
   });
 
   it("keeps the published package name", () => {

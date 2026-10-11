@@ -1,9 +1,9 @@
 import { type MutableRefObject, useCallback, useEffect, useRef } from "react";
 import { AUTOSAVE_MS } from "../constants";
-import { stashUnsaved, type RecoveryEntry } from "../store/crash-recovery";
-import type { DocumentRecord } from "../store/document";
-import { collectUnloadStash, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "../store/documentStore";
-import { StorageQuotaError } from "../store/storage-adapter";
+import { stashUnsaved, type RecoveryEntry } from "../store/persistence/crash-recovery";
+import type { DocumentRecord } from "../store/documents/document";
+import { collectUnloadStash, describeUncommittedSave, isBlankCanonical, useDocumentStore } from "../store/documents/documentStore";
+import { StorageQuotaError } from "../store/persistence/storage-adapter";
 import { t } from "../i18n";
 import type { PerssonifyEditorProps } from "./props";
 import type { CmRef, DocStore, Lifecycle, SyncEngine, TiptapRef, Toast } from "./types";

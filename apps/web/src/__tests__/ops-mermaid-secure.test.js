@@ -13,7 +13,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import mermaid from "mermaid";
-import { mermaidConfig, MERMAID_SECURE_KEYS } from "../ui/DiagramPreview";
+import { mermaidConfig, MERMAID_SECURE_KEYS } from "../ui/panes/diagramPreview";
 
 const HOSTILE_CSS = "body:has(&) { display: none }";
 

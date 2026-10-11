@@ -9,9 +9,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDocumentLifecycle } from "../hooks/useDocumentLifecycle";
-import { useDocumentStore } from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
-import { snapshotStore } from "../store/snapshot-store";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
+import { snapshotStore } from "../store/history/snapshot-store";
 
 const doc = (text) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] });
 

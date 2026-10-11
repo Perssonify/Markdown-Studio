@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { snapshotStore } from "../store/snapshot-store";
+import { snapshotStore } from "../store/history/snapshot-store";
 
 /**
  * A088 (snapshot half) — pruning the snapshot ring reads it ONCE.

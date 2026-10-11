@@ -33,8 +33,8 @@ const read = (p) => readFileSync(resolve(process.cwd(), p), "utf8");
 
 const PE = read("src/PerssonifyEditor.tsx");
 const VIEWS = read("src/editor/useWorkspaceViews.ts");
-const STATUS_BAR = read("src/ui/StatusBar.tsx");
-const MENU_BAR = read("src/ui/MenuBar.tsx");
+const STATUS_BAR = read("src/ui/chrome/statusBar/index.tsx");
+const MENU_BAR = read("src/ui/chrome/menuBar/index.tsx");
 
 describe("workspace views are mutually exclusive", () => {
   it("derives a single exclusive `workspaceView` selection", () => {

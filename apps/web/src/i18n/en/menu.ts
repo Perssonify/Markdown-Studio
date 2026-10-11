@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Menu bar: MenuBar.tsx, SelectMenuContent.tsx, formatting/select-scope.ts. */
+/** Menu bar: menuBar/index.tsx, selectMenuContent/index.tsx, formatting/select-scope.ts. */
 export const menu = {
   // Top-level menus (the desktop row and the phone drill-down).
   "menu.file": "File",
@@ -116,7 +116,7 @@ export const menu = {
   "menu.aboutDescription": "A dual-pane Markdown editor that runs in your browser. Version {version}. Your documents are stored locally in this browser, not on a server.",
   "menu.allMenus": "All menus",
   "menu.shortcutsDescription": "Common actions, shown for this device's keyboard.",
-  // Edit ▸ Select by type… (SelectMenuContent.tsx, formatting/select-scope.ts).
+  // Edit ▸ Select by type… (selectMenuContent/index.tsx, formatting/select-scope.ts).
   "menu.currentBlock": "Current block",
   "menu.selectGroupHeadings": "Headings",
   "menu.selectGroupParagraphsLists": "Paragraphs & lists",

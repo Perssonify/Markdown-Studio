@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import { missingAuthSettings, type Env } from "./config/env.ts";
-import type { Auth } from "./lib/auth.ts";
-import { corsForFrontend } from "./middleware/cors.ts";
-import { requireOriginSecret } from "./middleware/origin-verify.ts";
-import { authRoutes } from "./routes/auth.ts";
-import { healthRoutes } from "./routes/health.ts";
-import { importRelayRoutes } from "./routes/import-relay.ts";
-import { syncRoutes, type SyncDeps } from "./routes/sync.ts";
+import { missingAuthSettings, type Env } from "./config/env/index.ts";
+import type { Auth } from "./modules/auth/index.ts";
+import { corsForFrontend } from "./middlewares/cors/index.ts";
+import { requireOriginSecret } from "./middlewares/originVerify/index.ts";
+import { authRoutes } from "./modules/auth/index.ts";
+import { healthRoutes } from "./modules/health/index.ts";
+import { importRelayRoutes } from "./modules/importRelay/index.ts";
+import { syncRoutes, type SyncDeps } from "./modules/sync/index.ts";
 
 export interface AppDeps {
   env: Env;

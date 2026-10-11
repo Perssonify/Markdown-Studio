@@ -15,13 +15,13 @@ import type { useFormatDispatcher } from "../formatting/useFormatDispatcher";
 import type { useDocumentLifecycle } from "../hooks/useDocumentLifecycle";
 import type { useDialogs } from "../hooks/useDialogs";
 import type { useLinkIndex } from "../hooks/useLinkIndex";
-import type { useDocumentStore } from "../store/documentStore";
-import type { useEditorStore } from "../store/editorStore";
-import type { useUIStore } from "../store/uiStore";
-import type { CodeMirrorPaneHandle } from "../ui/CodeMirrorPane";
-import type { useConfirm } from "../ui/ConfirmDialog";
-import type { useToast } from "../ui/Toast";
-import type { TiptapPaneHandle } from "../ui/TiptapPane";
+import type { useDocumentStore } from "../store/documents/documentStore";
+import type { useEditorStore } from "../store/editor/editorStore";
+import type { useUIStore } from "../store/preferences/uiStore";
+import type { CodeMirrorPaneHandle } from "../ui/panes/codeMirrorPane";
+import type { useConfirm } from "../ui/dialogs/confirmDialog";
+import type { useToast } from "../ui/shared/toast";
+import type { TiptapPaneHandle } from "../ui/panes/tiptapPane";
 
 /** The markdown pane (CodeMirror). */
 export type CmRef = RefObject<CodeMirrorPaneHandle | null>;

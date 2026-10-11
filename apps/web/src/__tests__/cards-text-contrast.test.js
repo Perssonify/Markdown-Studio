@@ -12,7 +12,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { CARD_COLORS } from "../store/cards";
+import { CARD_COLORS } from "../store/cards/cards";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
 
@@ -35,7 +35,7 @@ function cardForegrounds() {
 /** Opacity of every TEXT element CardsView dims (a text-size class beside an opacity class). */
 function textOpacities() {
   const found = new Set();
-  for (const line of read("src/ui/CardsView.tsx").split("\n")) {
+  for (const line of read("src/ui/cards/cardsView/index.tsx").split("\n")) {
     if (!/text-(?:xs|sm|\[\d+px\])|line-through/.test(line) || /aria-hidden/.test(line)) continue;
     for (const m of line.matchAll(/(?<![:\w-])opacity-(\d+)\b/g)) found.add(Number(m[1]) / 100);
   }

@@ -2,7 +2,7 @@ import TurndownService from "turndown";
 import { describe, expect, it } from "vitest";
 import { buildMarked } from "../engine/build-marked";
 import { addBaseRules } from "../engine/turndown-rules";
-import { DEFAULT_MARKDOWN_FEATURES } from "../store/settings";
+import { DEFAULT_MARKDOWN_FEATURES } from "../store/preferences/settings";
 
 /**
  * Strikethrough must be DOUBLE-tilde only. marked's default GFM `del` tokenizer

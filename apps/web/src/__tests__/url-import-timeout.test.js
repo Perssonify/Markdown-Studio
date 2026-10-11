@@ -8,7 +8,7 @@
  * for a site that had simply not answered yet.
  */
 import { describe, expect, it, vi } from "vitest";
-import { fetchImportResource } from "../store/url-import";
+import { fetchImportResource } from "../store/importExport/url-import";
 
 describe("direct import timeout", () => {
   it.each(["TimeoutError", "AbortError"])("a %s says it timed out and never asks about the relay", async (name) => {

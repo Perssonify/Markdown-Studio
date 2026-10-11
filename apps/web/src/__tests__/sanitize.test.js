@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizePastedHtml } from '../engine/html-cleaner.ts';
-import { sanitizeForIngest } from '../store/ingest.ts';
+import { sanitizeForIngest } from '../store/importExport/ingest.ts';
 
 describe('paste sanitizer (sanitizePastedHtml)', () => {
   it('strips on* event-handler attributes', () => {

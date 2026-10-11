@@ -12,8 +12,8 @@ import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type E
 import { holdsBreakMark, portableBreaksActive, stripBreakMarks, withoutPortableBreaks } from './portable-breaks';
 import { createIncrementalConverter } from './incremental-md';
 import { buildMarked, resetFootnoteNumbering } from './build-marked';
-import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/settings';
-import { useUIStore } from '../store/uiStore';
+import { DEFAULT_MARKDOWN_FEATURES, type MarkdownFeatureSettings } from '../store/preferences/settings';
+import { useUIStore } from '../store/preferences/uiStore';
 import { diag } from '../utils/diag';
 
 const PREVIEW_CSS = `

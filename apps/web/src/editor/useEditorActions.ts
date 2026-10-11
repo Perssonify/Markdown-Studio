@@ -1,10 +1,10 @@
 import { type MutableRefObject, useCallback } from "react";
 import { buildContextPrompt } from "../integration/prompt-builder";
-import { extractText } from "../store/document";
-import { useDocumentStore } from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
+import { extractText } from "../store/documents/document";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
 import { t } from "../i18n";
-import { inlineAssetRefsInText } from "../store/assets";
+import { inlineAssetRefsInText } from "../store/assets/assets";
 import type { CmRef, Confirm, DocStore, Engine, Lifecycle, LinkIndexApi, PromptText, SyncEngine, TiptapRef, Toast, UIStore } from "./types";
 import {
   type ExportDocs,

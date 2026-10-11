@@ -15,9 +15,9 @@ import React from "react";
 import { act, fireEvent, render } from "@testing-library/react/pure";
 import { EditorView } from "@codemirror/view";
 import { PerssonifyEditor } from "../PerssonifyEditor";
-import { MemoryStorageAdapter } from "../store/storage-adapter";
-import { createDocument } from "../store/document";
-import { useDocumentStore } from "../store/documentStore";
+import { MemoryStorageAdapter } from "../store/persistence/storage-adapter";
+import { createDocument } from "../store/documents/document";
+import { useDocumentStore } from "../store/documents/documentStore";
 
 /** Layout and platform APIs a browser has and jsdom lacks. Installed only
  *  where missing, so a jsdom that grows a real one keeps it. */

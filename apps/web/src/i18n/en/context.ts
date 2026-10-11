@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Right-click menu: EditorContextMenu.tsx. */
+/** Right-click menu: editorContextMenu/index.tsx. */
 export const context = {
   "context.cut": "Cut",
   "context.paste": "Paste",

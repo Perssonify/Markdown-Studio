@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cardSyncSignature, planCardReload } from "../store/cards";
-import { CardsView } from "../ui/CardsView";
-import { GraphView } from "../ui/GraphView";
+import { cardSyncSignature, planCardReload } from "../store/cards/cards";
+import { CardsView } from "../ui/cards/cardsView";
+import { GraphView } from "../ui/graph/graphView";
 
 /**
  * A087 — the board re-read EVERY document on any change and blanked to

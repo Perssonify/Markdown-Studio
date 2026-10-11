@@ -184,6 +184,6 @@ describe("the shipped notice file", () => {
 
   it("is linked from the About page", () => {
     expect(THIRD_PARTY_NOTICES_PATH).toBe("/third-party-licenses.txt");
-    expect(read("src/ui/pages/AboutPage.tsx")).toMatch(/href=\{THIRD_PARTY_NOTICES_PATH\}/);
+    expect(read("src/ui/pages/aboutPage/index.tsx")).toMatch(/href=\{THIRD_PARTY_NOTICES_PATH\}/);
   });
 });

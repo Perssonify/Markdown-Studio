@@ -247,7 +247,7 @@ runCase("surfaces", async (rep, onClose) => {
   //
   //    In the STANDALONE shell those two numbers happen to agree: the toolbar
   //    is a full-width band above the row that holds `<main>` and the workspace
-  //    panel, so opening the panel does not narrow it. (Toolbar.tsx claimed the
+  //    panel, so opening the panel does not narrow it. (toolbar/index.tsx claimed the
   //    opposite until this case was written — a comment left behind by the
   //    WorkspacePanel refactor, which moved the toolbar out of the column that
   //    the panel shares.) So resizing the window here cannot tell the two

@@ -9,7 +9,7 @@ import {
   getBacklinks,
   getForwardLinks,
   exportGraph,
-} from '../store/link-index';
+} from '../store/links/link-index';
 
 // --- PM JSON builders ---
 

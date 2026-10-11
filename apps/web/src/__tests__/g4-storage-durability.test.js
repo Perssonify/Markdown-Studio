@@ -4,7 +4,7 @@
  * All documents live in this origin's IndexedDB only. `persist()`/`estimate()`
  * were never called, there were no backup reminders, and a wiped library was
  * re-seeded with the starter documents as if this were a first visit. These
- * cases pin the logic in store/storage-durability.ts; the UI is covered by
+ * cases pin the logic in store/persistence/storage-durability.ts; the UI is covered by
  * g4-durability-notices.test.jsx.
  */
 import "fake-indexeddb/auto";
@@ -34,8 +34,8 @@ import {
   requestPersistence,
   startDurabilityWatch,
   storagePersists,
-} from "../store/storage-durability";
-import { IndexedDBStorageAdapter, MemoryStorageAdapter } from "../store/storage-adapter";
+} from "../store/persistence/storage-durability";
+import { IndexedDBStorageAdapter, MemoryStorageAdapter } from "../store/persistence/storage-adapter";
 import { LEGACY_APP_HOST } from "../constants";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");

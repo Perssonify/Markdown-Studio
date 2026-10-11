@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Interior pages: AboutPage.tsx, HelpPage.tsx, PageChrome.tsx (long-form copy lives in their content modules, not here). */
+/** Interior pages: aboutPage/index.tsx, helpPage/index.tsx, pageChrome/index.tsx (long-form copy lives in their content modules, not here). */
 export const pages = {
   "pages.backToEditor": "Back to editor",
   "pages.helpContents": "Help contents",

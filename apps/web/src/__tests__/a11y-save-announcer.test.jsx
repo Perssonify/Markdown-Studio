@@ -1,14 +1,14 @@
 import { act, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { useDocumentStore } from "../store/documentStore";
+import { useDocumentStore } from "../store/documents/documentStore";
 import {
   FAILURE_MESSAGES,
   INITIAL_ANNOUNCER,
   RECOVERED_MESSAGE,
   nextAnnouncement,
-} from "../ui/save-announcer";
-import { StatusBar } from "../ui/StatusBar";
+} from "../ui/chrome/statusBar/save-announcer";
+import { StatusBar } from "../ui/chrome/statusBar";
 
 /**
  * A096. The save indicator WAS the live region, and it walks

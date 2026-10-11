@@ -6,8 +6,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { canonicalToHtml } from "../engine/serialize-doc";
 import { sanitizeStyleDeclarations } from "../engine/css-safety";
-import { sanitizeCanonicalNode } from "../store/canonical-sanitize";
-import { ingest, sanitizeForIngest } from "../store/ingest";
+import { sanitizeCanonicalNode } from "../store/documents/canonical-sanitize";
+import { ingest, sanitizeForIngest } from "../store/importExport/ingest";
 import { engineFor } from "./converter-harness";
 
 const para = (marks, text = "x") => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text, marks }] }] });

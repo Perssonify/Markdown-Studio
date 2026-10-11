@@ -2,11 +2,11 @@ import "fake-indexeddb/auto";
 import { renderHook } from "@testing-library/react";
 import { strFromU8, unzipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assetStore } from "../store/asset-store";
-import { assetRef, bytesToDataUrl } from "../store/asset-refs";
-import { createDocument } from "../store/document";
-import { useDocumentStore } from "../store/documentStore";
-import { useFolderStore } from "../store/folders";
+import { assetStore } from "../store/assets/asset-store";
+import { assetRef, bytesToDataUrl } from "../store/assets/asset-refs";
+import { createDocument } from "../store/documents/document";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useFolderStore } from "../store/documents/folders";
 import { exportActiveDocAsFile, exportActiveDocAsPdf, useExportActions } from "../editor/useExportActions";
 
 /**

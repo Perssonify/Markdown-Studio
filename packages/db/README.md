@@ -4,7 +4,7 @@ PostgreSQL 17 through [Drizzle ORM](https://orm.drizzle.team/).
 
 - `src/schema/` — the tables. Today: accounts only — `user`, `session`,
   `account` (the Google link), `verification` — the shape Better Auth reads
-  and writes (`apps/api/src/lib/auth.ts`). Documents come with the sync
+  and writes (`apps/api/src/modules/auth/services/index.ts`). Documents come with the sync
   feature.
 - `drizzle/` — the SQL migrations, committed. Never edit an applied one; change
   the schema and generate the next.

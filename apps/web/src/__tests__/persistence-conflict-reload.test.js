@@ -25,9 +25,9 @@ const T0 = new Date("2026-03-01T10:00:00.000Z").getTime();
 /** A fresh "tab": its own module graph, its own store, same database. */
 async function openTab() {
   vi.resetModules();
-  const store = await import("../store/documentStore");
-  const recovery = await import("../store/crash-recovery");
-  const { IndexedDBStorageAdapter } = await import("../store/idb-storage-adapter");
+  const store = await import("../store/documents/documentStore");
+  const recovery = await import("../store/persistence/crash-recovery");
+  const { IndexedDBStorageAdapter } = await import("../store/persistence/idb-storage-adapter");
   const adapter = new IndexedDBStorageAdapter({ dbName: DB });
   await adapter.isReady();
   store.useDocumentStore.getState().initStorage(adapter);
@@ -48,8 +48,8 @@ beforeEach(async () => {
   warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   localStorage.clear();
   // Seed the library through a throwaway adapter (the database is shared).
-  const { IndexedDBStorageAdapter } = await import("../store/idb-storage-adapter");
-  const { createDocument } = await import("../store/document");
+  const { IndexedDBStorageAdapter } = await import("../store/persistence/idb-storage-adapter");
+  const { createDocument } = await import("../store/documents/document");
   const seed = new IndexedDBStorageAdapter({ dbName: DB });
   await seed.isReady();
   await seed.save(createDocument({ id: "x", title: "Shared", canonical: doc("original") }));
@@ -130,7 +130,7 @@ describe("A018: a reload after a two-tab conflict", () => {
     A.recovery.stashUnsaved(stash);
 
     const A2 = await openTab();
-    const { snapshotStore } = await import("../store/snapshot-store");
+    const { snapshotStore } = await import("../store/history/snapshot-store");
     const record = vi.spyOn(snapshotStore, "record").mockResolvedValue(undefined);
     const reopened = await boot(A2);
     expect(text(reopened.canonical)).toContain("original");  // disk wins…

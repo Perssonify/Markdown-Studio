@@ -39,7 +39,7 @@ Everything else is decided by the build itself: `import.meta.env.DEV` ([src/util
 | Sync max-wait ceiling | `SYNC_MIN_MAX_WAIT_MS`…`SYNC_MAX_MAX_WAIT_MS` = 250…1200 ([src/constants.ts](../src/constants.ts)) | how far the other pane may lag while you keep typing |
 | Autosave interval | `AUTOSAVE_MS` = 5000 ([src/constants.ts:63](../src/constants.ts#L63)) | |
 | Toolbar compact breakpoint | `TOOLBAR_COMPACT_BP = 1080` ([src/constants.ts](../src/constants.ts)) | |
-| IndexedDB name / limit | `perssonify-docs` (`DEFAULT_DB_NAME`, [src/store/idb-storage-adapter.ts:159](../src/store/idb-storage-adapter.ts#L159)) | no cap of its own — the browser's quota, unless a host passes `storageConfig.maxBytes`; see [database.md](database.md) |
+| IndexedDB name / limit | `perssonify-docs` (`DEFAULT_DB_NAME`, [src/store/persistence/idb-storage-adapter.ts:159](../src/store/persistence/idb-storage-adapter.ts#L159)) | no cap of its own — the browser's quota, unless a host passes `storageConfig.maxBytes`; see [database.md](database.md) |
 | Theme storage key | `perssonify-theme` (next-themes `storageKey`, [src/main.tsx:61](../src/main.tsx#L61)) | localStorage |
 | Admin settings in a production build | `localStorage["pf:admin"] = "1"` | a per-browser opt-in that shows Settings ▸ Admin (console, context-menu switch); dev builds always show it |
 
@@ -62,7 +62,7 @@ Everything else is decided by the build itself: `import.meta.env.DEV` ([src/util
 
 ## Seed data
 
-There's no DB to seed — the app seeds itself. On first load (only when storage is empty, and not when the browser wiped a library this origin used to hold — the `pf:library-canary` check, A017), [src/App.tsx](../src/App.tsx) passes an `initialDocument` containing `DEFAULT_CONTENT` ([src/constants.ts](../src/constants.ts)) — a "Welcome" doc demonstrating formatting, tables, task lists, and styled content — plus `starterDocuments` ([src/data/starter-documents.ts](../src/data/starter-documents.ts)), which adds a **Changelog** doc and an **About Perssonify** doc inside a `Perssonify` folder. The three `[[wiki link]]` to each other on purpose, so the relationship map opens on a connected graph rather than one lone dot. This is standalone-app only — an embedder's `initialDocument` stays exactly one document. Subsequent loads restore the last active document from IndexedDB ([src/store/documentStore.ts](../src/store/documentStore.ts)).
+There's no DB to seed — the app seeds itself. On first load (only when storage is empty, and not when the browser wiped a library this origin used to hold — the `pf:library-canary` check, A017), [src/App.tsx](../src/App.tsx) passes an `initialDocument` containing `DEFAULT_CONTENT` ([src/constants.ts](../src/constants.ts)) — a "Welcome" doc demonstrating formatting, tables, task lists, and styled content — plus `starterDocuments` ([src/data/starter-documents.ts](../src/data/starter-documents.ts)), which adds a **Changelog** doc and an **About Perssonify** doc inside a `Perssonify` folder. The three `[[wiki link]]` to each other on purpose, so the relationship map opens on a connected graph rather than one lone dot. This is standalone-app only — an embedder's `initialDocument` stays exactly one document. Subsequent loads restore the last active document from IndexedDB ([src/store/documents/documentStore.ts](../src/store/documents/documentStore.ts)).
 
 There are **no default users/passwords** (no auth).
 
@@ -72,29 +72,29 @@ To get a realistic multi-document state for testing graphs/backlinks: create a f
 
 ### Add a formatting command (e.g. a new toolbar button)
 
-1. Add the button in [src/ui/Toolbar.tsx](../src/ui/Toolbar.tsx) calling `dispatch("myCmd")`.
+1. Add the button in [src/ui/chrome/toolbar/index.tsx](../src/ui/chrome/toolbar/index.tsx) calling `dispatch("myCmd")`.
 2. Handle `"myCmd"` in **both** branches of [src/formatting/useFormatDispatcher.ts](../src/formatting/useFormatDispatcher.ts): `dispatchToTiptap` ([:344](../src/formatting/useFormatDispatcher.ts#L344)) for the rich-text pane and `dispatchToMd` ([:512](../src/formatting/useFormatDispatcher.ts#L512)) for the markdown pane.
 3. If it should reflect active state, add detection in the format-state query, `queryState` ([:689](../src/formatting/useFormatDispatcher.ts#L689)).
 4. Optional shortcut: add to [src/hooks/useKeyboardShortcuts.ts](../src/hooks/useKeyboardShortcuts.ts) — a document chord acts only with the caret in a pane and the Editor view showing, and never on AltGr input — and document it in [src/data/shortcuts.ts](../src/data/shortcuts.ts), the single source for the Help page and the shortcut dialogs.
 
 ### Add a new view panel (workspace-panel / overlay style)
 
-1. Add a toggle flag to [src/store/uiStore.ts](../src/store/uiStore.ts).
+1. Add a toggle flag to [src/store/preferences/uiStore.ts](../src/store/preferences/uiStore.ts).
 2. Build the component in [src/ui/](../src/ui/), consuming the store.
 3. Render it from [src/PerssonifyEditor.tsx](../src/PerssonifyEditor.tsx) (where panels are wired).
 
 ### Add a custom Tiptap node
 
 1. Create the extension in [src/extensions/](../src/extensions/), export from [src/extensions/index.ts](../src/extensions/index.ts).
-2. Register it in the Tiptap extensions list in [src/ui/TiptapPane.tsx](../src/ui/TiptapPane.tsx) **and** in `SERIALIZE_EXTENSIONS` in [src/engine/serialize-doc.ts](../src/engine/serialize-doc.ts) — miss the second and headless/bulk export (and headless import) silently drops or throws on the node. Add the tags it renders to `KNOWN_ELEMENTS` in [src/store/ingest.ts](../src/store/ingest.ts), or imports report it as unmappable.
+2. Register it in the Tiptap extensions list in [src/ui/panes/tiptapPane/index.tsx](../src/ui/panes/tiptapPane/index.tsx) **and** in `SERIALIZE_EXTENSIONS` in [src/engine/serialize-doc.ts](../src/engine/serialize-doc.ts) — miss the second and headless/bulk export (and headless import) silently drops or throws on the node. Add the tags it renders to `KNOWN_ELEMENTS` in [src/store/importExport/ingest.ts](../src/store/importExport/ingest.ts), or imports report it as unmappable.
 3. If it has a markdown form: the markdown → HTML side is a marked extension or renderer override in [src/engine/build-marked.ts](../src/engine/build-marked.ts) (wiki links, maths, footnotes, task lists and callouts work this way — a marked extension never fires inside code), and the HTML → markdown side a Turndown rule in [src/engine/turndown-rules.ts](../src/engine/turndown-rules.ts). If literal text could read as the new syntax, teach the escaper (`escapeMarkdownText`) to escape it. [src/engine/preprocessor.ts](../src/engine/preprocessor.ts) is only for rewrites of the raw source that must happen before marked tokenizes it (front matter, a wiki-link alias's `|`, the opt-in curly syntax).
-4. If it can be lost on markdown export, teach [src/store/fidelity.ts](../src/store/fidelity.ts) about it.
-5. If older builds could not load documents that use it, bump `CURRENT_SCHEMA_VERSION` ([src/store/schema-version.ts](../src/store/schema-version.ts)) — they then open such documents read-only instead of blank.
+4. If it can be lost on markdown export, teach [src/store/documents/fidelity.ts](../src/store/documents/fidelity.ts) about it.
+5. If older builds could not load documents that use it, bump `CURRENT_SCHEMA_VERSION` ([src/store/documents/schema-version.ts](../src/store/documents/schema-version.ts)) — they then open such documents read-only instead of blank.
 
 ### Add a storage field
 
-1. Extend `DocumentRecord` in [src/store/document.ts](../src/store/document.ts) and default it on read.
-2. `serializeForStorage` ([:470](../src/store/document.ts#L470)) writes an explicit list of fields: **add a field that must persist to it**, and leave a derived one out. If a backup should carry the field, add it to `toExportEnvelope` ([src/store/import-export.ts](../src/store/import-export.ts)) and forward it in the `pmjson` branch of `ingest()`.
+1. Extend `DocumentRecord` in [src/store/documents/document.ts](../src/store/documents/document.ts) and default it on read.
+2. `serializeForStorage` ([:470](../src/store/documents/document.ts#L470)) writes an explicit list of fields: **add a field that must persist to it**, and leave a derived one out. If a backup should carry the field, add it to `toExportEnvelope` ([src/store/importExport/import-export.ts](../src/store/importExport/import-export.ts)) and forward it in the `pmjson` branch of `ingest()`.
 3. Only bump `DB_VERSION` if you need a new object store or a data transform — see [database.md#migrations](database.md#migrations).
 
 ### Run one test file in watch mode

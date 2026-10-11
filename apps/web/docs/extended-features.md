@@ -28,7 +28,7 @@ Configured in the **Settings** panel (gear in the menu bar / File ▸ Settings) 
 persisted under `__prefs.markdownFeatures`.
 
 - **Flavor presets** — CommonMark / GitHub Flavored / Markdown Extra. Choosing a
-  preset applies its feature defaults (`src/store/settings.ts`).
+  preset applies its feature defaults (`src/store/preferences/settings.ts`).
 - **Per-feature toggles** (Settings ▸ Features) — tables, task lists,
   strikethrough, autolink, footnotes (footnotes are on only in the Markdown
   Extra preset). Implemented in `src/engine/build-marked.ts` via `marked`
@@ -66,7 +66,7 @@ singleton) so flavors can toggle at runtime. See
 
 - ```` ```mermaid ```` and ```` ```abc ```` fenced blocks render in one framed
   card — label, Edit/Copy, the (still-editable) source and a live preview — via
-  `src/ui/DiagramPreview.tsx`, which lazy-loads Mermaid / abcjs only when such a
+  `src/ui/panes/diagramPreview/index.tsx`, which lazy-loads Mermaid / abcjs only when such a
   block appears. They re-render on theme change. A renderer that fails to load
   is tried again next time, and the preview says it could not be loaded.
 - Mermaid's configuration keys that paste CSS into the page (`themeCSS`, font
@@ -90,20 +90,20 @@ singleton) so flavors can toggle at runtime. See
   `<html>`, orthogonal to light/dark.
 - Persisted in localStorage and applied before first paint
   (`src/theme/palette.ts`, `initPalette()` in `main.tsx`). Controls live in
-  View ▸ Appearance and the Settings panel (`src/ui/ThemeControls.tsx`).
+  View ▸ Appearance and the Settings panel (`src/ui/settings/themeControls/index.tsx`).
 
 ## Nested folders (file explorer)
 
-- The Workspace panel's **Files** tab renders a **folder tree** (`src/ui/FolderTree.tsx`):
+- The Workspace panel's **Files** tab renders a **folder tree** (`src/ui/workspace/folderTree/index.tsx`):
   create/rename/delete folders, "Move to…" for docs and folders (cycle-guarded), expand/collapse.
 - **Design:** folders are an organizational overlay persisted under
-  `__prefs.folderTree` (`src/store/folders.ts`) — documents stay flat in storage,
+  `__prefs.folderTree` (`src/store/documents/folders.ts`) — documents stay flat in storage,
   their tree position is metadata. This keeps the document save-path and the
   IndexedDB schema untouched. Orphan metadata is pruned when docs are deleted.
 
 ## Archive import / export
 
-- **Import** (`src/store/archive.ts`, fflate): drop or pick a `.zip` / `.tar` /
+- **Import** (`src/store/importExport/archive.ts`, fflate): drop or pick a `.zip` / `.tar` /
   `.tar.gz` / `.gz`; text docs (md/html/txt/json) are extracted and their
   directory paths become folders. Junk is skipped — `__MACOSX`, anything inside a
   hidden directory, and non-text files — but a dot-prefixed file name (a note
@@ -116,7 +116,7 @@ singleton) so flavors can toggle at runtime. See
 
 ## Settings panel
 
-`src/ui/SettingsSheet.tsx` — a side sheet hosting Appearance (theme + accent),
+`src/ui/settings/settingsSheet/index.tsx` — a side sheet hosting Appearance (theme + accent),
 Markdown flavor presets, per-feature toggles (Features), the math / diagram /
 music / emoji / callout / details switches (Extensions), Editor, Reading &
 typography, Storage & backup, Privacy (the import relay, Block remote images),

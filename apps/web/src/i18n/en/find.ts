@@ -1,6 +1,6 @@
 import type { Message } from "../types";
 
-/** Find & Replace and library search: FindReplace.tsx, SearchPanel.tsx. */
+/** Find & Replace and library search: findReplace/index.tsx, searchPanel/index.tsx. */
 export const find = {
   "find.findAndReplace": "Find and replace",
   "find.panelTitle": "Find & Replace",

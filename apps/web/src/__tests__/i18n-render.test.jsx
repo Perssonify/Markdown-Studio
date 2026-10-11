@@ -4,8 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { getLocale, PSEUDO_LOCALE, setLocale } from "../i18n";
 import { _registerLocaleForTests, _resetLocaleForTests } from "../i18n/core";
-import { useDocumentStore } from "../store/documentStore";
-import { useUIStore } from "../store/uiStore";
+import { useDocumentStore } from "../store/documents/documentStore";
+import { useUIStore } from "../store/preferences/uiStore";
 
 /**
  * A099, end to end: the REAL app under the pseudo-locale. Every string the

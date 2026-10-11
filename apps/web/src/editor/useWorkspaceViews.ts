@@ -72,7 +72,7 @@ export function useWorkspaceViews({
   // Shared overlay shell for the graph / cards boards. Takes focus on mount and
   // marks the editor behind it inert so its controls are neither tabbable nor
   // clickable while covered. Escape is each surface's own (bubble phase, and
-  // only when pressed inside it — see ui/overlay-escape.ts).
+  // only when pressed inside it — see ui/shared/utils/overlay-escape.ts).
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
   // The surface switcher SELECTS: its buttons say "go here", so they must not
