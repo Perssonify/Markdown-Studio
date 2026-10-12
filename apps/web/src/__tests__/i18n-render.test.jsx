@@ -5,6 +5,7 @@ import { App } from "../App";
 import { getLocale, PSEUDO_LOCALE, setLocale } from "../i18n";
 import { _registerLocaleForTests, _resetLocaleForTests } from "../i18n/core";
 import { useDocumentStore } from "../store/documents/documentStore";
+import { useFolderStore } from "../store/documents/folders";
 import { useUIStore } from "../store/preferences/uiStore";
 
 /**
@@ -88,7 +89,8 @@ describe("the app under the pseudo-locale (en-XA)", () => {
     const words = new Set(["Markdown", "Studio", "Perssonify"]);
     const state = useDocumentStore.getState();
     for (const d of state.documents) for (const w of (d.title ?? "").match(/[A-Za-z]{2,}/g) ?? []) words.add(w);
-    for (const f of state.folders ?? []) for (const w of (f.name ?? "").match(/[A-Za-z]{2,}/g) ?? []) words.add(w);
+    // Folders live in their own store; the document store has no `folders`.
+    for (const f of useFolderStore.getState().folders) for (const w of (f.name ?? "").match(/[A-Za-z]{2,}/g) ?? []) words.add(w);
 
     const leaks = {};
     const inspect = (name, el) => {
