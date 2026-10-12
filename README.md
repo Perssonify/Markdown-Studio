@@ -14,6 +14,7 @@ the syntax you type and the page you'll publish.
 **[Open the app](https://markdownstudio.com)** · [Run it locally](#run-it-on-your-machine) · [Embed it](#put-it-in-your-product) · [Host it](#host-your-own) · [Read the docs](apps/web/docs/README.md)
 
 [![CI status](https://github.com/Perssonify/Markdown-Studio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Perssonify/Markdown-Studio/actions/workflows/ci.yml)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 </div>
@@ -42,7 +43,7 @@ sequenceDiagram
   D->>M: the line becomes "- [ ] Ship it"
 ```
 
-Around that core sits a full writing environment: folders, `[[wiki links]]`, a relationship map, a Cards board, version history, offline support, optional sync, and an embeddable build for your own product.
+Around that core sits a full writing environment: folders, `[[wiki links]]`, a relationship map, a Cards board, version history, offline support, optional sync, and an embeddable build for your own product. The source is free to use for non-commercial purposes under [CC BY-NC 4.0](#license).
 
 ## What you get
 
@@ -166,6 +167,9 @@ Reload <http://localhost:5173> and you'll land on the sign-in screen, with your 
 ## Put it in your product
 
 Markdown Studio is also a component. Drop it into a React app:
+
+> [!NOTE]
+> The public license covers non-commercial use. To embed Markdown Studio in a commercial product, get a commercial license from Perssonify Labs at hello@markdownstudio.com.
 
 ```tsx
 import { PerssonifyEditorIntegration } from "@perssonify/editor";
@@ -318,7 +322,7 @@ New contributors are very welcome, and you don't need to touch the backend to ma
 
 Pairing with an AI coding assistant? Point it at [`CLAUDE.md`](CLAUDE.md), [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md) and [`AGENTS.md`](AGENTS.md) so it learns the same rules.
 
-The full guide lives in [CONTRIBUTING.md](CONTRIBUTING.md). For deeper reading, start with the [docs index](apps/web/docs/README.md), then the [architecture](apps/web/docs/architecture.md), the [data pipeline](apps/web/docs/data-pipeline.md) and the [gotchas](apps/web/docs/gotchas.md). Releases are recorded in the [changelog](apps/web/CHANGELOG.md).
+By contributing, you agree that your contribution is licensed under the same terms as the project ([CC BY-NC 4.0](LICENSE)). The full guide lives in [CONTRIBUTING.md](CONTRIBUTING.md). For deeper reading, start with the [docs index](apps/web/docs/README.md), then the [architecture](apps/web/docs/architecture.md), the [data pipeline](apps/web/docs/data-pipeline.md) and the [gotchas](apps/web/docs/gotchas.md). Releases are recorded in the [changelog](apps/web/CHANGELOG.md).
 
 <details>
 <summary><b>Handy commands</b></summary>
@@ -350,6 +354,12 @@ The editor started life under the Perssonify name, and that name is baked into h
 <summary><b>Do I need the backend to contribute?</b></summary>
 <br>
 No. Without one, the editor runs fully in your browser. You only need the API, PostgreSQL and S3 to work on sign-in or sync.
+</details>
+
+<details>
+<summary><b>Can I use it in a commercial product?</b></summary>
+<br>
+Not under the public license. CC BY-NC 4.0 lets you use, share and adapt Markdown Studio for non-commercial purposes, with credit. For anything commercial, including embedding it in a paid product or running it as a paid service, write to hello@markdownstudio.com for a commercial license.
 </details>
 
 <details>
@@ -388,8 +398,17 @@ Markdown Studio would not exist without [ProseMirror](https://prosemirror.net), 
 **Everyone who has contributed**
 
 <a href="https://github.com/SyedMoin-Lab" title="SyedMoin-Lab"><img src="https://images.weserv.nl/?url=github.com/SyedMoin-Lab.png&w=128&h=128&fit=cover&mask=circle" width="64" height="64" alt="SyedMoin-Lab"></a>
-<a href="https://github.com/Perssonify/Markdown-Studio/graphs/contributors"><img src="https://contrib.rocks/image?repo=Perssonify/Markdown-Studio" alt="People who have contributed to Markdown Studio"></a>
+<a href="https://github.com/Perssonify/Markdown-Studio/graphs/contributors"><img src="https://images.weserv.nl/?url=contrib.rocks%2Fimage%3Frepo%3DPerssonify%2FMarkdown-Studio&output=png&maxage=1d" alt="People who have contributed to Markdown Studio"></a>
 
 ## License
 
-Copyright © 2026 [Perssonify Labs](https://labs.perssonify.com/).
+Markdown Studio is licensed under [Creative Commons Attribution-NonCommercial 4.0 International](LICENSE) (CC BY-NC 4.0). Copyright © 2026 [Perssonify Labs](https://labs.perssonify.com/).
+
+| You may | As long as you |
+| --- | --- |
+| Use, copy and share it | Use it for non-commercial purposes only |
+| Change it and build on it | Credit Perssonify Labs, link to the license and say what you changed |
+
+Commercial use needs a separate license. Write to hello@markdownstudio.com.
+
+Third-party components keep their own licenses, listed in [third-party-licenses.txt](apps/web/public/third-party-licenses.txt).
