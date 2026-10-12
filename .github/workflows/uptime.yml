@@ -7,9 +7,8 @@ name: Uptime — markdownstudio.com
 # the Vercel project (docs/deployment.md ▸ The domain).
 #
 # A scheduled workflow is a stopgap, not a monitor: GitHub delays and sometimes
-# skips scheduled runs, only notifies the workflow's last editor, and each run
-# is billed Actions minutes on a private repository (~1,450 runs a month at
-# this schedule). An external uptime service should replace it
+# skips scheduled runs and only notifies the workflow's last editor (~1,450
+# runs a month at this schedule). An external uptime service should replace it
 # (docs/runbooks/hosting-outage.md).
 on:
   schedule:

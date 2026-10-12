@@ -20,8 +20,8 @@ Markdown Studio is a **browser-based** markdown editor that runs two editing sur
 This repo uses **[Bun](https://bun.sh)** as its package manager and runner (see [`bun.lock`](../bun.lock) and [`vercel.json`](../vercel.json)). `npm` also works for installing, but the deploy pipeline and lockfile are Bun.
 
 ```bash
-git clone https://github.com/SolutionPath/markdown-studio.git
-cd markdown-studio
+git clone https://github.com/Perssonify/Markdown-Studio.git
+cd Markdown-Studio
 bun install --frozen-lockfile   # exactly the locked tree (Bun 1.4.0, see packageManager)
 bun run dev                     # starts the standalone app (Vite 8)
 ```
@@ -35,7 +35,7 @@ Expected output once Vite is up (the version and timing vary):
   ➜  Network: use --host to expose
 ```
 
-Open `http://localhost:5173`. On an empty browser profile the first run seeds three linked documents — **Welcome** (which opens), **Changelog**, and **About Perssonify** in a folder — in a split view (markdown left, rich text right). They cross-link on purpose, so the relationship map has a real graph on day one. The structured `[DIAG]` boot trace is off by default; add `?diag=1` to the URL to see it (see [domain-glossary.md#diag](domain-glossary.md#diag)).
+Open `http://localhost:5173`. On an empty browser profile the first run seeds three linked documents — **Welcome** (which opens), **Changelog**, and **Getting started** in a folder — in a split view (markdown left, rich text right). They cross-link on purpose, so the relationship map has a real graph on day one. The structured `[DIAG]` boot trace is off by default; add `?diag=1` to the URL to see it (see [domain-glossary.md#diag](domain-glossary.md#diag)).
 
 Run the tests:
 

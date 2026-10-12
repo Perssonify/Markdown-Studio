@@ -99,17 +99,15 @@ export const DEFAULT_CONTENT = `<img src="/brand/markdown.webp" alt="Markdown St
 
 # Markdown Studio
 
-**Tomorrow's Advantage, Delivered Today.**
+**Markdown on the left. Rich text on the right. Always in sync.**
 
-We build custom technology solutions for companies that need to move fast without breaking things: applications, AI integrations, and automation systems.
-
-**Markdown Studio** is one of those tools — write **Markdown on the left**, see polished **rich text on the right**, always in sync and running in your browser. Your documents are stored on this device and there is no account to make. Home: [markdownstudio.com](https://markdownstudio.com) · Built by [Perssonify](https://perssonify.com/).
+Write in whichever pane suits you and watch the other update as you type. Your documents are saved in this browser, and when you're signed in they sync across your devices. Markdown Studio is on GitHub: [github.com/Perssonify/Markdown-Studio](https://github.com/Perssonify/Markdown-Studio). Built by [Perssonify Labs](https://labs.perssonify.com/).
 
 > **New here?** Everything below is live and editable — change either pane and the other updates instantly. Open **Help** in the menu bar for the full guide, or **Help → Take a guided tour**.
 
 **Your library already has two more documents**, linked from here with wiki links:
-[[Changelog]] tracks what changes in this app, and [[About Perssonify]] is a deep
-dive into the divisions behind it. Type \`[[\` anywhere to link documents together,
+[[Changelog]] tracks what changes in this app, and [[Getting started]] walks
+through the first few things to try. Type \`[[\` anywhere to link documents together,
 then open the **relationship map** (**⌘⇧G**, or *Map* in the top-right switcher) to
 see the connections — the three documents below are already a small graph.
 

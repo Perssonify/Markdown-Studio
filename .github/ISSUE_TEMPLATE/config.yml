@@ -1,11 +1,14 @@
 blank_issues_enabled: true
 contact_links:
-  # The repository is private, so its GitHub security-advisory page is not
-  # reachable by outside reporters. The mailbox is the channel; it is also
-  # published at https://markdownstudio.com/.well-known/security.txt.
-  - name: Report a security vulnerability (private)
+  # Two private channels. The mailbox is also published at
+  # https://markdownstudio.com/.well-known/security.txt; GitHub's form works
+  # once private vulnerability reporting is switched on in the repo settings.
+  - name: Report a security vulnerability by e-mail (private)
     url: mailto:security@markdownstudio.com
     about: E-mail security@markdownstudio.com — never report a vulnerability in a public issue. See SECURITY.md for scope.
+  - name: Report a security vulnerability on GitHub (private)
+    url: https://github.com/Perssonify/Markdown-Studio/security/advisories/new
+    about: GitHub's private vulnerability reporting. Only maintainers see the report.
   - name: Contributing guide
-    url: https://github.com/SolutionPath/markdown-studio/blob/main/CONTRIBUTING.md
+    url: https://github.com/Perssonify/Markdown-Studio/blob/main/CONTRIBUTING.md
     about: Setup, the verification gate, and the invariants to read before changing code.

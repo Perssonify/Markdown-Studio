@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { AccountUser } from "../account";
 
-/** First letters of the first two words: "Syed Moinuddin" → "SM". */
+/** First letters of the first two words: "Ada Lovelace" → "AL". */
 export function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   return words.slice(0, 2).map((w) => Array.from(w)[0]!.toUpperCase()).join("") || "?";

@@ -19,9 +19,13 @@ dist/
 # project is the repository root — vercel.json's services.
 .vercel/
 
-# AWS CDK output.
+# AWS CDK output. cdk.context.json caches lookups keyed by the AWS account
+# ID, so it stays on the machine that deploys.
 infra/cdk.out/
+infra/cdk.context.json
 infra/cdk.context.local.json
 
-# Local tooling worktrees (never part of the project).
+# Local tooling state (never part of the project).
 .claude/worktrees/
+.claude/scheduled_tasks.lock
+.vscode/

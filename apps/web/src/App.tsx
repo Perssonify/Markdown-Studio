@@ -302,7 +302,7 @@ export function App() {
                     title: "Welcome",
                     content: DEFAULT_CONTENT,
                 }}
-                // First-run companions (Changelog + a foldered About Perssonify),
+                // First-run companions (Changelog + a foldered Getting started),
                 // linked to/from the welcome doc so the relationship map opens on
                 // an actual graph rather than one unconnected dot.
                 starterDocuments={STARTER_DOCUMENTS.map((d) => ({

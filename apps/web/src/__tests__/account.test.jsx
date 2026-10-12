@@ -17,8 +17,8 @@ import { ProfilePage } from "../ui/pages/profilePage";
 
 const USER = {
   id: "u1",
-  name: "Syed Moinuddin",
-  email: "syed@perssonify.com",
+  name: "Ada Lovelace",
+  email: "ada@example.com",
   image: null,
   createdAt: "2026-10-05T06:41:52.222Z",
 };
@@ -104,7 +104,7 @@ describe("the session state", () => {
   });
 
   it("makes initials from a name", () => {
-    expect(initialsOf("Syed Moinuddin")).toBe("SM");
+    expect(initialsOf("Ada Lovelace")).toBe("AL");
     expect(initialsOf("ada")).toBe("A");
     expect(initialsOf("  ")).toBe("?");
   });
@@ -156,7 +156,7 @@ describe("the menu-bar control", () => {
     const trigger = screen.getByRole("button", { name: `Account: ${USER.name}` });
     expect(trigger.querySelector("img")).toBeNull();
     const badge = trigger.querySelector("span[aria-hidden]");
-    expect(badge.textContent).toBe("SM");
+    expect(badge.textContent).toBe("AL");
     expect(badge.className).toMatch(/\bbg-primary\b/);
     expect(badge.className).toMatch(/\btext-primary-foreground\b/);
   });

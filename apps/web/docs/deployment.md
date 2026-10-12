@@ -51,8 +51,8 @@ all name it.
    that the Markdown Studio shell (`<title>`, `#root`) and its JavaScript entry
    are served — a parking page fails it.
 6. Replace the scheduled workflow with an external uptime monitor that pages a
-   person. GitHub may delay or skip scheduled runs, notifies only the workflow's
-   last editor, and bills each run on a private repository (≈1,450 runs a month).
+   person. GitHub may delay or skip scheduled runs and notifies only the
+   workflow's last editor (≈1,450 runs a month).
 
 ---
 

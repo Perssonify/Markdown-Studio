@@ -48,15 +48,15 @@ const docs = [
 ];
 
 describe("first-run documents", () => {
-  it("seeds a changelog and a Perssonify deep dive", () => {
+  it("seeds a changelog and a getting-started note", () => {
     const titles = STARTER_DOCUMENTS.map((d) => titleOf(d.markdown));
     expect(titles).toContain("Changelog");
-    expect(titles).toContain("About Perssonify");
+    expect(titles).toContain("Getting started");
   });
 
-  it("files the Perssonify deep dive in a folder", () => {
-    const about = STARTER_DOCUMENTS.find((d) => titleOf(d.markdown) === "About Perssonify");
-    expect(about.folderPath).toEqual(["Perssonify"]);
+  it("files the getting-started note in a folder", () => {
+    const guide = STARTER_DOCUMENTS.find((d) => titleOf(d.markdown) === "Getting started");
+    expect(guide.folderPath).toEqual(["Guides"]);
   });
 
   it("gives every starter a derivable title (a first H1)", () => {
@@ -81,7 +81,7 @@ describe("the seeded graph is connected", () => {
   it("links the welcome document to both companions", () => {
     const fromWelcome = linksIn(DEFAULT_CONTENT);
     expect(fromWelcome).toContain("Changelog");
-    expect(fromWelcome).toContain("About Perssonify");
+    expect(fromWelcome).toContain("Getting started");
   });
 
   it("leaves no document orphaned — every one is linked from somewhere", () => {

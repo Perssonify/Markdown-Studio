@@ -124,7 +124,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Callouts — Insert → Callout (or type > [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION] in a blockquote) makes a colored admonition card. Collapsible details — Insert → Collapsible details adds a <details> disclosure block you can expand/collapse.",
           "Diagrams — Mermaid flowcharts, sequence diagrams and more, in a ```mermaid code block.",
           "Music — ABC notation rendered as a score, in an ```abc code block.",
-          "Code — fenced code blocks with syntax highlighting and a copy button.",
+          "Code — fenced code blocks with a copy button.",
           "Emoji — type :shortcodes: like :rocket: :sparkles:.",
           "Images — Insert → Image with a URL; size one with an <img … width=\"120\" /> HTML tag.",
           "Pasted and dropped images — paste a screenshot or drop an image file into either pane. The picture is stored once in this browser and the Markdown shows a short pf-asset: reference instead of a wall of base64; exports and backups carry the picture itself. Settings → Storage lists stored images and cleans up the ones nothing uses.",

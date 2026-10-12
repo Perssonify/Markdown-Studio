@@ -36,7 +36,7 @@ A running log of what changes in Markdown Studio, kept **inside** the app.
 > entirely and begin fresh. It is an ordinary document: edit it, export it,
 > or delete it.
 
-See also: [[Markdown Studio|Welcome]] · [[About Perssonify]]
+See also: [[Markdown Studio|Welcome]] · [[Getting started]]
 
 ---
 
@@ -260,128 +260,54 @@ others.
 `;
 
 /**
- * About Perssonify — the deep dive.
+ * Getting started — the first few things to try.
  *
- * Sourced from the copy the app already ships (the welcome document's "Explore
- * Perssonify" section and the About page): the four divisions, their taglines,
- * and their URLs. Nothing here is invented — no clients, headcount, pricing, or
- * case studies — so it can be expanded from the source of truth rather than
- * corrected.
+ * Short on purpose: the Welcome document is the full tour. Every menu path and
+ * shortcut here is a real one; check them when the menus change.
  */
-const ABOUT_PERSSONIFY = `# About Perssonify
+const GETTING_STARTED = `# Getting started
 
-**Tomorrow's Advantage, Delivered Today.**
+A few things to try in your first five minutes. [[Markdown Studio|Welcome]] is
+the full tour, and [[Changelog]] lists what's new.
 
-Perssonify builds custom technology solutions for companies that need to move
-fast without breaking things: applications, AI integrations, and automation
-systems. → [perssonify.com](https://perssonify.com/)
+## 1. Write in either pane
 
-This document is a deep dive into the divisions and what each one is for. The
-editor you are reading it in was built by **Perssonify Labs** — see [[Markdown Studio|Welcome]]
-for a tour of the product, and [[Changelog]] for what has changed recently.
+Type in the Markdown pane on the left or the rich text pane on the right, and
+the other one follows as you type. Switch layouts with **MD · HTML · Split** in
+the top bar.
 
----
+## 2. Link your notes
 
-## The four divisions
+Type \`[[\` followed by a note's title and close it with \`]]\`, like the links
+at the top of this note. Then open the **relationship map** (**⌘⇧G**, or *Map*
+in the top-right switcher) to see how your notes connect.
 
-Perssonify is organised into four divisions. They share a way of working —
-research first, build in the open, measure what ships — but each one answers a
-different question.
+## 3. Capture quickly
 
-| Division | The question it answers | Where |
-| --- | --- | --- |
-| Perssonify | "Can you build this for us?" | [perssonify.com](https://perssonify.com/) |
-| Labs | "Is there already a tool for this?" | [labs.perssonify.com](https://labs.perssonify.com/) |
-| Growth | "Can you make this reach people?" | [growth.perssonify.com](https://growth.perssonify.com/) |
-| Research | "What becomes possible next?" | [research.perssonify.com](https://research.perssonify.com/) |
+Open **Cards** (**⌘⇧K**) to see every note as a card and jot down a new one.
 
----
+## 4. Keep your work safe
 
-## Perssonify — custom technology solutions
+Every note has version history (**Tools → Version history**). For a copy you
+keep yourself, use **File → Export → Full backup (.zip)**: it re-imports with
+its folders and dates.
 
-The core practice. Applications, AI integrations, and automation systems built
-for companies that need to move quickly without accumulating the kind of
-technical debt that makes the next move slower.
+## 5. Make it yours
 
-**What that tends to look like in practice:**
-
-- Custom applications built around an existing workflow rather than replacing it
-- AI integrations wired into systems that already hold the data
-- Automation that removes repeated manual steps between tools
-
-→ [perssonify.com](https://perssonify.com/)
+Pick a theme and an accent colour in **View → Appearance**, and choose your
+Markdown flavor in **Settings**.
 
 ---
 
-## Perssonify Labs — built in the open, free to try
+Found a bug or have an
+idea? [Open an issue on GitHub](https://github.com/Perssonify/Markdown-Studio/issues).
 
-Tools, frameworks, and experiments from the workshop. The Labs principle is
-that a tool you can open and use right now teaches you more than a demo: use
-them today, scale them tomorrow.
-
-**Markdown Studio is a Labs product.** It runs in the browser — every document lives
-there, with no account and no server holding your work — and it ships both as a standalone app
-and as an embeddable library. That combination is the Labs pattern: something
-genuinely useful on its own, which also drops into a larger system.
-
-→ [labs.perssonify.com](https://labs.perssonify.com/)
-
----
-
-## Perssonify Growth — measurable growth
-
-High-performance marketing: performance marketing, organic visibility, brand
-authority, and the operational backbone that makes those work together rather
-than as four disconnected efforts.
-
-The through-line with the rest of Perssonify is measurement — the same
-preference for things you can observe and adjust, applied to reach instead of
-software.
-
-→ [growth.perssonify.com](https://growth.perssonify.com/)
-
----
-
-## Perssonify Research — built on research, open to explore
-
-Where new ideas get explored and prototyped to unlock future opportunities.
-Research feeds Labs: an idea that survives a prototype becomes a tool, and a
-tool that people keep using becomes a product.
-
-→ [research.perssonify.com](https://research.perssonify.com/)
-
----
-
-## How the divisions fit together
-
-\`\`\`mermaid
-graph LR
-  R[Research<br/>explore] --> L[Labs<br/>build in the open]
-  L --> P[Perssonify<br/>custom solutions]
-  P --> G[Growth<br/>reach]
-  G -.feedback.-> R
-\`\`\`
-
-Research explores what is possible. Labs turns the promising parts into tools
-anyone can try. The core practice builds those ideas into systems for specific
-companies. Growth makes sure the result reaches the people it was built for —
-and what it learns there points Research at the next question.
-
----
-
-## Where to go next
-
-- **Try the product you are holding** — [[Markdown Studio|Welcome]] is a full tour of Markdown Studio
-- **Track what changes** — [[Changelog]]
-- **Everything else** — [perssonify.com](https://perssonify.com/)
-
-*This document ships with Markdown Studio as an example of a linked, structured
-note. Edit it freely — it is yours now.*
+*This note ships with Markdown Studio. Edit it or delete it: it's yours now.*
 `;
 
 export const STARTER_DOCUMENTS: StarterDocument[] = [
   { folderPath: [], markdown: CHANGELOG },
   // Filed in a folder, which also gives the relationship map a labelled
   // cluster to draw on a first visit.
-  { folderPath: ["Perssonify"], markdown: ABOUT_PERSSONIFY },
+  { folderPath: ["Guides"], markdown: GETTING_STARTED },
 ];
