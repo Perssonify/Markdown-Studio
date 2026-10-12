@@ -20,7 +20,7 @@
     "deploy:web": "bun run --cwd infra deploy -- --web-only"
   },
   "devDependencies": {
-    "turbo": "2.11.6"
+    "turbo": "2.11.7"
   },
   "overrides": {
     "vite": "8.1.5",
