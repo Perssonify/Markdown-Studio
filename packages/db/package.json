@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.5.0",
+    "@types/node": "^26.6.4",
     "@types/pg": "8.23.1",
     "drizzle-kit": "0.31.11",
     "eslint": "^10.11.0",
