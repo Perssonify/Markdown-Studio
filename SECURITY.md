@@ -1,15 +1,25 @@
 # Security Policy
 
 Markdown Studio (npm package `@perssonify/editor`) is a browser-based Markdown
-editor: documents are converted in the visitor's browser and stored there
-(IndexedDB), with no account and no server copy. The one server-side component
-is `api/import.js` — a first-party "import relay" that fetches a user-supplied
-URL on the app's own origin so the browser can import from hosts that send no
-CORS headers. The app uses it only after the visitor has agreed to it (asked
-once, remembered, changeable in Settings ▸ Privacy).
+editor. Documents are converted in the visitor's browser and stored there
+(IndexedDB). The hosted app at `https://markdownstudio.com` also has accounts:
+visitors sign in with Google, and their documents, folders and images sync to
+their account. That server side is `apps/api`:
 
-We take reports about that relay, about the import/ingest path, and about the
-embed's host-supplied parameters seriously. Thank you for looking.
+- **Accounts** — Google sign-in through Better Auth (`/api/auth/*`), with
+  sessions in Postgres.
+- **Cloud sync** — `/api/sync/*`: each user's documents, folder tree, images,
+  past versions and daily backups, stored in a private S3 bucket and indexed in
+  Postgres.
+- **The import relay** — `apps/web/api/import.js`, a first-party proxy that
+  fetches a user-supplied URL on the app's own origin so the browser can import
+  from hosts that send no CORS headers. The app uses it only after the visitor
+  has agreed to it (asked once, then remembered).
+
+The editor also runs with no backend at all (a static build, or the npm
+package), in which case only the browser-side surfaces below apply.
+
+We take reports about any of these seriously. Thank you for looking.
 
 ## Supported versions
 
@@ -20,9 +30,9 @@ embed's host-supplied parameters seriously. Thank you for looking.
 | Latest published `@perssonify/editor` on npm       | Yes       |
 | Any older tag, release or npm version              | No        |
 
-The app is continuously deployed from `main` and stores no documents on a
-server, so there is nothing to back-port to: fixes land on `main`, ship to the
-live deployment, and go out in the next npm release. Please reproduce against
+The app is continuously deployed from `main`, so there is nothing to
+back-port to: fixes land on `main`, ship to the live deployment, and go out in
+the next npm release. Please reproduce against
 the live site or a current `main` build before reporting.
 
 ## Reporting a vulnerability
@@ -30,24 +40,26 @@ the live site or a current `main` build before reporting.
 **Please do not open a public issue for a security problem, and please do not
 post a working exploit in a pull request.**
 
-Report privately by e-mail:
+Report privately, either way:
 
-- **<security@markdownstudio.com>**
+- **GitHub:** [report a vulnerability](https://github.com/Perssonify/Markdown-Studio/security/advisories/new)
+  (private vulnerability reporting on this repository), or
+- **E-mail:** **<security@markdownstudio.com>**
 
-The same address is published at
-<https://markdownstudio.com/.well-known/security.txt> (RFC 9116). The source
-repository is private, so GitHub's private vulnerability reporting is not
-available to outside reporters; e-mail is the channel. If you want to encrypt
-your report, say so in a first short message and we will agree a way to
-exchange it.
+The e-mail address is also published at
+<https://markdownstudio.com/.well-known/security.txt> (RFC 9116). If you want
+to encrypt your report, say so in a first short message and we will agree a way
+to exchange it.
 
 A useful report includes:
 
-- the affected surface (relay / import path / embed parameter / library API),
+- the affected surface (accounts / sync API / relay / import path / embed
+  parameter / library API),
 - the exact URL, file or parameter value that triggers it,
-- what an attacker gains (be specific — reading another origin's data,
-  executing script on `markdownstudio.com`, reaching a host the relay should
-  refuse, corrupting stored documents),
+- what an attacker gains (be specific — reading or changing another user's
+  documents, taking over a session, reading another origin's data, executing
+  script on `markdownstudio.com`, reaching a host the relay should refuse,
+  corrupting stored documents),
 - steps to reproduce, and the browser/OS if it is browser-specific.
 
 ### What to expect
@@ -66,7 +78,18 @@ no bug bounty.
 
 ## In scope
 
-**The import relay — `api/import.js`.** It is internet-facing and deliberately
+**Accounts and sessions — `apps/api/src/modules/auth`.** Google sign-in through
+Better Auth, with its origin check switched on explicitly. A way to sign in as
+someone else, to steal or fixate a session, to bypass the origin check, or to
+turn the sign-in callbacks into an open redirect is in scope.
+
+**Cloud sync — `apps/api/src/modules/sync`.** Every route acts only on the
+signed-in user's own library. Reading, writing, deleting or listing another
+user's documents, images, versions or backups is in scope, as is getting a
+presigned S3 link for an object that isn't yours, or a write that skips the
+server's revision check (`base`) and overwrites newer content.
+
+**The import relay — `apps/web/api/import.js`.** It is internet-facing and deliberately
 hardened; anything that gets past one of these controls is a valid report:
 
 - **SSRF.** `http(s)` only; `localhost`, `*.local` and `*.internal` refused;
@@ -134,10 +157,12 @@ execution in the host page.
 - **The visitor's own browser storage.** Documents live in IndexedDB
   (including the `perssonify-snapshots` version-history sidecar), and the unload
   stash, drafts and preferences in `localStorage` (`pf:` keys) — in plain text,
-  by design: there is no server copy and no encryption at rest. Anyone with
-  access to the device, the browser profile, or devtools on the page can read
-  them. That is the product's threat model, not a vulnerability. (Settings ▸
-  Local data ▸ Erase all local data removes them.)
+  by design. Anyone with access to the device, the browser profile, or devtools
+  on the page can read them. That is the product's threat model, not a
+  vulnerability. (Settings ▸ Local data ▸ Erase all local data removes them.)
+- **Synced content is not end-to-end encrypted.** It is encrypted at rest in S3
+  with AWS-managed keys, and the service can read it. That is documented, not
+  a finding; a way for anyone else to read it is.
 - **Self-XSS in your own document.** You can author raw HTML in your own
   editor; content you type into your own browser is not a cross-user issue.
   Content that arrives via *import* is a different matter and is in scope.
@@ -160,5 +185,7 @@ execution in the host page.
 Test against your own browser and your own documents. When probing the relay,
 please use your own hosts as targets, keep request volume low (there is a
 per-IP rate limit for a reason), and do not attempt to degrade the service for
-other people. Do not attempt to access accounts, infrastructure, or data that
-is not yours — there are no user accounts to access.
+other people. Use your own Google account (or a test account you
+own) and your own documents. Do not attempt to access accounts,
+infrastructure, or data that is not yours: if you find you can, stop, and
+report what you found without looking further.

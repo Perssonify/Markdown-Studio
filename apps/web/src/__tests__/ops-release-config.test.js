@@ -206,13 +206,17 @@ describe("a reachable security contact (A007)", () => {
     expect(days, "RFC 9116 recommends an Expires less than a year away").toBeLessThanOrEqual(366);
   });
 
-  it("SECURITY.md and the issue-template link point to that mailbox, not the private repo", () => {
+  // The repository is public, so GitHub's private reporting is a channel too
+  // (it must be switched on in the repo settings); the mailbox stays, because
+  // it works for reporters without a GitHub account.
+  it("SECURITY.md and the issue templates name that mailbox, and no longer call the repo private", () => {
     const policy = read(`${REPO}/SECURITY.md`);
     const config = read(`${GH}/ISSUE_TEMPLATE/config.yml`);
     expect(policy).toContain("security@markdownstudio.com");
     expect(config).toContain("mailto:security@markdownstudio.com");
     for (const [name, text] of [["SECURITY.md", policy], ["config.yml", config]]) {
-      expect(text, name).not.toMatch(/security\/advisories\/new/);
+      expect(text, name).not.toMatch(/repository is private/i);
+      expect(text, name).not.toMatch(/no server copy/i);
     }
   });
 });

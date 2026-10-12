@@ -23,10 +23,10 @@
   "homepage": "https://markdownstudio.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SolutionPath/markdown-studio.git"
+    "url": "git+https://github.com/Perssonify/Markdown-Studio.git"
   },
   "bugs": {
-    "url": "https://markdownstudio.com",
+    "url": "https://github.com/Perssonify/Markdown-Studio/issues",
     "email": "security@markdownstudio.com"
   },
   "type": "module",

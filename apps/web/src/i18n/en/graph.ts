@@ -35,7 +35,7 @@ export const graph = {
   "graph.createNotesAndLinkThem": "Create notes and link them with [[wiki links]] to see them here.",
   "graph.noneLinkedYet": { one: "One note, nothing linked yet", other: "{count} notes, none linked yet" },
   /** `{code}` is the `[[` link opener, set as code. */
-  "graph.howToLink": "This map draws a line between two notes when one links to the other. Type {code} in any document and pick a note to link it — the connection appears here.",
+  "graph.howToLink": "This map draws a line between two notes when one links to the other. Type {code} and a note's name in any document to link it — the connection appears here.",
   "graph.openTitle": "Open {title}",
   "graph.openQuoted": "Open \"{title}\"",
   "graph.showInMap": "Show \"{title}\" in the map",

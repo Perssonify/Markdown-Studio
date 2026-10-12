@@ -9,8 +9,8 @@ before changing code.
 
 ## 0. Current state
 
-- **Repo:** `SolutionPath/markdown-studio`
-- **Archived predecessor:** [`SolutionPath/Markdown-Editor-V3`](https://github.com/SolutionPath/Markdown-Editor-V3)
+- **Repo:** `Perssonify/Markdown-Studio`
+- **Archived predecessor:** `SolutionPath/Markdown-Editor-V3` (private)
 - **Package/version:** `@perssonify/editor` **v1.77.0**, plus the unreleased fixes for
   the September 2026 production-readiness audit (`CHANGELOG.md` ▸ Unreleased) —
   single-sourced from `package.json` (Vite injects `__APP_VERSION__`;

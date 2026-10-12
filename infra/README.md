@@ -4,7 +4,7 @@ Three CloudFormation stacks in `us-east-1`:
 
 - **`MarkdownStudioFiles`** ([`lib/files-stack.ts`](lib/files-stack.ts)) — users' files:
   ONE production bucket, `markdown-studio-labs`. **Deployed** (5 Oct 2026, as
-  `markdown-studio-files-519046119363`; renamed — S3 cannot rename, so the new
+  `markdown-studio-files-<account-id>`; renamed — S3 cannot rename, so the new
   name is a new bucket and the old one is retained as it was). Its own stack so
   no app deploy, rollback or delete can touch users'
   files; retained and termination-protected. Private, encrypted, TLS-only,

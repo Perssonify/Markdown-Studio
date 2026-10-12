@@ -68,7 +68,7 @@ export const account = {
   "account.planFreeFeature1": "Unlimited documents on your device",
   "account.planFreeFeature2": "Sync across your devices",
   "account.planFreeFeature3": "Share links with images built in",
-  "account.planFreeFeature4": "Import and export Markdown, Word, PDF",
+  "account.planFreeFeature4": "Markdown and Word in and out, plus PDF",
   "account.planProName": "Pro",
   "account.planProPrice": "Soon",
   "account.planProTagline": "More room, more power",

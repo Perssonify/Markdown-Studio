@@ -29,11 +29,11 @@ export interface AboutContent {
 
 const en: AboutContent = {
   intro:
-    "A dual-pane Markdown editor that keeps a raw-Markdown source and a rich-text preview perfectly in sync — with math, diagrams, music, tables, folders, a knowledge graph, a card board, and one-click export. It runs in your browser: there is no account, and your documents are stored on your device, not on a server.",
+    "A dual-pane Markdown editor that keeps a raw-Markdown source and a rich-text preview perfectly in sync — with math, diagrams, music, tables, folders, a knowledge graph, a card board, and one-click export. It runs in your browser and keeps your documents there, so it works offline. Sign in to sync them across your devices. Markdown Studio is open source under the MIT license.",
   principles: {
     privacy: {
       title: "Private by design",
-      body: "Your documents are stored in this browser. There is no account, and no server stores or reads them. Importing from a URL asks before using our relay, and remote images can be blocked — both in Settings ▸ Privacy.",
+      body: "No analytics or tracking. Your documents are stored in this browser and, when you're signed in, synced to your account. Importing from a URL asks before using our relay, and remote images can be blocked in Settings ▸ Privacy.",
     },
     offline: {
       title: "Works offline",

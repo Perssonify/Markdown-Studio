@@ -43,7 +43,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **First-run library** (`src/data/starter-documents.ts` + `DEFAULT_CONTENT`): the app
   seeds **three** cross-linked documents, not one — **Welcome** (the `initialDocument`),
   **Changelog** (a living in-app release log, meant to be cleared at each release), and
-  **About Perssonify** filed in a `Perssonify` FOLDER. They `[[wiki link]]` to each other
+  **Getting started** filed in a `Guides` FOLDER (it replaced an "About Perssonify"
+  agency brochure before the open-source launch). They `[[wiki link]]` to each other
   ON PURPOSE: with a single document the relationship map opened on one unconnected dot
   with nothing to explore, and the folder gives it a labelled cluster too. Seeded via PE's
   **`starterDocuments`** prop — standalone app ONLY (`App.tsx`); an embedder's

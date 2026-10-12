@@ -4,7 +4,7 @@
 >
 > **Home:** [markdownstudio.com](https://markdownstudio.com) · Built by [Perssonify Labs](https://labs.perssonify.com/) · Ships as a standalone app **and** an embeddable library (`@perssonify/editor` — the npm coordinate is unchanged).
 
-> **Lineage:** The archived predecessor is [SolutionPath/Markdown-Editor-V3](https://github.com/SolutionPath/Markdown-Editor-V3). This repository began as a history-clean import of predecessor `main` at `41e831e44b4a8830168b94d13e74c962e3bb0626` (`v1.70.0`) and is the active home of Markdown Studio.
+> **Lineage:** The archived predecessor is `SolutionPath/Markdown-Editor-V3` (private). This repository began as a history-clean import of predecessor `main` at `41e831e44b4a8830168b94d13e74c962e3bb0626` (`v1.70.0`) and is the active home of Markdown Studio.
 
 > 📚 **Full engineering documentation lives in [`docs/`](docs/).** Start at [docs/README.md](docs/README.md). This file is a high-level overview; the `docs/` set is the living source of truth.
 
@@ -862,4 +862,4 @@ New engineers: start with [HANDOVER.md](HANDOVER.md).
 
 ---
 
-*Built by [Perssonify Labs](https://github.com/SolutionPath)*
+*Built by [Perssonify Labs](https://labs.perssonify.com/)*
