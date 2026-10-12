@@ -158,7 +158,10 @@ describe("Block remote images", () => {
 });
 
 describe("Settings ▸ Privacy ▸ Import relay", () => {
-  it("reflects and changes the stored answer", async () => {
+  // The toggle is HIDDEN (commented out in settingsPrivacy, 2026-10-05, on
+  // request); the import dialog still asks (g4-relay-consent.test.js).
+  // Un-skip this when the toggle is restored.
+  it.skip("reflects and changes the stored answer", async () => {
     render(<PrivacySection open />);
     expect(screen.getByText(/Not decided yet/)).toBeInTheDocument();
     const toggle = screen.getByRole("switch", { name: "Import relay" });

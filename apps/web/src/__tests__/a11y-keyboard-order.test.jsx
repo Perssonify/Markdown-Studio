@@ -32,7 +32,9 @@ describe("DOM order matches visual order", () => {
   it("puts the skip link first in the app shell", () => {
     const app = codeOnly(read("src/App.tsx"));
     expect(app.indexOf("<SkipToEditor />")).toBeGreaterThan(-1);
-    expect(app.indexOf("<SkipToEditor />")).toBeLessThan(app.indexOf("<EditorHeader />"));
+    const header = app.indexOf("<EditorHeader");
+    expect(header).toBeGreaterThan(-1);
+    expect(app.indexOf("<SkipToEditor />")).toBeLessThan(header);
   });
 });
 
