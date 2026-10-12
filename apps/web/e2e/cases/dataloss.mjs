@@ -13,7 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  serve, open, boot, seed, storedDoc, canonicalText, richText, runCase, until, closeRig, APP_DIR, BLANK_PATH,
+  serve, open, boot, seed, storedDoc, canonicalText, richText, mdText, runCase, until, closeRig, APP_DIR, BLANK_PATH,
 } from "../lib.mjs";
 import { proseDoc } from "../docs.mjs";
 
@@ -76,6 +76,33 @@ const notice = (pg) => pg.evaluate(() =>
   document.querySelector("[data-tab-sync-notice]")?.getAttribute("data-tab-sync-notice") ?? null);
 const clickNotice = (pg, label) => pg.locator(`[data-tab-sync-notice] button:has-text("${label}")`).first().click();
 
+/** What the markdown pane's DOM holds — only CodeMirror's rendered viewport,
+ *  which is why the checks read it with `mdText` — and how it is scrolled.
+ *  The detail of a failed markdown-pane check. */
+const mdPane = (pg) => pg.evaluate(() => {
+  const s = document.querySelector(".cm-scroller");
+  const c = document.querySelector(".cm-content");
+  return {
+    lines: c ? c.querySelectorAll(".cm-line").length : null,
+    tail: (c?.textContent ?? "").slice(-120),
+    scroll: s ? [Math.round(s.scrollTop), s.clientHeight, s.scrollHeight] : null,
+  };
+});
+
+/** Every toast the page shows from now on, kept after it goes: a toast lives
+ *  three seconds, and a check that runs after a slow one would miss it. */
+const recordToasts = (pg) => pg.evaluate(() => {
+  const seen = (window.__toasts = []);
+  const look = () => {
+    for (const el of document.querySelectorAll("[data-sonner-toast]")) {
+      if (!seen.includes(el.textContent)) seen.push(el.textContent);
+    }
+  };
+  new MutationObserver(look).observe(document.body, { childList: true, subtree: true, characterData: true });
+  look();
+});
+const toastsSeen = (pg) => pg.evaluate(() => window.__toasts ?? []);
+
 /** Every document on disk, parsed. */
 const allDocs = (pg) => pg.evaluate(() => new Promise((res) => {
   const r = indexedDB.open("perssonify-docs");
@@ -121,15 +148,21 @@ runCase("dataloss", async (rep, onClose) => {
       docs: [proseDoc("aaa", "Alpha doc", 1), proseDoc("bbb", "Beta doc", 1)],
       label: "live sync",
     });
+    await recordToasts(b);
     await typeAtEnd(a.page, "LIVE-FROM-A");
     await a.page.keyboard.press("Control+s");
     rep.check("live sync: A's save reaches B's rich pane without a reload",
       await until(async () => (await richText(b)).includes("LIVE-FROM-A"), { timeout: 20000 }),
       (await richText(b)).slice(-160));
     rep.check("live sync: …and B's markdown pane",
-      await until(async () => (await b.evaluate(() => document.querySelector(".cm-content")?.textContent ?? "")).includes("LIVE-FROM-A")));
+      await until(async () => (await mdText(b)).includes("LIVE-FROM-A")),
+      JSON.stringify(await mdPane(b)));
+    if (!(await mdPane(b)).tail.includes("LIVE-FROM-A")) {
+      rep.note(`B's markdown pane has not rendered the end of the document: ${JSON.stringify(await mdPane(b))}`);
+    }
     rep.check("live sync: B says so, quietly",
-      await until(async () => (await b.locator('[data-sonner-toast]:has-text("Updated from another tab")').count()) > 0));
+      await until(async () => (await toastsSeen(b)).some((t) => t.includes("Updated from another tab"))),
+      JSON.stringify(await toastsSeen(b)));
     rep.check("live sync: B is not in conflict and asks nothing",
       !/another tab|conflict|not sav/i.test(await shownStatus(b)) && (await notice(b)) === null, (await shownStatus(b)).slice(0, 160));
 
@@ -419,9 +452,10 @@ runCase("dataloss", async (rep, onClose) => {
       !!assetMeta && assetMeta.mime === "image/png", JSON.stringify(assetMeta));
     rep.check("A086: the markdown pane shows a short reference, not a wall of base64",
       await until(async () => {
-        const t = await pg.evaluate(() => document.querySelector(".cm-content")?.textContent ?? "");
+        const t = await mdText(pg);
         return t.includes(`pf-asset:${hash.slice(0, 8)}…`) && !t.includes("base64");
-      }, { timeout: 10000 }));
+      }, { timeout: 10000 }),
+      JSON.stringify({ ...(await mdPane(pg)), ref: (await mdText(pg)).match(/.{0,24}pf-asset:.{0,24}/)?.[0] ?? null }));
 
     await pg.reload({ waitUntil: "networkidle" });
     rep.check("A086: after a reload the image is still there",
