@@ -49,7 +49,7 @@
         "lowlight": "^3.3.0",
         "mammoth": "^1.12.0",
         "marked": "^18.0.14",
-        "marked-emoji": "^2.0.3",
+        "marked-emoji": "^3.0.0",
         "marked-footnote": "^1.4.0",
         "mermaid": "^12.0.0",
         "nanoid": "^6.0.1",
@@ -1628,7 +1628,7 @@
 
     "marked": ["marked@18.0.14", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-mBHK6FBHuBAlhgRe88w9F0O1AbwwXJUcQibUbC/QcdTbVGAD7aWza+xt3N6oT/jCZx3/OMeS+8rnuiHZcQ9s7A=="],
 
-    "marked-emoji": ["marked-emoji@2.0.3", "", { "peerDependencies": { "marked": ">=4 <19" } }, "sha512-fChW/AfUqCHgoEC1nFDgiw3OR/qsi71/QXH/HTo05yd6B5+T+VHh1SqCpn/HpeGLDxkA+MK4+hr4eULB2/A8Jw=="],
+    "marked-emoji": ["marked-emoji@3.0.0", "", { "peerDependencies": { "marked": ">=4 <19" } }, "sha512-4IODef6jiQfuRsWOXSH/q9YiXmpVemvm1raj4WmObkWeAPg5bMMPTvbDpxbn4BIvbM245a1Dhq6RAzCS0WFGOw=="],
 
     "marked-footnote": ["marked-footnote@1.4.0", "", { "peerDependencies": { "marked": ">=7.0.0" } }, "sha512-fZTxAhI1TcLEs5UOjCfYfTHpyKGaWQevbxaGTEA68B51l7i87SctPFtHETYqPkEN0ka5opvy4Dy1l/yXVC+hmg=="],
 
