@@ -33,10 +33,12 @@
  * a Vite plugin reading each chunk's `moduleIds` instead.
  */
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const POSIX = (p) => p.split(sep).join("/");
+// Every backslash, not just the host's separator: a Windows path (a source map
+// written on Windows, or the tests) must parse the same on Linux CI.
+const POSIX = (p) => p.replace(/\\/g, "/");
 const LICENCE_FILE = /^(licen[cs]e|copying|notice|ofl)([.-].*)?$/i;
 const MAX_TEXT = 64 * 1024;
 
