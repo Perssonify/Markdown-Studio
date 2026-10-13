@@ -13,6 +13,19 @@ import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n";
 
+/**
+ * The small dialog's footer. The primitive lays its two buttons out as a
+ * 2-column grid, so a label longer than half the dialog ("Sign out and remove",
+ * "Delete unused images") spills out of its button. Here they are flex items
+ * at least half the row each (half of `gap-2` taken off): side by side as
+ * equal halves when both labels fit, otherwise stacked full-width with the
+ * action on top — the default size's narrow layout. The content's group
+ * variant is restated so these outrank the primitive's own `sm` rules.
+ */
+const SM_FOOTER =
+  "group-data-[size=sm]/alert-dialog-content:flex group-data-[size=sm]/alert-dialog-content:flex-row group-data-[size=sm]/alert-dialog-content:flex-wrap-reverse";
+const SM_FOOTER_BUTTON = "grow min-w-[calc(50%-0.25rem)]";
+
 interface ConfirmOptions {
   title: string;
   description?: string;
@@ -67,11 +80,12 @@ export function useConfirm() {
             <AlertDialogDescription>{state.description}</AlertDialogDescription>
           )}
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={handleCancel}>
+        <AlertDialogFooter className={SM_FOOTER}>
+          <AlertDialogCancel className={SM_FOOTER_BUTTON} onClick={handleCancel}>
             {state.cancelLabel ?? t("common.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
+            className={SM_FOOTER_BUTTON}
             variant={state.destructive ? "destructive" : "default"}
             onClick={handleConfirm}
           >
