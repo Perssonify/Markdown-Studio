@@ -27,7 +27,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { APP_NAME, MODES, VERSION } from "@/constants";
-import { ChevronLeft, ChevronRight, FileText, Menu as MenuIcon, Network, PenLine, SettingsIcon, StickyNote } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Menu as MenuIcon, Network, PenLine, SettingsIcon, Share2, StickyNote } from "lucide-react";
+import { gatedShareProps, useShareGate } from "@/editor/share-gate";
 import { useTheme } from "next-themes";
 import React, { type ReactNode, useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -89,6 +90,8 @@ export interface MenuBarProps {
   onVersionHistory?: () => void;
   /** Opens the share / embed link builder dialog. */
   onLinkBuilder?: () => void;
+  /** Copies a share link to the open document (the Share button). */
+  onShare?: () => void;
   /** Standalone-app navigation. When provided, these open interior pages
    *  (/about, /help) instead of the built-in dialogs used by embedders. */
   onAbout?: () => void;
@@ -156,6 +159,7 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
   // rather than being folded into the light/dark it currently resolves to.
   const { theme, setTheme } = useTheme();
   const isMobile = useIsMobile();
+  const shareGate = useShareGate();
   const caseContentOnly = useUIStore((s) => s.caseContentOnly);
   const setCaseContentOnly = useUIStore((s) => s.setCaseContentOnly);
   const readOnly = useUIStore((s) => s.readOnly);
@@ -603,6 +607,24 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
             </span>
           </div>
         )}
+        {/* Share the open document, in plain sight: it used to live only in each
+            note's ⋮ menu. Greyed out, with the reason on hover, while sharing is
+            unavailable (share-gate.ts: the app, signed out). */}
+        {props.onShare && (
+          <Button
+            data-tour="share"
+            variant="outline"
+            size="sm"
+            className={cn("h-8 gap-1.5 px-2 pointer-coarse:min-h-9 pointer-coarse:min-w-9", shareGate && "cursor-not-allowed opacity-50")}
+            title={t("menu.shareTitle")}
+            aria-label={t("menu.share")}
+            {...gatedShareProps(shareGate)}
+            onClick={props.onShare}
+          >
+            <Share2 className="size-4" />
+            <span className="hidden text-xs tracking-tight whitespace-nowrap sm:inline-block">{t("menu.share")}</span>
+          </Button>
+        )}
         {props.activeDocId && <div className="hidden h-5 w-px bg-border md:block" aria-hidden />}
         <span data-tour="mode-switcher">
           <ModeSwitcher mode={props.mode} setMode={props.setMode} />
@@ -630,7 +652,9 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
                 <span
                   className={cn(
                     "hidden text-xs tracking-tight whitespace-nowrap lg:inline-block",
-                    active && "inline-block"
+                    // The active surface's label from 380px wide (the Share
+                    // button needs the room on the narrowest phones).
+                    active && "min-[380px]:inline-block"
                   )}
                 >
                   {label}

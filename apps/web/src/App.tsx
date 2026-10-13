@@ -297,6 +297,11 @@ export function App() {
                 durabilityNotices
                 initialImportUrl={importUrlSeed}
                 initialShare={shareSeed}
+                // Share links need an account: signed out, every share control
+                // is greyed out and says so. Where no account service answers
+                // (offline, an outage) there is nobody to sign in to, so sharing
+                // stays as it was.
+                shareDisabledReason={accounts && accountStatus === "signed-out" ? t("account.signInToShare") : undefined}
                 graphOpen={route === "graph"}
                 // Opening the graph pushes (so browser Back closes it); closing
                 // REPLACES the /graph entry — otherwise every toggle stacked two

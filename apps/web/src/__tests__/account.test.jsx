@@ -374,7 +374,12 @@ describe("accounts in the app", () => {
     expect(container.querySelector('[data-tour="menubar"]')).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Continue with Google/ })).toBeNull(); // no sign-in screen in the way
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/get-session", expect.anything());
-  }, 30_000);
+    // Sharing needs an account: the Share button is in plain sight, greyed out, and says why.
+    // (It appears once the editor has a document open: under a loaded test run that can take a while.)
+    const share = await screen.findByRole("button", { name: "Share" }, { timeout: 30_000 });
+    expect(share.getAttribute("aria-disabled")).toBe("true");
+    expect(share.getAttribute("title")).toBe("Sign in to share links to your notes and folders.");
+  }, 60_000);
 
   it("waits for the answer instead of flashing the editor", async () => {
     fetchMock.mockReturnValue(new Promise(() => {})); // never answers (until the timeout)

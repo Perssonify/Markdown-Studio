@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { gatedShareProps, useShareGate } from "@/editor/share-gate";
 import { useDocumentStore } from "@/store/documents/documentStore";
 import { useFolderStore } from "@/store/documents/folders";
 import type { OutlineHeading } from "@/store/documents/doc-outline";
@@ -725,6 +726,7 @@ function FlatDocList({
   scrollRef,
 }: FlatDocListProps) {
   const t = useT();
+  const shareGate = useShareGate();
   const listRef = useRef<HTMLDivElement>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -918,7 +920,7 @@ function FlatDocList({
                 </DropdownMenuSub>
               )}
               {onShareDoc && (
-                <DropdownMenuItem onClick={() => onShareDoc(doc.id)}><Share2Icon />{t("library.shareLink")}</DropdownMenuItem>
+                <DropdownMenuItem className={cn(shareGate && "cursor-not-allowed opacity-50")} {...gatedShareProps(shareGate)} onClick={() => onShareDoc(doc.id)}><Share2Icon />{t("library.shareLink")}</DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(doc.id)}>

@@ -22,6 +22,7 @@ import { useBottomTray, useConsoleContext, useTrayTabs } from "./editor/useBotto
 import { useImportPipeline } from "./editor/useImportPipeline";
 import { useEditorBoot, usePersistPreferences } from "./editor/useEditorBoot";
 import { useExportActions } from "./editor/useExportActions";
+import { ShareGateContext } from "./editor/share-gate";
 import { useEditorActions } from "./editor/useEditorActions";
 import { useLibraryQueries } from "./editor/useLibraryQueries";
 import { useCardHandlers } from "./editor/useCardHandlers";
@@ -105,6 +106,7 @@ function PerssonifyEditorInstance({
   durabilityNotices = false,
   initialImportUrl,
   initialShare,
+  shareDisabledReason,
   readOnly: readOnlyProp,
   fitParent = false,
 }: PerssonifyEditorProps) {
@@ -620,6 +622,16 @@ function PerssonifyEditorInstance({
   const { handleExportFolder, handleExportDoc, handleExportDocs, handleShareDoc, handleShareFolder } = useExportActions({
     engine, syncMode, getCanonical, toast, toastRef, autosaveRef, exportDocsRef,
   });
+  // Sharing behind `shareDisabledReason` (the app: signed out): every share
+  // control says why instead of copying a link (share-gate.ts).
+  const shareDoc = useCallback((docId: string) => {
+    if (shareDisabledReason) toast.show(shareDisabledReason, "info");
+    else void handleShareDoc(docId);
+  }, [shareDisabledReason, toast, handleShareDoc]);
+  const shareFolder = useCallback((folderId: string) => {
+    if (shareDisabledReason) toast.show(shareDisabledReason, "info");
+    else void handleShareFolder(folderId);
+  }, [shareDisabledReason, toast, handleShareFolder]);
 
   // ── Library queries ───────────────────────────────────────────────────────
   // Search, and the map's per-document headings, answered from what the link
@@ -681,6 +693,7 @@ function PerssonifyEditorInstance({
   return (
 
    <DialogProvider value={dialogApi}>
+    <ShareGateContext.Provider value={shareDisabledReason}>
     <TooltipProvider>
       {/* `perssonify-editor` is the editor ROOT class. It is a styling hook, not
           decoration: the page-level rules in styles.css are scoped so they cannot
@@ -719,6 +732,7 @@ function PerssonifyEditorInstance({
             onMemory={openMemory}
             onVersionHistory={openVersionHistory}
             onLinkBuilder={openLinkBuilder}
+            onShare={activeDocId ? () => shareDoc(activeDocId) : undefined}
             onAbout={onAbout}
             onHelp={onHelp}
             onStartTour={onStartTour}
@@ -804,8 +818,8 @@ function PerssonifyEditorInstance({
                   onExportFolder={handleExportFolder}
                   onExportDocs={handleExportDocs}
                   onExportDoc={handleExportDoc}
-                  onShareDoc={handleShareDoc}
-                  onShareFolder={handleShareFolder}
+                  onShareDoc={shareDoc}
+                  onShareFolder={shareFolder}
                   onSearchBody={searchDocBody}
                   headings={docNavHeadings}
                   activeIndex={activeHeadingIndex}
@@ -989,6 +1003,7 @@ function PerssonifyEditorInstance({
         </div>
       </div>
     </TooltipProvider>
+    </ShareGateContext.Provider>
    </DialogProvider>
   );
 }

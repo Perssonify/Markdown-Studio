@@ -44,7 +44,10 @@ export function ModeSwitcher({ mode, setMode }: ModeSwitcherProps) {
       return (
         <Button data-slot="mode-switcher-button" key={id} variant={mode === id ? "default" : "outline"} onClick={() => setMode(id)} disabled={readOnly} title={readOnly ? t("toolbar.viewLockedInReadOnly") : t("toolbar.modeTitle", { label, short })} aria-label={modeAccessibleName(short, label)} aria-pressed={mode === id} className="pointer-coarse:min-h-9 pointer-coarse:min-w-9">
           <Icon className="size-3.5" />
-          <span className={cn("text-xs tracking-tight whitespace-nowrap hidden sm:inline-block", mode === id ? "inline-block" : "")}>{short}</span>
+          {/* The active mode's label shows from 400px wide; narrower, the menu bar
+              (with its Share button) needs the room, and the pressed state still
+              marks the mode. */}
+          <span className={cn("text-xs tracking-tight whitespace-nowrap hidden sm:inline-block", mode === id ? "min-[400px]:inline-block" : "")}>{short}</span>
         </Button>
       );
     })}

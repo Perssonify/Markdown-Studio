@@ -180,6 +180,14 @@ export interface PerssonifyEditorProps {
    * through the normal import path. Omitted by the library / iframe embed.
    */
   initialShare?: SharePayload;
+  /**
+   * When set, sharing is unavailable and this says why: the Share button and
+   * "Copy share link" on notes and folders are shown greyed out with this text
+   * on hover, and choosing one shows the text instead of copying a link. The
+   * standalone app sets it for signed-out visitors (sharing needs an account).
+   * Omitted by the library / iframe embed, where sharing works as before.
+   */
+  shareDisabledReason?: string;
 
   /**
    * Open read-only: editing disabled, formatting toolbar hidden, view mode

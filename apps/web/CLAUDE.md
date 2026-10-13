@@ -1120,6 +1120,13 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   (`SESSION_CHECK_TIMEOUT_MS`) and, signed in, while `prepareCloudLibrary` readies
   the library, so a signed-in visitor on a new device opens on their notes, not on
   freshly seeded first-visit notes. Share links open straight into the editor.
+  **Making** a share link needs an account: App passes PE's `shareDisabledReason`
+  ("Sign in to share…") while signed out, and every share control (the menu bar's
+  Share button beside the document title, "Copy share link" on notes and folders)
+  reads it through `editor/share-gate.ts`: greyed out with the reason on hover, and
+  choosing one shows the reason instead of copying. `aria-disabled`, not `disabled`:
+  a disabled element gets no hover and no tooltip. The library and the embed never
+  set it, so sharing there is unchanged.
   `/login` shows the full sign-in screen (`SignInScreen`) over the editor, with
   "Continue without signing in". `SignInNudge` (a bar under the header) invites a
   signed-out visitor to sign in a minute after they have a note of their own, and

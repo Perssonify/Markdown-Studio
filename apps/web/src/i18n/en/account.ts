@@ -20,6 +20,7 @@ export const account = {
   "account.loginHeading": "Sign in to {app}",
   "account.loginLead": "Use your Google account. Your documents and their images are saved to your account and kept in sync across your devices.",
   "account.continueWithoutSignIn": "Continue without signing in",
+  "account.signInToShare": "Sign in to share links to your notes and folders.",
   "account.nudge": "Your notes are saved in this browser only. Sign in to sync them across your devices and keep a daily backup in your account.",
   "account.loginTagline": "Markdown, made effortless.",
   "account.loginTaglineDetail": "Write in plain text, see rich text, sync everywhere.",  "account.loginPrivacyNote": "We use your Google account only to sign you in.",

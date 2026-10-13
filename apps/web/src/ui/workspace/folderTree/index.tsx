@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { gatedShareProps, useShareGate } from "@/editor/share-gate";
 import type { DocumentSummary } from "@/store/documents/document";
 import { useUIStore } from "@/store/preferences/uiStore";
 import {
@@ -381,6 +382,7 @@ function DocMenuBody({
   onShareDoc?: (docId: string) => void;
 }) {
   const t = useT();
+  const shareGate = useShareGate();
   const moveDoc = useFolderStore((s) => s.moveDoc);
   const createFolder = useFolderStore((s) => s.createFolder);
   return (
@@ -400,7 +402,7 @@ function DocMenuBody({
       />
       {onExportDoc && <ExportDocSubmenu F={F} docId={docId} onExportDoc={onExportDoc} />}
       {onShareDoc && (
-        <F.Item onClick={() => onShareDoc(docId)}>
+        <F.Item className={cn(shareGate && "cursor-not-allowed opacity-50")} {...gatedShareProps(shareGate)} onClick={() => onShareDoc(docId)}>
           <Share2Icon className="mr-2 size-3.5" />
           {t("library.shareLink")}
         </F.Item>
@@ -433,6 +435,7 @@ function FolderMenuBody({
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
 }) {
   const t = useT();
+  const shareGate = useShareGate();
   const createFolder = useFolderStore((s) => s.createFolder);
   const moveFolder = useFolderStore((s) => s.moveFolder);
   const deleteFolder = useFolderStore((s) => s.deleteFolder);
@@ -467,7 +470,7 @@ function FolderMenuBody({
         </>
       )}
       {onShareFolder && (
-        <F.Item onClick={() => onShareFolder(folder.id)}>
+        <F.Item className={cn(shareGate && "cursor-not-allowed opacity-50")} {...gatedShareProps(shareGate)} onClick={() => onShareFolder(folder.id)}>
           <Share2Icon className="mr-2 size-3.5" />
           {t("library.shareLink")}
         </F.Item>
