@@ -10,7 +10,7 @@
 New capabilities layered onto the dual-pane editor. This complements
 [features.md](features.md); read that first for the baseline (documents, wiki links,
 graph, find/replace, import/export). Everything here runs in the browser and is
-MIT-licensed; the product's one piece of server code, the opt-in URL-import
+licensed under CC BY-NC 4.0; the product's one piece of server code, the opt-in URL-import
 relay, is described in [import-relay.md](import-relay.md).
 
 > **Latest additions** (see [features.md](features.md) for details): Word (`.docx`)

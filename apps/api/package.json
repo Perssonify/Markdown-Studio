@@ -2,7 +2,7 @@
   "name": "@markdown-studio/api",
   "version": "0.0.0",
   "private": true,
-  "license": "MIT",
+  "license": "CC-BY-NC-4.0",
   "type": "module",
   "scripts": {
     "dev": "node --watch-path=src --watch-path=../../packages/db/src --watch-path=../web/api --env-file-if-exists=.env src/server.ts",

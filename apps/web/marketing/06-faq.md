@@ -141,7 +141,9 @@ note by note — that is what the search and filters are for.
 No. It's an editor.
 
 **Is it open source?**
-Yes, MIT licensed.
+It's source-available under CC BY-NC 4.0: free to use, share and adapt for
+non-commercial purposes, with credit to Perssonify Labs. Commercial use needs a
+license: write to hello@markdownstudio.com.
 
 ---
 

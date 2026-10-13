@@ -129,7 +129,7 @@ For a homepage grid. Each is a genuine differentiator, not table stakes.
   the starting document
 - Pluggable storage adapter — bring your own persistence
 - Shareable links with view mode, read-only and theme baked in
-- TypeScript types included; MIT licensed
+- TypeScript types included; source-available under CC BY-NC 4.0 (non-commercial)
 
 ---
 
