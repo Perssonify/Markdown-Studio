@@ -428,7 +428,7 @@ These are on-disk contracts. Do not rename them.
   - Diagnostics: `pf:diagnostics` (the redacted error ring, no document content) and `pf:boot-recovered` (written by the watchdog).
   - **Document text:** `pf:recovery` (the unload stash) and `pf:card-draft` (the Cards composer's unsaved note).
   - `perssonify-theme`, `perssonify-theme-mode` (integration only), `perssonify-palette`, `perssonify-diag`.
-- **sessionStorage:** `pf:session-view-mode`, `pf:preload-reload-at`, `pf:boot-recover-at`.
+- **sessionStorage:** `pf:session-view-mode`, `pf:preload-reload-at`, `pf:boot-recover-at`, `pf:pending-share` (a share link opened while signed out, kept through sign-in).
 
 ### 6.5 Migrations
 
