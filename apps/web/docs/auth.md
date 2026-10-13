@@ -33,7 +33,7 @@ The removal is recorded in git:
 84d7099 refactor: remove login form and authentication logic from App component
 ```
 
-[`vercel.json`](../vercel.json) today is a static SPA config — install with `bun install --frozen-lockfile`, build with `build:app` and then strip the sourcemaps, output `dist-app/`, rewrite everything **except `/api/`, `/assets/` and `/.well-known/`** to `/index.html`, and send security headers (a report-only CSP, enforced anti-framing, `nosniff`, `no-referrer` — see [deployment.md](deployment.md#content-security-policy)). No middleware, and the single serverless function (`api/import.js`) is the import relay, not an auth gate.
+[`vercel.json`](../../../vercel.json) today is a static SPA config — install with `bun install --frozen-lockfile`, build with `build:app` and then strip the sourcemaps, output `dist-app/`, rewrite everything **except `/api/`, `/assets/` and `/.well-known/`** to `/index.html`, and send security headers (a report-only CSP, enforced anti-framing, `nosniff`, `no-referrer` — see [deployment.md](deployment.md#content-security-policy)). No middleware, and the single serverless function (`api/import.js`) is the import relay, not an auth gate.
 
 > If a future requirement reintroduces auth, do **not** restore the old middleware blindly — design it against the current static-SPA + optional-embed model. Note this doc and [gotchas.md](gotchas.md) when you do.
 

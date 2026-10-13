@@ -47,7 +47,7 @@
     git checkout package.json bun.lock && bun install --frozen-lockfile
     ```
   - **Browser campaign:** the three builds, then `bun run e2e` on Chromium — every suite but perf: harness, surfaces, deep, dataloss, **floor**, stress, journeys, faults, library, bridge, **csp**, **pwa**. Harness, surfaces, deep, dataloss and floor — the suites `e2e/run.mjs` lists for all three engines — also run on Firefox and WebKit with `E2E_BROWSER` (A100). Checks an engine cannot run print SKIP; checks failing for a reported app defect print XFAIL — see [e2e/README.md](../e2e/README.md#engines).
-- **CD: Vercel**, driven by [vercel.json](../vercel.json):
+- **CD: Vercel**, driven by [vercel.json](../../../vercel.json):
   - Install: `bun install --frozen-lockfile`.
   - Build: `bun run build:app && node scripts/strip-sourcemaps.mjs` → output `dist-app/` (no `.map` files).
   - SPA rewrite: every path except `api/`, `assets/` and `.well-known/` → `/index.html` (a missing hashed chunk 404s instead of being answered with HTML).

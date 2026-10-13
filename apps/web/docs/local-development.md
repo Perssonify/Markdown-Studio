@@ -6,7 +6,7 @@
 
 | Tool | Version | Why |
 |------|---------|-----|
-| [Bun](https://bun.sh) | 1.4.0 | Canonical package manager + runner, pinned by `packageManager` in [`package.json`](../package.json). [`bun.lock`](../bun.lock) is the committed lockfile; the verify gate and [`vercel.json`](../vercel.json) install with `bun install --frozen-lockfile`, so a dependency change that does not update `bun.lock` fails the build. |
+| [Bun](https://bun.sh) | 1.4.0 | Canonical package manager + runner, pinned by `packageManager` in [`package.json`](../package.json). [`bun.lock`](../../../bun.lock) is the committed lockfile; the verify gate and [`vercel.json`](../../../vercel.json) install with `bun install --frozen-lockfile`, so a dependency change that does not update `bun.lock` fails the build. |
 | Node.js | `^22.22.2`, `^24.15.0` or `>=26` — 24 is the one to use ([`.node-version`](../../../.node-version)) | The `engines` range in `package.json`: the Nodes EVERY direct dependency accepts (the narrowest are jsdom 30's `^22.22.2 \|\| ^24.15.0 \|\| >=26` and Vitest 5's, which skips 23 and 25; `ops-node-range.test.js` recomputes it from `node_modules`). The build scripts (`scripts/*.mjs`, `build/*.mjs`, `e2e/`) and the import relay run on it. |
 | A browser at or above the floor | Safari/iOS 16.4, Chrome/Edge 111, Firefox 128 (A097) | The app relies on IndexedDB + DOMParser + (optionally) the RegExp `d`/`hasIndices` flag for find-and-replace capture coloring. The e2e campaign drives Chromium from `playwright-core` (`bunx playwright-core install chromium`), and the cross-engine suites Firefox and WebKit too (`install firefox webkit`, then `E2E_BROWSER=firefox` or `webkit`). |
 
