@@ -1118,7 +1118,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   sign-in screen (`SignInScreen`) INSTEAD of the editor while signed out, and a
   checking screen while the session is unknown (`SESSION_CHECK_TIMEOUT_MS`), so
   neither flashes. **`unavailable` (no answer: offline, an outage) opens the editor**
-  — documents live in this browser and must stay reachable offline.
+  — documents live in this browser and must stay reachable offline. **A share link
+  (`#share=…`) gets the sign-in screen too** (it names the shared document): its
+  payload waits in this tab's sessionStorage (`pf:pending-share`) through the
+  Google round trip — Google returns to `/`, without the hash — and is removed once
+  the editor opens with it, so a reload does not import it twice.
   `src/app/account/account.ts` is the session state (`useAccount`), calling same-origin
   `/api/auth/*` — CloudFront routes `/api/*` to the API on AWS, and
   `vite.app.config.ts` proxies `/api` to `:4000` in dev and preview, so local sign-in
