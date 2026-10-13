@@ -51,7 +51,9 @@ Markdown Studio gives every note one document with two editors attached: CodeMir
 
 **Just want to write?** Open [markdownstudio.com](https://markdownstudio.com) and sign in with Google.
 
-**Want to run the code?** You need [Bun](https://bun.sh) 1.4 and [Node.js](https://nodejs.org) 24.
+### 1. Run the editor
+
+You need [Bun](https://bun.sh) 1.4 and [Node.js](https://nodejs.org) 24.
 
 ```bash
 git clone https://github.com/Perssonify/Markdown-Studio.git
@@ -60,7 +62,38 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Then open <http://localhost:5173>. No setup or accounts needed: the editor runs in your browser with a few starter notes. To turn on sign-in and sync, follow the [API guide](apps/api/README.md).
+Open <http://localhost:5173>. That's the full editor, running in your browser with a few starter notes. No database, storage or accounts needed, and it's all most contributions require.
+
+### 2. Add sign-in and sync (optional)
+
+Sync needs PostgreSQL, an S3-compatible bucket and a Google sign-in client. With [Docker](https://www.docker.com), the first two take one command:
+
+```bash
+cp apps/api/.env.example apps/api/.env   # local defaults, already filled in
+bun run db:up                            # PostgreSQL + a local S3, in Docker
+bun run db:migrate                       # create the tables
+```
+
+No Docker? Point `DATABASE_URL` at any PostgreSQL 17 and pick a storage option below.
+
+Then add `BETTER_AUTH_SECRET` and your Google client ID and secret to `apps/api/.env` ([how to get them](apps/api/README.md#google-sign-in-the-oauth-client)) and restart `bun run dev`.
+
+**Bring your own storage.** Any S3-compatible bucket works, so you can skip the Docker S3:
+
+| Storage | `S3_ENDPOINT` | `S3_REGION` | `S3_FORCE_PATH_STYLE` |
+| --- | --- | --- | --- |
+| Local S3 in Docker (default) | `http://localhost:9540` | `us-east-1` | `true` |
+| Your own MinIO | `http://localhost:9000` | `us-east-1` | `true` |
+| Amazon S3 | leave empty | your bucket's region | `false` |
+| Cloudflare R2 | `https://<account-id>.r2.cloudflarestorage.com` | `auto` | `false` |
+
+Put those values, your bucket name and your keys in `apps/api/.env`, then run:
+
+```bash
+bun run storage:setup   # creates the bucket, applies the settings, tests a real upload
+```
+
+It tells you exactly what your storage supports. More providers and details are in the [storage guide](apps/api/README.md#file-storage).
 
 ## Embed it
 

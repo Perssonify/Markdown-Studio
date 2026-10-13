@@ -17,6 +17,7 @@
     "db:down": "docker compose down",
     "db:generate": "bun run --cwd packages/db generate",
     "db:migrate": "bun run --cwd packages/db migrate",
+    "storage:setup": "bun run --cwd apps/api storage:setup",
     "deploy": "bun run --cwd infra deploy",
     "deploy:web": "bun run --cwd infra deploy -- --web-only"
   },

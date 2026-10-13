@@ -6,5 +6,5 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["src", "tests", "rolldown.config.ts", "vitest.config.ts"]
+  "include": ["src", "tests", "scripts/*.ts", "rolldown.config.ts", "vitest.config.ts"]
 }
