@@ -101,7 +101,7 @@ export const DEFAULT_CONTENT = `<img src="/brand/markdown.webp" alt="Markdown St
 
 **Markdown on the left. Rich text on the right. Always in sync.**
 
-Write in whichever pane suits you and watch the other update as you type. Your documents are saved in this browser, and when you're signed in they sync across your devices. Markdown Studio is on GitHub: [github.com/Perssonify/Markdown-Studio](https://github.com/Perssonify/Markdown-Studio). Built by [Perssonify Labs](https://labs.perssonify.com/).
+Write in whichever pane suits you and watch the other update as you type. Your documents are saved in this browser, and when you're signed in they sync across your devices. Markdown Studio is source-available under CC BY-NC 4.0: [github.com/Perssonify/Markdown-Studio](https://github.com/Perssonify/Markdown-Studio). Built by [Perssonify Labs](https://labs.perssonify.com/).
 
 > **New here?** Everything below is live and editable — change either pane and the other updates instantly. Open **Help** in the menu bar for the full guide, or **Help → Take a guided tour**.
 

@@ -29,7 +29,7 @@ export interface AboutContent {
 
 const en: AboutContent = {
   intro:
-    "A dual-pane Markdown editor that keeps a raw-Markdown source and a rich-text preview perfectly in sync — with math, diagrams, music, tables, folders, a knowledge graph, a card board, and one-click export. It runs in your browser and keeps your documents there, so it works offline. Sign in to sync them across your devices.",
+    "A dual-pane Markdown editor that keeps a raw-Markdown source and a rich-text preview perfectly in sync — with math, diagrams, music, tables, folders, a knowledge graph, a card board, and one-click export. It runs in your browser and keeps your documents there, so it works offline. Sign in to sync them across your devices. Markdown Studio is source-available under CC BY-NC 4.0.",
   principles: {
     privacy: {
       title: "Private by design",
