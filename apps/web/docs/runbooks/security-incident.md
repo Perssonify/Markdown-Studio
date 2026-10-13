@@ -48,8 +48,9 @@ until it exists, a report sent there reaches no one (A007).
 - Deploy. Users receive it via the update prompt; for a severe issue, say in the
   advisory that users should press **Reload** (or close all tabs), because
   nothing force-reloads an open tab.
-- For the npm package: publish a fixed version (tag `vX.Y.Z` → the Publish
-  workflow) and deprecate the vulnerable range:
+- For the npm package: publish a fixed version (tag `vX.Y.Z`, then an owner
+  publishes it by hand — [deployment.md ▸ Publishing](../deployment.md#publishing-the-npm-package))
+  and deprecate the vulnerable range:
   `npm deprecate @perssonify/editor@"<X.Y.Z" "Security fix in X.Y.Z — upgrade"`.
 
 ## Disclose
