@@ -51,7 +51,7 @@ describe.skipIf(!dbServer || !s3Endpoint)("/api/sync", () => {
     for (const id of ["alice", "bob"]) {
       await handle.db.insert(schema.user).values({ id, name: id, email: `${id}@example.com` });
     }
-    const keys = { accessKeyId: "local", secretAccessKey: "local" };
+    const keys = { accessKeyId: process.env.TEST_S3_ACCESS_KEY_ID ?? "local", secretAccessKey: process.env.TEST_S3_SECRET_ACCESS_KEY ?? "local" };
     const admin = new S3Client({ region: "us-east-1", endpoint: s3Endpoint, forcePathStyle: true, credentials: keys });
     await admin.send(new CreateBucketCommand({ Bucket: bucket }));
     // Like the production bucket (infra FilesStack).

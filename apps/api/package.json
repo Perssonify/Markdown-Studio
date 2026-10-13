@@ -10,7 +10,8 @@
     "start": "node --env-file-if-exists=.env dist/server.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "storage:setup": "node --env-file-if-exists=.env scripts/setup-storage.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1144.0",
