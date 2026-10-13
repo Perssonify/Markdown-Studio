@@ -138,11 +138,15 @@ If Markdown Studio is useful to you, a star helps other people find it.
   </picture>
 </a>
 
-## Everyone who has contributed
+## Contribution wall
+
+Everyone who has helped build Markdown Studio. Get a pull request merged and you join the wall automatically; it refreshes within a day.
 
 <a href="https://github.com/SyedMoin-Lab" title="SyedMoin-Lab"><img src="https://images.weserv.nl/?url=github.com/SyedMoin-Lab.png&w=128&h=128&fit=cover&mask=circle" width="64" height="64" alt="SyedMoin-Lab"></a>
 <a href="https://github.com/claude" title="Claude"><img src="https://images.weserv.nl/?url=github.com/claude.png&w=128&h=128&fit=cover&mask=circle" width="64" height="64" alt="Claude"></a>
 <a href="https://github.com/Perssonify/Markdown-Studio/graphs/contributors"><img src="https://images.weserv.nl/?url=contrib.rocks%2Fimage%3Frepo%3DPerssonify%2FMarkdown-Studio&output=png&maxage=1d" alt="People who have contributed to Markdown Studio"></a>
+
+**Want your face here?** Pick a [good first issue](https://github.com/Perssonify/Markdown-Studio/contribute), comment `/assign-me` to claim it, and send a pull request. The [contributing guide](CONTRIBUTING.md) has the rest.
 
 ## License
 
