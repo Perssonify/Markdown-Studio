@@ -22,6 +22,12 @@ interface TourStep {
 // spotlight actually points at what the copy describes.
 const isPhoneViewport = () => typeof window !== "undefined" && window.innerWidth < 640;
 
+// Sharing needs an account where the app has one: the Share button is greyed
+// out then (share-gate.tsx), and the step says why instead of promising a link.
+const shareIsGated = () =>
+  typeof document !== "undefined" &&
+  document.querySelector('[data-tour="share"]')?.getAttribute("aria-disabled") === "true";
+
 const STEPS: TourStep[] = [
   {
     selector: '[data-tour="menus"]',
@@ -31,6 +37,11 @@ const STEPS: TourStep[] = [
         ? t("tour.menuBarBodyPhone")
         : t("tour.menuBarBody");
     },
+  },
+  {
+    selector: '[data-tour="share"]',
+    get title() { return t("tour.shareTitle"); },
+    get body() { return shareIsGated() ? t("tour.shareBodySignIn") : t("tour.shareBody"); },
   },
   {
     selector: '[data-tour="mode-switcher"]',
