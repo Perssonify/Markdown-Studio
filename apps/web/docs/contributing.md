@@ -19,7 +19,7 @@
    has shipped several, including thirteen describing a flag the code never had.
    Where a guard is genuinely unobservable (a memo that only changes a hit rate),
    say so in a comment instead of writing a case that passes either way.
-4. Verify locally before pushing (CI runs the same gate on every PR — see [workflows.md](workflows.md#cicd-pipeline) — but reproducing locally is faster):
+4. Verify locally before opening the PR, and again before merging it — there is no CI, so this gate is the only check (see [workflows.md](workflows.md#verify-gate-and-deploys)):
    ```bash
    bun run lint               # ESLint — zero errors; warnings are the tracked backlog
    bunx tsc --noEmit          # the type gate (strict mode)
@@ -47,7 +47,7 @@
 
 ## Adding a dependency
 
-- Install with **Bun** (`bun add <pkg>`) and commit `bun.lock`: CI and the deploy install with `bun install --frozen-lockfile`.
+- Install with **Bun** (`bun add <pkg>`) and commit `bun.lock`: the verify gate and the deploy install with `bun install --frozen-lockfile`.
 - **Library impact:** the library's externals are **derived from `package.json`** ([build/externals.mjs](../build/externals.mjs)) — anything in `dependencies` or `peerDependencies` stays external, so consumers install and dedupe it; a devDependency the library imports is bundled, and must be listed as such in `pkg-manifest.test.js`, which fails on any import that is not declared. Use a `peerDependency` when the consumer must share your copy (React, Tiptap, CodeMirror). Tiptap packages move as one set at one version, and `pkg-lockfile.test.js` requires a single resolution of Tiptap, ProseMirror, React and KaTeX. UI-only deps used by the app build don't need any of this.
 - Prefer small, focused packages; this app deliberately implements things like the force-directed graph **without** a heavy library ([src/ui/graph/graphView/index.tsx](../src/ui/graph/graphView/index.tsx)). Match that bias before reaching for a big dependency.
 - Avoid adding anything that duplicates an existing capability (we already have `marked`, `turndown`, `tiptap`, `codemirror`, `zustand`, `lucide-react`, shadcn/ui primitives).

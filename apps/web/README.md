@@ -39,8 +39,8 @@ Markdown Studio is a **browser-based** markdown editor that runs two editing eng
 The editor supports multi-document management with **nested folders**, wiki-style inter-document linking, a force-directed knowledge graph, selectable **Markdown flavors** (CommonMark/GFM/Markdown Extra), **LaTeX math (KaTeX)**, **Mermaid diagrams**, **ABC music**, emoji, a **theme/accent selector**, and import/export across markdown, HTML, JSON, and **ZIP/TAR archives**. Documents are persisted in the browser's IndexedDB — there is no account and no server copy; the only server code is an opt-in relay for "Import from URL" ([below](#the-import-relay)). After one online visit the app works offline. It ships two ways: as a standalone web app and as an embeddable npm library (`@perssonify/editor`). See [docs/extended-features.md](docs/extended-features.md) for the 2026 additions.
 
 > **Before launch:** the September 2026 production-readiness audit and what still
-> remains — mostly owner actions such as the domain, the CI gate on deploys and
-> the npm scope — are in [docs/audit-2026-09.md](docs/audit-2026-09.md).
+> remains — mostly owner actions such as the domain and the npm scope — are in
+> [docs/audit-2026-09.md](docs/audit-2026-09.md).
 
 ---
 
@@ -92,7 +92,7 @@ the offline caches, never runs there. See
 - [Bun](https://bun.sh) (canonical — `bun.lock` is committed and Vercel builds with Bun),
   at the version pinned by `packageManager` in `package.json`. Install with
   `bun install --frozen-lockfile` to get exactly the locked tree.
-- Node.js `^22.22.2 || ^24.15.0 || >=26` (`engines.node`; CI runs the major in `.node-version`)
+- Node.js `^22.22.2 || ^24.15.0 || >=26` (`engines.node`; `.node-version` names the major to use)
 
 ### Install and Run
 
@@ -743,7 +743,7 @@ host page, the Content-Security-Policy enforced, offline after one visit) lives 
 | `workspace-views` | Editor / Cards / Map stay one exclusive selection |
 | `app-identity` | Product name is consistent; data identifiers are unchanged |
 
-CI runs on every PR to `main` and every push to it via GitHub Actions ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)): lint, `bunx tsc --noEmit`, `bun run test`, the app/library/embed builds and the browser campaign, including the `csp` and `pwa` suites. Run the same gate locally before pushing. **CI does not yet block a deploy** — Vercel deploys `main` on its own until branch protection and deployment checks are switched on ([docs/deployment.md](docs/deployment.md)). See [docs/workflows.md](docs/workflows.md).
+There is no CI. Before opening a PR to `main`, and again before merging it, run the gate locally: lint, `bunx tsc --noEmit`, `bun run test`, the app/library/embed builds and the browser campaign, including the `csp` and `pwa` suites. **Nothing blocks a deploy** — Vercel deploys `main` on its own ([docs/deployment.md](docs/deployment.md)). See [docs/workflows.md](docs/workflows.md).
 
 ---
 
@@ -775,8 +775,8 @@ guide, threat model, limitations and hardening roadmap:
 - The service worker **prompts** for updates ("Update ready — Reload"); it never reloads an
   open tab by itself while there is work to lose
 
-Production is not yet gated on CI; the owner steps (domain, branch protection, Vercel
-deployment checks, npm) are in [docs/deployment.md](docs/deployment.md).
+Production is gated only by review and the local gate; the owner steps (domain, branch
+protection, npm) are in [docs/deployment.md](docs/deployment.md).
 
 ### Manual Deployment
 

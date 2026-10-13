@@ -1,9 +1,8 @@
 # Runbook — Hosting Outage (markdownstudio.com is down or wrong)
 
 ## Symptoms
-- The **Uptime** workflow (`.github/workflows/uptime.yml`, every 30 min) is red,
-  or an external monitor alerts. It is red by design until the domain points
-  at the Vercel project (A001, an owner action).
+- An external uptime monitor alerts (setting one up is an owner action —
+  [deployment.md ▸ The domain](../deployment.md#the-domain), A001).
 - Users report the site will not load, shows a parking / "domain for sale" page,
   a Vercel error page, or a certificate warning.
 - Installed users mostly do NOT notice: the service worker serves the app from
@@ -48,17 +47,15 @@
   — a Firewall kill switch may be active.
 
 ## After
-- Confirm the Uptime workflow is green again (Actions ▸ **Uptime —
-  markdownstudio.com** ▸ Run workflow).
+- Confirm the site serves the app again (the `curl` checks above) and the
+  uptime monitor is green.
 - If the outage came from a domain or registrar change, record who owns the
   registrar account and when it renews ([deployment.md](../deployment.md)).
 
 ## Prevention
 - The registration, DNS and Vercel project must be owned by company accounts
   with more than one admin, and auto-renew on.
-- Replace the scheduled GitHub workflow with an external uptime monitor that
-  pages a person: GitHub may delay or skip scheduled runs and only notifies the
-  workflow's last editor.
+- An external uptime monitor that pages a person.
 
 ## Escalation
 No on-call. The owner of the Vercel team and of the domain registration.

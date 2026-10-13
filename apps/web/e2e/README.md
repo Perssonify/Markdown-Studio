@@ -31,7 +31,7 @@ bun run e2e:library        # the published stylesheet on a host page (needs `bun
 bun run e2e:bridge         # the embed's host bridge from a second origin (needs build:embed)
 bun run e2e:csp            # vercel.json's CSP ENFORCED while every renderer runs
 bun run e2e:pwa            # offline after one visit; updates that never force-reload a tab
-bun run e2e:perf           # measurement only, never asserted in CI
+bun run e2e:perf           # measurement only, never asserted
 node e2e/run.mjs floor     # the browser floor: below it a message, no app code, nothing touched
 node e2e/run.mjs perf-map  # measurement only: the relationship map at library scale
 
@@ -42,12 +42,11 @@ E2E_BROWSER=firefox node e2e/run.mjs surfaces   # any suite on Firefox or WebKit
 `bridge` do not: without `dist/` or `dist-embed/` they log a note, run zero
 checks and exit green — build first, and read the output.
 
-CI (`.github/workflows/ci.yml`) builds all three outputs and runs harness,
-smoke, deep, dataloss, floor, library, bridge, journeys, faults, csp and pwa on
-Chromium, one after another, on every pull request and push to `main`; stress
-runs on pushes to `main` only; perf never runs in CI. A second job,
-`e2e-engines`, runs the cross-engine suites (harness, surfaces, surfaces-deep,
-dataloss, floor) again on Firefox and on WebKit.
+There is no CI: run the campaign by hand before opening a pull request and
+again before merging it. Build all three outputs first; `bun run e2e` then runs
+every suite but perf on Chromium, one after another. Run the cross-engine suites
+(harness, surfaces, surfaces-deep, dataloss, floor) again on Firefox and on
+WebKit with `E2E_BROWSER` (see "Engines").
 
 The browsers come from `playwright-core`: `bunx playwright-core install
 chromium` (add `firefox webkit` for the other engines) if you do not have them;
@@ -133,7 +132,7 @@ suites therefore never boot the app before seeding.
 | `cases/csp.mjs` | the production build served with vercel.json's headers, the report-only CSP switched to ENFORCING; KaTeX, Mermaid, abcjs, a data: image, Find, the map, Cards, Word export and /help must raise zero violations |
 | `cases/pwa.mjs` | the service worker: one online visit, then the network is killed and every lazy feature is used for the first time offline; then a byte-changed `sw.js` — the prompt appears, nothing reloads by itself, a dirty second tab is told rather than reloaded |
 | `renderers.mjs` | the probe document and actions `csp` and `pwa` share (a helper, not a case) |
-| `probes/` | one-off diagnostics kept because they are the evidence behind a fix (or, like `forced-colors-ring.mjs` and `leave-during-lazy-chunk.mjs`, behind a reported defect). None is wired into `run.mjs` or CI; run one by hand with `node e2e/probes/<name>.mjs` against a production build (`bun run build:app` first; `embed-boot.mjs` needs `build:embed`). Two cover the audit fixes: `g2-audit-fixes.mjs` (AltGr typing in both panes, ⌘B in the Cards composer, broken-link marking, the Find regex Worker timing out, map wheel-zoom on a later open, Escape on a card's delete confirmation) and `g4-durability-trust.mjs` (the wiped-library boot path, the "Not saving" banner, the Version history delete confirm, the backup record, remote images and Referer under the image CSP, the relay consent prompt, the old-origin banner, no Admin/ads in production, the licence notice) Two are the evidence for the map's scale work (A088): `map-overlap.mjs` re-measures CLAUDE.md's "nothing drawn over text" counts across workspace sizes, desktop and phone, at fit / 4 zoom-outs / 8 zoom-ins, and fingerprints everything drawn so two builds can be compared; `map-trace.mjs` splits a map open (or, with `ZOOM=1`, a zoom) into script, style, layout and paint from a Chrome trace. `autosave-cost.mjs` is the evidence for the large-document save work (A083): it types in a 4 MB document under a CPU slowdown and reports the long tasks in the window where each autosave runs (`SHIM=1` was the experiment behind `ReactSelectionShield`; `PROFILE=<file>` writes a CPU profile) |
+| `probes/` | one-off diagnostics kept because they are the evidence behind a fix (or, like `forced-colors-ring.mjs` and `leave-during-lazy-chunk.mjs`, behind a reported defect). None is wired into `run.mjs`; run one by hand with `node e2e/probes/<name>.mjs` against a production build (`bun run build:app` first; `embed-boot.mjs` needs `build:embed`). Two cover the audit fixes: `g2-audit-fixes.mjs` (AltGr typing in both panes, ⌘B in the Cards composer, broken-link marking, the Find regex Worker timing out, map wheel-zoom on a later open, Escape on a card's delete confirmation) and `g4-durability-trust.mjs` (the wiped-library boot path, the "Not saving" banner, the Version history delete confirm, the backup record, remote images and Referer under the image CSP, the relay consent prompt, the old-origin banner, no Admin/ads in production, the licence notice) Two are the evidence for the map's scale work (A088): `map-overlap.mjs` re-measures CLAUDE.md's "nothing drawn over text" counts across workspace sizes, desktop and phone, at fit / 4 zoom-outs / 8 zoom-ins, and fingerprints everything drawn so two builds can be compared; `map-trace.mjs` splits a map open (or, with `ZOOM=1`, a zoom) into script, style, layout and paint from a Chrome trace. `autosave-cost.mjs` is the evidence for the large-document save work (A083): it types in a 4 MB document under a CPU slowdown and reports the long tasks in the window where each autosave runs (`SHIM=1` was the experiment behind `ReactSelectionShield`; `PROFILE=<file>` writes a CPU profile) |
 
 ## What this campaign does NOT cover
 
@@ -193,7 +192,7 @@ several were in the plan this campaign was built from and were not written.
   out — those are in `behave-heading-renames.test.jsx` only.
 
 **Firefox and WebKit — five suites, not a device.** Harness, surfaces,
-surfaces-deep, dataloss and floor run on all three engines (CI: `e2e-engines`).
+surfaces-deep, dataloss and floor run on all three engines.
 Journeys (real IME composition is Chromium's DevTools protocol), faults,
 stress, library, bridge, csp and pwa run on Chromium only. And WebKit here is
 Playwright's build on a desktop, not Safari on an iPhone: the iOS-specific paths
