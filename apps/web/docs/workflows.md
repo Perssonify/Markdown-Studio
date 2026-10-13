@@ -6,7 +6,7 @@
 
 - **Main branch:** `main`. Feature work happens on `type/short-description` branches, merged via PR.
 - **Commit style** (observed): conventional-ish prefixes — `feat:`, `fix:`, `refactor:`, `chore:`, `test:`, `ci:`. Prefer the prefixed form, and reference the finding or issue a fix closes.
-- **PRs:** a PR template exists ([.github/pull_request_template.md](../../../.github/pull_request_template.md)). There is **no `CODEOWNERS`**. Required reviews and required status checks are branch-protection settings — an owner action ([deployment.md ▸ Gate production on CI](deployment.md#gate-production-on-ci)); until they are set, nothing *enforces* a green CI before merge.
+- **PRs:** a PR template exists ([.github/pull_request_template.md](../../../.github/pull_request_template.md)). There is **no `CODEOWNERS`** and **no CI**: PRs are reviewed by hand, and the author runs the verify gate locally before opening one and again before merging it ([below](#verify-gate-and-deploys)). Required reviews are a branch-protection setting — an owner action ([deployment.md ▸ Gate production on review](deployment.md#gate-production-on-review)); until it is set, nothing *enforces* a review before merge.
 
 ## Testing strategy
 
@@ -34,34 +34,31 @@
   node e2e/run.mjs csp pwa              # selected suites
   ```
 - **The rule for both:** a test that cannot fail is worse than none. Mutation-test every guard — revert the fix, watch the case go red, restore.
-- **What must pass before merge:** `bun run lint`, `bunx tsc --noEmit`, `bun run test`, the three builds, and the e2e tiers CI runs (below).
+- **What must pass before merge:** `bun run lint`, `bunx tsc --noEmit`, `bun run test`, the three builds, and the e2e tiers (below) — run locally; there is no CI.
 
-## CI/CD pipeline
+## Verify gate and deploys
 
-- **CI: GitHub Actions** — [.github/workflows/ci.yml](../../../.github/workflows/ci.yml), on every PR to `main` and every push to it. Bun is pinned (`BUN_VERSION`, the version that produced `bun.lock`), and so is Node: every job that installs the toolchain first runs `actions/setup-node` with [`.node-version`](../../../.node-version), a major inside `engines.node` (A113; `ops-node-range.test.js` checks both, and that `engines.node` admits no Node a direct dependency refuses). Every action is pinned to a commit SHA, and the workflow only has `contents: read`.
-  - job **`verify`**: `bun install --frozen-lockfile` → `bun run lint` → `bunx tsc --noEmit` → `bun run test` → `build:app` (which also writes the third-party licence notice from the build's hidden sourcemaps) → the CSP-hash test again against the BUILT `index.html` → strip sourcemaps (kept as a 90-day artifact on pushes) → library build → `pkg-cjs-require.test.js` and `pkg-declarations.test.js` again, now against the BUILT `dist/` (every CommonJS entry `require`d in plain Node, exports compared with the ES build; a consumer file type-checked against the declarations with `skipLibCheck: false` under `bundler` and `nodenext` resolution) → embed build.
-  - job **`react18`** (A113): the repo develops on React 19, but the library's peer range still admits `^18.3.0`, so this job installs from the lockfile, then swaps in React 18.3.1 and its 18.3 types with `bun add -d` (in that job only — nothing is written back) and runs `bunx tsc --noEmit` and `bun run test` against them. The same check locally — it rewrites `package.json` and `bun.lock`, so restore them afterwards:
+- **No CI.** Nothing runs on a PR or a push; the gate below is run by hand, before a PR is opened and again before it is merged. Use the Bun that produced `bun.lock` (`packageManager`) and the Node major in [`.node-version`](../../../.node-version), which lies inside `engines.node` (A113; `ops-node-range.test.js` checks that, and that `engines.node` admits no Node a direct dependency refuses).
+  - **The gate** (root [CLAUDE.md](../../../CLAUDE.md) ▸ Verify; the editor's own list is [CLAUDE.md ▸ Verify before you commit](../CLAUDE.md#verify-before-you-commit)): `bun install --frozen-lockfile` → `bun run lint` → `bunx tsc --noEmit` → `bun run test` → `build:app` (which also writes the third-party licence notice from the build's hidden sourcemaps) → the CSP-hash test again against the BUILT `index.html` → library build → `pkg-cjs-require.test.js` and `pkg-declarations.test.js` again, now against the BUILT `dist/` (every CommonJS entry `require`d in plain Node, exports compared with the ES build; a consumer file type-checked against the declarations with `skipLibCheck: false` under `bundler` and `nodenext` resolution) → embed build.
+  - **React 18** (A113): the repo develops on React 19, but the library's peer range still admits `^18.3.0`, so the type gate and the unit suite must also pass on React 18.3.1 and its 18.3 types. The check rewrites `package.json` and `bun.lock`, so restore them afterwards:
     ```bash
     bun add -d react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
     bunx tsc --noEmit && bun run test
     git checkout package.json bun.lock && bun install --frozen-lockfile
     ```
-  - job **`e2e`**: the three builds, Chromium, then harness → surfaces → deep → dataloss → **floor** → library → bridge → journeys → faults → **csp** → **pwa** (and stress on pushes).
-  - job **`e2e-engines`** (A100): a Firefox + WebKit matrix running harness → surfaces → deep → dataloss → floor on each, the suites `e2e/run.mjs` lists for all three engines (`ops-release-config.test.js` keeps the two in step). Checks an engine cannot run print SKIP; checks failing for a reported app defect print XFAIL — see [e2e/README.md](../e2e/README.md#engines).
-  - [dependabot.yml](../../../.github/dependabot.yml): weekly grouped PRs for the Bun lockfile and the pinned actions.
-  - [uptime.yml](../../../.github/workflows/uptime.yml): every 30 minutes, checks that markdownstudio.com serves the app shell and its entry script.
+  - **Browser campaign:** the three builds, then `bun run e2e` on Chromium — every suite but perf: harness, surfaces, deep, dataloss, **floor**, stress, journeys, faults, library, bridge, **csp**, **pwa**. Harness, surfaces, deep, dataloss and floor — the suites `e2e/run.mjs` lists for all three engines — also run on Firefox and WebKit with `E2E_BROWSER` (A100). Checks an engine cannot run print SKIP; checks failing for a reported app defect print XFAIL — see [e2e/README.md](../e2e/README.md#engines).
 - **CD: Vercel**, driven by [vercel.json](../vercel.json):
   - Install: `bun install --frozen-lockfile`.
   - Build: `bun run build:app && node scripts/strip-sourcemaps.mjs` → output `dist-app/` (no `.map` files).
   - SPA rewrite: every path except `api/`, `assets/` and `.well-known/` → `/index.html` (a missing hashed chunk 404s instead of being answered with HTML).
   - Headers: immutable caching for `/assets/*`; a report-only CSP pinned to the inline scripts' hashes; enforced anti-framing on the app (not `/embed.html`); `nosniff`, `Referrer-Policy`, `Permissions-Policy`; `no-cache` for `sw.js`, `sw-recover.js`, the manifest and `index.html`.
   - The only serverless function is `api/import.js`, the same-origin import relay ([import-relay.md](import-relay.md)), with `maxDuration: 25`.
-  - Vercel's GitHub integration deploys on push (previews for branches, production for `main`). Gating production on CI is an owner setting ([deployment.md](deployment.md#gate-production-on-ci)).
+  - Vercel's GitHub integration deploys on push (previews for branches, production for `main`); nothing but review and the local gate stands before production ([deployment.md](deployment.md#gate-production-on-review)).
 
 ## Release & deployment
 
-- **App:** merge to `main` → Vercel builds and deploys (once gated: after `verify` and `e2e` pass). Open tabs are **prompted** to reload onto the new version; nothing force-reloads them ([decisions.md](decisions.md)). Rollback = Vercel ▸ Deployments ▸ promote a previous deployment.
-- **Library (`@perssonify/editor`):** bump `version` in [package.json](../package.json) (the single source — Vite injects it as `__APP_VERSION__`, re-exported as `VERSION` in `src/constants.ts`), merge, then push a `vX.Y.Z` tag. [.github/workflows/publish.yml](../../../.github/workflows/publish.yml) verifies the tag, runs the type check, tests and library build, `require`s the built CommonJS entries, type-checks a consumer against the built declarations, and publishes with **npm provenance** behind the `npm` environment. Never publish from a laptop. Owner setup (npm org, 2FA, token or trusted publishing): [deployment.md ▸ Publishing](deployment.md#publishing-the-npm-package).
+- **App:** merge to `main` → Vercel builds and deploys. Open tabs are **prompted** to reload onto the new version; nothing force-reloads them ([decisions.md](decisions.md)). Rollback = Vercel ▸ Deployments ▸ promote a previous deployment.
+- **Library (`@perssonify/editor`):** bump `version` in [package.json](../package.json) (the single source — Vite injects it as `__APP_VERSION__`, re-exported as `VERSION` in `src/constants.ts`), merge, then push a `vX.Y.Z` tag. Publishing is manual, by an owner: on that commit, the verify gate, `bun run build`, the built-package checks (`pkg-cjs-require.test.js`, `pkg-declarations.test.js`), then `npm publish --access public` from `apps/web`. Owner setup (npm org, 2FA) and the steps: [deployment.md ▸ Publishing](deployment.md#publishing-the-npm-package).
 - **Feature flags:** none. Build-time gates exist for dev-only surfaces (the ad placeholders; the Settings Admin section, which a support session can reveal with `localStorage["pf:admin"] = "1"` — [src/utils/build-gates.ts](../src/utils/build-gates.ts)).
 
 ## TypeScript 7
@@ -89,7 +86,7 @@ Most observability is browser-side, and none of the browser-side part leaves the
 - **Diagnostics ring** ([src/utils/diagnostics.ts](../src/utils/diagnostics.ts)): uncaught errors, unhandled rejections, error-boundary crashes, failed lazy chunks, failed/refused/conflicted saves, service-worker problems and boot-watchdog recoveries — redacted, bounded (25), local. Users copy it from the crash screen or Help ▸ About (**Copy diagnostics**); it contains no document content. A host embedding the library can subscribe with `setErrorReporter(fn)` or the `ErrorBoundary`'s `onError`.
 - **[DIAG] logs** ([src/utils/diag.ts](../src/utils/diag.ts)): detailed tracing, OFF by default — `?diag=1` or `localStorage.setItem("perssonify-diag", "1")`.
 - **Relay logs:** one structured JSON line per `/api/import` request in the Vercel logs (host, status, bytes, ms, reason — never the URL's path or query).
-- **Uptime:** the scheduled workflow above; an external monitor that pages a person is an owner action.
+- **Uptime:** none in the repository; an external monitor that pages a person is an owner action.
 - **Error-reporting service:** none, by decision ([decisions.md](decisions.md)).
 - **Dashboards / alerts / paging:** none in the repository. Vercel spend and usage alerts are owner settings ([import-relay.md ▸ Operating it](import-relay.md#operating-it-owner-setup)).
 

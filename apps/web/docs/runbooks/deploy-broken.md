@@ -10,8 +10,8 @@
      `bun install --frozen-lockfile`, then
      `bun run build:app && node scripts/strip-sourcemaps.mjs`. A lockfile that
      does not match `package.json` fails the install on purpose — regenerate
-     `bun.lock` with the pinned Bun (1.4.0: `packageManager` in `package.json`,
-     `BUN_VERSION` in `.github/workflows/ci.yml`) and commit it. `build:app` is
+     `bun.lock` with the pinned Bun (1.4.0: `packageManager` in `package.json`)
+     and commit it. `build:app` is
      `vite build` followed by `scripts/third-party-licenses.mjs`, which writes
      `dist-app/third-party-licenses.txt` from the build's hidden sourcemaps and
      fails the build if there are none. Reproduce anything else locally with
@@ -48,12 +48,11 @@
   is blank, it is a real bundle problem, not Vercel.
 
 ## Prevention
-- Production must only receive commits that passed CI — branch protection with
-  required checks, and Vercel deployment checks. Both are owner settings
-  ([deployment.md ▸ Gate production on CI](../deployment.md#gate-production-on-ci));
-  until they are switched on, Vercel deploys every push to `main` without
-  waiting for CI (A005).
-- The CI gate: lint, type-check, unit tests, the three builds, the browser
+- There is no CI, and Vercel deploys every push to `main` (A005): production
+  must only receive reviewed commits that passed the verify gate locally.
+  Branch protection requiring a reviewed PR is an owner setting
+  ([deployment.md ▸ Gate production on review](../deployment.md#gate-production-on-review)).
+- The verify gate: lint, type-check, unit tests, the three builds, the browser
   campaign (including the enforced-CSP and service-worker suites).
 
 ## Escalation

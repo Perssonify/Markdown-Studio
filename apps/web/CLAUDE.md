@@ -1170,7 +1170,8 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   is undone like any restore. The avatar is the initials on `--primary`, never the
   Google picture. Tests: `cloud-plan`, `cloud-folder-merge`, `cloud-sync` (two
   devices, in-memory account), `cloud-backup`, `cloud-versions` and `cloud-contract`
-  (this code against the REAL API, Postgres and S3 — CI's backend job).
+  (this code against the REAL API, Postgres and S3 — skipped without
+  `TEST_DATABASE_URL` / `TEST_S3_ENDPOINT`; `bun run db:up` starts both).
 - `src/PerssonifyEditor.tsx` — the orchestrator: reads the stores, owns the refs and
   engines, calls the hooks below, and renders. **Where PerssonifyEditor's parts live**
   (`src/editor/`, A110 — each hook takes its dependencies explicitly; `types.ts`
@@ -1781,7 +1782,7 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   out of), footnote definitions, a bare-pipe alias wiki link, raw HTML holding a
   `<pre>` with more than text or a `white-space`/CSS-escape style, ANY raw-HTML
   `<table>` (three defects came from them), a raw-length mismatch, the
-  preprocessor rewriting the text. **CI's 40 random walks are not enough to trust a
+  preprocessor rewriting the text. **The suite's 40 random walks are not enough to trust a
   change to the cut rules**: deep runs of 600–4,000 seeds each found new defects —
   run deep, split across processes (`RICH_SEEDS`/`RICH_SEED_FROM`/`RICH_LONG_SEEDS`,
   and `RICH_PREBUILD_SEEDS` for the prepared-model walks; the corpora and edits live
@@ -2316,10 +2317,10 @@ The product ships three ways from one codebase: the standalone app
   carry `data-pf-portal`** (the emoji suggestion list, the Find/Replace match ticks) —
   Base UI's own wrapper gives us `data-base-ui-portal` for free. Pinned by
   `src/__tests__/scope-css.test.js` and the browser case `e2e/cases/library.mjs`.
-- **npm releases are CI-only** (A006): `.github/workflows/publish.yml` publishes on a
-  `vX.Y.Z` tag that matches `package.json`, behind the `npm` environment, with
-  provenance, after tsc, tests and the build — never from a laptop. Claiming the
-  `@perssonify` scope, 2FA and the token are owner steps (`docs/deployment.md`).
+- **npm releases are manual, by an owner** (A006): after the verify gate, `bun run
+  build` and the built-package checks, an owner runs `npm publish` from `apps/web`
+  (`docs/deployment.md` ▸ Publishing). Claiming the `@perssonify` scope and 2FA are
+  owner steps.
   `public/.well-known/security.txt` expires 2027-09-29 and
   `ops-release-config.test.js` goes red a month before, so it gets renewed.
 - **`"use client"`** belongs on every hook-bearing library entry (`index.tsx`,
@@ -2368,9 +2369,9 @@ The product ships three ways from one codebase: the standalone app
   (a `katex` override dedupes mermaid's copy) — the unit suite stays green through a
   duplicated prosemirror-model, so after a dependency change run
   `rm -rf node_modules && bun install --frozen-lockfile` and that test. React is 19 at runtime and in `@types/react`
-  (same major, `pkg-manifest.test.js`). The peers are `^18.3.0 || ^19.0.0`, and CI's
-  `react18` job re-runs `tsc` and the unit suite on React 18.3.1 and its types, so
-  code must compile and run on BOTH: a ref whose `.current` you READ is
+  (same major, `pkg-manifest.test.js`). The peers are `^18.3.0 || ^19.0.0`, and `tsc`
+  and the unit suite must also pass on React 18.3.1 and its types (the local check
+  is in `docs/workflows.md`), so code must compile and run on BOTH: a ref whose `.current` you READ is
   `RefObject<T | null>`; a ref prop you only FORWARD to `ref=` is `React.Ref<T>`
   (`RefObject<T | null>` on a `ref=` fails under 18's types, `RefObject<T>` rejects
   19's `useRef<T>(null)`); `MutableRefObject` stays where 18 needs a writable ref;
@@ -2386,8 +2387,8 @@ The product ships three ways from one codebase: the standalone app
   still peer `<6.1.0` — still blocked.
 - **`engines.node` is the intersection of the direct dependencies' ranges**
   (`^22.22.2 || ^24.15.0 || >=26.0.0` — jsdom 30 and vitest 5 are the narrowest;
-  vitest 5 skips Node 23 and 25). `.node-version` (24) is what every CI job and the
-  publish job install. `ops-node-range.test.js` reads every installed dependency's
+  vitest 5 skips Node 23 and 25). `.node-version` (24) is the Node to develop,
+  verify and publish on. `ops-node-range.test.js` reads every installed dependency's
   Node requirement and fails, naming the tool, if our range admits a Node one of
   them refuses.
 - **Published declarations are FINISHED by `build/finish-declarations.mjs`** (both
@@ -2410,7 +2411,8 @@ The product ships three ways from one codebase: the standalone app
   `"type": "module"`, so Rolldown gives the CJS build Node's interop and the default
   becomes the whole module object; `require("@perssonify/editor")` threw until A113.
   `pkg-cjs-require.test.js` enforces the rule in source and requires the built
-  `dist/*.cjs` after `bun run build` in CI and before `npm publish`.
+  `dist/*.cjs` when a current `dist/` exists — re-run it after `bun run build`, and
+  always before `npm publish`.
 - **One editor per page** (A106): the stores are module singletons, so a SECOND
   editor mounted while one is running refuses to start. `PerssonifyEditor` is a gate
   (`ui/shared/oneEditorPerPage/index.tsx`) around `PerssonifyEditorInstance`: it claims the page's
@@ -2599,11 +2601,12 @@ bun run e2e                    # every browser suite but perf (see e2e/README.md
 bun run e2e:csp                # …or one: the build under the ENFORCED CSP
 bun run e2e:pwa                # …offline after one visit; updates never force a reload
 ```
-CI (`.github/workflows/ci.yml`) runs all of the above on PRs to `main`, plus the
-CSP-hash check against the BUILT `index.html`, the sourcemap strip and, on pushes,
-the stress tier. **CI does not yet gate a deploy**: Vercel deploys on its own until
-branch protection and Vercel deployment checks are switched on (A005 — an owner
-step in `docs/deployment.md`).
+There is no CI: run all of the above before opening a PR to `main` and again
+before merging it. The checks that need a build skip without one, so after the
+builds re-run `bunx vitest run src/__tests__/ops-vercel-headers.test.js
+src/__tests__/pkg-cjs-require.test.js src/__tests__/pkg-declarations.test.js`
+(the CSP hashes against the BUILT `index.html`; the built library). **Nothing
+gates a deploy**: Vercel deploys `main` on its own (`docs/deployment.md`).
 
 **`build:app` also writes the third-party licence notice**, read from the build's
 HIDDEN sourcemaps (`scripts/third-party-licenses.mjs` → `dist-app/third-party-licenses.txt`;
@@ -2621,15 +2624,14 @@ page's credits (`src/data/credits.ts`) are pinned to it by
 composition through CDP, real IndexedDB, quota exhaustion, blocked storage, a
 second tab, coarse pointers, duration, the service worker (offline and updates),
 the CSP enforced, and the published library on a host page. Chromium runs every suite; harness, surfaces, surfaces-deep, dataloss and floor
-also run on Firefox and WebKit (`E2E_BROWSER`, CI job `e2e-engines`, kept in step
-with `run.mjs` by `ops-release-config.test.js`). An engine difference is a harness
+also run on Firefox and WebKit (`E2E_BROWSER`; `run.mjs` lists them). An engine difference is a harness
 fix, a `rep.skip` (the capability is missing; `open({cdp|throttle})` throws off
 Chromium) or a strict `rep.xfail` naming a reported defect — never a loosened check.
 `ENGINE_NOISE` holds the exact non-defect console messages, and `seed()` writes from
 `BLANK_PATH` with the stores cleared, never from the app's page (A100). Every guard in it was
 mutation-tested (revert the fix, confirm the case goes red); a case that cannot
 fail is worse than no case. Timing is measured (`e2e:perf`) but never asserted
-in CI — this container's wall-clock varies by more than 50% run to run.
+— this container's wall-clock varies by more than 50% run to run.
 **`e2e/README.md` also states what the campaign does NOT cover** — keep that
 section honest when you add or remove a case; "the browser tiers are green" is
 worth nothing if the reader has to guess what was in them.
@@ -2723,7 +2725,7 @@ the viewport, so it cannot be relied on to move a board across a threshold.
   cannot be checked is not evidence.
 - **Assertions poll, they do not sleep** (`until` / `waitUntil` / `waitForMirror`
   in `e2e/lib.mjs`). A fixed budget tuned on one machine does not report "too
-  slow" on a slower CI runner — it reports the same FAIL a real regression does.
+  slow" on a slower machine — it reports the same FAIL a real regression does.
   A fixed sleep is correct for exactly one thing: a NEGATIVE assertion, where
   there is nothing to poll for.
 - **Documentation anchors are gated.** `#L123` links from `docs/` into `src/`

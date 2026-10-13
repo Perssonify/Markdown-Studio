@@ -8,19 +8,18 @@
 
 ## 1. Before the first production deploy
 
-- [ ] Merge `audit/production-readiness-fixes` into `main` through a pull request, with the CI jobs **`verify`** and **`e2e`** green.
+- [ ] Merge `audit/production-readiness-fixes` into `main` through a reviewed pull request, after running the verify gate locally (there is no CI — root `CLAUDE.md` ▸ Verify, and the editor's gate in `apps/web/CLAUDE.md`).
 - [ ] Bump `version` in `package.json`, rename CHANGELOG's `[Unreleased]` to that version, and clear the in-app **Changelog** starter document for the release.
-- [ ] GitHub ▸ Rulesets for `main`: require a PR with one approval, require the checks `verify` and `e2e`, block force pushes and deletions (A005).
-- [ ] Vercel ▸ Settings ▸ **Deployment Checks**: add `verify` and `e2e`, so a deploy is promoted only after both pass. If the plan lacks it, turn off automatic production deploys and promote green deployments by hand (A005).
+- [ ] GitHub ▸ Rulesets for `main`: require a PR with one approval, block force pushes and deletions (A005).
 - [ ] Vercel: confirm the dashboard does not override `vercel.json` — the install command must be `bun install --frozen-lockfile` and the build command `bun run build:app && node scripts/strip-sourcemaps.mjs`.
 - [ ] Vercel: check a build log shows **Bun 1.4.0** (the `packageManager` version); set it in the project settings if not (A014).
-- [ ] Vercel: set the project's Node.js version to **24.x** (what CI runs, `.node-version`; 22.x also lies inside `engines.node` as long as Vercel's 22 is 22.22.2 or later) — the import relay function runs on it, and its undici 8 needs Node 22.19 or later.
+- [ ] Vercel: set the project's Node.js version to **24.x** (`.node-version`; 22.x also lies inside `engines.node` as long as Vercel's 22 is 22.22.2 or later) — the import relay function runs on it, and its undici 8 needs Node 22.19 or later.
 
 ## 2. The domain (A001, A002)
 
 - [ ] Confirm markdownstudio.com is registered to a company account (auto-renew on, two admins) and remove the parking / "for sale" listing.
 - [ ] Vercel ▸ Domains: add `markdownstudio.com` and `www.markdownstudio.com` (one redirecting to the other); create the DNS records Vercel shows; wait for the certificate.
-- [ ] GitHub ▸ Actions ▸ **Uptime** ▸ Run workflow — it must go green. Then set up an external uptime monitor that alerts a person.
+- [ ] Confirm markdownstudio.com serves the Markdown Studio app, not a parking page. Then set up an external uptime monitor that alerts a person.
 - [ ] `markdownstudio.perssonify.com`: a permanent **301 redirect** to markdownstudio.com — not a second copy of the app (a second copy would be a second, separate library for users).
 
 ## 3. The old address — markdowneditor.perssonify.com (A004)
@@ -40,9 +39,7 @@
 ## 5. The npm package — only if you publish the library (A006)
 
 - [ ] Claim the **`perssonify`** organisation on npmjs.com under a company account; add a second owner; require 2FA.
-- [ ] Set up publishing: trusted publishing for `publish.yml` (preferred), or a granular token saved as the repository secret `NPM_TOKEN`.
-- [ ] GitHub ▸ Environments: create **`npm`** with required reviewers.
-- [ ] Release by tag: bump `package.json`, merge, `git tag vX.Y.Z && git push origin vX.Y.Z`, approve the workflow, check the provenance badge.
+- [ ] Release by hand: bump `package.json`, merge, `git tag vX.Y.Z && git push origin vX.Y.Z`, then on that commit run the verify gate, `bun run build` and `npm publish --access public` from `apps/web` ([deployment.md ▸ Publishing](deployment.md#publishing-the-npm-package)).
 
 ## 6. Not code, before the public launch
 
@@ -53,7 +50,7 @@
 
 ## 7. After every deploy — a 5-minute check
 
-- [ ] https://markdownstudio.com opens the editor; the Uptime workflow is green.
+- [ ] https://markdownstudio.com opens the editor.
 - [ ] `curl -I https://markdownstudio.com/` shows `Content-Security-Policy-Report-Only`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
 - [ ] A file under `/assets/` is served with `Cache-Control: public, max-age=31536000, immutable`, and its `.map` returns 404 (sourcemaps are not deployed).
 - [ ] `/embed.html` returns 404 (unless the embed build is deployed there).
