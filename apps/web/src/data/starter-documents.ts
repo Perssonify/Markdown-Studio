@@ -299,7 +299,7 @@ Markdown flavor in **Settings**.
 
 ---
 
-Found a bug or have an
+Markdown Studio is source-available under CC BY-NC 4.0. Found a bug or have an
 idea? [Open an issue on GitHub](https://github.com/Perssonify/Markdown-Studio/issues).
 
 *This note ships with Markdown Studio. Edit it or delete it: it's yours now.*

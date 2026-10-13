@@ -18,6 +18,7 @@
     "offline-first",
     "wiki-links"
   ],
+  "license": "CC-BY-NC-4.0",
   "author": "Perssonify Labs (https://perssonify.com)",
   "homepage": "https://markdownstudio.com",
   "repository": {

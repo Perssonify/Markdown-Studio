@@ -1,6 +1,7 @@
 {
   "name": "markdown-studio",
   "private": true,
+  "license": "CC-BY-NC-4.0",
   "workspaces": [
     "apps/*",
     "packages/*",

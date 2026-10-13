@@ -138,7 +138,7 @@ Understated; this audience punishes marketing language.
 > logs. No analytics. After one visit the service worker has the whole app
 > cached, so it works offline.
 >
-> The same code ships as an embeddable component.
+> Source-available under CC BY-NC 4.0, and the same code ships as an embeddable component.
 
 ---
 
@@ -186,7 +186,7 @@ Lead with the fact, not the pitch. Disclose that you made it.
 > analytics, and it works offline after the first visit. The only server code is
 > an opt-in relay for importing links whose hosts block browser reads. Math,
 > Mermaid, wiki links with a relationship map, and export to
-> Markdown/HTML/Word/PDF.
+> Markdown/HTML/Word/PDF. Source-available under CC BY-NC 4.0.
 >
 > markdownstudio.com — feedback welcome, especially on the round-trip fidelity.
 > That's the part that's hard to get right and the part I most want broken.
