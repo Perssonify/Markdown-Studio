@@ -79,12 +79,12 @@ Full annotated tree and a "where does X live?" table: [codebase-tour.md](codebas
 | [codebase-tour.md](codebase-tour.md) | Directory map and naming conventions |
 | [i18n.md](i18n.md) | Interface translation: how to add a string or a language, the `en-XA` pseudo-locale |
 | [local-development.md](local-development.md) | Getting productive: env, run modes, seed data, recipes |
-| [workflows.md](workflows.md) | Branching, testing, CI/CD, deployment, observability |
+| [workflows.md](workflows.md) | Branching, testing, the verify gate, deployment, observability |
 | [domain-glossary.md](domain-glossary.md) | Vocabulary: canonical, residuals, fidelity, transclusion, … |
 | [gotchas.md](gotchas.md) | Landmines, stale docs, dead code, perf cliffs |
 | [runbooks/](runbooks/) | When things break: documents vanished, sync loop, quota exceeded |
 | [audit-2026-09.md](audit-2026-09.md) | **What remains before launch** — the September 2026 production-readiness audit: all 114 findings with their status, the owner actions (accounts, settings, legal) and the deferred engineering work |
-| [deployment.md](deployment.md) | What the repository does for a release, and what an owner must switch on (domain, CI gate, npm, CSP) |
+| [deployment.md](deployment.md) | What the repository does for a release, and what an owner must switch on (domain, branch protection, npm, CSP) |
 | [deployment-todo.md](deployment-todo.md) | The launch checklist: what to switch on, in order, and what to check after every deploy |
 | [decisions.md](decisions.md) | Recorded product and architecture decisions, and why |
 | [backlog.md](backlog.md) | Planned features and the earlier audits' findings |

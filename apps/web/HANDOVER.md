@@ -16,20 +16,19 @@ before changing code.
   single-sourced from `package.json` (Vite injects `__APP_VERSION__`;
   `src/constants.ts` re-exports it as `VERSION`). Bump `package.json` only.
 - **Before launch:** read **`docs/audit-2026-09.md`** — the audit's 114 findings, what
-  is done, the owner actions that are not code (domain, CI gate, npm scope, legal
-  pages…) and the deferred engineering work.
+  is done, the owner actions that are not code (domain, npm scope, legal pages…)
+  and the deferred engineering work.
 - **Package manager:** **Bun 1.4.0** (pinned by `packageManager`; always
   `bun install --frozen-lockfile`). Do not use npm/yarn.
 - **Deploy:** the standalone app auto-deploys to **Vercel** (preview per branch,
   production on `main`). It's a static SPA; the only server code is one same-origin
   serverless relay (`api/import.js` — see `docs/import-relay.md`), used only after
   the user agrees. Open tabs are PROMPTED to update, never force-reloaded.
-- **CI:** `.github/workflows/ci.yml` runs the full verify gate and the browser campaign
-  on every PR to `main` and every push to it — but nothing yet stops a red build
-  from deploying: branch protection and Vercel deployment checks are owner steps
-  (`docs/deployment.md`).
+- **CI:** none. PRs are reviewed by hand; run the verify gate below locally before
+  opening a PR and again before merging it. Nothing stops a red build from
+  deploying (`docs/deployment.md`).
 
-### Verify gate (run before every commit; CI runs the same)
+### Verify gate (run before every commit, and before opening or merging a PR)
 ```bash
 bun install --frozen-lockfile
 bunx tsc --noEmit      # type gate — must be clean
@@ -274,8 +273,7 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
 ## 8. Suggested next work (candidates, not commitments)
 
 - **Launch blockers first:** the owner actions and deferred engineering in
-  `docs/audit-2026-09.md` — above all the domain, the CI gate on deploys and the old
-  origin's move banner — and the defects found while reconciling the docs, listed in
+  `docs/audit-2026-09.md` — above all the domain and the old origin's move banner — and the defects found while reconciling the docs, listed in
   the same file (the `/embed.html` framing gap and the broken first-run `[[Welcome]]`
   links first).
 - **Full-document LaTeX / multi-file projects** — content/engine-layer if single-doc; a
@@ -291,7 +289,7 @@ Full list in `CLAUDE.md`. The ones that have each caused a real bug:
   shippable change; keep `tsc` + tests + all three builds green.
 - Commit messages: clear and descriptive; match the existing style in `git log`.
 - Do not include any AI model identifier in commits, PR text, code, or docs.
-- GitHub ops go through the GitHub MCP tools (no `gh` CLI in the CI/agent env).
+- GitHub ops go through the GitHub MCP tools (no `gh` CLI in the agent env).
 
 ## 10. Fast orientation checklist
 

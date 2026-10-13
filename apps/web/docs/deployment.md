@@ -19,11 +19,11 @@ there when the repository became a monorepo).
 
 | Area | In the repository | Owner action still needed |
 |---|---|---|
-| Domain serves the app | `uptime.yml` checks it every 30 min | Point markdownstudio.com at Vercel ([The domain](#the-domain)) |
+| Domain serves the app | `APP_URL`, the relay's CORS origins and `security.txt` name it | Point markdownstudio.com at Vercel, and an uptime monitor at it ([The domain](#the-domain)) |
 | Users on the old address keep their library | A "has moved — download a backup" banner on markdowneditor.perssonify.com | Serve the current build there; redirect only later ([The old address](#the-old-address)) |
-| Production only after CI | CI job names `verify` and `e2e` | Branch protection + Vercel deployment checks ([Gate production on CI](#gate-production-on-ci)) |
-| Reproducible builds | Bun pinned (`packageManager`, CI), SHA-pinned actions, `--frozen-lockfile`, Dependabot | Confirm Vercel builds with the same Bun |
-| npm package | `publish.yml` (tag-triggered, provenance) | Claim `@perssonify`, 2FA, token or trusted publishing, `npm` environment ([Publishing](#publishing-the-npm-package)) |
+| Production only after review | The verify gate, run locally before a PR is opened and merged (there is no CI) | Branch protection requiring a reviewed PR ([Gate production on review](#gate-production-on-review)) |
+| Reproducible builds | Bun pinned (`packageManager`), `--frozen-lockfile` | Confirm Vercel builds with the same Bun |
+| npm package | Published by hand by an owner | Claim `@perssonify`, 2FA ([Publishing](#publishing-the-npm-package)) |
 | Security contact | `security.txt`, SECURITY.md, issue templates | Create and monitor security@markdownstudio.com |
 | Import relay costs | 4 MB cap, 25 s `maxDuration`, one log line per request | Firewall rate limit, spend alerts ([import-relay.md ▸ Operating it](import-relay.md#operating-it-owner-setup)) |
 | Security headers | CSP report-only (hash-pinned), anti-framing enforced | Decide when to enforce the CSP ([CSP](#content-security-policy)) |
@@ -47,12 +47,9 @@ all name it.
 4. At the DNS provider, create the records Vercel shows (or delegate to Vercel's
    nameservers). Wait for Vercel to report the domain valid and the certificate
    issued.
-5. Run **Actions ▸ Uptime ▸ Run workflow** and confirm it goes green. It checks
-   that the Markdown Studio shell (`<title>`, `#root`) and its JavaScript entry
-   are served — a parking page fails it.
-6. Replace the scheduled workflow with an external uptime monitor that pages a
-   person. GitHub may delay or skip scheduled runs and notifies only the
-   workflow's last editor (≈1,450 runs a month).
+5. Confirm the domain serves the Markdown Studio shell (`<title>`, `#root`) and
+   its JavaScript entry — a parking page has neither.
+6. Set up an external uptime monitor that pages a person.
 
 ---
 
@@ -75,29 +72,24 @@ imports; Help has "Moving your library".
 
 ---
 
-## Gate production on CI
+## Gate production on review
 
 Vercel deploys `main` on every push and runs only its build command
 (`build:app`, then the sourcemap strip): no type check, no tests, no browser
-campaign. CI runs in parallel and nothing waits for it, so
-a red merge ships to every user. Two settings close that; `vercel.json` is
-deliberately not used to switch auto-deploys off.
+campaign. There is no CI, so nothing else checks a merge: run the verify gate
+locally before opening a pull request and again before merging it (root
+`CLAUDE.md` ▸ Verify, and the editor's gate in `apps/web/CLAUDE.md`), or a red
+merge ships to every user. `vercel.json` is deliberately not used to switch
+auto-deploys off.
 
 **Owner action — GitHub:**
 1. Settings ▸ **Rules ▸ Rulesets** (or Branches ▸ Branch protection) for `main`:
    - require a pull request before merging, with at least one approving review;
-   - require status checks to pass: **`verify`** and **`e2e`** (the job names in
-     `.github/workflows/ci.yml`), and require branches to be up to date;
    - block force pushes and deletions.
 2. Add a `CODEOWNERS` file if review should be routed (none exists today).
 
 **Owner action — Vercel:**
-3. Project ▸ Settings ▸ **Deployment Checks**: add the GitHub checks `verify`
-   and `e2e`. Vercel then builds a production deployment on push but only
-   promotes it to the production domains after both checks pass. (If the plan
-   lacks Deployment Checks: turn off automatic production deployments in
-   Settings ▸ Git and promote a green deployment by hand.)
-4. Keep preview deployments on — they are where a change is looked at before
+3. Keep preview deployments on — they are where a change is looked at before
    merge — and note that each preview origin has its own browser storage.
 
 **Rollback** is Vercel ▸ Deployments ▸ a previous deployment ▸ **Promote to
@@ -121,21 +113,16 @@ The standalone app is a PWA with a **prompting** service worker:
 
 ## Reproducible builds
 
-- CI installs with `bun install --frozen-lockfile` using Bun **1.4.0** (the
-  version that produced `bun.lock`), set once in `BUN_VERSION` in each workflow.
+- The verify gate installs with `bun install --frozen-lockfile`; run it with Bun
+  **1.4.0** (the version that produced `bun.lock`, pinned by `packageManager`).
 - Vercel runs `bun install --frozen-lockfile` (`vercel.json` ▸ `installCommand`):
   a lockfile that does not match `package.json` fails the deploy instead of
   resolving something new.
-- Every GitHub Action is pinned to a full commit SHA with its version in a
-  comment; workflows run with `permissions: contents: read` unless they need
-  more (the publish job adds `id-token: write`).
-- Dependabot (`.github/dependabot.yml`) proposes weekly updates for the Bun
-  lockfile and for the pinned actions.
 
 **Owner action:** make sure Vercel builds with the same Bun. `package.json`
 already declares `"packageManager": "bun@1.4.0"`; check the Bun version in a
 Vercel build log, and set it in the project's build settings if it differs.
-Bump CI's `BUN_VERSION`, that field and `bun.lock` together.
+Bump that field and `bun.lock` together.
 
 ---
 
@@ -157,7 +144,7 @@ Bump CI's `BUN_VERSION`, that field and `bun.lock` together.
 
 The hashes are checked by `src/__tests__/ops-vercel-headers.test.js`, which
 recomputes them from `index.html` and `embed.html` (and from the BUILT
-`index.html` in CI) and fails on a missing or stale one — so **editing an inline
+`index.html` when a current `dist-app/` exists) and fails on a missing or stale one — so **editing an inline
 script means updating `vercel.json` in the same change**; the failure message
 names the new hash.
 
@@ -177,10 +164,10 @@ The app is built with `sourcemap: 'hidden'`: maps are emitted (the third-party
 licence scan reads them, and they turn a minified stack from "Copy diagnostics"
 back into source) but nothing references them. `vercel.json`'s build command
 ends with `node scripts/strip-sourcemaps.mjs`, which moves every `.map` out of
-`dist-app/` into `dist-app-sourcemaps/` — they are not deployed. CI keeps them
-as the artifact `app-sourcemaps-<commit sha>` for 90 days (pushes to `main`);
-to read a production stack, download the artifact for the deployed commit and
-map the `file:line:col` from the diagnostics with any source-map tool.
+`dist-app/` into `dist-app-sourcemaps/` — they are not deployed, and nothing
+keeps them. To read a production stack, rebuild the deployed commit with
+`vercel.json`'s build command and map the `file:line:col` from the diagnostics
+against its `dist-app-sourcemaps/` with any source-map tool.
 
 ---
 
@@ -193,26 +180,19 @@ anyone can publish under that name (a squatting / dependency-confusion risk).
 **Owner action:**
 1. Create (claim) the **`perssonify` organisation** on npmjs.com under a company
    account; add a second owner; **require 2FA** for all members.
-2. Publishing credentials — one of:
-   - **Trusted publishing** (preferred; no long-lived secret): on the package's
-     npm settings, trust this repository's `publish.yml` workflow; or
-   - a **granular access token** limited to `@perssonify/editor` with publish
-     rights, saved as the repository secret **`NPM_TOKEN`**.
-3. GitHub ▸ Settings ▸ **Environments** ▸ create **`npm`** with required
-   reviewers (and, optionally, restrict it to tags `v*`).
+2. Publishing is a manual step by an owner, signed in to npm with their own
+   2FA-protected account; no token is stored in the repository.
 
 **Releasing:**
 1. Bump `version` in `package.json` (single source of the version) and merge.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The **Publish to npm** workflow waits for the `npm` environment's approval
-   (the whole job runs in that environment), then checks the tag matches
-   `package.json`, runs the type check, the unit tests and the library build,
-   prints `npm pack --dry-run`, and runs
-   `npm publish --provenance --access public`.
-4. Check the package page shows the provenance badge (built by this repository's
-   workflow from this commit).
+3. On that commit, run the verify gate locally (root `CLAUDE.md` ▸ Verify),
+   then, in `apps/web`: `bun run build`; the two checks that need the build
+   (`bunx vitest run src/__tests__/pkg-cjs-require.test.js
+   src/__tests__/pkg-declarations.test.js`); `npm pack --dry-run` to see what
+   will be published; and `npm publish --access public`.
 
-Never publish from a laptop. A bad release: [runbooks/bad-npm-release.md](runbooks/bad-npm-release.md).
+Only an owner publishes. A bad release: [runbooks/bad-npm-release.md](runbooks/bad-npm-release.md).
 
 ---
 

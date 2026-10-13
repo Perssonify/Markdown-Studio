@@ -18,8 +18,8 @@ infrastructure is `infra`.
 ## Getting set up
 
 The package manager is **Bun** (1.4.0 — pinned by `packageManager` in the root
-`package.json`; CI installs with `bun install --frozen-lockfile`, so commit the
-root `bun.lock` with any dependency change).
+`package.json`; the gate and the deploy install with `bun install
+--frozen-lockfile`, so commit the root `bun.lock` with any dependency change).
 
 ```bash
 bun install
@@ -29,10 +29,11 @@ bun run --cwd apps/web dev   # the editor alone, exactly as before the monorepo
 
 ## The verification gate
 
-Run these before you open a pull request — from the root they cover every
-package through Turbo. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
-runs the same checks on every PR to `main`, plus the browser campaign
-(`bun run e2e` in `apps/web`, see [`apps/web/e2e/README.md`](apps/web/e2e/README.md)).
+Run these before you open a pull request, and again before it is merged — from
+the root they cover every package through Turbo. There is no CI: pull requests
+are reviewed by hand, so this local gate is the only check. Run the browser
+campaign too (`bun run e2e` in `apps/web`, see
+[`apps/web/e2e/README.md`](apps/web/e2e/README.md)).
 
 ```bash
 bun run lint         # ESLint — zero errors (warnings are the tracked backlog)

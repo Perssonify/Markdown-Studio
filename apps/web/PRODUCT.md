@@ -44,7 +44,7 @@ Grounded in: name and home page in [src/constants.ts](src/constants.ts), dual pa
 - **Test investment.**
   - 196 Vitest files with about 2,100 test cases ([src/\_\_tests\_\_](src/__tests__)).
   - 12 real-browser suites ([e2e/cases](e2e/cases)) covering IME composition, real IndexedDB, quota exhaustion, a second tab, fault injection, an enforced Content-Security-Policy, and offline use and updates through the service worker.
-  - CI runs all of them except the timing suite on every PR (the stress suite only on pushes to `main`), together with lint, a type-check and three builds ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)).
+  - There is no CI: contributors run all of them except the timing suite locally before opening and merging a PR, together with lint, a type-check and three builds ([CLAUDE.md ▸ Verify before you commit](CLAUDE.md#verify-before-you-commit)).
   - [e2e/README.md](e2e/README.md) states plainly what is not covered.
 - **Data-loss engineering.** Five protections: a hydration guard, an empty-save backstop, crash recovery, snapshot history and multi-tab conflict detection — plus, against the browser clearing its storage, a persistent-storage request, a backup reminder and wiped-library detection (§4.5).
 - **Operations.**
@@ -56,7 +56,7 @@ Grounded in: name and home page in [src/constants.ts](src/constants.ts), dual pa
   - The ad slots are placeholders, and only development builds render them ([src/ui/shared/adUnit/index.tsx](src/ui/shared/adUnit/index.tsx), [src/utils/build-gates.ts](src/utils/build-gates.ts)).
   - There is no analytics or telemetry, so no product usage data is collected.
   - There are no accounts or sync.
-  - The iframe embed is built in CI but not deployed ([vercel.json](vercel.json) builds only the app).
+  - The iframe embed is built by `bun run build:embed` but not deployed ([vercel.json](vercel.json) builds only the app).
 
 ## 3. Users and roles
 
@@ -287,7 +287,7 @@ The URL-import relay isn't a user role, but it has its own gates. The app uses i
 | Custom storage adapter | Sends document storage through a host-supplied adapter. The default database is still opened at startup, and snapshots and the crash stash still use the browser's own storage, but they follow the host's `storageConfig` namespace, or can be switched off there. `clearLocalData()` erases them, e.g. on logout. | [src/store/documents/documentStore.ts](src/store/documents/documentStore.ts), [src/store/persistence/storage-adapter.ts](src/store/persistence/storage-adapter.ts) | Partial |
 | Associations | Host-supplied extra edges between documents. Held in memory, and merged only into `getGraph` and `copyAsPrompt`; never shown in the map or backlinks. | [src/integration/associations.ts](src/integration/associations.ts) | Partial |
 | `setFieldSchemas`; `documents`, `fieldSchemas`, `linkResolver`, `onFieldChange`, `onExport` props | Deprecated (`@deprecated` in the types, and one console warning per page load in development builds when used), still accepted and ignored: `setFieldSchemas` writes a global nobody reads; the props are never read or fired. `onLinkClick` replaces `linkResolver`. | [src/integration/deprecation.ts](src/integration/deprecation.ts), [src/integration/PerssonifyEditorIntegration.tsx](src/integration/PerssonifyEditorIntegration.tsx) | Dead |
-| Iframe embed | `embed.html` with URL parameters: `mode`, `theme`, `accent`, `accentColor`, `chrome`, `bg` (including `transparent`), `allowed_origin`, `readonly`. Built in CI but **not part of the deployed site**: `/embed.html` on the production domain serves the standalone app. Self-hosters must serve the `dist-embed` build. | [src/embed.tsx](src/embed.tsx), [vite.embed.config.ts](vite.embed.config.ts), [vite.app.config.ts](vite.app.config.ts), [vercel.json](vercel.json) | Partial |
+| Iframe embed | `embed.html` with URL parameters: `mode`, `theme`, `accent`, `accentColor`, `chrome`, `bg` (including `transparent`), `allowed_origin`, `readonly`. Built by `bun run build:embed` but **not part of the deployed site**: `/embed.html` on the production domain serves the standalone app. Self-hosters must serve the `dist-embed` build. | [src/embed.tsx](src/embed.tsx), [vite.embed.config.ts](vite.embed.config.ts), [vite.app.config.ts](vite.app.config.ts), [vercel.json](vercel.json) | Partial |
 | postMessage bridge | About 20 actions (document reads and writes, theme, mode, chrome, export, prompt, associations) with request/response, plus events (ready, change, save, link click). Unknown actions are rejected. Talks only to the origins resolved as §3 describes, and to nobody when none qualifies. | [src/integration/host-bridge.ts](src/integration/host-bridge.ts), [src/integration/embed-origins.ts](src/integration/embed-origins.ts) | Done |
 | Client helper | `createEditorClient(iframe)` wraps the bridge for host pages. | [src/integration/host-bridge.ts](src/integration/host-bridge.ts) | Done |
 

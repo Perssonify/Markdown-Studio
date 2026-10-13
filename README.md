@@ -17,7 +17,6 @@
   <a href="https://github.com/Perssonify/Markdown-Studio/issues/new?template=bug_report.yml">Report a bug</a>
 </p>
 
-[![CI](https://github.com/Perssonify/Markdown-Studio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Perssonify/Markdown-Studio/actions/workflows/ci.yml)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/license-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Perssonify/Markdown-Studio?color=0a7bbb)](https://github.com/Perssonify/Markdown-Studio/stargazers)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-1a7f37.svg)](CONTRIBUTING.md)
