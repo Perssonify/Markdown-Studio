@@ -8,11 +8,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogIn, LogOut, UserRound } from "lucide-react";
+import { Eraser, LogIn, LogOut, UserRound } from "lucide-react";
 import { useCallback } from "react";
 import { useT } from "@/i18n";
+import { clearLocalData, useDocumentStore } from "@/store/documents/documentStore";
+import { useConfirm } from "@/ui/dialogs/confirmDialog";
 import { useToast } from "@/ui/shared/toast";
-import { useAccount } from "../account";
+import { useCloudStatus } from "../../cloud";
+import { browserNav, useAccount } from "../account";
 import { AccountAvatar } from "../accountAvatar";
 import { CloudStatusLine } from "../cloudStatusLine";
 
@@ -26,9 +29,11 @@ interface AccountMenuProps {
 /**
  * The account control at the right end of the top header (EditorHeader).
  * Signed out: a "Sign in" button that opens the sign-in page. Signed in: the
- * account's photo, opening a menu with the name and email, Profile and Sign
- * out. Renders NOTHING while the session is being checked or when no account
- * service answers, so a host without the backend shows the editor as before.
+ * account's initials, opening a menu with the name and email, Profile, Sign
+ * out (the notes stay in this browser) and, for a shared computer, Sign out
+ * and remove the notes from this browser. Renders NOTHING while the session is
+ * being checked or when no account service answers, so a host without the
+ * backend shows the editor as before.
  */
 export function AccountMenu({ onSignIn, onProfile }: AccountMenuProps) {
   const t = useT();
@@ -36,6 +41,12 @@ export function AccountMenu({ onSignIn, onProfile }: AccountMenuProps) {
   const status = useAccount((s) => s.status);
   const user = useAccount((s) => s.user);
   const signOut = useAccount((s) => s.signOut);
+  const { confirm, ConfirmDialog } = useConfirm();
+  // Removing the notes here is safe only once the account holds every change:
+  // nothing waiting to be saved in the editor, and the last sync finished.
+  const cloudPhase = useCloudStatus((s) => s.phase);
+  const saveStatus = useDocumentStore((s) => s.saveStatus);
+  const allInAccount = cloudPhase === "synced" && (saveStatus === "ready" || saveStatus === "saved");
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -45,6 +56,31 @@ export function AccountMenu({ onSignIn, onProfile }: AccountMenuProps) {
       toast.show(t("account.signOutFailed"), "error");
     }
   }, [signOut, toast, t]);
+
+  const handleSignOutAndClear = useCallback(async () => {
+    const ok = await confirm({
+      title: t("account.signOutAndClearTitle"),
+      description: t("account.signOutAndClearDesc"),
+      confirmLabel: t("account.signOutAndClearConfirm"),
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await signOut();
+    } catch {
+      toast.show(t("account.signOutAndClearFailed"), "error");
+      return; // still signed in: nothing is removed
+    }
+    try {
+      // Every note, image, version and setting here, and with the settings
+      // this browser's sync state (`pf:cloud-*`): the next sign-in here starts
+      // like a new device and brings the account's notes down.
+      await clearLocalData({ preferences: true });
+    } finally {
+      // Start over as a new visitor: an empty library seeds the first-visit notes.
+      browserNav.go("/");
+    }
+  }, [confirm, signOut, toast, t]);
 
   if (status === "signed-out") {
     return (
@@ -57,13 +93,15 @@ export function AccountMenu({ onSignIn, onProfile }: AccountMenuProps) {
         onClick={onSignIn}
       >
         <LogIn className="size-4" />
-        <span className="hidden text-xs tracking-tight whitespace-nowrap lg:inline-block">{t("account.signIn")}</span>
+        <span className="hidden text-xs tracking-tight whitespace-nowrap sm:inline-block">{t("account.signIn")}</span>
       </Button>
     );
   }
   if (status !== "signed-in" || !user) return null;
 
   return (
+    <>
+    {ConfirmDialog}
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
@@ -102,7 +140,16 @@ export function AccountMenu({ onSignIn, onProfile }: AccountMenuProps) {
           <LogOut />
           {t("account.signOut")}
         </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!allInAccount}
+          title={allInAccount ? undefined : t("account.signOutAndClearWaiting")}
+          onClick={handleSignOutAndClear}
+        >
+          <Eraser />
+          {t("account.signOutAndClear")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 }

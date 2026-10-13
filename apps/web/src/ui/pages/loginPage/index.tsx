@@ -16,7 +16,7 @@ interface SignInPanelProps {
   onClose?: () => void;
   onProfile?: () => void;
   /** When false, the brand icon + heading are omitted so a host layout (the
-   * front door) can supply its own. The interactive body is unchanged. */
+   * sign-in screen) can supply its own. The interactive body is unchanged. */
   showHeader?: boolean;
 }
 
@@ -122,7 +122,7 @@ export function SignInPanel({ onClose, onProfile, showHeader = true }: SignInPan
     );
   }
 
-  // Embedded in a custom layout (the front door) that supplies its own brand.
+  // Embedded in a custom layout (the sign-in screen) that supplies its own brand.
   if (!showHeader) return <div className="w-full text-center">{body}</div>;
 
   return (
@@ -134,41 +134,43 @@ export function SignInPanel({ onClose, onProfile, showHeader = true }: SignInPan
   );
 }
 
-/** /login while the app is open: the panel as an interior page over the editor. */
+/**
+ * /login: an interior page over the (still-mounted) editor. Signed out, the
+ * full sign-in screen; signed in, or with no account service, the panel that
+ * says so.
+ */
 export function LoginPage({ onClose, onProfile }: { onClose: () => void; onProfile: () => void }) {
   const t = useT();
+  const status = useAccount((s) => s.status);
   return (
     <PageChrome title={t("account.loginTitle")} onClose={onClose}>
-      <SignInPanel onClose={onClose} onProfile={onProfile} />
+      {status === "signed-out" ? <SignInScreen onContinue={onClose} /> : <SignInPanel onClose={onClose} onProfile={onProfile} />}
     </PageChrome>
   );
 }
 
 /**
- * The front door: what a signed-out visitor sees INSTEAD of the app (App.tsx,
- * at /login). No way past it but signing in — there is no editor behind it to
- * go back to. A split layout: the sign-in content on the left, a photo with the
- * product's pitch on the right (hidden on narrow viewports, where the left fills).
- * `sharedName` is set when the visitor came from a share link: its documents
- * open after sign-in, and the screen says so.
+ * The sign-in screen. Signing in is optional: the editor works without an
+ * account, with the notes kept in this browser; signing in adds sync and the
+ * daily backup. So the screen always offers a way back ("Continue without
+ * signing in"). A split layout: the sign-in content on the left, a photo with
+ * the product's pitch on the right (hidden on narrow viewports, where the left fills).
  */
-export function SignInScreen({ sharedName }: { sharedName?: string }) {
+export function SignInScreen({ onContinue }: { onContinue: () => void }) {
   const t = useT();
   return (
-    <main className="flex min-h-dvh flex-col bg-background text-foreground lg:grid lg:grid-cols-2">
+    <div className="flex min-h-full flex-col bg-background text-foreground lg:grid lg:grid-cols-2">
       {/* Left — the sign-in content. */}
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 sm:px-10">
         <div className="w-full max-w-sm text-center">
           <BrandLogo />
           <h1 className="mt-4 text-2xl font-semibold tracking-tight">{t("account.loginHeading", { app: APP_NAME })}</h1>
           <p className="mt-1 text-[11px] font-bold tracking-wider text-muted-foreground/60 uppercase">{APP_BRAND}</p>
-          {sharedName !== undefined && (
-            <p role="status" className="mt-6 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-medium">
-              {sharedName ? t("account.loginShared", { name: sharedName }) : t("account.loginSharedUnnamed")}
-            </p>
-          )}
           <SignInPanel showHeader={false} />
-          <p className="mt-8 text-xs text-muted-foreground/70">{t("account.loginPrivacyNote")}</p>
+          <Button variant="ghost" size="sm" className="mt-3 text-muted-foreground" onClick={onContinue}>
+            {t("account.continueWithoutSignIn")}
+          </Button>
+          <p className="mt-6 text-xs text-muted-foreground/70">{t("account.loginPrivacyNote")}</p>
         </div>
       </div>
 
@@ -191,6 +193,6 @@ export function SignInScreen({ sharedName }: { sharedName?: string }) {
           <p className="mt-3 text-base leading-relaxed text-white/80">{t("account.loginTaglineDetail")}</p>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

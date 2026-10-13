@@ -16,9 +16,10 @@ Function: the `api` service of the root [`vercel.json`](../../vercel.json)).
 
 File storage is `src/lib/storage/index.ts` (put / get / remove / ping / signed URLs on one S3 bucket), and `src/lib/storage/setup.ts` prepares a bucket (`bun run storage:setup`).
 
-No feature endpoints yet. The editor signs in through these routes: a signed-out
-visitor sees its sign-in screen instead of the editor; once signed in, the
-account menu (right of the menu bar) has Profile and Sign out
+No feature endpoints yet. The editor signs in through these routes. Signing in is
+optional: a signed-out visitor uses the editor with notes kept in the browser and
+can sign in from the header to add sync; once signed in, the account menu (right
+of the top header) has Profile and Sign out
 (`apps/web/src/app/account/account.ts`). It calls them at its OWN origin — in
 development Vite forwards `/api` to this server — so sign-in runs on one
 address, as it does behind CloudFront.

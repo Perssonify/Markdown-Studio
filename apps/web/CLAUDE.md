@@ -1114,25 +1114,35 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   the unit tests — makes NO account call and shows no account UI. It reads
   the exact expression `import.meta.env`: Vite and Vitest rewrite only that text, and a
   cast-wrapped form read a stale copy (tests could not switch it on).
-  **Where accounts exist, the app is for signed-in visitors**: App.tsx renders the
-  sign-in screen (`SignInScreen`) INSTEAD of the editor while signed out, and a
-  checking screen while the session is unknown (`SESSION_CHECK_TIMEOUT_MS`), so
-  neither flashes. **`unavailable` (no answer: offline, an outage) opens the editor**
-  — documents live in this browser and must stay reachable offline. **A share link
-  (`#share=…`) gets the sign-in screen too** (it names the shared document): its
-  payload waits in this tab's sessionStorage (`pf:pending-share`) through the
-  Google round trip — Google returns to `/`, without the hash — and is removed once
-  the editor opens with it, so a reload does not import it twice.
+  **Signing in is OPTIONAL (guest first)**: every visitor gets the editor, with the
+  notes in this browser; signing in adds sync and the daily backup. There is no
+  sign-in gate: only a checking screen while the session is unknown
+  (`SESSION_CHECK_TIMEOUT_MS`) and, signed in, while `prepareCloudLibrary` readies
+  the library, so a signed-in visitor on a new device opens on their notes, not on
+  freshly seeded first-visit notes. Share links open straight into the editor.
+  `/login` shows the full sign-in screen (`SignInScreen`) over the editor, with
+  "Continue without signing in". `SignInNudge` (a bar under the header) invites a
+  signed-out visitor to sign in a minute after they have a note of their own, and
+  "Not now" hides it for a week (`pf:sign-in-nudge-dismissed-at`). **The first
+  sign-in in a browser used signed out** removes the still-untouched first-visit
+  notes there when the account already has notes (`app/cloud/starters.ts`,
+  `cloud-starters.test.js`), so each device does not add another Welcome, Getting
+  started and Changelog to the account; they were never in the account, and
+  anything the visitor wrote or edited stays and syncs. **Sign out keeps the notes
+  in this browser**; "Sign out and remove notes from this browser" (account menu,
+  for a shared computer) is offered only once every change is synced, asks first,
+  and erases the library with `clearLocalData({ preferences: true })` (which also
+  drops the `pf:cloud-*` sync state) before starting over at `/`.
   `src/app/account/account.ts` is the session state (`useAccount`), calling same-origin
   `/api/auth/*` — CloudFront routes `/api/*` to the API on AWS, and
   `vite.app.config.ts` proxies `/api` to `:4000` in dev and preview, so local sign-in
   also runs on ONE origin (`PUBLIC_URL` is the editor's address; a cookie set on
   another port is not reliably sent back). Signed in: `src/app/account/accountMenu/index.tsx` at the
-  right end of the menu bar after Settings (Profile, Sign out), handed in through PE's
-  `accountControl` prop (App.tsx only — the library and the embed never pass it,
-  pinned by `account.test.jsx`); `/login` and `/profile` are routed interior pages
-  (`ui/pages/loginPage/index.tsx`, `profilePage/index.tsx`). Signing out unmounts the editor (the
-  gate takes over) — unmount is a document-leaving path (`releaseEditor`). Signing in
+  right end of the top header (Profile, Sign out, Sign out and remove notes), handed in
+  through EditorHeader's `accountControl` prop (App.tsx only; the library and the embed
+  never pass it, pinned by `account.test.jsx`); `/login` and `/profile` are routed
+  interior pages (`ui/pages/loginPage/index.tsx`, `profilePage/index.tsx`). Signing
+  out leaves the editor open on the same notes. Signing in
   is a full navigation to Google, covered by the unload safety net, and does not touch
   documents. Google returns to `/` on success and `/login?error=<code>` on failure
   (`signInTargets`), both trusted origins of the API (`CORS_ORIGINS`).

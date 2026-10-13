@@ -49,7 +49,7 @@ Markdown Studio gives every note one document with two editors attached: CodeMir
 
 ## Quick start
 
-**Just want to write?** Open [markdownstudio.com](https://markdownstudio.com) and sign in with Google.
+**Just want to write?** Open [markdownstudio.com](https://markdownstudio.com) and start writing, no account needed. Sign in with Google when you want your notes synced across devices.
 
 ### 1. Run the editor
 
