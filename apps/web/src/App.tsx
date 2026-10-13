@@ -7,7 +7,7 @@ import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
 import { useUIStore } from "./store/preferences/uiStore";
-import { readSharePayloadFromHash } from "./store/importExport/share-link";
+import { decodeSharePayload, readSharePayloadFromHash } from "./store/importExport/share-link";
 import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
@@ -51,6 +51,9 @@ const SignInScreen = React.lazy(() => import("./ui/pages/loginPage").then((m) =>
 const Walkthrough = React.lazy(() => import("./ui/tour/walkthrough").then((m) => ({ default: m.Walkthrough })));
 
 const TOUR_SEEN_KEY = "pf:tour-seen-v1";
+/** A share link's documents, kept for this tab while a signed-out visitor signs
+ *  in: Google sends the browser back to "/", without the `#share=`. */
+const PENDING_SHARE_KEY = "pf:pending-share";
 
 export function App() {
     const t = useT();
@@ -79,10 +82,17 @@ export function App() {
     });
     /** A self-contained share link (`#share=…`) the visitor opened: its documents,
      *  decoded during render so the editor can import them on boot. Captured here
-     *  (not in an effect) before the `#share=` is stripped from the address below. */
+     *  (not in an effect) before the `#share=` is stripped from the address below.
+     *  Back from signing in, the address has no `#share=` any more: the documents
+     *  come from this tab's PENDING_SHARE_KEY (see the effect below). */
     const [shareSeed] = useState(() => {
         if (typeof window === "undefined") return undefined;
-        return readSharePayloadFromHash() ?? undefined;
+        const fromLink = readSharePayloadFromHash();
+        if (fromLink) return fromLink;
+        try {
+            const pending = sessionStorage.getItem(PENDING_SHARE_KEY);
+            return (pending && decodeSharePayload(pending)) || undefined;
+        } catch { return undefined; }
     });
 
     // Config deep-links: apply ?ads=, ?readonly=, and ?view_mode= (md|html|split)
@@ -128,10 +138,14 @@ export function App() {
 
     // Strip `#share=…` from the address after it was captured (shareSeed), so a
     // refresh does not re-import the shared documents. Any other hash is kept.
+    // The documents stay in this tab's PENDING_SHARE_KEY until the editor opens
+    // with them: a signed-out visitor goes to Google first, and comes back to "/".
     useEffect(() => {
         if (typeof window === "undefined" || !/[#&]share=/.test(window.location.hash)) return;
         try {
             const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+            const shared = params.get("share");
+            try { if (shared) sessionStorage.setItem(PENDING_SHARE_KEY, shared); } catch { /* ignore */ }
             params.delete("share");
             const rest = params.toString();
             window.history.replaceState({}, "", window.location.pathname + window.location.search + (rest ? `#${rest}` : ""));
@@ -175,13 +189,22 @@ export function App() {
     }, [accounts, route, navigate]);
     // A signed-out visitor belongs on /login, so the sign-in front door has its
     // own address — a deep link, a refresh and the browser Back all land there
-    // rather than on "/". The share-link guest flow is exempt: it opens straight
-    // into the editor (see the signed-out gate below).
+    // rather than on "/". A share link is no exception: its documents wait in
+    // PENDING_SHARE_KEY and open once the visitor has signed in.
     useEffect(() => {
-        if (accounts && accountStatus === "signed-out" && !shareSeed && route !== "login") {
+        if (accounts && accountStatus === "signed-out" && route !== "login") {
             navigate("login", { replace: true });
         }
-    }, [accounts, accountStatus, shareSeed, route, navigate]);
+    }, [accounts, accountStatus, route, navigate]);
+    // The editor opens on this render (the same conditions as the gates below).
+    // From here it has the share link's documents, so this tab stops keeping
+    // them: a later load must not import them a second time.
+    const editorOpens = !accounts || accountStatus === "unavailable"
+        || (accountStatus === "signed-in" && (!accountUserId || cloudReadyFor === accountUserId));
+    useEffect(() => {
+        if (!editorOpens) return;
+        try { sessionStorage.removeItem(PENDING_SHARE_KEY); } catch { /* ignore */ }
+    }, [editorOpens]);
 
     // The account control at the right end of the top header. One element for
     // the life of the shell: a fresh element each render would needlessly
@@ -261,17 +284,15 @@ export function App() {
     if (accounts && accountStatus === "signed-in" && accountUserId && cloudReadyFor !== accountUserId) {
         return <AccountCheckScreen message={cloudPhase === "preparing" ? t("account.bringingDocuments") : undefined} />;
     }
-    // A visitor who opened a SHARE link (`#share=…`) is let straight into the
-    // editor as a guest — no sign-in. The whole point of a share link is that
-    // anyone can open it; gating it behind Google sign-in defeats it. They read
-    // and import the shared document into this browser's local library; signing
-    // in later (and cloud-syncing it) stays available, it is just not required.
-    if (accounts && accountStatus === "signed-out" && !shareSeed) {
+    // Signed out: the sign-in screen, share links included — the shared
+    // documents are imported once the visitor is back from Google, signed in
+    // (PENDING_SHARE_KEY), so they land in the account's library and sync.
+    if (accounts && accountStatus === "signed-out") {
         return (
             <ErrorBoundary isDark={isDark}>
                 <div lang={locale} dir={localeDir(locale)}>
                     <Suspense fallback={<AccountCheckScreen />}>
-                        <SignInScreen />
+                        <SignInScreen sharedName={shareSeed?.name} />
                     </Suspense>
                 </div>
             </ErrorBoundary>
