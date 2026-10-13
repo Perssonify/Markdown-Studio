@@ -778,9 +778,9 @@ This revision re-checked every item from the 1.77.0 pass:
   - Nothing in the repo loads `dist/*.js` or `dist/*.cjs`, though. `e2e/cases/library.mjs` loads only `dist/styles.css`.
   - Evidence: `vite.config.ts:45, 63-71`, `src/__tests__/pkg-library-build.test.js:75-76`, `e2e/cases/library.mjs:28-38`.
 - **BLD-7: No `prepack` or `prepublishOnly` script.** `Low` · `Confirmed`
-  - A local `npm publish` would ship whatever `dist/` holds.
-  - The publish workflow builds and tests first, and the double-shipping of dependencies is fixed (A104). Only `sonner` and `@base-ui/react` are bundled, both on purpose.
-  - Evidence: `package.json:75-98`, `.github/workflows/publish.yml:56-74`, `build/externals.mjs:41-48`.
+  - `npm publish` would ship whatever `dist/` holds.
+  - Publishing is manual: the release steps build and run the built-package checks first ([deployment.md ▸ Publishing](docs/deployment.md#publishing-the-npm-package)), and the double-shipping of dependencies is fixed (A104). Only `sonner` and `@base-ui/react` are bundled, both on purpose.
+  - Evidence: `package.json:75-98`, `build/externals.mjs:41-48`.
 - **BLD-8: tsconfig pitfalls.** `Low–Medium` · `Confirmed`
   - The root `tsconfig.json` has `"noEmit": false` and `"declaration": true` but no `outDir`. A bare `tsc` writes `.js` and `.d.ts` files beside the sources.
   - The type gate doesn't cover `api/`, `e2e/`, `build/`, `scripts/`, the Vite configs or any test. ESLint now lints them, but lint is not type-checking.
@@ -788,21 +788,15 @@ This revision re-checked every item from the 1.77.0 pass:
 - **BLD-10: Override drift.** `Low` · `Confirmed`
   - `overrides` pin exact versions of `vite`, `rollup`, `postcss` and `picomatch`, plus a `katex` range. The exact pins block patch updates.
   - `postcss` and `picomatch` are direct dependencies of Vite 8.1.5, and `rollup` reaches `workbox-build`.
-  - Vercel now installs with `--frozen-lockfile`, like CI.
+  - Vercel now installs with `--frozen-lockfile`, like the verify gate.
   - Evidence: `package.json:221-227`, `vercel.json:5`.
 
-### 8.7 Tests and CI
+### 8.7 Tests
 
 **Inventory:**
 - 196 Vitest files; a run executes 2,126 tests. No `.skip`, `.only`, `.todo` or `.fails`.
-- 12 e2e suites. CI runs 10 of them on every pull request and push to `main`; `stress` runs on pushes only, and `perf` never runs in CI. There are also 28 hand-run probes.
-- The CI `verify` job runs, in order:
-  - lint, tsc and the unit tests
-  - `build:app`
-  - the CSP-hash test against the built `index.html`
-  - the sourcemap strip
-  - `build` and `build:embed`
-- The `e2e` job builds all three outputs, installs Chromium and runs the suites one after another. The `e2e-engines` job runs harness, surfaces, surfaces-deep, dataloss and floor on Firefox and WebKit (A100).
+- 12 e2e suites; `bun run e2e` runs all but `perf`. There are also 28 hand-run probes.
+- There is no CI: the whole gate is run by hand before a PR is opened and merged ([workflows.md ▸ Verify gate and deploys](docs/workflows.md#verify-gate-and-deploys)). Harness, surfaces, surfaces-deep, dataloss and floor also run on Firefox and WebKit (A100).
 
 **Findings:**
 
@@ -812,17 +806,11 @@ This revision re-checked every item from the 1.77.0 pass:
   - Since A108, sixteen behavioural suites (`behave-*.test.jsx`) mount the real editor and judge outcomes by storage, both panes, toasts and downloads. Coverage over all of `src/` is 81.8% of lines (71.2% before them); `PerssonifyEditor` with `src/editor/` went from 46% to 85%.
   - Evidence: `src/__tests__/persistence-remount.test.jsx`, `persistence-import-content.test.jsx`, `hydration-guard.test.js:91`.
 - **TST-2: Two e2e suites can pass without testing anything.** `Medium` · `Confirmed`
-  - The `library` and `bridge` suites exit green with zero checks when their build output is missing. CI builds both first, so the false green happens only locally.
+  - The `library` and `bridge` suites exit green with zero checks when their build output is missing. Nothing builds them first automatically, so build all three outputs before `bun run e2e`.
   - Evidence: `e2e/cases/library.mjs:28-31`, `e2e/cases/bridge.mjs:18-21`, `e2e/lib.mjs:457`.
 - **TST-3: Vitest does not define the app version.** `Low` · `Confirmed`
   - Tests see `VERSION = "1.4.0"`. The coverage scope is fixed (A108).
   - Evidence: `vitest.config.js:12-27`, `src/constants.ts:31-32`.
-- **TST-4: CI workflow issues.** `Low` · `Confirmed`
-  - A comment says stress runs "on a schedule", but there is no `schedule:` trigger. It runs on pushes to `main`.
-  - The failure-artifact step uploads nothing: `E2E_JSON` is never set, and nothing writes to `e2e/artifacts`.
-  - There is no Node setup step (Bun is pinned now).
-  - Suites run one after another, so the first failure hides the rest.
-  - Evidence: `.github/workflows/ci.yml:17-21, 153-170`.
 - **TST-5: Tests that can't fail, or no longer describe the code.** `Low` · `Confirmed`
   - The starter-documents test hard-codes the Welcome title (UI-1).
   - The shortcut-coverage test checks only 8 of the table's 34 rows, and only by string presence. Its ninth key, "Indent / Outdent", matches no row (the row is "Indent / Outdent list item"). Behavioural chord tests were added beside it.
@@ -862,7 +850,7 @@ This revision re-checked every item from the 1.77.0 pass:
   - the devDependency `rollup` (imported nowhere) and a `vaul` match left in `vite.chunks.ts:89`
 - **Orphaned files:**
   - `public/site.webmanifest`: not linked from anywhere, and its colours differ from the PWA manifest.
-  - `scripts/live-preview-walkthrough.mjs`: no script or workflow runs it.
+  - `scripts/live-preview-walkthrough.mjs`: nothing runs it.
 
 ### 8.9 Comments and config vs code
 
@@ -922,6 +910,7 @@ Drift in the Markdown docs themselves (README, `docs/`, `CLAUDE.md` and the rest
 | BLD-6 | The library build's minifier might not be installed | Fixed (9d26809; now oxc) |
 | BLD-9 | Lazy dependencies ended up in eager chunks | A084 |
 | BLD-11 | The credits list was out of date | A077 (a licence notice generated from the build) |
+| TST-4 | CI workflow issues | Moot: the CI workflows have been removed |
 
 ---
 
@@ -931,14 +920,14 @@ Drift in the Markdown docs themselves (README, `docs/`, `CLAUDE.md` and the rest
 2. **Relay runtime.** The repo does not pin the Vercel function's Node version; `docs/import-relay.md` asks an owner to. Does the userland undici 7 `Agent` work as a `dispatcher` for that runtime's built-in `fetch`? The tests stub `fetch`.
 3. **Autosave timing.** Which is intended: a save 5 s after the first unsaved edit (current code) or after an idle pause?
 4. **Welcome title.** Should the Welcome document be pinned as "Welcome", or should the starter documents link to `[[Markdown Studio]]` (UI-1)?
-5. **Hidden settings.** `docs/deployment.md` lists branch protection, Vercel Deployment Checks and Vercel's Bun version as owner settings (A005, A014); `docs/import-relay.md` adds the function's Node version. Whether any of them is set cannot be seen from the repo.
+5. **Hidden settings.** `docs/deployment.md` lists branch protection and Vercel's Bun version as owner settings (A005, A014); `docs/import-relay.md` adds the function's Node version. Whether any of them is set cannot be seen from the repo.
 6. **History claims.** This repository's history starts at the 1.77.0 import (`0fed016`). The commits the docs cite (`84d7099` auth removal, `41e831e…` import point, `2e29275`) belong to the predecessor repository and can't be checked here.
 7. **Missing doc.** Where did `docs/migration-markdown-studio.md` go (`.gitignore:11-12`), and how is the marketing-kit zip regenerated?
 8. **Browser support.** Answered (A097): the floor is Safari/iOS 16.4, Chrome/Edge 111 and Firefox 128, which is what Tailwind v4 needed anyway. Below it `index.html` and `embed.html` show a message instead of loading the app, so the lookbehind still in the lazily loaded Find & Replace chunk (`src/ui/find/findReplace/index.tsx:132`) is above the floor.
 9. **Editor settings.** Is the `js/ts.tsdk.path` key in `.vscode/settings.json` intended? The long-standing key is `typescript.tsdk`.
 
 Answered since 1.77.0:
-- **Publishing:** `publish.yml` publishes from CI only, once an owner has claimed the scope (A006).
+- **Publishing:** an owner publishes by hand, once the scope is claimed (A006; `docs/deployment.md`).
 - **Remounting:** supported, one editor per page (A024, A106).
 - **Relay access:** a bounded proxy, with the platform limits as owner setup (A010).
 - **Authoring-only nodes:** deprecated (A105).
