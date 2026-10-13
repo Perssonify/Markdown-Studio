@@ -106,6 +106,7 @@ If Markdown Studio is useful to you, a star helps other people find it.
 ## Everyone who has contributed
 
 <a href="https://github.com/SyedMoin-Lab" title="SyedMoin-Lab"><img src="https://images.weserv.nl/?url=github.com/SyedMoin-Lab.png&w=128&h=128&fit=cover&mask=circle" width="64" height="64" alt="SyedMoin-Lab"></a>
+<a href="https://github.com/claude" title="Claude"><img src="https://images.weserv.nl/?url=github.com/claude.png&w=128&h=128&fit=cover&mask=circle" width="64" height="64" alt="Claude"></a>
 <a href="https://github.com/Perssonify/Markdown-Studio/graphs/contributors"><img src="https://images.weserv.nl/?url=contrib.rocks%2Fimage%3Frepo%3DPerssonify%2FMarkdown-Studio&output=png&maxage=1d" alt="People who have contributed to Markdown Studio"></a>
 
 ## License
