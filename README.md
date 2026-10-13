@@ -88,6 +88,9 @@ Contributions are welcome, and most fixes need only the editor running, no backe
 2. Read [CONTRIBUTING.md](CONTRIBUTING.md), especially the house rules that keep people's notes safe.
 3. Before you open a pull request, run `bun run lint && bun run typecheck && bun run test`.
 
+> [!TIP]
+> **Using AI is welcome.** Claude Code, Cursor, Copilot or any other assistant can help you fix an issue here. Point it at [`CLAUDE.md`](CLAUDE.md) and [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md) so it follows the same rules we do. Just own the result: read every line, run the tests yourself, and mention in your pull request that AI helped.
+
 Questions go in [issues](https://github.com/Perssonify/Markdown-Studio/issues), security reports go through [SECURITY.md](SECURITY.md), and everyone here follows our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Star history
