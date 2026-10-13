@@ -1,0 +1,39 @@
+# Lets contributors claim issues and frees up claims nobody is working on.
+#
+#   On a "good first issue":  the contributor comments /assign-me
+#   On anything else:         a maintainer comments /assign @username
+#   Giving up:                /unassign-me
+#
+# A claim with no activity is released after 7 days, with a reminder halfway.
+# Add the "📌 Pinned" label to an issue to keep its assignee (bigger issues).
+# Each person can hold one good first issue and two issues overall at a time.
+#
+# Copy to .github/workflows/issue-assignment.yml. Edit `maintainers` to the
+# GitHub usernames allowed to run /assign and /unassign.
+name: Issue assignment
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  assign:
+    if: github.event_name != 'issue_comment' || !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: takanome-dev/assign-issue-action@v3.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          maintainers: "SyedMoin-Lab,Syed-Perssonify"
+          required_label: "good first issue"
+          allow_self_assign_author: false
+          days_until_unassign: 7
+          max_assignments: 2
+          max_overall_assignment_labels: "good first issue"
+          max_overall_assignment_count: 1

@@ -1,0 +1,36 @@
+# Greets people on their first issue and first pull request.
+# Copy to .github/workflows/welcome.yml.
+#
+# pull_request_target is used so the greeting also works on pull requests from
+# forks. It is safe here: this job never checks out or runs the pull request's code.
+name: Welcome
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  greet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@v3.1.0
+        with:
+          issue_message: |
+            Thanks for opening your first issue here! A maintainer will take a look soon.
+
+            Looking for something to work on? Start with the pinned welcome issue and the [good first issues](https://github.com/Perssonify/Markdown-Studio/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+          pr_message: |
+            Thanks for your first pull request! 🎉 A maintainer will review it soon.
+
+            While you wait, please check that:
+            - the description links the issue it fixes (`Closes #123`)
+            - `bun run lint && bun run typecheck && bun run test && bun run build` passes
+            - if an AI assistant helped, the pull request says so
+
+            The [contributing guide](https://github.com/Perssonify/Markdown-Studio/blob/main/CONTRIBUTING.md) has the details.
