@@ -1,7 +1,7 @@
 <div align="center">
 
 <a href="https://markdownstudio.com">
-  <img src="apps/web/public/brand/markdown.webp" alt="Markdown Studio logo" width="88" height="88">
+  <img src="apps/web/public/brand/markdown.webp" alt="Markdown Studio logo" width="288" height="288">
 </a>
 
 <h1>Markdown Studio</h1>
