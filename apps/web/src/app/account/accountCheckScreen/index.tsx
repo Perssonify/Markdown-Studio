@@ -2,8 +2,8 @@ import { useT } from "@/i18n";
 
 /**
  * Shown while the app asks whether the visitor is signed in (at most
- * SESSION_CHECK_TIMEOUT_MS), so neither the editor nor the sign-in screen
- * flashes up before the answer is known.
+ * SESSION_CHECK_TIMEOUT_MS), so the editor does not open on the wrong library
+ * (signed out, or a signed-in account's) before the answer is known.
  */
 export function AccountCheckScreen({ message }: { message?: string }) {
   const t = useT();

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { setAccountVersions } from "@/store/history/account-versions";
 import { assetStore } from "@/store/assets/asset-store";
+import type { DocumentSummary } from "@/store/documents/document";
 import { IndexedDBStorageAdapter } from "@/store/persistence/idb-storage-adapter";
 import { snapshotStore } from "@/store/history/snapshot-store";
 import { recordFullBackup } from "@/store/persistence/storage-durability";
@@ -10,6 +11,7 @@ import { safeStorage } from "../../utils/safe-storage";
 import { CloudError, httpAccountArchive, httpCloudApi } from "./api";
 import { backedUpToday, backUpToAccount, type BackupDeps, type BackupOutcome } from "./backup";
 import { SyncEngine } from "./engine";
+import { untouchedStarterIds, withoutNotes } from "./starters";
 import { accountVersionsProvider } from "./versions";
 
 /**
@@ -98,9 +100,36 @@ function makeEngine(userId: string, announce: (e: TabSyncEvent[]) => void): Sync
 }
 
 /**
+ * The first sign-in in a browser that was used signed out: when the account
+ * already has notes, the first-visit notes seeded here (still untouched) are
+ * removed instead of uploaded, so each device does not add its own Welcome,
+ * Getting started and Changelog to the account. They were never in the
+ * account, so nothing is deleted there. Everything the visitor wrote stays and
+ * syncs. Returns how many notes the library still holds.
+ */
+async function dropStarterCopies(storage: IndexedDBStorageAdapter, docs: DocumentSummary[]): Promise<number> {
+  const starters = untouchedStarterIds(docs);
+  if (starters.size === 0) return docs.length;
+  try {
+    const state = await httpCloudApi.state();
+    if (!state.documents.some((d) => !d.deleted)) return docs.length; // the account's first device: keep them
+    for (const id of starters) await storage.delete(id);
+    const prefs = await storage.getPrefs();
+    const active = prefs["lastActiveDocId"];
+    await storage.setPrefs({
+      folderTree: withoutNotes(prefs["folderTree"], starters),
+      ...(typeof active === "string" && starters.has(active) ? { lastActiveDocId: null } : {}),
+    });
+    return docs.length - starters.size;
+  } catch {
+    return docs.length; // offline or failing: keep everything, sync merges later
+  }
+}
+
+/**
  * Before the editor opens for a signed-in visitor: claim this browser's library
  * for the account (or refuse, if another account owns it), and when the
- * library here is EMPTY — a new device, or a browser that wiped its storage —
+ * library here is EMPTY (a new device, or a browser that wiped its storage)
  * bring the account's documents down first, so the editor opens on them rather
  * than seeding the starter notes as if this were a first visit.
  */
@@ -110,14 +139,15 @@ export async function prepareCloudLibrary(userId: string): Promise<"ready" | "bl
     setPhase("blocked");
     return "blocked";
   }
-  if (!owner) safeStorage.set(OWNER_KEY, userId);
   const storage = new IndexedDBStorageAdapter();
   let empty = false;
   try {
-    empty = (await storage.list()).length === 0;
+    const docs = await storage.list();
+    empty = (owner ? docs.length : await dropStarterCopies(storage, docs)) === 0;
   } catch {
     /* unreadable: let the editor report it */
   }
+  if (!owner) safeStorage.set(OWNER_KEY, userId);
   if (!empty) return "ready";
   setPhase("preparing");
   try {

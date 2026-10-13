@@ -12,6 +12,9 @@ import { App } from "../App";
 import { AccountMenu } from "../app/account/accountMenu";
 import { initialsOf } from "../app/account/accountAvatar";
 import { AccountBackups } from "../app/account/accountBackups";
+import { SignInNudge } from "../app/account/signInNudge";
+import { useCloudStatus } from "../app/cloud";
+import { useDocumentStore } from "../store/documents/documentStore";
 import { LoginPage } from "../ui/pages/loginPage";
 import { ProfilePage } from "../ui/pages/profilePage";
 
@@ -142,10 +145,58 @@ describe("the menu-bar control", () => {
 
     await openMenu(screen.getByRole("button", { name: `Account: ${USER.name}` }));
     fetchMock.mockResolvedValueOnce(json({ success: true }));
-    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /Sign out/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" })); });
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/sign-out", expect.objectContaining({ method: "POST" }));
     expect(useAccount.getState().status).toBe("signed-out");
     expect(screen.getByRole("button", { name: "Sign in with Google" })).toBeTruthy();
+  });
+
+  // For a shared computer: sign out AND remove the notes from this browser. Only
+  // once the account holds every change, and only after a confirmation.
+  describe("Sign out and remove notes from this browser", () => {
+    afterEach(() => {
+      useCloudStatus.setState({ phase: "off", lastSyncedAt: null });
+      useDocumentStore.setState({ saveStatus: "ready" });
+    });
+    const item = () => screen.getByRole("menuitem", { name: /remove notes from this browser/ });
+
+    it("waits until every change is synced to the account", async () => {
+      signedIn();
+      useCloudStatus.setState({ phase: "syncing" });
+      render(<AccountMenu onSignIn={() => {}} onProfile={() => {}} />);
+      await openMenu(screen.getByRole("button", { name: `Account: ${USER.name}` }));
+      expect(item().getAttribute("aria-disabled")).toBe("true");
+    });
+
+    it("asks first, then signs out, erases this browser's library and starts over", async () => {
+      signedIn();
+      useCloudStatus.setState({ phase: "synced" });
+      render(<AccountMenu onSignIn={() => {}} onProfile={() => {}} />);
+      await openMenu(screen.getByRole("button", { name: `Account: ${USER.name}` }));
+      await act(async () => { fireEvent.click(item()); });
+      expect(fetchMock).not.toHaveBeenCalled(); // nothing before the confirmation
+      localStorage.setItem("pf:cloud-owner", USER.id);
+      fetchMock.mockResolvedValueOnce(json({ success: true }));
+      await act(async () => { fireEvent.click(await screen.findByRole("button", { name: "Sign out and remove" })); });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/sign-out", expect.objectContaining({ method: "POST" }));
+      expect(localStorage.getItem("pf:cloud-owner")).toBeNull();
+      expect(go).toHaveBeenCalledWith("/");
+    });
+
+    it("removes nothing when sign-out fails", async () => {
+      signedIn();
+      useCloudStatus.setState({ phase: "synced" });
+      localStorage.setItem("pf:cloud-owner", USER.id);
+      render(<AccountMenu onSignIn={() => {}} onProfile={() => {}} />);
+      await openMenu(screen.getByRole("button", { name: `Account: ${USER.name}` }));
+      await act(async () => { fireEvent.click(item()); });
+      fetchMock.mockResolvedValueOnce(json({}, 500));
+      await act(async () => { fireEvent.click(await screen.findByRole("button", { name: "Sign out and remove" })); });
+      expect(useAccount.getState().status).toBe("signed-in");
+      expect(localStorage.getItem("pf:cloud-owner")).toBe(USER.id);
+      expect(go).not.toHaveBeenCalled();
+      localStorage.removeItem("pf:cloud-owner");
+    });
   });
 
   // Google's picture is, for most accounts, its own coloured letter, which
@@ -194,6 +245,14 @@ describe("the sign-in page", () => {
     render(<LoginPage onClose={() => {}} onProfile={() => {}} />);
     expect(screen.getByRole("status").textContent).toMatch(/isn’t available/);
     expect(screen.queryByRole("button", { name: /Continue with Google/ })).toBeNull();
+  });
+
+  it("always offers a way back: signing in is optional", () => {
+    signedOut();
+    const onClose = vi.fn();
+    render(<LoginPage onClose={onClose} onProfile={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue without signing in" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("points a signed-in visitor to their profile", () => {
@@ -286,9 +345,10 @@ describe("accounts are the standalone app's alone", () => {
   });
 });
 
-// The app is for signed-in visitors wherever accounts exist; where they do not,
-// or the account service does not answer, it is the editor it always was.
-describe("the sign-in gate", () => {
+// Signing in is optional: every visitor gets the editor, and signing in adds
+// sync and the daily backup. Where accounts do not exist, or the account
+// service does not answer, there is no account UI at all.
+describe("accounts in the app", () => {
   it("is on for the dev server and VITE_ACCOUNTS=on, off for other builds and for tests", () => {
     expect(accountsEnabled({ DEV: true, MODE: "development" })).toBe(true);
     expect(accountsEnabled({ DEV: false, MODE: "production", VITE_ACCOUNTS: "on" })).toBe(true);
@@ -307,12 +367,12 @@ describe("the sign-in gate", () => {
   };
   afterEach(() => vi.unstubAllEnvs());
 
-  it("shows a signed-out visitor the sign-in screen, and no editor", async () => {
+  it("opens the editor for a signed-out visitor, with Sign in in the header", async () => {
     fetchMock.mockResolvedValue(json(null));
     const { container } = await renderApp();
-    expect(await screen.findByRole("button", { name: /Continue with Google/ }, { timeout: 10_000 })).toBeTruthy();
-    expect(container.querySelector('[data-tour="menubar"]')).toBeNull();
-    expect(screen.queryByRole("button", { name: /Back to editor/ })).toBeNull(); // nothing behind it to go back to
+    expect(await screen.findByRole("button", { name: "Sign in with Google" }, { timeout: 10_000 })).toBeTruthy();
+    expect(container.querySelector('[data-tour="menubar"]')).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Continue with Google/ })).toBeNull(); // no sign-in screen in the way
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/get-session", expect.anything());
   }, 30_000);
 
@@ -322,4 +382,58 @@ describe("the sign-in gate", () => {
     expect(screen.getByText("Checking your account…")).toBeTruthy();
     expect(container.querySelector('[data-tour="menubar"]')).toBeNull();
   }, 30_000);
+});
+
+// The invitation to sign in: only once the visitor has notes of their own, a
+// minute later, and "Not now" keeps it away for a week.
+describe("the sign-in nudge", () => {
+  const at = (s) => new Date(Date.UTC(2026, 9, 13, 7, 0, 0) + s * 1000).toISOString();
+  const doc = (id, title, created, updated = created) => ({ id, title, created: at(created), updated: at(updated), wordCount: 1, tags: [], hasResiduals: false, originFormat: "markdown" });
+  const firstVisit = [doc("w", "Markdown Studio", 0, 0.6), doc("c", "Changelog", 0.9), doc("g", "Getting started", 1)];
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    useDocumentStore.setState({ documents: [] });
+    localStorage.removeItem("pf:sign-in-nudge-dismissed-at");
+  });
+  const wait = (ms) => act(async () => { vi.advanceTimersByTime(ms); });
+
+  it("stays away on a first visit, with only the first-visit notes", async () => {
+    signedOut();
+    useDocumentStore.setState({ documents: firstVisit });
+    render(<SignInNudge onSignIn={() => {}} />);
+    await wait(120_000);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("appears a minute after the visitor's first own note, and opens sign-in", async () => {
+    signedOut();
+    useDocumentStore.setState({ documents: [...firstVisit, doc("mine", "My plan", 300, 400)] });
+    const onSignIn = vi.fn();
+    render(<SignInNudge onSignIn={onSignIn} />);
+    await wait(30_000);
+    expect(screen.queryByRole("status")).toBeNull();
+    await wait(30_000);
+    expect(screen.getByRole("status").textContent).toMatch(/saved in this browser only/);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(onSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes away with Not now, for a week", async () => {
+    signedOut();
+    useDocumentStore.setState({ documents: [...firstVisit, doc("mine", "My plan", 300, 400)] });
+    render(<SignInNudge onSignIn={() => {}} />);
+    await wait(60_000);
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(Number(localStorage.getItem("pf:sign-in-nudge-dismissed-at"))).toBeGreaterThan(0);
+  });
+
+  it.each([["signed-in"], ["unavailable"]])("is never shown %s", async (status) => {
+    useAccount.setState({ status, user: status === "signed-in" ? { ...USER } : null });
+    useDocumentStore.setState({ documents: [...firstVisit, doc("mine", "My plan", 300, 400)] });
+    render(<SignInNudge onSignIn={() => {}} />);
+    await wait(120_000);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });
