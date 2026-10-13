@@ -2,6 +2,7 @@ import { CreateBucketCommand, PutBucketVersioningCommand, S3Client } from "@aws-
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadEnv } from "../../src/config/env/index.ts";
 import { assertKey, createStorage, storageFromEnv, type Storage } from "../../src/lib/storage/index.ts";
+import { setupStorage } from "../../src/lib/storage/setup.ts";
 import { testApp } from "../fixtures/index.ts";
 
 describe("storage keys", () => {
@@ -73,7 +74,8 @@ describe("storage settings", () => {
 // `bun run db:up` starts it (TEST_S3_ENDPOINT in apps/api/.env.example). Each
 // run makes its own bucket, so parallel runs never share objects.
 const endpoint = process.env.TEST_S3_ENDPOINT;
-const keys = { accessKeyId: "local", secretAccessKey: "local" };
+// The local server takes any keys; a MinIO or other server of your own needs its real ones.
+const keys = { accessKeyId: process.env.TEST_S3_ACCESS_KEY_ID ?? "local", secretAccessKey: process.env.TEST_S3_SECRET_ACCESS_KEY ?? "local" };
 
 describe.skipIf(!endpoint)("storage against S3", () => {
   const bucket = `markdown-studio-test-${process.pid}-${Date.now()}`;
@@ -125,5 +127,30 @@ describe.skipIf(!endpoint)("storage against S3", () => {
   it("/health reports the bucket up", async () => {
     const res = await testApp({}, { pingStorage: () => storage.ping() }).request("/health");
     expect(await res.json()).toMatchObject({ status: "ok", storage: "up" });
+  });
+});
+
+describe.skipIf(!endpoint)("storage:setup against S3", () => {
+  const bucket = `markdown-studio-setup-${process.pid}-${Date.now()}`;
+  const options = { bucket, region: "us-east-1", endpoint, forcePathStyle: true, credentials: keys, origins: ["http://localhost:5173"] };
+
+  it("creates a missing bucket, switches on versioning and passes a real signed upload", async () => {
+    const results = await setupStorage(options);
+    const status = Object.fromEntries(results.map((r) => [r.step, r.status]));
+    expect(status).toMatchObject({ Bucket: "ok", Versioning: "ok", "Signed upload": "ok" });
+    expect(results.find((r) => r.step === "Bucket")?.detail).toMatch(/^created/);
+    expect(results.some((r) => r.status === "fail")).toBe(false);
+  });
+
+  it("is safe to run again on the same bucket", async () => {
+    const results = await setupStorage(options);
+    expect(results.find((r) => r.step === "Bucket")?.detail).toMatch(/exists$/);
+    expect(results.some((r) => r.status === "fail")).toBe(false);
+  });
+
+  it("stops at the bucket when the server cannot be reached", async () => {
+    const results = await setupStorage({ ...options, endpoint: "http://127.0.0.1:9" });
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ step: "Bucket", status: "fail" });
   });
 });
