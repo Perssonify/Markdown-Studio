@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { gatedShareProps, useShareGate } from "@/editor/share-gate";
+import { gatedShareProps, ShareHelpIcon, ShareHint, useShareGate } from "@/editor/share-gate";
 import type { DocumentSummary } from "@/store/documents/document";
 import { useUIStore } from "@/store/preferences/uiStore";
 import {
@@ -402,10 +402,13 @@ function DocMenuBody({
       />
       {onExportDoc && <ExportDocSubmenu F={F} docId={docId} onExportDoc={onExportDoc} />}
       {onShareDoc && (
-        <F.Item className={cn(shareGate && "cursor-not-allowed opacity-50")} {...gatedShareProps(shareGate)} onClick={() => onShareDoc(docId)}>
-          <Share2Icon className="mr-2 size-3.5" />
-          {t("library.shareLink")}
-        </F.Item>
+        <ShareHint text={shareGate} side="right">
+          <F.Item className={cn(shareGate && "cursor-not-allowed")} {...gatedShareProps(shareGate)} onClick={() => onShareDoc(docId)}>
+            <Share2Icon className={cn("mr-2 size-3.5", shareGate && "opacity-50")} />
+            <span className={cn(shareGate && "opacity-50")}>{t("library.shareLink")}</span>
+            {shareGate && <ShareHelpIcon className="ml-auto" />}
+          </F.Item>
+        </ShareHint>
       )}
       <F.Separator />
       <F.Item className="text-destructive focus:text-destructive" onClick={() => onDelete(docId)}>
@@ -470,10 +473,13 @@ function FolderMenuBody({
         </>
       )}
       {onShareFolder && (
-        <F.Item className={cn(shareGate && "cursor-not-allowed opacity-50")} {...gatedShareProps(shareGate)} onClick={() => onShareFolder(folder.id)}>
-          <Share2Icon className="mr-2 size-3.5" />
-          {t("library.shareLink")}
-        </F.Item>
+        <ShareHint text={shareGate} side="right">
+          <F.Item className={cn(shareGate && "cursor-not-allowed")} {...gatedShareProps(shareGate)} onClick={() => onShareFolder(folder.id)}>
+            <Share2Icon className={cn("mr-2 size-3.5", shareGate && "opacity-50")} />
+            <span className={cn(shareGate && "opacity-50")}>{t("library.shareLink")}</span>
+            {shareGate && <ShareHelpIcon className="ml-auto" />}
+          </F.Item>
+        </ShareHint>
       )}
       <F.Separator />
       <F.Item

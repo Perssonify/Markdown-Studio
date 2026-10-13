@@ -1123,9 +1123,11 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   **Making** a share link needs an account: App passes PE's `shareDisabledReason`
   ("Sign in to share…") while signed out, and every share control (the menu bar's
   Share button beside the document title, "Copy share link" on notes and folders)
-  reads it through `editor/share-gate.ts`: greyed out with the reason on hover, and
-  choosing one shows the reason instead of copying. `aria-disabled`, not `disabled`:
-  a disabled element gets no hover and no tooltip. The library and the embed never
+  reads it through `editor/share-gate.tsx`: greyed out with a ? icon, the reason in
+  the app's tooltip (`ShareHint`, shadcn / Base UI) on hover and focus and in
+  `aria-description`, and choosing one (a tap on a phone) shows the reason as a toast
+  instead of copying. `aria-disabled`, not `disabled`: a disabled element gets no
+  hover and no tooltip. The library and the embed never
   set it, so sharing there is unchanged.
   `/login` shows the full sign-in screen (`SignInScreen`) over the editor, with
   "Continue without signing in". `SignInNudge` (a bar under the header) invites a

@@ -623,7 +623,7 @@ function PerssonifyEditorInstance({
     engine, syncMode, getCanonical, toast, toastRef, autosaveRef, exportDocsRef,
   });
   // Sharing behind `shareDisabledReason` (the app: signed out): every share
-  // control says why instead of copying a link (share-gate.ts).
+  // control says why instead of copying a link (share-gate.tsx).
   const shareDoc = useCallback((docId: string) => {
     if (shareDisabledReason) toast.show(shareDisabledReason, "info");
     else void handleShareDoc(docId);

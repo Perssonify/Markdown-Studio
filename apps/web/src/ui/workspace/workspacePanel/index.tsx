@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { gatedShareProps, useShareGate } from "@/editor/share-gate";
+import { gatedShareProps, ShareHelpIcon, ShareHint, useShareGate } from "@/editor/share-gate";
 import { useDocumentStore } from "@/store/documents/documentStore";
 import { useFolderStore } from "@/store/documents/folders";
 import type { OutlineHeading } from "@/store/documents/doc-outline";
@@ -920,7 +920,13 @@ function FlatDocList({
                 </DropdownMenuSub>
               )}
               {onShareDoc && (
-                <DropdownMenuItem className={cn(shareGate && "cursor-not-allowed opacity-50")} {...gatedShareProps(shareGate)} onClick={() => onShareDoc(doc.id)}><Share2Icon />{t("library.shareLink")}</DropdownMenuItem>
+                <ShareHint text={shareGate} side="right">
+                  <DropdownMenuItem className={cn(shareGate && "cursor-not-allowed")} {...gatedShareProps(shareGate)} onClick={() => onShareDoc(doc.id)}>
+                    <Share2Icon className={cn(shareGate && "opacity-50")} />
+                    <span className={cn(shareGate && "opacity-50")}>{t("library.shareLink")}</span>
+                    {shareGate && <ShareHelpIcon className="ml-auto" />}
+                  </DropdownMenuItem>
+                </ShareHint>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(doc.id)}>

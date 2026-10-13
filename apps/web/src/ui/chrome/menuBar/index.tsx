@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { APP_NAME, MODES, VERSION } from "@/constants";
 import { ChevronLeft, ChevronRight, FileText, Menu as MenuIcon, Network, PenLine, SettingsIcon, Share2, StickyNote } from "lucide-react";
-import { gatedShareProps, useShareGate } from "@/editor/share-gate";
+import { gatedShareProps, ShareHelpIcon, ShareHint, useShareGate } from "@/editor/share-gate";
 import { useTheme } from "next-themes";
 import React, { type ReactNode, useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -608,22 +608,25 @@ export const MenuBar = React.memo(function MenuBar(props: MenuBarProps) {
           </div>
         )}
         {/* Share the open document, in plain sight: it used to live only in each
-            note's ⋮ menu. Greyed out, with the reason on hover, while sharing is
-            unavailable (share-gate.ts: the app, signed out). */}
+            note's ⋮ menu. While sharing is unavailable (share-gate.tsx: the app,
+            signed out) it is greyed out, a ? says there is an explanation, and
+            the app's tooltip gives it. */}
         {props.onShare && (
-          <Button
-            data-tour="share"
-            variant="outline"
-            size="sm"
-            className={cn("h-8 gap-1.5 px-2 pointer-coarse:min-h-9 pointer-coarse:min-w-9", shareGate && "cursor-not-allowed opacity-50")}
-            title={t("menu.shareTitle")}
-            aria-label={t("menu.share")}
-            {...gatedShareProps(shareGate)}
-            onClick={props.onShare}
-          >
-            <Share2 className="size-4" />
-            <span className="hidden text-xs tracking-tight whitespace-nowrap sm:inline-block">{t("menu.share")}</span>
-          </Button>
+          <ShareHint text={shareGate ?? t("menu.shareTitle")}>
+            <Button
+              data-tour="share"
+              variant="outline"
+              size="sm"
+              className={cn("h-8 gap-1.5 px-2 pointer-coarse:min-h-9 pointer-coarse:min-w-9", shareGate && "cursor-not-allowed")}
+              aria-label={t("menu.share")}
+              {...gatedShareProps(shareGate)}
+              onClick={props.onShare}
+            >
+              <Share2 className={cn("size-4", shareGate && "opacity-50")} />
+              <span className={cn("hidden text-xs tracking-tight whitespace-nowrap sm:inline-block", shareGate && "opacity-50")}>{t("menu.share")}</span>
+              {shareGate && <ShareHelpIcon />}
+            </Button>
+          </ShareHint>
         )}
         {props.activeDocId && <div className="hidden h-5 w-px bg-border md:block" aria-hidden />}
         <span data-tour="mode-switcher">

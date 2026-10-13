@@ -378,7 +378,8 @@ describe("accounts in the app", () => {
     // (It appears once the editor has a document open: under a loaded test run that can take a while.)
     const share = await screen.findByRole("button", { name: "Share" }, { timeout: 30_000 });
     expect(share.getAttribute("aria-disabled")).toBe("true");
-    expect(share.getAttribute("title")).toBe("Sign in to share links to your notes and folders.");
+    expect(share.getAttribute("aria-description")).toBe("Sign in to share links to your notes and folders.");
+    expect(share.querySelector("svg.lucide-circle-question-mark, svg.lucide-circle-help")).toBeTruthy(); // the ? that says "hover me"
   }, 60_000);
 
   it("waits for the answer instead of flashing the editor", async () => {
