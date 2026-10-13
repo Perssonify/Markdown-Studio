@@ -72,13 +72,15 @@ accurately is more persuasive than selling it.
 | "Hard to lose work" | Autosave, blank-save backstop, per-document undo, snapshot version history, multi-tab conflict detection, a persistent-storage request and a backup reminder |
 | "Export anywhere" | Markdown, HTML, DOCX, PDF, JSON per document; full-library ZIP that re-imports intact |
 | "Embeddable" | React component and iframe embed with a postMessage bridge; pluggable storage |
-| "Free and open source" | MIT licensed |
+| "Free for non-commercial use" | Source-available under CC BY-NC 4.0; commercial use needs a license |
 
 ## Claims you must not make
 
 - Real-time collaboration, comments, presence, sharing a live document
 - Cloud sync, cross-device continuity, "access anywhere"
 - AI writing, summarising or autocomplete
+- "Open source" or "MIT licensed": it is source-available under CC BY-NC 4.0
+  (code published before the switch stays MIT)
 - Encryption of stored documents (they are stored in ordinary browser storage)
 - Absolutes about the network: "your data never leaves your device", "nothing
   leaves your browser", "nothing is uploaded", "nothing you write is uploaded",

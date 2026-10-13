@@ -18,7 +18,7 @@ stays clean enough to commit.
 **What matters to them:** syntax-highlighted Markdown pane · Mermaid and LaTeX
 that round-trip · fenced code blocks · front matter · scoped Find &
 Replace (only headings, only code) · GitHub-flavoured callouts and task lists ·
-export straight to Markdown · MIT licensed and embeddable.
+export straight to Markdown · source-available (CC BY-NC 4.0) and embeddable.
 
 **Proof line:** The canonical document is a structured model, not a string —
 which is why your `**bold**` never drifts to `__bold__` and your tables don't
@@ -85,8 +85,8 @@ other sites load from those sites, and Settings ▸ Privacy can block them.
 **What matters to them:** documents stored only in the browser · no account ·
 no analytics or tracking · remote images can be blocked · works offline ·
 installable as an app · one-click full-library export so *you* hold the backups ·
-version history and undo held locally · erase all local data in one step · open
-source, MIT licensed.
+version history and undo held locally · erase all local data in one step ·
+source-available under CC BY-NC 4.0.
 
 **Proof line:** There is no server copy of your documents to leak — a stronger
 guarantee than any privacy policy.
@@ -109,7 +109,7 @@ internal tools and 3D scenes.
 
 **What matters to them:** React component *and* iframe embed · postMessage
 bridge · pluggable storage adapter · chrome and theme control · TypeScript types ·
-MIT licence · no backend to run.
+CC BY-NC 4.0 (commercial use needs a license) · no backend to run.
 
 **Proof line:** Bring your own storage adapter — it doesn't assume your
 persistence looks anything like ours.

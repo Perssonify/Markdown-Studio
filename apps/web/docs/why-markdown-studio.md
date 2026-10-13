@@ -51,7 +51,7 @@ server copy of your work, no subscription wall — open the tab and write.
 | **No lock-in** | Your content is portable Markdown/HTML/JSON/DOCX. Export anytime; nothing is trapped. |
 | **No accounts, no server copy** | Documents are stored only in your browser. No backend stores or reads them; the one piece of server code is an opt-in relay that fetches a link you import and passes the file straight back. |
 | **No lost work** | A six-layer data-loss defence plus version history means an accidental overwrite or delete is recoverable — and the app asks the browser to keep your library and reminds you to back it up. |
-| **No cost of entry** | Open-source (MIT), free, offline-capable, installable as an app. |
+| **No cost of entry** | Source-available (CC BY-NC 4.0), free for non-commercial use, offline-capable, installable as an app. |
 | **No busywork** | Import a `.docx`, a URL, or a whole ZIP archive and keep writing. |
 
 ---
@@ -161,7 +161,7 @@ server copy of your work, no subscription wall — open the tab and write.
 > **Markdown Studio is what a Markdown editor should have been all along:** write in
 > raw Markdown or rich text — whichever you feel like, in the same document, at the
 > same time — link your notes into a living knowledge graph, drop in math and diagrams,
-> and export to anything. It's free, open-source, works offline, and keeps your
+> and export to anything. It's free for non-commercial use, source-available, works offline, and keeps your
 > documents on your own device. No account. No server copy. No lock-in. Just open it
 > and write.
 
@@ -170,7 +170,7 @@ server copy of your work, no subscription wall — open the tab and write.
 ## Quick facts for a landing page / one-pager
 
 - **Category:** Markdown editor + personal knowledge base
-- **Price:** Free & open-source (MIT)
+- **Price:** Free for non-commercial use; source-available under CC BY-NC 4.0
 - **Runs:** In any modern browser; works offline after the first visit; installable
   as a PWA
 - **Privacy:** Documents stored only in your browser — no account, no analytics or
