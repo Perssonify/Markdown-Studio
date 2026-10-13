@@ -4,17 +4,14 @@
  *
  * `engines.node` said `^20.19.0 || >=22.12.0` — Vite 8's range — while ESLint
  * 10 needs `^20.19.0 || ^22.13.0 || >=24`, so the manifest admitted Node
- * 22.12 on which `bun run lint` refuses to start. CI never chose a Node at all:
- * every job ran the runner image's default, so a new image could move the gate
- * to a version outside the range without a line changing here.
+ * 22.12 on which `bun run lint` refuses to start.
  *
- * Now `.node-version` names the major CI runs, every workflow job installs it
- * with `actions/setup-node`, and `engines.node` is checked against what every
- * direct dependency INSTALLED here declares: any Node the range admits must be
- * one each tool admits too. Upgrading a tool that needs a newer Node turns this
- * red and names the tool.
+ * Now `.node-version` names the major to develop on, and `engines.node` is
+ * checked against what every direct dependency INSTALLED here declares: any
+ * Node the range admits must be one each tool admits too. Upgrading a tool
+ * that needs a newer Node turns this red and names the tool.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -23,8 +20,8 @@ const ROOT = process.cwd();
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 const RANGE = pkg.engines?.node ?? "";
 const read = (p) => readFileSync(join(ROOT, p), "utf8").replace(/\r\n/g, "\n");
-// The frontend is apps/web of the monorepo: `.node-version`, the workflows and
-// the hoisted node_modules sit at the repository root, two levels up.
+// The frontend is apps/web of the monorepo: `.node-version` and the hoisted
+// node_modules sit at the repository root, two levels up.
 const REPO = join(ROOT, "..", "..");
 
 // ── a minimal semver, enough for the engines ranges in this tree ────────────
@@ -122,37 +119,11 @@ describe("engines.node is the toolchain's range", () => {
   });
 });
 
-describe("CI runs a Node inside that range, and every job chooses it", () => {
+describe("`.node-version` names a Node inside that range", () => {
   const pinned = read("../../.node-version").trim();
 
-  it("`.node-version` names a major the range admits at its newest patch", () => {
+  it("names a major the range admits at its newest patch", () => {
     expect(pinned).toMatch(/^\d+$/);
     expect(satisfies(`${pinned}.999.0`, RANGE)).toBe(true);
-  });
-
-  const workflows = readdirSync(join(REPO, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f));
-  const jobsOf = (text) => {
-    const body = text.slice(text.indexOf("\njobs:\n") + 7);
-    return body.split(/\n(?= {2}[a-z0-9_-]+:\n)/).filter((b) => /^ {2}[a-z0-9_-]+:\n/.test(b));
-  };
-
-  it("finds the jobs it checks (the check is not vacuous)", () => {
-    const toolchainJobs = workflows.flatMap((f) => jobsOf(read(`../../.github/workflows/${f}`))).filter((j) => /bun install/.test(j));
-    expect(toolchainJobs.length).toBeGreaterThanOrEqual(5); // verify, react18, e2e, e2e-engines, publish
-  });
-
-  it.each(workflows)("%s: every job that installs the toolchain sets up Node from .node-version", (file) => {
-    const missing = [];
-    for (const job of jobsOf(read(`../../.github/workflows/${file}`))) {
-      const name = job.match(/^ {2}([a-z0-9_-]+):/)[1];
-      // A job that installs the dependencies runs them (Vite, Vitest, ESLint,
-      // the e2e rig) on Node — even through `bunx`, which honours their
-      // `#!/usr/bin/env node`. The uptime probe only runs curl.
-      if (!/bun install/.test(job)) continue;
-      if (!/uses: actions\/setup-node@[0-9a-f]{40}/.test(job) || !/node-version-file: \.node-version/.test(job)) {
-        missing.push(name);
-      }
-    }
-    expect(missing).toEqual([]);
   });
 });

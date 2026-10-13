@@ -17,8 +17,8 @@
  * build/finish-declarations.mjs repairs the emitted files; the rewrite itself
  * is pinned here without a build, and the BUILT check compiles a consumer with
  * `skipLibCheck: false` under both resolutions. Like pkg-cjs-require.test.js,
- * the built check runs when a CURRENT dist/ exists — CI re-runs this file after
- * `bun run build`, and the publish workflow before publishing.
+ * the built check runs when a CURRENT dist/ exists — re-run this file after
+ * `bun run build`, and always before publishing to npm.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
@@ -201,7 +201,7 @@ function typeCheck(moduleResolution) {
 describe("a consumer compiles against the built declarations with skipLibCheck off (when a current dist/ exists)", () => {
   for (const resolution of ["bundler", "nodenext"]) {
     it(`moduleResolution: ${resolution}`, () => {
-      if (!currentDeclarations()) return; // CI re-runs this file after `bun run build`
+      if (!currentDeclarations()) return; // re-run this file after `bun run build`
       const { status, errors } = typeCheck(resolution);
       expect(errors).toEqual([]);
       expect(status).toBe(0);

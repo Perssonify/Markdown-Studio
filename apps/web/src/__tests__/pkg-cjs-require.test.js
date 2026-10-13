@@ -22,8 +22,8 @@
  *    entry is `__esModule` (import the named export instead);
  *  - the BUILT check requires every CJS entry, through the package's own
  *    exports map, in a separate Node process, and compares what each exposes
- *    with its ES twin. It runs when a CURRENT dist/ exists — CI re-runs this
- *    file after `bun run build`, and the publish workflow before publishing.
+ *    with its ES twin. It runs when a CURRENT dist/ exists — re-run this
+ *    file after `bun run build`, and always before publishing to npm.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -102,7 +102,7 @@ function newestInput() {
   return newest;
 }
 
-/** A dist/ built from the current inputs, or null (CI re-runs this file after the build). */
+/** A dist/ built from the current inputs, or null (re-run this file after the build). */
 function currentDist() {
   const cjs = Object.values(ENTRIES).map((e) => join(ROOT, "dist", `${e}.cjs`));
   if (!cjs.every(existsSync)) return null;
@@ -124,7 +124,7 @@ function esExportNames(file) {
 
 describe("the built CommonJS entries load in plain Node (checked when a current dist/ exists)", () => {
   it("every exports-map `require` target loads, and exposes what its ES twin exports", () => {
-    if (!currentDist()) return; // CI re-runs this file after `bun run build`
+    if (!currentDist()) return; // re-run this file after `bun run build`
     const MARK = "@@pf-cjs-result@@";
     // A separate process: vitest's own module system is not what a consumer's
     // `require` goes through. The package's own name resolves through its

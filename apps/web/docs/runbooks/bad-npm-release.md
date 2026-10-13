@@ -1,14 +1,13 @@
 # Runbook — Bad npm Release (`@perssonify/editor`)
 
-Releases are published by `.github/workflows/publish.yml` when a `vX.Y.Z` tag is
-pushed: it checks the tag against `package.json`, runs the type check, the unit
-tests and the library build, then `npm publish --provenance --access public`
-behind the `npm` GitHub environment ([deployment.md ▸ Publishing](../deployment.md#publishing-the-npm-package)).
+Releases are published by hand by an owner, from the commit tagged `vX.Y.Z`:
+the verify gate, the library build and its built-package checks,
+`npm pack --dry-run`, then `npm publish --access public` from `apps/web`
+([deployment.md ▸ Publishing](../deployment.md#publishing-the-npm-package)).
 
-Nothing can be published that way until an owner claims the `@perssonify` scope
-on npm, turns on 2FA for it, stores `NPM_TOKEN` (or sets up trusted
-publishing) and creates the `npm` environment (A006). Until then, any version
-that appears under that name was not published by this project.
+Nothing can be published until an owner claims the `@perssonify` scope on npm
+and turns on 2FA for it (A006). Until then, any version that appears under that
+name was not published by this project.
 
 ## Symptoms
 - Consumers report a broken install, missing files (`dist/`), a crash on
@@ -16,20 +15,18 @@ that appears under that name was not published by this project.
   do not resolve. (Every formula rendering twice, unstyled, is not a bad
   release: the consumer has not imported `katex/dist/katex.min.css`, which the
   library does not bundle — see the README's Install section.)
-- The published tarball differs from what `npm pack --dry-run` showed in the
-  workflow log.
-- A version appears on npm that no workflow run published (compromised token).
+- The published tarball differs from what `npm pack --dry-run` showed before
+  publishing.
+- A version appears on npm that no owner published (compromised account or token).
 
 ## Diagnosis
 ```bash
 npm view @perssonify/editor versions --json        # what is out there
 npm view @perssonify/editor@X.Y.Z dist             # tarball + integrity
-npm audit signatures                               # provenance: which workflow + commit built it
 npm pack @perssonify/editor@X.Y.Z && tar -tzf perssonify-editor-X.Y.Z.tgz | head   # contents
 ```
-A version **without provenance**, or with provenance pointing somewhere other
-than this repository's Publish workflow, was not published by CI — treat it as
-a compromise ([security-incident.md](security-incident.md)).
+A version that no owner published was not published by this project — treat it
+as a compromise ([security-incident.md](security-incident.md)).
 
 ## Remediation
 - **Broken but harmless**: publish a fixed patch release (bump `package.json`,
@@ -40,16 +37,16 @@ a compromise ([security-incident.md](security-incident.md)).
   never be reused, so the fix still needs a new version.
 - **Wrong dist-tag** (e.g. a pre-release became `latest`):
   `npm dist-tag add @perssonify/editor@<good> latest`.
-- **Compromised token or account**: revoke the token (npm ▸ Access Tokens),
-  remove `NPM_TOKEN` from the repository secrets, rotate, check the org's
-  members and 2FA, deprecate every version CI did not publish, and move to npm
-  *trusted publishing* so no long-lived token exists.
+- **Compromised token or account**: revoke any token (npm ▸ Access Tokens),
+  rotate the owner's credentials, check the org's members and 2FA, and
+  deprecate every version no owner published.
 
 ## Prevention
-- Only CI publishes. Nobody runs `npm publish` from a laptop.
-- Owner setup: the `npm` environment requires a reviewer before the job runs;
-  the org requires 2FA; the publish token is scoped to this package.
-- `npm pack --dry-run` in the workflow log is the record of what shipped.
+- Only an owner publishes, by hand, after the verify gate passes on the tagged
+  commit.
+- Owner setup: the org requires 2FA; no publish token is stored in the
+  repository.
+- `npm pack --dry-run` before every publish shows exactly what will ship.
 
 ## Escalation
 The npm org owner(s) and the repository admins.

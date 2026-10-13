@@ -238,7 +238,7 @@ the relay cannot be used to read a response it just refused to hand over.
 
 ## Running and testing it
 
-### The unit tests (what CI runs)
+### The unit tests (part of the verify gate)
 
 ```bash
 bun run test src/__tests__/import-relay.test.js
@@ -449,4 +449,4 @@ Everything else in `api/import.js` is implementation.
 - [architecture.md](architecture.md) — where the relay sits in the whole system
 - [data-pipeline.md](data-pipeline.md) — what happens to the bytes after they arrive
 - [../SECURITY.md](../../../SECURITY.md) — reporting a vulnerability
-- [workflows.md](workflows.md) — CI, deployment, what runs on a PR
+- [workflows.md](workflows.md) — the verify gate, deployment, what to run before a PR

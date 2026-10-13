@@ -52,7 +52,7 @@ On top of editing, it provides:
 | Area | Technology | Declared (`package.json`) | Resolved (`bun.lock`) | Notes |
 |---|---|---|---|---|
 | Language | TypeScript, strict mode | `^6.0.3` | 6.0.3 | 6.0 is the newest release every tool here can use; TypeScript 7 type-checks the project but has no JavaScript API for typescript-eslint yet ([workflows.md ▸ TypeScript 7](docs/workflows.md#typescript-7)). Only `src/` is type-checked (`tsconfig.json:38`). Tests, e2e, `api/`, `build/` and `scripts/` are plain JS. `noImplicitAny` is on; `src/types/` holds declarations for untyped packages (turndown). |
-| UI runtime | React, React DOM | dev `^19.3.0`, peer `^18.3.0 \|\| ^19.0.0` | 19.3.0 | `@types/react` / `@types/react-dom` are `^19.3.0` (19.3.0 / 19.3.0), matching the runtime. CI's `react18` job re-runs the type gate and the unit suite on React 18.3.1 and its types, for library consumers still on 18. |
+| UI runtime | React, React DOM | dev `^19.3.0`, peer `^18.3.0 \|\| ^19.0.0` | 19.3.0 | `@types/react` / `@types/react-dom` are `^19.3.0` (19.3.0 / 19.3.0), matching the runtime. The type gate and the unit suite must also pass on React 18.3.1 and its types, for library consumers still on 18 (the local check is in [workflows.md](docs/workflows.md#verify-gate-and-deploys)). |
 | Rich-text engine | TipTap 3 (ProseMirror via `@tiptap/pm`) | every `@tiptap/*` package at `3.31.3` (dev), peer `^3.31.3` | 3.31.3 | One version across the set, pinned by `pkg-lockfile.test.js`. `@tiptap/extension-list` is declared. |
 | Markdown pane | CodeMirror 6, `@lezer/highlight` | view `^6.39.14`, state `^6.5.4`, lang-markdown `^6.5.0`, commands, search, language | 6.39.14, 6.5.4, 6.5.0 | Peers of the library. |
 | Markdown → HTML | marked, marked-emoji, marked-footnote | `^18.0.14`, `^2.0.3`, `^1.4.0` | 18.0.14, 2.0.3, 1.4.0 | Configured per instance in `src/engine/build-marked.ts`. Wiki links are a marked inline extension (`src/engine/wiki-link-marked.ts`). `breaks: true` is always on. |
@@ -67,8 +67,8 @@ On top of editing, it provides:
 | Lint | ESLint (flat config), typescript-eslint, eslint-plugin-react-hooks | `^10.11.0`, `^8.71.0`, `^7.1.1` | 10.11.0 | `bun run lint`: zero errors required, warnings allowed. |
 | Browser tests | Custom Node runner, playwright-core (Chromium; Firefox and WebKit for five suites) | `1.62.1` | 1.62.1 | In `e2e/`. |
 | Server code | One Vercel Node function using `undici` | `^7.30.0` (a dependency) | 7.30.0 | `api/import.js` |
-| Tooling | Bun 1.4.0 as package manager (`packageManager`; CI pins the same); Node | engines: `^20.19.0` or `>=22.12.0` | — | `bun.lock` is committed and installed with `--frozen-lockfile` in CI and on Vercel. `bun run` executes Vite with Node. |
-| Hosting and CI | Vercel (static SPA plus one function), GitHub Actions | — | — | `vercel.json`; `.github/workflows/ci.yml`, `publish.yml`, `uptime.yml` |
+| Tooling | Bun 1.4.0 as package manager (`packageManager`); Node | engines: `^20.19.0` or `>=22.12.0` | — | `bun.lock` is committed and installed with `--frozen-lockfile` by the verify gate and on Vercel. `bun run` executes Vite with Node. |
+| Hosting | Vercel (static SPA plus one function); no CI | — | — | `vercel.json` |
 
 ---
 
@@ -79,8 +79,8 @@ On top of editing, it provides:
 | Product | Entry chain | Build → output | How it ships |
 |---|---|---|---|
 | **Standalone app** | `index.html` → `src/main.tsx` (fonts, palette, diagnostics capture, prompted service-worker updates, `ThemeProvider`) → `src/App.tsx` (router, URL params, remote-image policy, tour) → `PerssonifyEditor` | `bun run build:app` → `dist-app/`, with a PWA service worker and `third-party-licenses.txt` | Vercel runs `bun run build:app && node scripts/strip-sourcemaps.mjs` and serves `dist-app/` (`vercel.json:2-5`). |
-| **Iframe embed** | `embed.html` → `src/embed.tsx` (URL params; `allowedOrigins` from `src/integration/embed-origins.ts`) → `PerssonifyEditorIntegration` → `PerssonifyEditor` | `bun run build:embed` → `dist-embed/index.html`, relative base, no service worker | Built in CI. **Not deployed by this repo** (see API-5). |
-| **npm library** | `src/index.tsx`, plus the `./engine`, `./store` and `./integration` entries | `bun run build` → `dist/` (ES + CJS + `.d.ts` + `styles.css`); dependencies and peers stay external | `.github/workflows/publish.yml` publishes on a `vX.Y.Z` tag, with provenance, behind the `npm` environment. Claiming the `@perssonify` scope, 2FA and the token are owner actions (A006). |
+| **Iframe embed** | `embed.html` → `src/embed.tsx` (URL params; `allowedOrigins` from `src/integration/embed-origins.ts`) → `PerssonifyEditorIntegration` → `PerssonifyEditor` | `bun run build:embed` → `dist-embed/index.html`, relative base, no service worker | Built by `bun run build:embed`. **Not deployed by this repo** (see API-5). |
+| **npm library** | `src/index.tsx`, plus the `./engine`, `./store` and `./integration` entries | `bun run build` → `dist/` (ES + CJS + `.d.ts` + `styles.css`); dependencies and peers stay external | Published by hand by an owner (`npm publish` from `apps/web`, after the verify gate — [deployment.md ▸ Publishing](docs/deployment.md#publishing-the-npm-package)). Claiming the `@perssonify` scope and 2FA are owner actions (A006). |
 
 ### 3.2 How the parts communicate
 
@@ -332,7 +332,7 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 | `docs/` | Engineering docs, `deployment.md`, `decisions.md` and `runbooks/`. Start at `docs/README.md`. |
 | `public/` | Icons, `brand/` images used by the Welcome document, `sw-recover.js`, `third-party-licenses.txt`, `.well-known/security.txt`, and an orphaned `site.webmanifest` |
 | `marketing/` | Product copy kit, not code |
-| `.github/` | CI, publish and uptime workflows, Dependabot, PR template, issue forms |
+| `.github/` | PR template, issue forms, README screenshots |
 | Root files | `package.json`, `bun.lock`, `vite*.ts`, `vitest.config.js`, `eslint.config.js`, `tsconfig*.json`, `vercel.json`, `components.json`, `index.html`, `embed.html`, `.gitattributes`, plus `CLAUDE.md`, `HANDOVER.md`, `PRODUCT.md`, `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`, `LICENSE` |
 
 ---
@@ -355,7 +355,7 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 | 12 | `src/integration/PerssonifyEditorIntegration.tsx`, `src/integration/host-bridge.ts`, `src/integration/embed-origins.ts` | The public API, the iframe protocol and who the embed will talk to. |
 | 13 | `src/main.tsx`, `src/App.tsx`, `src/embed.tsx`, `index.html`, `src/pwa/sw-updates.ts` | Boot, routing, URL params, the boot watchdog and updates. |
 | 14 | `api/import.js` | The only server code, and it is internet-facing. |
-| 15 | `package.json`, `vite.config.ts`, `vite.app.config.ts`, `vercel.json`, `.github/workflows/ci.yml`, `e2e/README.md` | How the project is built, tested and deployed. |
+| 15 | `package.json`, `vite.config.ts`, `vite.app.config.ts`, `vercel.json`, `docs/workflows.md`, `e2e/README.md` | How the project is built, tested and deployed. |
 
 ---
 
@@ -475,7 +475,7 @@ A few fixes are applied as records and prefs are read:
 
 ### 7.1 Prerequisites
 
-- **Bun 1.4.0**, the version that produced `bun.lock` (`packageManager` in `package.json`; CI pins the same).
+- **Bun 1.4.0**, the version that produced `bun.lock` (`packageManager` in `package.json`).
 - **Node `^20.19.0` or `>=22.12.0`.** Vite 8 runs on Node even when started with `bun run`, and the e2e runner is plain Node.
 - **Chromium**, for e2e only. Install it through playwright-core (below) or point `E2E_CHROME` at an existing binary. Firefox and WebKit are needed only to run the engine suites locally (`E2E_BROWSER=firefox|webkit`).
 
@@ -484,7 +484,7 @@ A few fixes are applied as records and prefs are read:
 All scripts are defined in `package.json:75-98`.
 
 ```bash
-bun install --frozen-lockfile  # what CI and Vercel run
+bun install --frozen-lockfile  # what the verify gate and Vercel run
 bun run dev                  # standalone app at http://localhost:5173 (vite.app.config.ts)
 bun run lint                 # ESLint; must report 0 errors (warnings are allowed)
 bunx tsc --noEmit            # type gate; always pass --noEmit (see BLD-8)
@@ -502,7 +502,7 @@ bun run preview              # serve dist-app/
 
 ```bash
 bun run build:app && bun run build:embed && bun run build
-bunx playwright-core install chromium        # CI (Linux) adds --with-deps; add firefox webkit for E2E_BROWSER
+bunx playwright-core install chromium        # Linux may need --with-deps; add firefox webkit for E2E_BROWSER
 bun run e2e                                  # every suite except perf
 bun run e2e:harness   # also: e2e:smoke, e2e:deep, e2e:dataloss, e2e:library, e2e:bridge,
                       #       e2e:journeys, e2e:faults, e2e:stress, e2e:csp, e2e:pwa, e2e:perf
@@ -512,7 +512,7 @@ Before trusting an e2e result, know two runner behaviours:
 - `e2e/run.mjs` refuses to start without `dist-app/index.html`. Any console error fails a case.
 - The `library` and `bridge` suites **pass with zero checks** if `dist/` or `dist-embed/` is missing (TST-2).
 
-**Pre-PR gate** (the same as CI, `.github/workflows/ci.yml`):
+**Pre-PR gate** (there is no CI — run it before opening a PR and again before merging it):
 - `bun run lint`
 - `bunx tsc --noEmit`
 - `bun run test`
