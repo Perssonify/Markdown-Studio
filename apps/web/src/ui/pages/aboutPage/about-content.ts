@@ -50,7 +50,8 @@ const en: AboutContent = {
     "These are the highlights. The complete list of open-source software in this build, with every licence and notice text, is in the <link>third-party licences</link>.",
   diagnostics:
     "Copy a diagnostics report and include it when you get in touch. It lists recent errors, the app version and your browser — never the contents of your documents.",
-  footer: "© {app} · Made with 💗 by Perssonify. All trademarks and licenses belong to their respective owners.",
+  footer:
+    "© {app} · Made with 💗 by <perssonify>Perssonify</perssonify> & <virallens>Virallens</virallens>. All trademarks and licenses belong to their respective owners.",
 };
 
 /** About-page prose per interface language (English required). */

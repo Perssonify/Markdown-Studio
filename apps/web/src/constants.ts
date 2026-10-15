@@ -17,6 +17,9 @@ export const APP_BRAND = "labs.perssonify";
 /** Public home of the product. */
 export const APP_DOMAIN = "markdownstudio.com";
 export const APP_URL = `https://${APP_DOMAIN}`;
+/** The companies behind the product, credited on the About page. */
+export const PERSSONIFY_URL = "https://perssonify.com";
+export const VIRALLENS_URL = "https://virallens.com";
 /**
  * Where the product lived before the move to APP_DOMAIN. Browser storage is
  * per-ORIGIN, so libraries created there stay there: a visitor on this host is

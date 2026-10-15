@@ -19,7 +19,7 @@ export const pages = {
   "pages.noHelpMatches": "No help topics match “{query}”. Try a different word.",
   "pages.aboutTitle": "About {app}",
   "pages.aboutVersion": "Version {version} · <b>{brand}</b>",
-  "pages.madeWith": "Made with {heart} by Perssonify",
+  "pages.madeWith": "Made with {heart} by <perssonify>Perssonify</perssonify> & <virallens>Virallens</virallens>",
   "pages.love": "love",
   "pages.builtWithOpenSource": "Built with open source",
   "pages.creditsPackage": "Package",

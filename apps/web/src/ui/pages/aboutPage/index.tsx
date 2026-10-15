@@ -1,10 +1,20 @@
 import { FileText, Heart, Shield, WifiOff } from "lucide-react";
-import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, VERSION } from "@/constants";
+import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, PERSSONIFY_URL, VERSION, VIRALLENS_URL } from "@/constants";
 import { CREDITS, LICENSE_SUMMARY, THIRD_PARTY_NOTICES_PATH } from "@/data/credits";
 import { PageChrome } from "../pageChrome";
 import { CopyDiagnosticsButton } from "@/ui/diagnostics/diagnosticsActions";
 import { localizedContent, renderRich, useT } from "@/i18n";
 import { ABOUT_CONTENT } from "./about-content";
+
+/** Links for the `<perssonify>` and `<virallens>` spans in the credit line. */
+function companyLinks(className: string) {
+  const link = (href: string) => (name: string) => (
+    <a href={href} target="_blank" rel="noreferrer" className={className}>
+      {name}
+    </a>
+  );
+  return { perssonify: link(PERSSONIFY_URL), virallens: link(VIRALLENS_URL) };
+}
 
 interface AboutPageProps {
   onClose: () => void;
@@ -39,7 +49,10 @@ export function AboutPage({ onClose }: AboutPageProps) {
             {t.rich("pages.aboutVersion", { version: VERSION, b: (s) => <span className="font-medium">{s}</span>, brand: APP_BRAND })}
           </p>
           <p className="mt-4 inline-flex items-center gap-1.5 text-base font-medium">
-            {t.rich("pages.madeWith", { heart: <Heart className="size-4 fill-rose-500 text-rose-500" aria-label={t("pages.love")} /> })}
+            {t.rich("pages.madeWith", {
+              heart: <Heart className="size-4 fill-rose-500 text-rose-500" aria-label={t("pages.love")} />,
+              ...companyLinks("text-primary-strong hover:underline"),
+            })}
           </p>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
             {copy.intro}
@@ -141,7 +154,7 @@ export function AboutPage({ onClose }: AboutPageProps) {
         </section>
 
         <footer className="mt-12 border-t border-border pt-6 text-center text-xs text-muted-foreground">
-          {renderRich(copy.footer, { app: APP_NAME })}
+          {renderRich(copy.footer, { app: APP_NAME, ...companyLinks("hover:text-foreground hover:underline") })}
           <span className="mt-2 block">
             <a href={THIRD_PARTY_NOTICES_PATH} target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
               {t("pages.thirdPartyLicences")}
