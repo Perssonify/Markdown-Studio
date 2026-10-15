@@ -41,6 +41,7 @@ import {
   FileTextIcon,
   FolderDownIcon,
   FolderIcon,
+  FilePlusIcon,
   FolderPlusIcon,
   HashIcon,
   MoreVerticalIcon,
@@ -84,6 +85,7 @@ interface FolderTreeProps {
   /** Copy a self-contained share link for one document / a folder subtree. */
   onShareDoc?: (docId: string) => void;
   onShareFolder?: (folderId: string) => void;
+  onNewDocInFolder?: (folderId: string) => void;
   /** Confirm before deleting a folder. Resolves true to proceed. When omitted,
    *  deletion proceeds without confirmation (kept optional for tests). */
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
@@ -427,6 +429,7 @@ function FolderMenuBody({
   startRename,
   onExportFolder,
   onShareFolder,
+  onNewDocInFolder,
   confirmDeleteFolder,
 }: {
   F: MenuFam;
@@ -435,6 +438,7 @@ function FolderMenuBody({
   startRename: () => void;
   onExportFolder?: (folderId: string, opts?: { canonical?: boolean }) => void;
   onShareFolder?: (folderId: string) => void;
+  onNewDocInFolder?: (folderId: string) => void;
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
 }) {
   const t = useT();
@@ -444,6 +448,12 @@ function FolderMenuBody({
   const deleteFolder = useFolderStore((s) => s.deleteFolder);
   return (
     <>
+      {onNewDocInFolder && (
+        <F.Item onClick={() => onNewDocInFolder(folder.id)}>
+          <FilePlusIcon className="mr-2 size-3.5" />
+          {t("library.newDocument")}
+        </F.Item>
+      )}
       <F.Item onClick={() => createFolder("New Folder", folder.id, { startNaming: true })}>
         <FolderPlusIcon className="mr-2 size-3.5" />
         {t("library.newSubfolder")}
@@ -1031,6 +1041,7 @@ export function FolderTree(props: FolderTreeProps) {
         startRename={() => setRenamingKey(folderRowKey(payload.id))}
         onExportFolder={props.onExportFolder}
         onShareFolder={props.onShareFolder}
+        onNewDocInFolder={props.onNewDocInFolder}
         confirmDeleteFolder={props.confirmDeleteFolder}
       />
     );

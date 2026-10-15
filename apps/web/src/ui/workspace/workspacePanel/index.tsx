@@ -87,6 +87,7 @@ export interface WorkspacePanelProps {
   onExportDoc?: (docId: string, format: "md" | "html" | "docx" | "json") => void;
   onShareDoc?: (docId: string) => void;
   onShareFolder?: (folderId: string) => void;
+  onNewDocInFolder?: (folderId: string) => void;
   onSearchBody?: (docId: string, lowerQuery: string) => boolean;
 
   // ── Outline ───────────────────────────────────────────────────────────────
@@ -156,6 +157,7 @@ function WorkspacePanelInner({
   onExportDoc,
   onShareDoc,
   onShareFolder,
+  onNewDocInFolder,
   onSearchBody,
   headings,
   activeIndex,
@@ -334,6 +336,7 @@ function WorkspacePanelInner({
           onExportDoc={onExportDoc}
           onShareDoc={onShareDoc}
           onShareFolder={onShareFolder}
+          onNewDocInFolder={onNewDocInFolder}
           onSearchBody={onSearchBody}
         />
       )}
@@ -359,6 +362,7 @@ function FilesTab({
   onExportDoc,
   onShareDoc,
   onShareFolder,
+  onNewDocInFolder,
   onSearchBody,
 }: Pick<
   WorkspacePanelProps,
@@ -373,6 +377,7 @@ function FilesTab({
   | "onExportDoc"
   | "onShareDoc"
   | "onShareFolder"
+  | "onNewDocInFolder"
   | "onSearchBody"
 >) {
   const t = useT();
@@ -632,6 +637,7 @@ function FilesTab({
             onExportDoc={onExportDoc}
             onShareDoc={onShareDoc}
             onShareFolder={onShareFolder}
+            onNewDocInFolder={onNewDocInFolder}
             confirmDeleteFolder={confirmDeleteFolder}
             scrollRef={listScrollRef}
           />

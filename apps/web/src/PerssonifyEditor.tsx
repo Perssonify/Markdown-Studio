@@ -628,6 +628,14 @@ function PerssonifyEditorInstance({
     if (shareDisabledReason) toast.show(shareDisabledReason, "info");
     else void handleShareDoc(docId);
   }, [shareDisabledReason, toast, handleShareDoc]);
+  // A new note straight inside a folder (the folder's ⋮ menu): created like
+  // any new note, then filed under the folder, which opens to show it.
+  const handleNewDocInFolder = useCallback(async (folderId: string) => {
+    const before = useDocumentStore.getState().activeDocId;
+    await handleNewDoc();
+    const created = useDocumentStore.getState().activeDocId;
+    if (created && created !== before) useFolderStore.getState().moveDoc(created, folderId);
+  }, [handleNewDoc]);
   const shareFolder = useCallback((folderId: string) => {
     if (shareDisabledReason) toast.show(shareDisabledReason, "info");
     else void handleShareFolder(folderId);
@@ -820,6 +828,7 @@ function PerssonifyEditorInstance({
                   onExportDoc={handleExportDoc}
                   onShareDoc={shareDoc}
                   onShareFolder={shareFolder}
+                  onNewDocInFolder={handleNewDocInFolder}
                   onSearchBody={searchDocBody}
                   headings={docNavHeadings}
                   activeIndex={activeHeadingIndex}
