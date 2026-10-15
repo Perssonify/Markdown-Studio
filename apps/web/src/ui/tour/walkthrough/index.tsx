@@ -35,6 +35,12 @@ const shareIsGated = () =>
   document.querySelector('[data-tour="share"]')?.getAttribute("aria-disabled") === "true";
 
 const STEPS: TourStep[] = [
+  // First: signing in is what the app offers on top of the editor.
+  {
+    selector: '[data-tour="account"]',
+    get title() { return signedIn() ? t("tour.accountTitle") : t("tour.signInTitle"); },
+    get body() { return signedIn() ? t("tour.accountBody") : t("tour.signInBody"); },
+  },
   {
     selector: '[data-tour="menus"]',
     get title() { return t("tour.menuBarTitle"); },
@@ -48,11 +54,6 @@ const STEPS: TourStep[] = [
     selector: '[data-tour="share"]',
     get title() { return t("tour.shareTitle"); },
     get body() { return shareIsGated() ? t("tour.shareBodySignIn") : t("tour.shareBody"); },
-  },
-  {
-    selector: '[data-tour="account"]',
-    get title() { return signedIn() ? t("tour.accountTitle") : t("tour.signInTitle"); },
-    get body() { return signedIn() ? t("tour.accountBody") : t("tour.signInBody"); },
   },
   {
     selector: '[data-tour="mode-switcher"]',
