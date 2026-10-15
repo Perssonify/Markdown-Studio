@@ -13,7 +13,7 @@
  * with every existing install. Renaming them orphans people's documents.
  */
 export const APP_NAME = "Markdown Studio";
-export const APP_BRAND = "labs.perssonify";
+export const APP_BRAND = "Perssonify Labs";
 /** Public home of the product. */
 export const APP_DOMAIN = "markdownstudio.com";
 export const APP_URL = `https://${APP_DOMAIN}`;
