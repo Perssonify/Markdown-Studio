@@ -104,10 +104,15 @@ export function Walkthrough({ run, onFinish }: WalkthroughProps) {
     onFinish();
   }, [onFinish]);
 
-  // Reset to the first step whenever the tour (re)starts.
-  useEffect(() => {
+  // Reset to the first step whenever the tour (re)starts. During render, not in
+  // an effect: an effect's setIndex(0) landed AFTER the resolver below had
+  // skipped a missing first target (the Sign in button, absent where the app
+  // has no accounts), so the tour sat on a step with nothing to show.
+  const [wasRunning, setWasRunning] = useState(run);
+  if (run !== wasRunning) {
+    setWasRunning(run);
     if (run) setIndex(0);
-  }, [run]);
+  }
 
   /** Focus the step card, and hand focus back where it came from when the tour
    *  ends — a tour that opens with focus still on the button you clicked leaves
