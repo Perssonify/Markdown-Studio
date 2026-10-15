@@ -85,6 +85,7 @@ export function AccountMenu({ onSignIn, onProfile }: AccountMenuProps) {
   if (status === "signed-out") {
     return (
       <Button
+        data-tour="account"
         variant="ghost"
         size="sm"
         className="h-8 gap-1.5 px-2 pointer-coarse:min-h-9 pointer-coarse:min-w-9"
@@ -106,6 +107,7 @@ export function AccountMenu({ onSignIn, onProfile }: AccountMenuProps) {
       <DropdownMenuTrigger
         render={
           <Button
+            data-tour="account"
             variant="ghost"
             size="icon"
             className="size-8 rounded-full p-0 pointer-coarse:size-9"

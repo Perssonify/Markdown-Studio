@@ -24,6 +24,12 @@ const isPhoneViewport = () => typeof window !== "undefined" && window.innerWidth
 
 // Sharing needs an account where the app has one: the Share button is greyed
 // out then (share-gate.tsx), and the step says why instead of promising a link.
+// The account control: "Sign in" while signed out, the account's initials once
+// signed in. Absent where the app has no accounts, so the step is skipped there.
+const signedIn = () =>
+  typeof document !== "undefined" &&
+  document.querySelector('[data-tour="account"]')?.hasAttribute("aria-haspopup") === true;
+
 const shareIsGated = () =>
   typeof document !== "undefined" &&
   document.querySelector('[data-tour="share"]')?.getAttribute("aria-disabled") === "true";
@@ -42,6 +48,11 @@ const STEPS: TourStep[] = [
     selector: '[data-tour="share"]',
     get title() { return t("tour.shareTitle"); },
     get body() { return shareIsGated() ? t("tour.shareBodySignIn") : t("tour.shareBody"); },
+  },
+  {
+    selector: '[data-tour="account"]',
+    get title() { return signedIn() ? t("tour.accountTitle") : t("tour.signInTitle"); },
+    get body() { return signedIn() ? t("tour.accountBody") : t("tour.signInBody"); },
   },
   {
     selector: '[data-tour="mode-switcher"]',
