@@ -37,7 +37,7 @@
     },
     "apps/web": {
       "name": "@perssonify/editor",
-      "version": "1.77.0",
+      "version": "1.78.0",
       "dependencies": {
         "@zip.js/zip.js": "^2.8.34",
         "abcjs": "^6.6.4",

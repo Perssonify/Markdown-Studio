@@ -113,5 +113,7 @@ describe("A083 — linear conversion is byte-identical to turndown's", () => {
       expect(turndownLinear(td, html)).toBe(td.turndown(html));
       expect(turndownLinear(td, html, 7)).toBe(td.turndown(html));
     }
-  });
+    // Its own budget: ~1 s alone, but several times that with the whole suite
+    // running beside it, past the 5 s default.
+  }, 30_000);
 });

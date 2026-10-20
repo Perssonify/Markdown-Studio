@@ -2,7 +2,7 @@ import type { Database } from "@markdown-studio/db";
 import { schema } from "@markdown-studio/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono, type Context } from "hono";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { z } from "zod";
 import type { Storage } from "../../../lib/storage/index.ts";
@@ -11,7 +11,8 @@ import type { Storage } from "../../../lib/storage/index.ts";
  * /api/sync — each signed-in user's library in the cloud: documents, the
  * images in them, and the folder tree.
  *
- *   GET    /api/sync/state                  every document's revision (tombstones too) + the folder tree
+ *   GET    /api/sync/state?since=           every document's revision (tombstones too) + the folder tree,
+ *                                           and its `version` — or { unchanged } when that is still `since`
  *   GET    /api/sync/documents/:id          one document (gzip JSON)
  *   PUT    /api/sync/documents/:id          store one   { base, record }   (gzip JSON body)
  *   DELETE /api/sync/documents/:id?base=&at= delete one (kept as a tombstone)
@@ -24,6 +25,9 @@ import type { Storage } from "../../../lib/storage/index.ts";
  *   POST   /api/sync/backups/upload         a presigned upload for one day's backup ZIP
  *   GET    /api/sync/backups                the backups kept
  *   GET    /api/sync/backups/:date          a presigned download of one
+ *   PUT    /api/sync/published/:docId       publish (or update) a document's live share { revision, title, document } → { id }
+ *   DELETE /api/sync/published/:docId       stop publishing it
+ *   GET    /api/published/:id?since=        a live share, for anyone with its link (publishedRoutes below)
  *
  * Every write is CONDITIONAL: the client says which server revision its change
  * is based on (`base`), and a row lock makes the check and the write one step.
@@ -81,6 +85,28 @@ const BackupUpload = z.object({
   force: z.boolean().optional(),
 });
 
+/** A live share's public id: 128 random bits, base64url (`newPublishedId`). */
+export const PUBLISHED_ID = /^[A-Za-z0-9_-]{22}$/;
+/** A published copy carries its images inline, so it may be larger than a synced note's record. */
+export const MAX_PUBLISHED_BYTES = 32 * 1024 * 1024;
+const PutPublished = z.object({
+  /** The document revision (`updated`) this copy was made from. */
+  revision: iso,
+  title: z.string().max(500),
+  /** The document as the editor exports it (the `perssonify-document` envelope). */
+  document: z
+    .object({ _format: z.literal("perssonify-document"), canonical: z.object({ type: z.literal("doc") }).passthrough() })
+    .passthrough(),
+  /**
+   * UPDATE ONLY: the live share's public id, which must still be this
+   * document's. The sync engine republishes with it, so a republish racing
+   * "Stop sharing live" cannot bring the share back under a new id. Absent
+   * (the Share dialog): publish, creating the share if there is none.
+   */
+  id: z.string().regex(/^[A-Za-z0-9_-]{22}$/).optional(),
+});
+const newPublishedId = () => randomBytes(16).toString("base64url");
+
 /** At most this many versions are listed for one note. */
 export const MAX_LISTED_VERSIONS = 50;
 const MIN_VERSION_GAP_MS = 5 * 60_000;
@@ -104,7 +130,32 @@ export function thinVersions<T extends { lastModified: number }>(newestFirst: T[
   return kept;
 }
 
+/**
+ * What `GET /api/sync/state` describes, as one short string: every document's
+ * revision and tombstone, and the folder tree's revision — exactly what a
+ * device plans its sync from. Equal versions mean the same plan, so a device
+ * that sends back the version it holds (`?since=`) is told "unchanged" instead
+ * of being sent the whole list again. Order-independent (sorted by id).
+ */
+export function stateVersion(
+  docs: { id: string; updated: string; deleted: boolean }[],
+  libraryUpdated: string | null,
+  published: { docId: string; id: string; revision: string }[] = [],
+): string {
+  const h = createHash("sha256");
+  const byKey = <T>(key: (x: T) => string) => (a: T, b: T) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0);
+  for (const d of [...docs].sort(byKey((x) => x.id))) {
+    h.update(`${d.id}\u0000${d.updated}\u0000${d.deleted ? 1 : 0}\n`);
+  }
+  h.update(`library\u0000${libraryUpdated ?? ""}\n`);
+  for (const p of [...published].sort(byKey((x) => x.docId))) {
+    h.update(`published\u0000${p.docId}\u0000${p.id}\u0000${p.revision}\n`);
+  }
+  return h.digest("base64url").slice(0, 32);
+}
+
 const docKey = (userId: string, docId: string) => `users/${userId}/documents/${docId}.json.gz`;
+const publishedKey = (userId: string, docId: string) => `users/${userId}/published/${docId}.json.gz`;
 const assetKey = (userId: string, hash: string) => `users/${userId}/assets/${hash}`;
 const backupPrefix = (userId: string) => `users/${userId}/backups/`;
 const backupKey = (userId: string, date: string) => `${backupPrefix(userId)}${date}.zip`;
@@ -135,6 +186,15 @@ export function syncRoutes({ db, storage, userIdOf }: SyncDeps): Hono<SyncEnv> {
   const D = schema.syncDocument;
   const A = schema.syncAsset;
   const L = schema.syncLibrary;
+  const P = schema.publishedDocument;
+  type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+  /** Stop publishing a document (if it is): its row and its public copy. */
+  const unpublish = async (tx: Tx, userId: string, docId: string) => {
+    const [row] = await tx.select({ id: P.id }).from(P).where(and(eq(P.userId, userId), eq(P.docId, docId))).for("update");
+    if (!row) return;
+    await tx.delete(P).where(eq(P.id, row.id));
+    await storage!.remove(publishedKey(userId, docId));
+  };
 
   app.get("/api/sync/state", async (c: Ctx) => {
     const userId = c.get("userId");
@@ -143,7 +203,15 @@ export function syncRoutes({ db, storage, userIdOf }: SyncDeps): Hono<SyncEnv> {
       .from(D)
       .where(eq(D.userId, userId));
     const [lib] = await db!.select({ tree: L.folderTree, updated: L.updated }).from(L).where(eq(L.userId, userId));
-    return c.json({ documents: rows, library: lib ?? null });
+    // The documents this user publishes, and which revision each live copy
+    // holds: a device that has a newer one updates it (the sync engine).
+    const published = await db!.select({ docId: P.docId, id: P.id, revision: P.revision }).from(P).where(eq(P.userId, userId));
+    // A device polls this every few seconds while it is in use. When nothing
+    // changed since the state it last read (`?since=` the version it was
+    // given), the answer is just that — not the whole manifest again.
+    const version = stateVersion(rows, lib?.updated ?? null, published);
+    if (c.req.query("since") === version) return c.json({ unchanged: true, version });
+    return c.json({ documents: rows, library: lib ?? null, published, version });
   });
 
   app.get("/api/sync/documents/:id", async (c: Ctx) => {
@@ -203,8 +271,12 @@ export function syncRoutes({ db, storage, userIdOf }: SyncDeps): Hono<SyncEnv> {
     if (!DOC_ID.test(id) || Number.isNaN(Date.parse(at))) return c.json({ error: "bad_request" }, 400);
     return db!.transaction(async (tx) => {
       const [row] = await tx.select().from(D).where(and(eq(D.userId, userId), eq(D.docId, id))).for("update");
+      if (row && row.updated !== base) return c.json({ error: "conflict", current: { updated: row.updated, deleted: row.deleted } }, 409);
+      // A deleted note is no longer shared live: its public copy goes with it,
+      // here, in the deletion itself — not left to a device that may be
+      // offline, or closed, by the time it would have asked.
+      await unpublish(tx, userId, id);
       if (!row) return c.json({ deleted: true });
-      if (row.updated !== base) return c.json({ error: "conflict", current: { updated: row.updated, deleted: row.deleted } }, 409);
       // The bucket is versioned: the content stays recoverable for 30 days.
       await storage!.remove(docKey(userId, id));
       await tx.update(D).set({ deleted: true, updated: at, size: 0, modifiedAt: new Date() }).where(and(eq(D.userId, userId), eq(D.docId, id)));
@@ -358,5 +430,92 @@ export function syncRoutes({ db, storage, userIdOf }: SyncDeps): Hono<SyncEnv> {
     return c.json({ url: await storage!.presignGet(key, { filename: `markdown-studio-backup-${date}.zip` }) });
   });
 
+  // ── Publishing (live shares) ──────────────────────────────────────────────
+  // The owner's device uploads a read-only copy of one document — the editor's
+  // own export envelope, images inline — and gets back the public id its link
+  // carries. Every device of the owner keeps it current: `state` lists what is
+  // published and from which revision, and a device holding a newer one
+  // publishes again. Followers read it through publishedRoutes, below.
+
+  app.put("/api/sync/published/:docId", async (c: Ctx) => {
+    const userId = c.get("userId");
+    const docId = c.req.param("docId") ?? "";
+    if (!DOC_ID.test(docId)) return c.json({ error: "bad_id" }, 400);
+    let parsed: z.infer<typeof PutPublished>;
+    try {
+      const raw = Buffer.from(await c.req.arrayBuffer());
+      const text = (c.req.header("content-encoding") === "gzip" ? gunzipSync(raw, { maxOutputLength: MAX_PUBLISHED_BYTES }) : raw).toString("utf8");
+      if (Buffer.byteLength(text) > MAX_PUBLISHED_BYTES) return c.json({ error: "too_large" }, 413);
+      parsed = PutPublished.parse(JSON.parse(text));
+    } catch {
+      return c.json({ error: "bad_document" }, 400);
+    }
+    const title = parsed.title.slice(0, 500);
+    return db!.transaction(async (tx) => {
+      let id: string;
+      if (parsed.id) {
+        // Update only: the share must still exist, under that id.
+        const [row] = await tx.select({ id: P.id }).from(P).where(and(eq(P.userId, userId), eq(P.docId, docId))).for("update");
+        if (!row || row.id !== parsed.id) return c.json({ error: "not_published" }, 409);
+        id = row.id;
+      } else {
+        // Create or keep: one statement, so two first publishes at once agree
+        // on one id (the second waits on the first's row) instead of the loser
+        // hitting the unique index.
+        const [row] = await tx
+          .insert(P)
+          .values({ id: newPublishedId(), userId, docId, title, revision: parsed.revision })
+          .onConflictDoUpdate({ target: [P.userId, P.docId], set: { modifiedAt: new Date() } })
+          .returning({ id: P.id });
+        id = row!.id;
+      }
+      const body = gzipSync(Buffer.from(JSON.stringify({ v: 1, id, title, revision: parsed.revision, document: parsed.document }), "utf8"));
+      await storage!.put(publishedKey(userId, docId), body, { contentType: "application/json", contentEncoding: "gzip" });
+      await tx.update(P).set({ title, revision: parsed.revision, size: body.length, modifiedAt: new Date() }).where(eq(P.id, id));
+      return c.json({ id, revision: parsed.revision });
+    });
+  });
+
+  app.delete("/api/sync/published/:docId", async (c: Ctx) => {
+    const userId = c.get("userId");
+    const docId = c.req.param("docId") ?? "";
+    if (!DOC_ID.test(docId)) return c.json({ error: "bad_id" }, 400);
+    return db!.transaction(async (tx) => {
+      await unpublish(tx, userId, docId);
+      return c.json({ deleted: true });
+    });
+  });
+
+  return app;
+}
+
+/**
+ * GET /api/published/:id — a live share, for anyone holding its link (no
+ * sign-in: the link IS the permission, and its id is 128 random bits). A
+ * follower polls with `?since=` the revision it has, and while the owner has
+ * not changed the document the answer is a few bytes. Unpublished: 404, and
+ * the follower keeps its last copy as its own.
+ */
+export function publishedRoutes({ db, storage }: Pick<SyncDeps, "db" | "storage">): Hono {
+  const app = new Hono();
+  app.get("/api/published/:id", async (c) => {
+    c.header("Cache-Control", "no-store");
+    if (!db || !storage) return c.json({ error: "not_configured" }, 503);
+    // `not_published` — not the app's generic `not_found` — is what tells a
+    // follower the owner stopped sharing it, so a 404 from anything else (a
+    // route missing mid-deploy) is not mistaken for that.
+    const id = c.req.param("id") ?? "";
+    if (!PUBLISHED_ID.test(id)) return c.json({ error: "not_published" }, 404);
+    const P = schema.publishedDocument;
+    const [row] = await db.select({ userId: P.userId, docId: P.docId, revision: P.revision }).from(P).where(eq(P.id, id));
+    if (!row) return c.json({ error: "not_published" }, 404);
+    if (c.req.query("since") === row.revision) return c.json({ unchanged: true, revision: row.revision });
+    const obj = await storage.get(publishedKey(row.userId, row.docId));
+    if (!obj) return c.json({ error: "not_published" }, 404);
+    return new Response(obj.body, {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Content-Encoding": "gzip", "Cache-Control": "no-store", "X-Revision": row.revision },
+    });
+  });
   return app;
 }

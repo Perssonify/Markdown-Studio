@@ -5,12 +5,17 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { manualChunks } from './vite.chunks';
+import { buildInfo } from './build/build-info.mjs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    // The branch and commit this build came from, shown beside the version
+    // (src/constants.ts BUILD_INFO). The app only: the library and the embed
+    // carry the version alone.
+    __APP_BUILD__: JSON.stringify(buildInfo()),
   },
   plugins: [
     react(),

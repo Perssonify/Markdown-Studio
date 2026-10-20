@@ -41,6 +41,7 @@ export const editor = {
   "editor.couldNotCreateNote": "Could not create the note",
   "editor.editorNotReadyNoteNotSaved": "Editor not ready — note not saved",
   "editor.cardNewerVersion": "This note was made by a newer version of the app and can't be edited as a card — your typing is kept in Version history.",
+  "editor.cardSharedReadOnly": "This note was shared with you read-only — open it and make it editable first. Your typing is kept in Version history.",
   "editor.cardConflict": "This note was changed in another tab — your card edit was not saved over it. It is kept in Version history.",
   "editor.cardSaveFailed": "The note could not be saved — your card edit is kept in Version history.",
   "editor.cardAlignmentLost": "Alignment on the paragraphs you changed can't be kept in a card edit — the previous version is in Version history.",

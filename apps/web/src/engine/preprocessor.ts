@@ -389,6 +389,74 @@ function applyCurlyFormatting(md: string): string {
     .split(ESC_CLOSE).join("\\}");
 }
 
+/** A list item's first line: indent, marker, the spaces after it, and text. */
+const LIST_ITEM_LINE = /^( *)([-*+]|\d{1,9}[.)])( +)\S/;
+/** A setext heading underline: a run of `-` or of `=`, nothing else. */
+const UNDERLINE_LINE = /^( *)(-+|=+)[ \t]*$/;
+/** Text that opens a block other than a paragraph — a heading, a quote, a
+ *  fence, HTML or a table row. Under one of those an underline is not a
+ *  heading underline (`- # Title` then `  ---` is a thematic break). */
+const NOT_PARAGRAPH = /^(?:#{1,6}(?:[ \t]|$)|>|```|~~~|<|\|)/;
+
+/**
+ * Escape a setext underline that would turn a list item's first paragraph
+ * into a heading. CommonMark (and marked) read `1. foo` followed by `   -` as
+ * an item holding an `<h2>`, but a ProseMirror list item must START with a
+ * paragraph: the rich pane hoisted the heading out of the list and left an
+ * empty item behind — "Enter on a list item turned it into a heading". In an
+ * editor that line is never a heading underline; it is the half-typed start of
+ * a nested item (Enter, Backspace, `-` under `1. foo`; Tab on a new `- `), or
+ * a `===` typed under an item. Escaped, it reads as the text it is until the
+ * nested item has content (`   - bar` is a list again). Only the md→rich
+ * projection sees the escape — the markdown itself is never changed — and the
+ * line count is kept, so nothing downstream shifts.
+ *
+ * `-` is escaped only from the item's content column (up to 3 more spaces):
+ * further left it is a sibling item or a thematic break, which is right. `=`
+ * cannot start anything, and marked also reads it as an underline LAZILY,
+ * further left, so any indent short of code is escaped.
+ */
+export function escapeListSetextUnderlines(md: string): string {
+  if (!/^ *(?:-+|=+)[ \t]*$/m.test(md)) return md;
+  const lines = md.split("\n");
+  // Fenced code is content: leave every line inside a fence alone.
+  const fenced = new Set<number>();
+  const ranges = findFencedCodeRanges(md);
+  for (let l = 0, start = 0, r = 0; r < ranges.length && l < lines.length; l++) {
+    while (r < ranges.length && ranges[r]![1] <= start) r++;
+    if (r < ranges.length && start >= ranges[r]![0]) fenced.add(l);
+    start += lines[l]!.length + 1;
+  }
+  let changed = false;
+  for (let i = 1; i < lines.length; i++) {
+    const u = UNDERLINE_LINE.exec(lines[i]!);
+    if (!u || fenced.has(i)) continue;
+    // Walk up the paragraph above (no blank line) to the item it opens.
+    for (let j = i - 1; j >= 0; j--) {
+      const above = lines[j]!;
+      if (fenced.has(j) || !above.trim() || UNDERLINE_LINE.test(above)) break;
+      const item = LIST_ITEM_LINE.exec(above);
+      if (!item) {
+        if (NOT_PARAGRAPH.test(above.trimStart())) break;
+        continue;
+      }
+      // The item opens with something that is not a paragraph.
+      if (NOT_PARAGRAPH.test(above.slice(item[0].length - 1))) break;
+      const spaces = item[3]!.length;
+      // More than four spaces after the marker: the content starts one past it.
+      const contentCol = item[1]!.length + item[2]!.length + (spaces > 4 ? 1 : spaces);
+      const indent = u[1]!.length;
+      const isDash = u[2]![0] === "-";
+      if (indent < contentCol + 4 && (!isDash || indent >= contentCol)) {
+        lines[i] = `${u[1]}\\${lines[i]!.slice(indent)}`;
+        changed = true;
+      }
+      break;
+    }
+  }
+  return changed ? lines.join("\n") : md;
+}
+
 export function preprocessMarkdown(
   md: string,
   features: PreprocessFeatures = {}
@@ -428,6 +496,10 @@ export function preprocessMarkdown(
       }
     );
   }
+
+  // 0'. A setext underline under a list item's text is escaped, so the rich
+  // pane does not hoist that text out of the list as a heading.
+  md = escapeListSetextUnderlines(md);
 
   // 0a. Field blocks: :::fields ... ::: → HTML
   if (fieldBlocks) {

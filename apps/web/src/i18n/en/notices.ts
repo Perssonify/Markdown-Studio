@@ -122,4 +122,21 @@ export const notices = {
   "notices.tabDeletedBody": "It isn't saved here any more. Keep it as a new document, or close it — Version history keeps a copy.",
   "notices.tabKeepAsNew": "Keep as a new document",
   "notices.tabClose": "Close",
+
+  // SharedDocNotice — a shared document that is read-only here
+  "notices.liveLabel": "Live shared document",
+  "notices.liveHeadline": "Live copy — it updates when its owner edits it.",
+  "notices.liveBody": "It is read-only here, because the next update would replace anything you type. Stop following to keep it as your own document.",
+  "notices.liveUpdatedAt": "Updated {when}.",
+  "notices.liveStop": "Stop following",
+  "notices.liveStopConfirmTitle": "Stop following this document?",
+  "notices.liveStopConfirmBody": "It stays in your library as your own document, and you can edit it — but it will not get the owner's changes any more.",
+  "notices.liveEndedLabel": "No longer shared",
+  "notices.liveEndedHeadline": "Its owner stopped sharing this document.",
+  "notices.liveEndedBody": "It will not change any more. This copy is yours to keep and edit.",
+  "notices.liveEndedDismiss": "Got it",
+  "notices.readOnlyShareLabel": "Shared read-only",
+  "notices.readOnlyShareHeadline": "Shared with you read-only.",
+  "notices.readOnlyShareBody": "This is your own copy: make it editable whenever you like.",
+  "notices.makeEditable": "Make editable",
 } satisfies Record<`notices.${string}`, Message>;

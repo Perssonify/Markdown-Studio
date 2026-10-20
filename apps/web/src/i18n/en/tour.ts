@@ -6,7 +6,7 @@ export const tour = {
   "tour.menuBarBodyPhone": "Every command lives behind this menu button — File, Edit, Insert, View, Format, Tools and Help.",
   "tour.menuBarBody": "Every command lives here — File, Edit, Insert, View, Format, Tools and Help. When in doubt, start in a menu.",
   "tour.shareTitle": "Share a note",
-  "tour.shareBody": "Copy a link to the open note and send it to anyone. Opening the link adds a copy to their library. A whole folder shares from its ⋮ menu.",
+  "tour.shareBody": "Send the open note to anyone: choose how it opens and whether it's an editable copy, read-only, or live — a live link keeps their copy up to date as you edit. A whole folder shares from its ⋮ menu.",
   "tour.shareBodySignIn": "Copy a link to the open note and send it to anyone. Sharing needs an account, so sign in first; until then the button stays greyed out.",
   "tour.signInTitle": "Sign in when you want",
   "tour.signInBody": "You can write without an account; your notes are saved in this browser. Sign in with Google to sync them across your devices, keep a daily backup and share links.",

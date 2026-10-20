@@ -12,6 +12,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { selectMenuBody, type MenuPrimitives } from "../selectMenuContent";
+import { passShiftContextMenuToBrowser } from "../../shared/utils/native-context-menu";
 import { useUIStore } from "@/store/preferences/uiStore";
 import {
   Bold, CaseSensitive, Clipboard, Code, Copy, Eraser, Hash, Heading1, Heading2, Heading3, Highlighter,
@@ -91,13 +92,15 @@ export function EditorContextMenu({ api, children }: { api: EditorContextMenuApi
   const t = useT();
   const d = api.dispatch;
   const enabled = useUIStore((s) => s.contextMenuEnabled);
-  // Admin toggle: when disabled, fall back to the browser's native menu — render
-  // the same pane container without the custom ContextMenu wrapper.
+  // Settings ▸ Editor ▸ Custom right-click menu: when off, fall back to the
+  // browser's native menu (and its spelling suggestions) — render the same pane
+  // container without the custom ContextMenu wrapper.
   if (!enabled) return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
   return (
     <ContextMenu>
       <ContextMenuTrigger
         render={<div className="flex min-h-0 flex-1 flex-col" />}
+        onContextMenuCapture={passShiftContextMenuToBrowser}
       >
         {children}
       </ContextMenuTrigger>
@@ -179,6 +182,15 @@ export function EditorContextMenu({ api, children }: { api: EditorContextMenuApi
             <ContextMenuItem onClick={() => d("horizontalRule")}><Minus /> {t("context.horizontalRule")}</ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
+        <ContextMenuSeparator />
+
+        {/* 7 — How to reach the browser's own menu: its spelling suggestions
+            are not something this menu can offer. */}
+        <ContextMenuGroup>
+          <ContextMenuLabel className="max-w-56 font-normal normal-case leading-snug tracking-normal">
+            {t("context.browserMenuHint")}
+          </ContextMenuLabel>
+        </ContextMenuGroup>
       </ContextMenuContent>
     </ContextMenu>
   );

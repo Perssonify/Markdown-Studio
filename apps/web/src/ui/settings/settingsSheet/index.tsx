@@ -250,6 +250,13 @@ function SettingsSheetInner({
                 </div>
                 <Switch id="pref-shortcuts" checked={keyboardShortcutsEnabled} onCheckedChange={setKeyboardShortcutsEnabled} />
               </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="pref-context-menu" className="text-sm">{t("settings.customRightClickMenu")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.customRightClickMenuHint")}</p>
+                </div>
+                <Switch id="pref-context-menu" checked={contextMenuEnabled} onCheckedChange={setContextMenuEnabled} />
+              </div>
             </section>
 
             <Separator />
@@ -375,13 +382,6 @@ function SettingsSheetInner({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {t("settings.admin")}
               </h3>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="pref-context-menu" className="text-sm">{t("settings.enableRightClickMenu")}</Label>
-                  <p className="text-xs text-muted-foreground">{t("settings.customEditorContextMenuOff")}</p>
-                </div>
-                <Switch id="pref-context-menu" checked={contextMenuEnabled} onCheckedChange={setContextMenuEnabled} />
-              </div>
               <div className="flex items-center justify-between">
                 <div>
                   <Label htmlFor="pref-console" className="text-sm">{t("settings.diagnosticsConsole")}</Label>

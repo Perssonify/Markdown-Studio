@@ -62,6 +62,9 @@ export const status = {
   "status.totalCharacters": "Total characters",
   "status.charCountShort": { other: "{count}c" },
   "status.keyboardShortcuts": "Keyboard shortcuts",
+  "status.versionOnly": "{app} {version}",
+  "status.versionCommit": "{app} {version}, commit {commit}",
+  "status.versionBuilt": "{app} {version} — built from {branch} at commit {commit}",
   "status.memoryAndUndoHistory": "Memory and undo history",
   "status.memoryTitle": "Undo-history memory (estimated): {used} of {budget} — click to manage",
 

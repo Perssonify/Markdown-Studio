@@ -37,7 +37,7 @@ export function NoticeStrip({
   /** The notice's e2e hook — data, so it stays English whatever the interface language. */
   hook: string;
   /** Which data attribute carries `hook`. */
-  hookAttr?: "data-durability-notice" | "data-tab-sync-notice";
+  hookAttr?: "data-durability-notice" | "data-tab-sync-notice" | "data-shared-doc-notice";
   children: ReactNode;
   actions?: ReactNode;
 }) {

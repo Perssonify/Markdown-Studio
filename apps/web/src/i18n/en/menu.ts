@@ -13,7 +13,7 @@ export const menu = {
   /** The phone ☰ button's name. */
   "menu.menu": "Menu",
   "menu.share": "Share",
-  "menu.shareTitle": "Copy a share link to this note",
+  "menu.shareTitle": "Share this note: choose how it opens, then copy the link",
   "menu.newDocument": "New document",
   "menu.openFile": "Open file…",
   "menu.filesArchive": "File(s) / archive…",

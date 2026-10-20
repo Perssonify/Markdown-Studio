@@ -38,6 +38,40 @@ export const BLOCK_ELEMENTS = new Set([
 const isBlockElement = (el: Element): boolean =>
   BLOCK_ELEMENTS.has(el.nodeName) || el.nodeName === "DETAILS";
 
+/** A list item's marker: `- `, or its number — from the list's `start`. */
+function listMarker(el: Element): string {
+  const parent = el.parentNode;
+  if (!parent || (parent as Element).nodeName !== "OL") return "- ";
+  // Honor the list's `start` attribute so a list beginning at e.g. 5
+  // round-trips as `5.` instead of resetting to `1.`.
+  const startAttr = (parent as Element).getAttribute("start");
+  const start = startAttr ? parseInt(startAttr, 10) : 1;
+  const base = Number.isFinite(start) ? start : 1;
+  const idx = Array.from((parent as Element).children).indexOf(el);
+  return base + idx + ". ";
+}
+
+/**
+ * Turndown's `blankReplacement` (pass it to the constructor: turndown copies
+ * the option into its rules when it is built). Its default — a block becomes a
+ * blank line, anything else nothing — except for an EMPTY list item, the one
+ * Enter has just made in the rich pane. A blank node never reaches a rule, so
+ * that item was dropped: the markdown pane did not show it, and one made
+ * mid-list printed as `1. foo⏎⏎3. bar` (a loose list, a number skipped). It is
+ * written as its bare marker wherever that reads back as an empty item — after
+ * a sibling item (CommonMark's `- foo⏎-⏎- bar`), or first in a list that is not
+ * nested (a blank line precedes it). First in a NESTED list it is still
+ * dropped: `1. foo⏎   -` is a heading underline. (An empty TASK item holds its
+ * checkbox, so it is never blank and its own rule writes it.)
+ */
+export function blankReplacement(_content: string, node: Node & { isBlock?: boolean }): string {
+  const el = node as Element;
+  if (el.nodeName === "LI" && (el.previousElementSibling?.nodeName === "LI" || !el.parentElement?.closest("li"))) {
+    return listMarker(el).trimEnd() + "\n";
+  }
+  return node.isBlock ? "\n\n" : "";
+}
+
 /** Boundary markers for a converted run (see convertRun); never part of the output. */
 const SEAM_OPEN = "\uE000";
 const SEAM_CLOSE = "\uE001";
@@ -659,17 +693,7 @@ export function addBaseRules(td: TurndownInstance): TurndownInstance {
     },
     replacement: function (content: string, node?: Node): string {
       const el = node as Element;
-      const parent = el.parentNode;
-      let prefix = "- ";
-      if (parent && (parent as Element).nodeName === "OL") {
-        // Honor the list's `start` attribute so a list beginning at e.g. 5
-        // round-trips as `5.` instead of resetting to `1.`.
-        const startAttr = (parent as Element).getAttribute("start");
-        const start = startAttr ? parseInt(startAttr, 10) : 1;
-        const base = Number.isFinite(start) ? start : 1;
-        const idx = Array.from((parent as Element).children).indexOf(el);
-        prefix = base + idx + ". ";
-      }
+      const prefix = listMarker(el);
       listItemContent.set(el, content);
       return layoutListItem(el, content, prefix, prefix.length);
     },

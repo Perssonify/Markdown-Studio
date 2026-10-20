@@ -7,7 +7,7 @@ import { downloadBlob, exportAsHtml, exportAsJson, exportAsMarkdown, exportTimes
 import { printHtmlDocument } from "../store/importExport/print-export";
 import { recordFullBackup } from "../store/persistence/storage-durability";
 import { buildZipAsync, readDocuments } from "../store/importExport/zip-builder";
-import { buildShareUrl, SHARE_URL_SOFT_LIMIT, type ShareDoc } from "../store/importExport/share-link";
+import { buildShareUrl, SHARE_URL_SOFT_LIMIT, type ShareDoc, type ShareView } from "../store/importExport/share-link";
 import { t } from "../i18n";
 import { extForMime, replaceRefsInText } from "../store/assets/asset-refs";
 import {
@@ -15,6 +15,12 @@ import {
 } from "../store/assets/assets";
 import type { CmRef, DocStore, Engine, SyncEngine, TiptapRef, Toast } from "./types";
 import type { useAutosave } from "./useAutosave";
+
+/** How a share link opens for its recipient (the Share dialog's choices). */
+export interface ShareLinkOptions {
+  view?: ShareView;
+  readOnly?: boolean;
+}
 
 /** The multi-document ZIP exporter, as the editor's `exportDocsRef` holds it. */
 export type ExportDocs = (ids: string[], zipName: string, opts?: { canonical?: boolean }) => Promise<number> | void;
@@ -251,43 +257,48 @@ export function useExportActions({
   // so pictures travel in the link and the recipient's import restores them to
   // the asset store — at the cost of a bigger link, which the length warning
   // covers.
-  const copyShareUrl = useCallback(async (url: string) => {
+  const copyShareUrl = useCallback(async (url: string): Promise<boolean> => {
     const long = url.length > SHARE_URL_SOFT_LIMIT;
     try {
       await navigator.clipboard.writeText(url);
       toast.show(long ? t("editor.shareLinkCopiedLong") : t("editor.shareLinkCopied"), long ? "warning" : "success");
+      return true;
     } catch {
       toast.show(t("editor.shareLinkCopyFailed"), "error");
+      return false;
     }
   }, [toast]);
 
-  // Share ONE document as a link.
-  const handleShareDoc = useCallback(async (docId: string) => {
+  // Share ONE document as a link. Resolves true once the link is copied.
+  const handleShareDoc = useCallback(async (docId: string, opts: ShareLinkOptions = {}): Promise<boolean> => {
     try {
       // Persist the open doc first so the link carries the latest edits.
       try { await autosaveRef.current(); } catch { /* fall back to stored copy */ }
       const rec = await useDocumentStore.getState().getStorage().get(docId);
-      if (!rec) { toast.show(t("editor.documentNotFound"), "error"); return; }
+      if (!rec) { toast.show(t("editor.documentNotFound"), "error"); return false; }
       const canonical = useDocumentStore.getState().hydratedDocId === docId ? getCanonical() : rec.canonical;
       const title = resolveDocTitle(rec, canonical).title || t("common.untitled");
       const markdown = markdownForDoc(rec);
-      if (markdown == null) { toast.show(t("editor.shareFailed"), "error"); return; }
+      if (markdown == null) { toast.show(t("editor.shareFailed"), "error"); return false; }
       // Inline the doc's images as data URLs so they travel in the link.
       const inlined = await inlineAssetRefsInText(markdown);
-      await copyShareUrl(buildShareUrl({ v: 1, kind: "file", name: title, docs: [{ path: [], title, markdown: inlined.text }] }));
+      const copied = await copyShareUrl(buildShareUrl({
+        v: 1, kind: "file", name: title, docs: [{ path: [], title, markdown: inlined.text }], ...shareOptions(opts),
+      }));
       const note = missingImagesNote(inlined.missing.length);
       if (note) toast.show(note, "warning");
-    } catch { toast.show(t("editor.shareFailed"), "error"); }
+      return copied;
+    } catch { toast.show(t("editor.shareFailed"), "error"); return false; }
   }, [getCanonical, markdownForDoc, copyShareUrl, toast, autosaveRef]);
 
   // Share a whole FOLDER (its subtree) as one link, preserving folder structure.
-  const handleShareFolder = useCallback(async (folderId: string) => {
+  const handleShareFolder = useCallback(async (folderId: string, opts: ShareLinkOptions = {}): Promise<boolean> => {
     try {
       try { await autosaveRef.current(); } catch { /* fall back to stored copy */ }
       const { folders, docParents } = useFolderStore.getState();
       const root = folders.find((f) => f.id === folderId);
       const entries = collectFolderExport(folderId, folders, docParents);
-      if (entries.length === 0) { toast.show(t("editor.folderHasNoDocuments"), "warning"); return; }
+      if (entries.length === 0) { toast.show(t("editor.folderHasNoDocuments"), "warning"); return false; }
       const { docs: records } = await readDocuments(useDocumentStore.getState().getStorage(), entries.map((e) => e.docId));
       const docs: ShareDoc[] = [];
       let missingImages = 0;
@@ -302,14 +313,20 @@ export function useExportActions({
         const title = resolveDocTitle(rec, rec.canonical).title || t("common.untitled");
         docs.push({ path: dirSegments, title, markdown: inlined.text });
       }
-      if (docs.length === 0) { toast.show(t("editor.shareFailed"), "error"); return; }
-      await copyShareUrl(buildShareUrl({ v: 1, kind: "folder", name: root?.name || t("library.folder"), docs }));
+      if (docs.length === 0) { toast.show(t("editor.shareFailed"), "error"); return false; }
+      const copied = await copyShareUrl(buildShareUrl({ v: 1, kind: "folder", name: root?.name || t("library.folder"), docs, ...shareOptions(opts) }));
       const note = missingImagesNote(missingImages);
       if (note) toast.show(note, "warning");
-    } catch { toast.show(t("editor.shareFailed"), "error"); }
+      return copied;
+    } catch { toast.show(t("editor.shareFailed"), "error"); return false; }
   }, [markdownForDoc, copyShareUrl, toast, autosaveRef]);
 
   return { handleExportFolder, handleExportDoc, handleExportDocs, handleShareDoc, handleShareFolder };
+}
+
+/** The payload fields a share's options set — only the ones chosen. */
+function shareOptions(opts: ShareLinkOptions): { view?: ShareView; readOnly?: boolean } {
+  return { ...(opts.view ? { view: opts.view } : {}), ...(opts.readOnly ? { readOnly: true } : {}) };
 }
 
 /** File ▸ Export ▸ All documents: the whole library as one ZIP. */

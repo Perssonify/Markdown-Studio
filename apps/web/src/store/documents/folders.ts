@@ -72,15 +72,40 @@ export interface BuiltTree {
 }
 
 /**
+ * How the library orders each sibling group (a per-browser preference,
+ * `pf:library-sort`):
+ *  - `updated` (the default): dragged items keep their place; the rest are
+ *    folders A–Z, then documents newest-edited first.
+ *  - `name`: folders and documents A–Z.
+ *  - `created`: folders and documents newest first.
+ *  - `manual`: nothing is sorted — dragged items keep their place and the rest
+ *    stay in the order they were made, so a new item is added at the end.
+ * `name` and `created` ignore drag order (it is kept, not discarded).
+ */
+export type LibrarySort = "updated" | "name" | "created" | "manual";
+export const LIBRARY_SORTS: readonly LibrarySort[] = ["updated", "name", "created", "manual"];
+
+const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/** When a folder was made: the timestamp in its id (`generateFolderId`), or
+ *  NaN for an id from elsewhere — the caller falls back to list order. */
+function folderCreatedAt(id: string): number {
+  const m = /^fld-([0-9a-z]+)-/.exec(id);
+  return m ? parseInt(m[1]!, 36) : NaN;
+}
+
+/**
  * Build a nested tree from flat documents + folders + docParents. Documents
- * whose parent folder is missing fall back to the root. Folders are sorted by
- * name; documents by most-recently-updated.
+ * whose parent folder is missing fall back to the root. Each sibling group is
+ * ordered by `sort` (see {@link LibrarySort}); the default keeps the original
+ * order — folders by name, documents by most-recently-updated, drag order first.
  */
 export function buildFolderTree(
   documents: DocumentSummary[],
   folders: FolderRecord[],
   docParents: Record<string, string>,
-  docOrder: Record<string, string[]> = {}
+  docOrder: Record<string, string[]> = {},
+  sort: LibrarySort = "updated"
 ): BuiltTree {
   const folderById = new Map(folders.map((f) => [f.id, f]));
   const childFolders = new Map<string | null, FolderRecord[]>();
@@ -94,31 +119,59 @@ export function buildFolderTree(
     const key = parent && folderById.has(parent) ? parent : null;
     (docsByFolder.get(key) ?? docsByFolder.set(key, []).get(key)!).push(d);
   }
-  // Folders: manual `order` first (ascending), then un-ordered by name.
-  const byOrderName = (a: FolderRecord, b: FolderRecord) => {
+  // Creation order of folders: the time in the id, else the position in the
+  // list (createFolder appends, so the list is creation order too).
+  const listIndex = new Map(folders.map((f, i) => [f.id, i]));
+  const folderAge = (a: FolderRecord, b: FolderRecord) => {
+    const at = folderCreatedAt(a.id);
+    const bt = folderCreatedAt(b.id);
+    if (!Number.isNaN(at) && !Number.isNaN(bt) && at !== bt) return at - bt;
+    return listIndex.get(a.id)! - listIndex.get(b.id)!;
+  };
+  const byFolderName = (a: FolderRecord, b: FolderRecord) => nameCollator.compare(a.name, b.name) || folderAge(a, b);
+  // Folders: manual `order` first (ascending), then un-ordered by name — or, in
+  // `manual`, in the order they were made.
+  const byOrderThen = (rest: (a: FolderRecord, b: FolderRecord) => number) => (a: FolderRecord, b: FolderRecord) => {
     const ao = a.order ?? Number.MAX_SAFE_INTEGER;
     const bo = b.order ?? Number.MAX_SAFE_INTEGER;
-    return ao !== bo ? ao - bo : a.name.localeCompare(b.name);
+    return ao !== bo ? ao - bo : rest(a, b);
   };
+  const folderCompare =
+    sort === "name" ? byFolderName
+    : sort === "created" ? (a: FolderRecord, b: FolderRecord) => folderAge(b, a)
+    : sort === "manual" ? byOrderThen(folderAge)
+    : byOrderThen((a, b) => a.name.localeCompare(b.name));
+
+  const time = (iso: string) => new Date(iso).getTime() || 0;
   const byUpdated = (a: DocumentSummary, b: DocumentSummary) =>
-    new Date(b.updated).getTime() - new Date(a.updated).getTime();
+    time(b.updated) - time(a.updated);
+  const byCreatedNewest = (a: DocumentSummary, b: DocumentSummary) =>
+    time(b.created) - time(a.created) || byUpdated(a, b);
+  const byCreatedOldest = (a: DocumentSummary, b: DocumentSummary) =>
+    time(a.created) - time(b.created) || a.id.localeCompare(b.id);
+  const byTitle = (a: DocumentSummary, b: DocumentSummary) =>
+    nameCollator.compare(a.title, b.title) || byUpdated(a, b);
 
   // Docs: those listed in docOrder[key] first (in that order), then the rest by
   // most-recently-updated — so a manually reordered folder is stable while newly
-  // created docs still surface near the top.
+  // created docs still surface near the top. `manual` puts the rest in the
+  // order they were made instead, so nothing moves when a document is edited.
   const orderDocs = (folderId: string | null, docs: DocumentSummary[]): DocumentSummary[] => {
+    if (sort === "name") return docs.slice().sort(byTitle);
+    if (sort === "created") return docs.slice().sort(byCreatedNewest);
+    const rest = sort === "manual" ? byCreatedOldest : byUpdated;
     const explicit = docOrder[docOrderKey(folderId)];
-    if (!explicit || explicit.length === 0) return docs.slice().sort(byUpdated);
+    if (!explicit || explicit.length === 0) return docs.slice().sort(rest);
     const pos = new Map(explicit.map((id, i) => [id, i]));
     const listed = docs.filter((d) => pos.has(d.id)).sort((a, b) => pos.get(a.id)! - pos.get(b.id)!);
-    const rest = docs.filter((d) => !pos.has(d.id)).sort(byUpdated);
-    return [...listed, ...rest];
+    const unlisted = docs.filter((d) => !pos.has(d.id)).sort(rest);
+    return [...listed, ...unlisted];
   };
 
   const build = (parentId: string | null): FolderTreeNode[] =>
     (childFolders.get(parentId) ?? [])
       .slice()
-      .sort(byOrderName)
+      .sort(folderCompare)
       .map((folder) => ({
         folder,
         children: build(folder.id),

@@ -221,6 +221,36 @@ export function useAutosave({
     };
   }, [saveStatus]);
 
+  // ── Save on leaving the page ──────────────────────────────────────────────
+  // Switching to another tab or window saves NOW rather than up to
+  // AUTOSAVE_MS later. The same document open in two tabs was the common way
+  // to hit "Changed in another tab — not saving": type in one tab, switch and
+  // type in the other within the autosave window, and the first tab's pending
+  // save was older than the second's. Saved on the way out, the second tab
+  // reloads it before the user starts typing there; it also reaches the
+  // account (and other devices) sooner.
+  useEffect(() => {
+    const flush = () => {
+      if (!initDoneRef.current) return;
+      const status = useDocumentStore.getState().saveStatus;
+      if (status !== "editing" && status !== "error") return;
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      void autosaveRef.current();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("blur", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
   // ── Safety net before tab/window close ────────────────────────────────────
   // Autosave keeps the unsaved window small (≤ AUTOSAVE_MS); if a save is still
   // pending, fire one last best-effort write and warn so the last edits aren't

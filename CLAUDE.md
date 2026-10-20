@@ -85,6 +85,13 @@ break). Every path in it is relative to `apps/web`.
   missing locally is downloaded again. Server writes are conditional on the client's
   `base` revision under a row lock (`apps/api/src/modules/sync/routes/index.ts`). The client half
   is tested against the real server half by `apps/web/src/__tests__/cloud-contract.test.js`.
+- **`GET /api/published/:id` is the API's one public read of user content**
+  (live shares, PL-51): no session, the link IS the permission — the id is 128
+  random bits (`newPublishedId`), there is no listing, and it serves only the copy
+  the owner published (`users/<id>/published/<docId>.json.gz`, indexed by the
+  `published_document` table, migration `0002_publish`), never their synced notes.
+  Publishing and unpublishing are `/api/sync/published/:docId`, behind the sync
+  middleware like every other write.
 - **No code here may ever delete a database.** The RDS instance and the secret
   holding its password are `RemovalPolicy.RETAIN` with deletion protection
   (`infra/test/stack.test.ts` pins both): a failed deploy's rollback, a stack

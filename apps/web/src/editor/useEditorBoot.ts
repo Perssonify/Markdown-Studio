@@ -2,6 +2,7 @@ import { type MutableRefObject, useEffect, useRef } from "react";
 import { toast as toastSonner } from "sonner";
 import { configureLocalStores, useDocumentStore } from "../store/documents/documentStore";
 import { type FolderTreeData, useFolderStore } from "../store/documents/folders";
+import { READ_ONLY_SHARE_KEY } from "../store/documents/live-share-meta";
 import { historyCache } from "../store/history/history-cache";
 import type { IngestFormat } from "../store/importExport/ingest";
 import { normalizeMarkdownFeatures } from "../store/preferences/settings";
@@ -337,11 +338,15 @@ export function useEditorBoot({
         if (initialShare?.docs?.length) {
           try {
             await waitForEditor(3000);
+            // A read-only share: each copy opens read-only until the
+            // recipient makes it editable (store/documents/live-share-meta.ts).
+            const shared = initialShare.readOnly ? { [READ_ONLY_SHARE_KEY]: true } : undefined;
             const result = await importItems(
               initialShare.docs.map((d) => ({
                 raw: d.markdown,
                 format: (d.format ?? "markdown") as IngestFormat,
                 folderPath: d.path ?? [],
+                metadata: d.metadata || shared ? { ...shared, ...d.metadata } : undefined,
               }))
             );
             if (result.firstDocId) await handleSwitchDoc(result.firstDocId);
