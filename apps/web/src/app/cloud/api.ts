@@ -10,10 +10,29 @@ export interface ServerDocument {
   size: number;
 }
 
+/** A document the account publishes as a live share (app/publish), and the revision its copy holds. */
+export interface PublishedEntry {
+  docId: string;
+  id: string;
+  revision: string;
+}
+
 export interface ServerState {
   documents: ServerDocument[];
   library: { tree: SyncedTree; updated: string } | null;
+  /** The account's live shares (absent from an older API). */
+  published?: PublishedEntry[];
+  /** A digest of the above, for asking "anything new?" next time (`state(since)`). */
+  version?: string;
 }
+
+/** `state(since)` when the account still matches `since`: nothing to read. */
+export interface UnchangedState {
+  unchanged: true;
+  version: string;
+}
+
+export const isUnchanged = (s: ServerState | UnchangedState): s is UnchangedState => "unchanged" in s && s.unchanged === true;
 
 export type WriteResult = { ok: true } | { ok: false; current: { updated: string; deleted: boolean } | null };
 
@@ -30,7 +49,9 @@ export interface PresignedTransfer {
  * (cloud-sync.test.js) and runs against the real one here.
  */
 export interface CloudApi {
-  state(): Promise<ServerState>;
+  /** The account's state — or, given the `version` of the state last read and
+   *  nothing has changed since, `{ unchanged }` (a few bytes instead of the list). */
+  state(since?: string | null): Promise<ServerState | UnchangedState>;
   /** The document, or null when the account has none (or only a tombstone). */
   getDocument(id: string): Promise<DocumentRecord | null>;
   putDocument(id: string, base: string | null, record: DocumentRecord): Promise<WriteResult>;
@@ -92,7 +113,8 @@ const BASE = "/api/sync";
 /** The API refuses writes without it: a cross-site page cannot set it. */
 const WRITE_HEADERS = { "X-Requested-With": "markdown-studio" };
 
-async function gzip(text: string): Promise<{ body: BodyInit; encoded: boolean }> {
+/** A request body, gzipped where the browser can (CompressionStream). */
+export async function gzip(text: string): Promise<{ body: BodyInit; encoded: boolean }> {
   if (typeof CompressionStream === "undefined") return { body: text, encoded: false };
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
   return { body: await new Response(stream).arrayBuffer(), encoded: true };
@@ -136,8 +158,8 @@ async function putBytes(t: PresignedTransfer, bytes: Uint8Array): Promise<void> 
 }
 
 export const httpCloudApi: CloudApi = {
-  async state() {
-    return ok<ServerState>(await call("/state"), "sync state");
+  async state(since) {
+    return ok<ServerState | UnchangedState>(await call(since ? `/state?since=${encodeURIComponent(since)}` : "/state"), "sync state");
   },
   async getDocument(id) {
     const res = await call(`/documents/${encodeURIComponent(id)}`);

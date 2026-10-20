@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { safeStorage } from "@/utils/safe-storage";
 import { adminSettingsAvailable } from "@/utils/build-gates";
 import { MODES } from "@/constants";
+import { LIBRARY_SORTS, type LibrarySort } from "@/store/documents/folders";
 import {
   DEFAULT_MARKDOWN_FEATURES,
   type MarkdownFeatureSettings,
@@ -62,6 +63,10 @@ interface UIState {
   // src/ui/workspace/workspacePanel/index.tsx.
   workspaceTab: "files" | "outline";
 
+  // How the library orders folders and documents (persisted `pf:library-sort`,
+  // per browser). See LibrarySort in src/store/documents/folders.ts.
+  librarySort: LibrarySort;
+
   // Actions
   setMode: (mode: string) => void;
   setShowFindReplace: (value: boolean | ((prev: boolean) => boolean)) => void;
@@ -85,6 +90,7 @@ interface UIState {
   setFocusMode: (value: boolean) => void;
   setDocNavWidth: (value: number) => void;
   setWorkspaceTab: (value: "files" | "outline") => void;
+  setLibrarySort: (value: LibrarySort) => void;
   /**
    * Seed the initial syncMode value from outside (replaces the old
    * localStorage.getItem call). Called by the editor during mount when
@@ -181,11 +187,15 @@ export const useUIStore = create<UIState>((set) => ({
     safeStorage.get("pf:show-ads") === "true",
   readOnly:
     safeStorage.get("pf:read-only") === "true",
-  // Admin-only switches: when the Admin section is hidden (production without
-  // the `pf:admin` opt-in) a value stored before it was hidden must not stick —
-  // the user would have no control left to change it back. Defaults apply.
+  // An everyday switch (Settings ▸ Editor): with it off, a right-click opens
+  // the browser's own menu and its spelling suggestions. It used to be
+  // admin-only, and while hidden it read its default; it is honoured in every
+  // build now that every user has the control.
   contextMenuEnabled:
-    !adminSettingsAvailable() || safeStorage.get("pf:context-menu") !== "false",
+    safeStorage.get("pf:context-menu") !== "false",
+  // Admin-only: when the Admin section is hidden (production without the
+  // `pf:admin` opt-in) a value stored before it was hidden must not stick —
+  // the user would have no control left to change it back. Defaults apply.
   consoleEnabled:
     adminSettingsAvailable() && safeStorage.get("pf:console") === "true",
   keyboardShortcutsEnabled:
@@ -211,6 +221,9 @@ export const useUIStore = create<UIState>((set) => ({
     (((v) => (v === "outline" ? "outline" : v === "files" ? "files" : v === "map" ? "outline" : null))(
       safeStorage.get("pf:workspace-tab")
     )) || "files",
+  librarySort: ((v) => (LIBRARY_SORTS as readonly string[]).includes(v ?? "") ? (v as LibrarySort) : "updated")(
+    safeStorage.get("pf:library-sort")
+  ),
 
   setInitialSyncMode: (mode) => set({ syncMode: mode }),
   setMarkdownFeatures: (value) =>
@@ -294,5 +307,9 @@ export const useUIStore = create<UIState>((set) => ({
   setWorkspaceTab: (value) => {
     safeStorage.set("pf:workspace-tab", value);
     set({ workspaceTab: value });
+  },
+  setLibrarySort: (value) => {
+    safeStorage.set("pf:library-sort", value);
+    set({ librarySort: value });
   },
 }));

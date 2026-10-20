@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createStorage, type Storage } from "../../src/lib/storage/index.ts";
-import { MAX_DOCUMENT_BYTES, MAX_LISTED_VERSIONS, SYNC_HEADER, SYNC_HEADER_VALUE, thinVersions } from "../../src/modules/sync/index.ts";
+import { MAX_DOCUMENT_BYTES, MAX_LISTED_VERSIONS, stateVersion, SYNC_HEADER, SYNC_HEADER_VALUE, thinVersions } from "../../src/modules/sync/index.ts";
 import { testApp } from "../fixtures/index.ts";
 
 describe("the versions listed", () => {
@@ -24,6 +24,24 @@ describe("the versions listed", () => {
     const kept = thinVersions(saves, now);
     expect(kept.length).toBeLessThanOrEqual(MAX_LISTED_VERSIONS);
     expect((now - kept[kept.length - 1]!.lastModified) / (24 * 60 * MIN)).toBeGreaterThan(20);
+  });
+});
+
+describe("the state version a device polls with", () => {
+  const docs = [
+    { id: "a", updated: "2026-10-05T10:00:00.000Z", deleted: false },
+    { id: "b", updated: "2026-10-05T11:00:00.000Z", deleted: true },
+  ];
+  it("does not depend on the order the rows come back in", () => {
+    expect(stateVersion(docs, "rev1")).toBe(stateVersion([...docs].reverse(), "rev1"));
+  });
+  it("changes with any revision, tombstone or the folder tree", () => {
+    const v = stateVersion(docs, "rev1");
+    expect(stateVersion([docs[0]!, { ...docs[1]!, deleted: false }], "rev1")).not.toBe(v);
+    expect(stateVersion([{ ...docs[0]!, updated: "2026-10-05T10:00:01.000Z" }, docs[1]!], "rev1")).not.toBe(v);
+    expect(stateVersion(docs, "rev2")).not.toBe(v);
+    expect(stateVersion(docs, null)).not.toBe(v);
+    expect(stateVersion(docs.slice(0, 1), "rev1")).not.toBe(v);
   });
 });
 
@@ -121,6 +139,23 @@ describe.skipIf(!dbServer || !s3Endpoint)("/api/sync", () => {
       put("alice", "d1", base, record("d1", "2026-10-05T10:20:01.000Z", "B")),
     ]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+  });
+
+  it("answers a poll with 'unchanged' while nothing has changed since the version it was given", async () => {
+    const full = (await (await app.request("/api/sync/state", { headers: as("alice") })).json()) as { version: string; documents: unknown[] };
+    expect(full.version).toEqual(expect.any(String));
+    expect(full.documents.length).toBeGreaterThan(0);
+    const poll = async (since: string) => (await (await app.request(`/api/sync/state?since=${encodeURIComponent(since)}`, { headers: as("alice") })).json()) as Record<string, unknown>;
+    expect(await poll(full.version)).toEqual({ unchanged: true, version: full.version });
+    // Any change — here a write — moves the version, and the poll gets the state again.
+    const current = (full.documents as { id: string; updated: string }[]).find((d) => d.id === "d1")!.updated;
+    expect((await put("alice", "d1", current, record("d1", "2026-10-05T10:30:00.000Z", "third"))).status).toBe(200);
+    const after = await poll(full.version);
+    expect(after.unchanged).toBeUndefined();
+    expect(after.version).not.toBe(full.version);
+    expect((after.documents as { id: string; updated: string }[]).find((d) => d.id === "d1")!.updated).toBe("2026-10-05T10:30:00.000Z");
+    // A stale or made-up version is simply a full answer.
+    expect((await poll("nope")).documents).toBeDefined();
   });
 
   it("keeps each user's library to themselves", async () => {
@@ -274,6 +309,105 @@ describe.skipIf(!dbServer || !s3Endpoint)("/api/sync", () => {
     it("refuses what is not a stored image type", async () => {
       expect((await post("alice", "upload", { assets: [{ hash, mime: "image/svg+xml", size: 10 }] })).status).toBe(400);
       expect((await post("alice", "upload", { assets: [{ hash: "nothex", mime: "image/png", size: 10 }] })).status).toBe(400);
+    });
+  });
+
+  describe("live shares", () => {
+    const envelope = (text: string) => ({ _format: "perssonify-document", title: "Shared", canonical: record("p1", "2026-10-05T10:00:00.000Z", text).canonical });
+    const publish = (user: string, docId: string, revision: string, text: string, headers: Record<string, string> = as(user, { "Content-Type": "application/json" })) =>
+      app.request(`/api/sync/published/${docId}`, { method: "PUT", headers, body: JSON.stringify({ revision, title: "Shared", document: envelope(text) }) });
+    const read = async (id: string, since?: string) => {
+      const res = await app.request(`/api/published/${id}${since ? `?since=${encodeURIComponent(since)}` : ""}`);
+      const gz = res.headers.get("content-encoding") === "gzip";
+      const body = res.status === 200 ? JSON.parse((gz ? gunzipSync(Buffer.from(await res.arrayBuffer())) : Buffer.from(await res.arrayBuffer())).toString()) : null;
+      return { res, body };
+    };
+
+    it("publishing needs the owner signed in, and the request header", async () => {
+      expect((await publish("alice", "p1", "2026-10-05T10:00:00.000Z", "x", { [SYNC_HEADER]: SYNC_HEADER_VALUE, "Content-Type": "application/json" })).status).toBe(401);
+      expect((await publish("alice", "p1", "2026-10-05T10:00:00.000Z", "x", { "x-test-user": "alice", "Content-Type": "application/json" })).status).toBe(403);
+    });
+
+    it("publishes a document anyone with the link can read, and lists it in the owner's state", async () => {
+      const res = await publish("alice", "p1", "2026-10-05T10:00:00.000Z", "first");
+      expect(res.status).toBe(200);
+      const { id, revision } = (await res.json()) as { id: string; revision: string };
+      expect(id).toMatch(/^[A-Za-z0-9_-]{22}$/);
+      expect(revision).toBe("2026-10-05T10:00:00.000Z");
+      const { res: got, body } = await read(id); // no sign-in
+      expect(got.status).toBe(200);
+      expect(got.headers.get("x-revision")).toBe(revision);
+      expect(body).toMatchObject({ v: 1, id, title: "Shared", revision, document: { _format: "perssonify-document" } });
+      expect(body.document.canonical.content[0].content[0].text).toBe("first");
+      const st = (await (await app.request("/api/sync/state", { headers: as("alice") })).json()) as { published: unknown[] };
+      expect(st.published).toEqual([{ docId: "p1", id, revision }]);
+      expect(((await (await app.request("/api/sync/state", { headers: as("bob") })).json()) as { published: unknown[] }).published).toEqual([]);
+    });
+
+    it("answers a follower that is up to date with 'unchanged'; an update keeps the link", async () => {
+      const st = (await (await app.request("/api/sync/state", { headers: as("alice") })).json()) as { published: { id: string; revision: string }[] };
+      const { id, revision } = st.published[0]!;
+      expect((await read(id, revision)).body).toEqual({ unchanged: true, revision });
+      const again = (await (await publish("alice", "p1", "2026-10-05T11:00:00.000Z", "second")).json()) as { id: string };
+      expect(again.id).toBe(id);
+      const { body } = await read(id, revision);
+      expect(body.revision).toBe("2026-10-05T11:00:00.000Z");
+      expect(body.document.canonical.content[0].content[0].text).toBe("second");
+    });
+
+    it("keeps each owner's publications to themselves", async () => {
+      const bobs = (await (await publish("bob", "p1", "2026-10-05T12:00:00.000Z", "bob's")).json()) as { id: string };
+      const st = (await (await app.request("/api/sync/state", { headers: as("alice") })).json()) as { published: { id: string }[] };
+      expect(bobs.id).not.toBe(st.published[0]!.id);
+      expect((await read(st.published[0]!.id)).body.document.canonical.content[0].content[0].text).toBe("second");
+    });
+
+    it("stops when unpublished: the link is gone, and a racing republish cannot bring it back", async () => {
+      const st = (await (await app.request("/api/sync/state", { headers: as("alice") })).json()) as { published: { id: string }[] };
+      const id = st.published[0]!.id;
+      expect((await app.request("/api/sync/published/p1", { method: "DELETE", headers: as("alice") })).status).toBe(200);
+      const gone = await read(id);
+      expect(gone.res.status).toBe(404);
+      expect(await gone.res.json()).toEqual({ error: "not_published" }); // what tells a follower it ended
+      // A device's sync, still holding the old id, republishes: refused.
+      const republish = await app.request("/api/sync/published/p1", {
+        method: "PUT",
+        headers: as("alice", { "Content-Type": "application/json" }),
+        body: JSON.stringify({ id, revision: "2026-10-05T13:00:00.000Z", title: "Shared", document: envelope("late") }),
+      });
+      expect(republish.status).toBe(409);
+      expect(((await (await app.request("/api/sync/state", { headers: as("alice") })).json()) as { published: unknown[] }).published).toEqual([]);
+    });
+
+    it("two first publishes of a note at once agree on one link", async () => {
+      const [a, b] = await Promise.all([
+        publish("alice", "p3", "2026-10-05T10:00:00.000Z", "a"),
+        publish("alice", "p3", "2026-10-05T10:00:01.000Z", "b"),
+      ]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+      expect(((await a.json()) as { id: string }).id).toBe(((await b.json()) as { id: string }).id);
+    });
+
+    it("deleting the note itself takes its live share down with it", async () => {
+      const rec = record("p4", "2026-10-05T10:00:00.000Z", "shared, then deleted");
+      expect((await put("alice", "p4", null, rec)).status).toBe(200);
+      const { id } = (await (await publish("alice", "p4", rec.updated, "shared, then deleted")).json()) as { id: string };
+      expect((await read(id)).res.status).toBe(200);
+      const del = await app.request(`/api/sync/documents/p4?base=${encodeURIComponent(rec.updated)}&at=2026-10-05T14:00:00.000Z`, { method: "DELETE", headers: as("alice") });
+      expect(del.status).toBe(200);
+      expect((await read(id)).res.status).toBe(404);
+    });
+
+    it("refuses bad input, and unknown or malformed links", async () => {
+      expect((await app.request("/api/published/not-a-real-id")).status).toBe(404);
+      expect((await app.request("/api/published/AAAAAAAAAAAAAAAAAAAAAA")).status).toBe(404);
+      const bad = await app.request("/api/sync/published/p2", {
+        method: "PUT",
+        headers: as("alice", { "Content-Type": "application/json" }),
+        body: JSON.stringify({ revision: "2026-10-05T10:00:00.000Z", title: "x", document: { _format: "something-else", canonical: { type: "doc" } } }),
+      });
+      expect(bad.status).toBe(400);
+      expect((await publish("alice", "-bad", "2026-10-05T10:00:00.000Z", "x")).status).toBe(400);
     });
   });
 });

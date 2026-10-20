@@ -58,7 +58,7 @@ function makeDocs(n, bump = null) {
   }));
 }
 
-function mount(n) {
+function mount(n, props = {}) {
   useFolderStore.setState({ folders: [], docParents: {}, docOrder: {}, expanded: {}, lastCreatedFolderId: null });
   const docs = makeDocs(n);
   useDocumentStore.setState({ documents: docs, activeDocId: docs[n - 1].id });
@@ -73,6 +73,7 @@ function mount(n) {
             tab="files" onTabChange={noop} onClose={noop} width={320} onResize={noop}
             onSelect={noop} onNew={noop} onDelete={noop} onRename={noop} onDuplicate={noop}
             headings={[]} activeIndex={null} onNavigateHeading={noop}
+            {...props}
           />
         </Profiler>
       </TooltipProvider>
@@ -146,16 +147,19 @@ describe("A082 — one shared row menu per list, mounted on open", () => {
   });
 
   it("opens the shared menu for the row whose ⋮ was pressed", async () => {
-    const { container, findByText } = mount(30);
+    const onDuplicate = vi.fn();
+    const { container, findByText } = mount(30, { onDuplicate });
     const trigger = container.querySelector('[data-key="d:doc-12"] [aria-label="Options for Note 12"]');
     expect(trigger).not.toBeNull();
     await act(async () => { fireEvent.click(trigger); });
-    // The body is the shared one, rendered for THIS row: Rename opens its box.
-    const rename = await findByText("Rename");
-    await act(async () => { fireEvent.click(rename); });
-    const input = container.querySelector('[data-key="d:doc-12"] input');
-    expect(input).not.toBeNull();
-    expect(input.value).toBe("Note 12");
+    // The body is the shared one, rendered for THIS row. (Driven through
+    // Duplicate, not Rename: in jsdom a Base UI menu hands focus back to its
+    // trigger synchronously, which blurs — and commits — a rename box opened
+    // from it, depending on which item the menu had highlighted. Rename from
+    // the ⋮ menu is checked in a real browser.)
+    const duplicate = await findByText("Duplicate");
+    await act(async () => { fireEvent.click(duplicate); });
+    expect(onDuplicate).toHaveBeenCalledWith("doc-12");
   });
 
   it("defers the search filter so typing never waits for the whole library", () => {

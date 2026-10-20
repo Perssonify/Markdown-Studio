@@ -373,7 +373,7 @@ Every await is followed by a generation check, so an older switch can't hydrate 
 | `canonical` | **Layer 2.** ProseMirror JSON, the source of truth. `sanitizeCanonicalNode` (`src/store/documents/canonical-sanitize.ts`) strips dangerous URLs and validates colours, fonts, alignment and theme-image sources at the import and storage-load boundary. |
 | `residuals` | **Layer 3.** `ResidualItem[]`: what ingest could not represent. Shown in `ResidualsDialog`. |
 | `ingestReport` | Fidelity summary. May include `preIngestHtml` (up to 50K characters). |
-| `metadata`, `tags` | Values from `:::fields:::` blocks, the card fields `cardColor`/`cardPinned`, and tags. |
+| `metadata`, `tags` | Values from `:::fields:::` blocks, the card fields `cardColor`/`cardPinned`, a shared note's `liveShare`/`readOnlyShare` (`store/documents/live-share-meta.ts`), and tags. |
 | `created`, `updated` | ISO timestamps. The adapter re-stamps `updated` on every save unless `_preserveUpdated` is set. |
 | `schemaVersion` | The canonical format version it was written in. It is never downgraded. Content with a newer version opens read-only. |
 
@@ -421,7 +421,7 @@ The manifest row, `DocumentSummary` (`:83-92`), is `{id, title, updated, created
 These are on-disk contracts. Do not rename them.
 
 - **localStorage:**
-  - `pf:*` UI prefs in `src/store/preferences/uiStore.ts`: workspace, paste-styled, case-content-only, show-ads (it has an effect only in development builds), read-only, context-menu, console, keyboard-shortcuts, font-size, line-height, reading-width, spellcheck, focus-mode, docnav-width, workspace-tab.
+  - `pf:*` UI prefs in `src/store/preferences/uiStore.ts`: workspace, paste-styled, case-content-only, show-ads (it has an effect only in development builds), read-only, context-menu, console, keyboard-shortcuts, font-size, line-height, reading-width, spellcheck, focus-mode, docnav-width, workspace-tab, library-sort.
   - Find/Replace `pf:fr-*`, `pf:card-view`, `pf:tour-seen-v1`.
   - Durability (`src/store/persistence/storage-durability.ts`): `pf:library-canary`, `pf:last-full-backup`, `pf:content-since`, `pf:backup-nudge-snoozed-until`, `pf:persist-requested-at`, `pf:install-tip-snoozed-until`.
   - Privacy and gates: `pf:import-relay` (the relay consent), `pf:block-remote-images`, `pf:admin` (shows the Admin settings in a production build).

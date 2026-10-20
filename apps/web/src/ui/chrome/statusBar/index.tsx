@@ -21,6 +21,7 @@ import { formatEstBytes, historyCache } from "@/store/history/history-cache";
 import { useTabSyncStore } from "@/store/persistence/tab-sync";
 import { useUIStore } from "@/store/preferences/uiStore";
 import { KeyboardShortcutsDialog } from "../keyboardShortcutsDialog";
+import { VersionBadge } from "../versionBadge";
 import { ResidualsDialog } from "@/ui/importExport/residualsDialog";
 import { INITIAL_ANNOUNCER, nextAnnouncement } from "./save-announcer";
 import { t, useT } from "@/i18n";
@@ -368,6 +369,10 @@ function RawStatusBar({ onOpenMemory, onToggleLinks, linksActive, onToggleTray, 
             </button>
           )}
         </div>
+
+        {/* The version (and, on a preview build, its branch) — last, and only
+            where there is room: it is reference, not status. */}
+        <VersionBadge className="hidden border-l border-border/50 pl-3 lg:inline-flex" />
       </div>
       <KeyboardShortcutsDialog open={showShortcuts} onClose={() => setShowShortcuts(false)} />
       <ResidualsDialog

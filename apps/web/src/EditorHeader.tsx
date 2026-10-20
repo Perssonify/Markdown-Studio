@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { FileText } from "lucide-react";
 import type { ReactNode } from "react";
 import { APP_BRAND, APP_NAME } from "./constants";
+import { VersionBadge } from "./ui/chrome/versionBadge";
 
 interface EditorHeaderProps {
   /**
@@ -34,6 +35,7 @@ export function EditorHeader({ accountControl }: EditorHeaderProps) {
               <span className="text-sm font-semibold text-foreground truncate">
                 {APP_NAME}
               </span>
+              <VersionBadge className="hidden sm:inline-flex" />
             </div>
             <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-normal leading-none">
               {APP_BRAND}

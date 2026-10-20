@@ -12,6 +12,7 @@ import { canonicalJsonText } from "./canonical-json";
 import { sanitizeCanonicalNode } from "./canonical-sanitize";
 import type { ResidualItem } from "../importExport/ingest";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version";
+import { isReadOnlyShare, liveShareOf } from "./live-share-meta";
 
 // --- Types ---
 
@@ -90,6 +91,10 @@ export interface DocumentSummary {
   tags: string[];
   hasResiduals: boolean;
   originFormat: string;
+  /** A copy following a live share (live-share-meta.ts) — present only then. */
+  liveShare?: { id: string; unseen: boolean; ended: boolean };
+  /** Opened from a read-only share link — present only then. */
+  readOnlyShare?: true;
 }
 
 let _counter = 0;
@@ -519,7 +524,7 @@ export function deserializeFromStorage(
  */
 export function toSummary(doc: DocumentRecord): DocumentSummary {
   const counts = computeCounts(doc.canonical);
-  return {
+  const summary: DocumentSummary = {
     id: doc.id,
     title: doc.title,
     updated: doc.updated,
@@ -529,6 +534,11 @@ export function toSummary(doc: DocumentRecord): DocumentSummary {
     hasResiduals: doc.residuals.length > 0,
     originFormat: doc.origin?.format ?? "unknown",
   };
+  // Only shared documents carry these, so every other summary is unchanged.
+  const live = liveShareOf(doc.metadata);
+  if (live) summary.liveShare = { id: live.id, unseen: !!live.unseen, ended: !!live.ended };
+  if (isReadOnlyShare(doc.metadata)) summary.readOnlyShare = true;
+  return summary;
 }
 
 /**

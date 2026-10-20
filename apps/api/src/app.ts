@@ -6,7 +6,7 @@ import { requireOriginSecret } from "./middlewares/originVerify/index.ts";
 import { authRoutes } from "./modules/auth/index.ts";
 import { healthRoutes } from "./modules/health/index.ts";
 import { importRelayRoutes } from "./modules/importRelay/index.ts";
-import { syncRoutes, type SyncDeps } from "./modules/sync/index.ts";
+import { publishedRoutes, syncRoutes, type SyncDeps } from "./modules/sync/index.ts";
 
 export interface AppDeps {
   env: Env;
@@ -36,6 +36,7 @@ export function createApp({ env, pingDatabase, pingStorage, auth, sync }: AppDep
   app.route("/", healthRoutes({ pingDatabase, pingStorage }));
   app.route("/", authRoutes(auth, missingAuthSettings(env)));
   app.route("/", syncRoutes(sync ?? { db: null, storage: null, userIdOf: null }) as unknown as Hono);
+  app.route("/", publishedRoutes(sync ?? { db: null, storage: null }));
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   app.onError((err, c) => {

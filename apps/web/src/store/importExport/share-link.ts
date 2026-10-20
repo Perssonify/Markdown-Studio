@@ -28,7 +28,13 @@ export interface ShareDoc {
   markdown: string;
   /** Ingest format of `markdown`. Defaults to "markdown" when absent. */
   format?: IngestFormat;
+  /** Merged into the imported document's metadata. Never read from a link
+   *  (decodeSharePayload drops it): only the app sets it, for a live share. */
+  metadata?: Record<string, unknown>;
 }
+
+/** The layout a share opens in: the app's MD / HTML (rich) / Split modes. */
+export type ShareView = "md" | "html" | "split";
 
 export interface SharePayload {
   /** Envelope version, so an older client can refuse a newer shape cleanly. */
@@ -38,7 +44,15 @@ export interface SharePayload {
   /** A human label for the share (doc title or folder name) — used in notices. */
   name: string;
   docs: ShareDoc[];
+  /** The layout the recipient opens it in (this visit only). Absent: their own. */
+  view?: ShareView;
+  /** The recipient's copies open read-only (store/documents/live-share-meta.ts),
+   *  until they make them editable. Older builds ignore both — the link still
+   *  opens, as an editable copy in the recipient's own layout. */
+  readOnly?: boolean;
 }
+
+export const isShareView = (v: unknown): v is ShareView => v === "md" || v === "html" || v === "split";
 
 /** The fragment that marks a share link: `…/#share=<data>`. */
 export const SHARE_HASH_KEY = "share";
@@ -94,6 +108,8 @@ export function decodeSharePayload(encoded: string): SharePayload | null {
       kind: p.kind === "folder" ? "folder" : "file",
       name: typeof p.name === "string" ? p.name : "",
       docs,
+      ...(isShareView(p.view) ? { view: p.view } : {}),
+      ...(p.readOnly === true ? { readOnly: true } : {}),
     };
   } catch {
     return null;

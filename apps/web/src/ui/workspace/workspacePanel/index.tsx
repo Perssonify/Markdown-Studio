@@ -3,21 +3,27 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { gatedShareProps, ShareHelpIcon, ShareHint, useShareGate } from "@/editor/share-gate";
 import { useDocumentStore } from "@/store/documents/documentStore";
-import { useFolderStore } from "@/store/documents/folders";
+import { LIBRARY_SORTS, type LibrarySort, useFolderStore } from "@/store/documents/folders";
 import type { OutlineHeading } from "@/store/documents/doc-outline";
 import {
+  ArrowDownUpIcon,
   CheckSquareIcon,
   ClockIcon,
   CopyIcon,
@@ -44,12 +50,14 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import type { DocumentSummary } from "@/store/documents/document";
 import { AdUnit } from "@/ui/shared/adUnit";
 import { useDialog } from "@/ui/dialogs/dialogProvider";
-import { FolderTree } from "../folderTree";
+import { FolderTree, LibraryBackgroundMenuItems } from "../folderTree";
+import { SharedDocBadge, sharedStateOf } from "../sharedBadge";
 import { timeAgo } from "../utils/relative-time";
 import { TocList } from "../docNavPanel";
 import { DIVIDER_BASE_CLASS, DIVIDER_HIT_AREA, useDividerDrag } from "@/ui/shared/hooks/use-divider-drag";
 import { useFocusRowAfterRender, useWindowedList } from "../hooks/use-windowed-list";
-import { DOCNAV_WIDTH_MIN, docNavWidthMax } from "@/store/preferences/uiStore";
+import { DOCNAV_WIDTH_MIN, docNavWidthMax, useUIStore } from "@/store/preferences/uiStore";
+import { passShiftContextMenuToBrowser } from "@/ui/shared/utils/native-context-menu";
 import { t, useT } from "@/i18n";
 
 /** Keyboard resize step for the panel separator. */
@@ -384,6 +392,7 @@ function FilesTab({
   const documents = useDocumentStore((s) => s.documents);
   const activeDocId = useDocumentStore((s) => s.activeDocId);
   const createFolder = useFolderStore((s) => s.createFolder);
+  const contextMenuEnabled = useUIStore((s) => s.contextMenuEnabled);
   const { confirm } = useDialog();
 
   const [filter, setFilter] = useState("");
@@ -583,6 +592,7 @@ function FilesTab({
               <TooltipContent side="bottom" className="text-[10px] font-bold">{t("library.selectForBulkActions")}</TooltipContent>
             </Tooltip>
           )}
+          {!selectMode && <LibrarySortMenu />}
           {!selectMode && (
             <Tooltip>
               <TooltipTrigger render={
@@ -616,7 +626,11 @@ function FilesTab({
         />
       </div>
 
-      {/* List */}
+      {/* List. A right-click anywhere in it that no row claims — blank space
+          below the tree, the empty state, the flat list — offers New document
+          and New folder (the tree's own menu handles its rows and stops the
+          event, so the two menus never both open). */}
+      <LibraryContextMenu enabled={contextMenuEnabled} onNewDoc={onNew}>
       <div ref={listScrollRef} className="mt-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 pb-2">
         {filtered.length === 0 && (
           <span className="block px-2 py-4 text-center text-xs text-muted-foreground">
@@ -638,6 +652,7 @@ function FilesTab({
             onShareDoc={onShareDoc}
             onShareFolder={onShareFolder}
             onNewDocInFolder={onNewDocInFolder}
+            onNewDoc={onNew}
             confirmDeleteFolder={confirmDeleteFolder}
             scrollRef={listScrollRef}
           />
@@ -667,6 +682,7 @@ function FilesTab({
 
         <AdUnit variant="sidebar-inline" className="mx-1 mt-2" />
       </div>
+      </LibraryContextMenu>
 
       {/* Footer count. A095: 10px at the full muted token (the 60% alpha it
           carried measured 2.3:1). */}
@@ -678,6 +694,70 @@ function FilesTab({
         </span>
       </div>
     </div>
+  );
+}
+
+/** The library's blank-space right-click menu around `children` (one element,
+ *  the list's scroller, which the trigger renders as). Off: the browser's menu. */
+function LibraryContextMenu({
+  enabled,
+  onNewDoc,
+  children,
+}: {
+  enabled: boolean;
+  onNewDoc: () => void;
+  children: React.ReactElement;
+}) {
+  if (!enabled) return children;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger render={children} onContextMenuCapture={passShiftContextMenuToBrowser} />
+      <ContextMenuContent className="w-48">
+        <LibraryBackgroundMenuItems onNewDoc={onNewDoc} />
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+const SORT_LABEL_KEYS: Record<LibrarySort, "library.sortUpdated" | "library.sortName" | "library.sortCreated" | "library.sortManual"> = {
+  updated: "library.sortUpdated",
+  name: "library.sortName",
+  created: "library.sortCreated",
+  manual: "library.sortManual",
+};
+
+/** How the library is ordered — Last edited (the default), Name, Date created
+ *  or Custom order (see LibrarySort). */
+function LibrarySortMenu() {
+  const t = useT();
+  const sort = useUIStore((s) => s.librarySort);
+  const setSort = useUIStore((s) => s.setLibrarySort);
+  const label = t("library.sortByCurrent", { order: t(SORT_LABEL_KEYS[sort]) });
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger render={
+          <DropdownMenuTrigger render={
+            <Button variant="ghost" size="icon-sm" aria-label={label}>
+              <ArrowDownUpIcon data-icon />
+            </Button>
+          } />
+        } />
+        <TooltipContent side="bottom" className="text-[10px] font-bold">{label}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t("library.sortBy")}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={sort} onValueChange={(v) => setSort(v as LibrarySort)}>
+            {LIBRARY_SORTS.map((s) => (
+              <DropdownMenuRadioItem key={s} value={s}>{t(SORT_LABEL_KEYS[s])}</DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <p className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">{t("library.sortHint")}</p>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -872,7 +952,10 @@ function FlatDocList({
                     <FileTextIcon className={cn("mt-0.5 size-3.5 shrink-0", isActive ? "text-primary-strong" : "text-muted-foreground/50")} />
                   )}
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span title={doc.title || t("common.untitled")} className={cn("truncate text-xs leading-tight text-foreground", isActive ? "font-semibold" : "font-medium")}>{doc.title || t("common.untitled")}</span>
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span title={doc.title || t("common.untitled")} className={cn("min-w-0 truncate text-xs leading-tight text-foreground", isActive ? "font-semibold" : "font-medium")}>{doc.title || t("common.untitled")}</span>
+                      {(() => { const shared = sharedStateOf(doc); return shared ? <SharedDocBadge state={shared} /> : null; })()}
+                    </span>
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <span className="flex items-center gap-1 text-[10px]"><ClockIcon className="size-2.5!" />{timeAgo(doc.updated)}</span>
                       {doc.wordCount && doc.wordCount > 0 && (

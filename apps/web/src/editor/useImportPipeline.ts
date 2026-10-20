@@ -109,7 +109,7 @@ export function useImportPipeline({
   // folder path), creating folders as needed. Shared by file-drop import and
   // URL import so both get identical folder handling and canonical capture.
   const importItems = useCallback(async (
-    items: { raw: string; format: IngestFormat; folderPath: string[] }[],
+    items: { raw: string; format: IngestFormat; folderPath: string[]; metadata?: Record<string, unknown> }[],
     opts: { assets?: ArchiveAsset[] } = {}
   ): Promise<{ importedCount: number; failedCount: number; firstDocId: string | null }> => {
     let importedCount = 0;
@@ -163,6 +163,8 @@ export function useImportPipeline({
     for (const item of items) {
       const doc = createDoc(item.raw, item.format, "file-import", { mdToHtml: engine?.mdToHtml });
       if (!doc) continue;
+      // A shared document's flags (read-only, following a live share).
+      if (item.metadata) doc.metadata = { ...doc.metadata, ...item.metadata };
       if (!firstDocId) { firstDocId = doc.id; firstDoc = doc as DocumentRecord; }
       const folderId = item.folderPath.length ? ensureFolder(item.folderPath) : null;
 

@@ -1,5 +1,5 @@
 import { FileText, Heart, Shield, WifiOff } from "lucide-react";
-import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, PERSSONIFY_URL, VERSION, VIRALLENS_URL } from "@/constants";
+import { APP_BRAND, APP_DOMAIN, APP_NAME, APP_URL, BUILD_INFO, PERSSONIFY_URL, VERSION, VIRALLENS_URL } from "@/constants";
 import { CREDITS, LICENSE_SUMMARY, THIRD_PARTY_NOTICES_PATH } from "@/data/credits";
 import { PageChrome } from "../pageChrome";
 import { CopyDiagnosticsButton } from "@/ui/diagnostics/diagnosticsActions";
@@ -48,6 +48,12 @@ export function AboutPage({ onClose }: AboutPageProps) {
           <p className="mt-1 text-sm text-muted-foreground">
             {t.rich("pages.aboutVersion", { version: VERSION, b: (s) => <span className="font-medium">{s}</span>, brand: APP_BRAND })}
           </p>
+          {/* Which build this is: the branch and commit it was made from. */}
+          {BUILD_INFO.commit && (
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground" data-build-info="">
+              {BUILD_INFO.branch ? `${BUILD_INFO.branch} @ ${BUILD_INFO.commit}` : BUILD_INFO.commit}
+            </p>
+          )}
           <p className="mt-4 inline-flex items-center gap-1.5 text-base font-medium">
             {t.rich("pages.madeWith", {
               heart: <Heart className="size-4 fill-rose-500 text-rose-500" aria-label={t("pages.love")} />,

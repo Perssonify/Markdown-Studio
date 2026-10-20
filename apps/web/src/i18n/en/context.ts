@@ -37,4 +37,5 @@ export const context = {
   "context.diagramMermaid": "Diagram (Mermaid)",
   "context.musicScoreAbc": "Music score (ABC)",
   "context.horizontalRule": "Horizontal rule",
+  "context.browserMenuHint": "Spelling suggestions: Shift + right-click opens the browser's menu.",
 } satisfies Record<`context.${string}`, Message>;

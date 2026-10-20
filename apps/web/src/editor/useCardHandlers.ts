@@ -8,6 +8,7 @@ import { computeFidelity } from "../store/documents/fidelity";
 import type { FolderTreeData } from "../store/documents/folders";
 import { sanitizeForIngest } from "../store/importExport/ingest";
 import { canonicalMisfit, isNewerSchema } from "../store/documents/schema-version";
+import { isLockedShare } from "../store/documents/live-share-meta";
 import { snapshotStore } from "../store/history/snapshot-store";
 import { t } from "../i18n";
 import type { DocStore, Engine, Lifecycle, LinkIndexApi, SyncEngine, TiptapRef, Toast } from "./types";
@@ -140,6 +141,13 @@ export function useCardHandlers({
     if (current && (isNewerSchema(current.schemaVersion) || canonicalMisfit(current.canonical, editor.schema))) {
       void snapshotStore.record(id, current.title || "Untitled", canonical, "manual").catch(() => {});
       toast.show(t("editor.cardNewerVersion"), "warning");
+      return;
+    }
+    // A shared document that is read-only here (a live copy being followed, a
+    // read-only share): the editor opens it read-only, and so must its card.
+    if (current && isLockedShare(current.metadata)) {
+      void snapshotStore.record(id, current.title || "Untitled", canonical, "manual").catch(() => {});
+      toast.show(t("editor.cardSharedReadOnly"), "warning");
       return;
     }
     // What this edit REPLACES — the live editor's copy when it holds the note.

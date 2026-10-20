@@ -8,7 +8,7 @@ import TurndownService from 'turndown';
 import { preprocessMarkdown, normalizeMarkdown, type PreprocessFeatures } from './preprocessor';
 import { createRichProjector, type RichPath, type RichPlan, type RichPrebuild } from './incremental-rich';
 import { cleanHtmlForTurndown } from './html-cleaner';
-import { addBaseRules, addInlineStyleRule, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
+import { addBaseRules, addInlineStyleRule, blankReplacement, installEscape, turndownLinear, type EscapeOptions } from './turndown-rules';
 import { holdsBreakMark, portableBreaksActive, stripBreakMarks, withoutPortableBreaks } from './portable-breaks';
 import { createIncrementalConverter } from './incremental-md';
 import { buildMarked, resetFootnoteNumbering } from './build-marked';
@@ -252,8 +252,8 @@ export function createMarkdownEngine(
   // `hr: "---"`: turndown's default `* * *` rewrote every thematic break the
   // user typed on the first rich-pane edit. Its rule always emits the break
   // between blank lines, so `---` cannot read as a setext underline or open
-  // front matter.
-  const options = { headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*", hr: "---" } as const;
+  // front matter. `blankReplacement` keeps an empty list item (turndown-rules.ts).
+  const options = { headingStyle: "atx", codeBlockStyle: "fenced", emDelimiter: "*", hr: "---", blankReplacement } as const;
 
   // Escape exactly what the CURRENT settings give meaning to (turndown-rules.ts
   // escapeMarkdownText): `$` only while maths is on, `~~` only while

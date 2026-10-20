@@ -3608,11 +3608,11 @@
    "via": "engine",
    "features": 0,
    "md": "- [ ] foo\n  ---\n",
-   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><h2>[ ] foo</h2>\n</li>\n</ul>\n",
+   "html": "<ul data-type=\"taskList\">\n<li data-type=\"taskItem\" data-checked=\"false\">foo<br>---</li>\n</ul>\n",
    "changed": {
-    "why": "marked 18.0.3: a setext heading is not a task item's paragraph (GFM), so the item is a bullet whose heading reads [ ] foo.",
+    "why": "PL-51: a heading underline under a list item's first line is escaped in the md→rich projection (escapeListSetextUnderlines), so the item keeps its text (and, as a task item, its checkbox). The <h2> it used to hold was hoisted out of the list by the rich pane, which left an empty item behind.",
     "editor": "changed",
-    "was": "<ul data-type=\"taskList\">\n<li data-type=\"taskItem\" data-checked=\"false\"><h2>foo</h2>\n</li>\n</ul>\n"
+    "was": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><h2>[ ] foo</h2>\n</li>\n</ul>\n"
    }
   },
   {
@@ -3621,7 +3621,12 @@
    "via": "engine",
    "features": 12,
    "md": "- [ ] foo\n  ---\n",
-   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><h2>[ ] foo</h2>\n</li>\n</ul>\n"
+   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\">[ ] foo\n---</li>\n</ul>\n",
+   "changed": {
+    "why": "PL-51: a heading underline under a list item's first line is escaped in the md→rich projection (escapeListSetextUnderlines), so the item keeps its text (and, as a task item, its checkbox). The <h2> it used to hold was hoisted out of the list by the rich pane, which left an empty item behind.",
+    "editor": "changed",
+    "was": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><h2>[ ] foo</h2>\n</li>\n</ul>\n"
+   }
   },
   {
    "id": "c388",
@@ -3629,11 +3634,11 @@
    "via": "engine",
    "features": 13,
    "md": "- [ ] foo\n  ---\n",
-   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><h2>[ ] foo</h2>\n</li>\n</ul>\n",
+   "html": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><input disabled=\"\" type=\"checkbox\"> foo<br>---</li>\n</ul>\n",
    "changed": {
-    "why": "marked 18.0.3: a setext heading is not a task item's paragraph (GFM), so the item is a bullet whose heading reads [ ] foo.",
+    "why": "PL-51: a heading underline under a list item's first line is escaped in the md→rich projection (escapeListSetextUnderlines), so the item keeps its text (and, as a task item, its checkbox). The <h2> it used to hold was hoisted out of the list by the rich pane, which left an empty item behind.",
     "editor": "changed",
-    "was": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><input disabled=\"\" type=\"checkbox\"> <h2>foo</h2>\n</li>\n</ul>\n"
+    "was": "<ul style=\"list-style:disc outside;padding-left:24px;margin:8px 0\">\n<li style=\"display:list-item;margin-bottom:2px\"><h2>[ ] foo</h2>\n</li>\n</ul>\n"
    }
   },
   {

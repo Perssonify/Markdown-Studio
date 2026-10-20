@@ -39,6 +39,15 @@ declare const __APP_VERSION__: string;
 export const VERSION =
   typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.4.0";
 
+// The branch and commit the standalone app was built from (build/build-info.mjs,
+// injected by vite.app.config.ts). Null in the library and the embed — and in
+// a build made where git could not be asked.
+declare const __APP_BUILD__: { branch: string | null; commit: string | null } | undefined;
+export const BUILD_INFO: { branch: string | null; commit: string | null } =
+  typeof __APP_BUILD__ !== "undefined" && __APP_BUILD__ ? __APP_BUILD__ : { branch: null, commit: null };
+/** The branch production deploys from: a build from any other says which. */
+export const RELEASE_BRANCH = "main";
+
 export const MODES = {
   MD: "md",
   HTML: "html",

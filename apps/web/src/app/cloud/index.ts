@@ -8,20 +8,27 @@ import { recordFullBackup } from "@/store/persistence/storage-durability";
 import { parseTabSyncMessage, tabSyncChannel, tabSyncChannelName, type TabSyncEvent } from "@/store/persistence/tab-sync";
 import { liveBackupSources } from "../../utils/emergency-backup";
 import { safeStorage } from "../../utils/safe-storage";
-import { CloudError, httpAccountArchive, httpCloudApi } from "./api";
+import { CloudError, httpAccountArchive, httpCloudApi, isUnchanged } from "./api";
 import { backedUpToday, backUpToAccount, type BackupDeps, type BackupOutcome } from "./backup";
 import { SyncEngine } from "./engine";
 import { untouchedStarterIds, withoutNotes } from "./starters";
 import { accountVersionsProvider } from "./versions";
+import { notePublishProblem, rememberPublished } from "../publish";
+import { publishDocument } from "../publish/api";
 
 /**
  * Cloud sync in the standalone app: one SyncEngine per signed-in session,
  * driven by what happens in the library.
  *
  *  - When: right away, a moment after any change in this browser's library
- *    (the editor's own tab-sync announcements), when the tab regains focus or
- *    the network returns, and every 30 s.
- *  - One tab at a time (a Web Lock), so two tabs never upload the same note.
+ *    (the editor's own tab-sync announcements), when the page is shown again,
+ *    regains focus or the network returns, and on a poll that follows use:
+ *    every 5 s for a minute after anything moved, every 15 s while the page is
+ *    on screen, every 5 minutes behind other windows. A poll that finds the
+ *    account unchanged costs one tiny request.
+ *  - One tab at a time (a Web Lock), so two tabs never upload the same note. A
+ *    tab that finds another syncing tries again shortly, so the change that
+ *    woke it is not left for the next poll.
  *  - One account per browser library: the first account to sync this browser's
  *    library owns it; another account signing in here does not sync — its
  *    notes would otherwise be mixed with the first person's in either account.
@@ -41,8 +48,20 @@ const setPhase = (phase: CloudPhase, synced = false) =>
   useCloudStatus.setState((s) => ({ phase, lastSyncedAt: synced ? Date.now() : s.lastSyncedAt }));
 
 const OWNER_KEY = "pf:cloud-owner";
-const INTERVAL_MS = 30_000;
-const SETTLE_MS = 1_500;
+// How often the account is asked "anything new?". Cheap when nothing is: the
+// engine sends the version of the state it holds and is told "unchanged" — a
+// few bytes, not the whole list (engine.ts serverState).
+/** For a minute after anything moved (a change here, or one pulled from another device). */
+const ACTIVE_MS = 5_000;
+const ACTIVE_WINDOW_MS = 60_000;
+/** While the page is on screen. */
+const VISIBLE_MS = 15_000;
+/** In the background: no one is looking, and coming back syncs at once. */
+const HIDDEN_MS = 5 * 60_000;
+/** A focus or visibility wake this soon after the last cycle is not worth one. */
+const WAKE_GAP_MS = 2_000;
+/** After a change in the library, wait this long for more before syncing. */
+const SETTLE_MS = 750;
 const SOURCE = `cloud-sync:${Math.random().toString(36).slice(2)}`;
 /** The day's backup waits this long after sign-in, so it does not compete with opening the library. */
 const BACKUP_DELAY_MS = 60_000;
@@ -96,6 +115,8 @@ function makeEngine(userId: string, announce: (e: TabSyncEvent[]) => void): Sync
     assets: assetStore,
     announce,
     kv: safeStorage,
+    // Live shares: keep each one this account publishes current (app/publish).
+    publish: { seen: rememberPublished, put: publishDocument, problem: notePublishProblem },
   });
 }
 
@@ -112,7 +133,7 @@ async function dropStarterCopies(storage: IndexedDBStorageAdapter, docs: Documen
   if (starters.size === 0) return docs.length;
   try {
     const state = await httpCloudApi.state();
-    if (!state.documents.some((d) => !d.deleted)) return docs.length; // the account's first device: keep them
+    if (isUnchanged(state) || !state.documents.some((d) => !d.deleted)) return docs.length; // the account's first device: keep them
     for (const id of starters) await storage.delete(id);
     const prefs = await storage.getPrefs();
     const active = prefs["lastActiveDocId"];
@@ -171,6 +192,10 @@ export function startCloudSync(userId: string): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let running = false;
   let rerun = false;
+  /** When something last moved — a change here, or a cycle that moved a note. */
+  let lastActivity = 0;
+  /** When the last cycle ended. */
+  let lastRunAt = 0;
 
   const channel = openChannel((events, fromSync) => {
     if (fromSync) return; // another tab's sync: nothing new in the library
@@ -184,22 +209,45 @@ export function startCloudSync(userId: string): () => void {
         setPhase("off");
       }
     }
+    lastActivity = Date.now();
     schedule(SETTLE_MS);
   });
   const engine = makeEngine(userId, channel.post);
   const unregisterVersions = setAccountVersions(accountVersionsProvider(httpAccountArchive, snapshotStore));
 
+  // The day's backup builds a ZIP of the whole library: it runs beside sync,
+  // under a lock of its own, never inside a sync cycle (which it used to hold —
+  // and every tab's sync with it — for as long as the ZIP took).
   let nextBackupAt = Date.now() + BACKUP_DELAY_MS;
+  let backingUp = false;
   const dailyBackup = async () => {
-    if (Date.now() < nextBackupAt || backedUpToday(userId, backupDeps)) return;
+    if (backingUp || Date.now() < nextBackupAt || backedUpToday(userId, backupDeps)) return;
+    backingUp = true;
+    const attempt = async () => {
+      try {
+        const outcome = await backUpToAccount(userId, backupDeps);
+        // Nothing to back up, or it cannot be: not again on every cycle.
+        if (outcome !== "stored" && outcome !== "exists") nextBackupAt = Date.now() + BACKUP_RETRY_MS;
+      } catch {
+        nextBackupAt = Date.now() + BACKUP_RETRY_MS; // never the sync's failure
+      }
+    };
     try {
-      const outcome = await backUpToAccount(userId, backupDeps);
-      // Nothing to back up, or it cannot be: not again on every cycle.
-      if (outcome !== "stored" && outcome !== "exists") nextBackupAt = Date.now() + BACKUP_RETRY_MS;
+      const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+      if (locks) await locks.request(`pf-cloud-backup:${userId}`, { ifAvailable: true }, async (lock) => (lock ? attempt() : undefined));
+      else await attempt();
     } catch {
-      nextBackupAt = Date.now() + BACKUP_RETRY_MS; // never the sync's failure
+      /* the lock itself failed: the next cycle tries again */
+    } finally {
+      backingUp = false;
     }
   };
+
+  /** How long until the next poll: see ACTIVE_MS, VISIBLE_MS, HIDDEN_MS. */
+  const pollDelay = () =>
+    typeof document !== "undefined" && document.visibilityState === "hidden" ? HIDDEN_MS
+    : Date.now() - lastActivity < ACTIVE_WINDOW_MS ? ACTIVE_MS
+    : VISIBLE_MS;
 
   const run = async () => {
     if (stopped || paused) return;
@@ -208,24 +256,46 @@ export function startCloudSync(userId: string): () => void {
       return;
     }
     running = true;
-    setPhase("syncing");
+    let busy = false;
     try {
       const work = async () => {
+        setPhase("syncing"); // once the lock is held: not while another tab syncs
         const r = await engine.cycle();
         if (r.again) rerun = true;
-        await dailyBackup();
+        if (r.pulled || r.pushed || r.deletedHere || r.deletedThere || r.conflicts) lastActivity = Date.now();
       };
       const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
-      if (locks) await locks.request(`pf-cloud-sync:${userId}`, { ifAvailable: true }, async (lock) => (lock ? work() : undefined));
-      else await work();
-      if (!stopped) setPhase("synced", true);
+      if (locks) {
+        await locks.request(`pf-cloud-sync:${userId}`, { ifAvailable: true }, async (lock) => {
+          if (lock) await work();
+          else busy = true;
+        });
+      } else await work();
+      // Another tab was syncing: what woke this one may have come after that
+      // cycle read the library, so try again shortly — and do not claim
+      // "synced" for a cycle that did not run (it used to, and dropped the
+      // change that woke it until the next poll).
+      if (busy) rerun = true;
+      else if (!stopped) {
+        setPhase("synced", true);
+        void dailyBackup();
+      }
     } catch (e) {
       if (!stopped) setPhase(e instanceof CloudError && e.offline ? "offline" : "error");
     } finally {
       running = false;
-      if (rerun && !stopped) {
-        rerun = false;
-        schedule(SETTLE_MS);
+      lastRunAt = Date.now();
+      if (!stopped) {
+        if (rerun) {
+          rerun = false;
+          // Another tab held the lock: try again soon if this page is in
+          // use, else at its ordinary poll — every hidden tab retrying at
+          // once would read the account's state once each per edit.
+          const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+          schedule(busy ? (hidden ? pollDelay() : SETTLE_MS * 2) : SETTLE_MS);
+        } else if (!timer) {
+          schedule(pollDelay());
+        }
       }
     }
   };
@@ -239,18 +309,24 @@ export function startCloudSync(userId: string): () => void {
     }, ms);
   }
 
-  const onWake = () => schedule(0);
-  const interval = setInterval(() => void run(), INTERVAL_MS);
+  // Back on screen, focused again, or online again: sync now — unless a cycle
+  // has only just run (a click into the window fires focus and visibility).
+  const onWake = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    if (Date.now() - lastRunAt < WAKE_GAP_MS) return;
+    schedule(0);
+  };
   window.addEventListener("focus", onWake);
   window.addEventListener("online", onWake);
+  document.addEventListener("visibilitychange", onWake);
   schedule(0);
 
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);
-    clearInterval(interval);
     window.removeEventListener("focus", onWake);
     window.removeEventListener("online", onWake);
+    document.removeEventListener("visibilitychange", onWake);
     channel.close();
     unregisterVersions();
     setPhase("off");

@@ -6,7 +6,20 @@ import type { DocumentRecord, DocumentSummary } from "../store/documents/documen
 import type { FidelityReport } from "../store/documents/fidelity";
 import type { IDBStorageConfig, StorageMetrics } from "../store/persistence/idb-storage-adapter";
 import type { GraphEdge, GraphNode } from "../store/links/link-index";
-import type { SharePayload } from "../store/importExport/share-link";
+import type { SharePayload, ShareView } from "../store/importExport/share-link";
+
+/** What the host provides for live shares (`PerssonifyEditorProps.liveShares`). */
+export interface LiveShares {
+  /** Publish the document (or publish it again) and return its live link,
+   *  opening in `view`. Rejects with a message to show when it cannot. */
+  publish: (docId: string, view?: ShareView) => Promise<string>;
+  /** Stop publishing it: the link stops working, followers keep their copy. */
+  unpublish: (docId: string) => Promise<void>;
+  /** The document's live link when it is published, else null. */
+  linkFor: (docId: string, view?: ShareView) => string | null;
+  /** Why its live copy is behind the note (to show), else null. */
+  problemFor?: (docId: string) => string | null;
+}
 import type { StorageAdapter, StorageQuotaError } from "../store/persistence/storage-adapter";
 
 /** The document graph the editor exports (wiki links between documents). */
@@ -188,6 +201,13 @@ export interface PerssonifyEditorProps {
    * Omitted by the library / iframe embed, where sharing works as before.
    */
   shareDisabledReason?: string;
+  /**
+   * Standalone app only (it needs the account's server): LIVE shares. The
+   * Share dialog then offers a third kind of link — read-only, and kept
+   * up to date: people who open it follow the document, and get the owner's
+   * edits (app/publish). Omitted by the library / iframe embed.
+   */
+  liveShares?: LiveShares;
 
   /**
    * Open read-only: editing disabled, formatting toolbar hidden, view mode

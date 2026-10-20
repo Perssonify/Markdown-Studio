@@ -21,18 +21,27 @@ function fakeAccount() {
   let library = null;
   let libRev = 0;
   const conflict = (row) => ({ ok: false, current: row ? { updated: row.updated, deleted: row.deleted } : null });
+  /** How each state read was answered: "full", or "unchanged" (a poll with the current version). */
+  const stateReads = [];
+  /** The account's live shares, as `state` lists them. */
+  const published = [];
   return {
     docs,
     assets,
+    stateReads,
+    published,
     get library() {
       return library;
     },
     api: {
-      async state() {
-        return {
-          documents: [...docs].map(([id, d]) => ({ id, title: d.record?.title ?? "", updated: d.updated, deleted: d.deleted, size: 1 })),
-          library,
-        };
+      // Like the API: a version of what the state describes, and "unchanged"
+      // to a poll that already holds it (routes/index.ts stateVersion).
+      async state(since) {
+        const documents = [...docs].map(([id, d]) => ({ id, title: d.record?.title ?? "", updated: d.updated, deleted: d.deleted, size: 1 }));
+        const version = JSON.stringify([documents.map((d) => [d.id, d.updated, d.deleted]).sort(), library?.updated ?? null, published]);
+        stateReads.push(since === version ? "unchanged" : "full");
+        if (since === version) return { unchanged: true, version };
+        return { documents, library, published: structuredClone(published), version };
       },
       async getDocument(id) {
         const d = docs.get(id);
@@ -115,7 +124,7 @@ function memAssets() {
 }
 
 let seq = 0;
-function device(account, userId = "u1") {
+function device(account, userId = "u1", extra = {}) {
   const storage = new IndexedDBStorageAdapter({ dbName: `cloud-test-${++seq}`, snapshots: false });
   const snapshots = [];
   const announced = [];
@@ -130,6 +139,7 @@ function device(account, userId = "u1") {
     announce: (events) => announced.push(...events),
     kv: { get: (k) => kv.get(k) ?? null, set: (k, v) => void kv.set(k, v) },
     now: () => T(59),
+    ...extra,
   });
   const write = async (id, text, updated, extra = {}) => {
     const doc = createDocument({ id, title: `Doc ${id}`, canonical: extra.canonical ?? para(text) });
@@ -328,6 +338,174 @@ describe("two devices, one account", () => {
     await a.engine.cycle(); // both changed: the newer (theirs, T3) wins; A's is kept
     expect(textOf(await a.read("n1"))).toBe("someone else");
     expect(a.snapshots).toContainEqual({ docId: "n1", text: "v2", reason: "cloud-sync" });
+  });
+
+  it("polls cheaply: an account that has not changed is not read again", async () => {
+    const acct = fakeAccount();
+    const a = device(acct);
+    const b = device(acct);
+    await a.write("n1", "v1", T(1));
+    await a.engine.cycle(); // full read, then a push
+    await b.engine.cycle(); // full read, pulls n1
+    acct.stateReads.length = 0;
+    // Nothing changed anywhere: both are answered "unchanged", and do nothing.
+    expect(await b.engine.cycle()).toMatchObject({ pulled: 0, pushed: 0 });
+    expect(acct.stateReads).toEqual(["unchanged"]);
+    // A's own push moved the account's version: A reads it once more, in full.
+    await a.engine.cycle();
+    expect(acct.stateReads).toEqual(["unchanged", "full"]);
+    await a.engine.cycle();
+    expect(acct.stateReads).toEqual(["unchanged", "full", "unchanged"]);
+    // A change on one device reaches the other through a full read again.
+    await a.write("n1", "v2", T(2));
+    await a.engine.cycle();
+    expect(await b.engine.cycle()).toMatchObject({ pulled: 1 });
+    expect(textOf(await b.read("n1"))).toBe("v2");
+    // Local changes are still found while the account is "unchanged".
+    await b.engine.cycle();
+    await b.write("n2", "new on B", T(3));
+    acct.stateReads.length = 0;
+    expect(await b.engine.cycle()).toMatchObject({ pushed: 1 });
+    expect(acct.stateReads).toEqual(["unchanged"]);
+  });
+
+  // Two tabs of the same library: one runs the sync while the user types in
+  // either. A save that lands while a note is being downloaded must win.
+  it("never writes the account's copy over a save made here while it was being downloaded", async () => {
+    const acct = fakeAccount();
+    const a = device(acct);
+    const b = device(acct);
+    await a.write("n1", "v1", T(1));
+    await a.engine.cycle();
+    await b.engine.cycle();
+    await a.write("n1", "from A", T(5));
+    await a.engine.cycle();
+    // B's cycle plans a pull of A's edit; while it downloads, B's editor saves.
+    const realGet = acct.api.getDocument;
+    acct.api.getDocument = async (id) => {
+      acct.api.getDocument = realGet;
+      await b.write("n1", "typed on B meanwhile", T(9));
+      return realGet(id);
+    };
+    expect(await b.engine.cycle()).toMatchObject({ pulled: 0, again: true });
+    expect(textOf(await b.read("n1"))).toBe("typed on B meanwhile");
+    // The next cycle sees both changed: B's is newer and wins; A's is kept.
+    expect(await b.engine.cycle()).toMatchObject({ conflicts: 1, pushed: 1 });
+    expect(textOf(acct.docs.get("n1").record)).toBe("typed on B meanwhile");
+    expect(b.snapshots).toContainEqual({ docId: "n1", text: "from A", reason: "cloud-sync" });
+  });
+
+  it("does not forget a note deleted here while a cycle was running", async () => {
+    const acct = fakeAccount();
+    const a = device(acct);
+    await a.write("n1", "keep", T(1));
+    await a.write("n2", "doomed", T(1));
+    await a.engine.cycle();
+    await a.write("n3", "new", T(2)); // gives the next cycle work to do
+    const realPut = acct.api.putDocument;
+    acct.api.putDocument = async (id, base, record) => {
+      acct.api.putDocument = realPut;
+      // The editor deletes n2 mid-cycle (its delete event reaches the engine).
+      await a.storage.delete("n2");
+      a.engine.recordLocalDelete("n2", T(3));
+      return realPut(id, base, record);
+    };
+    await a.engine.cycle();
+    // It used to be dropped from the pending list here — and downloaded again.
+    expect(await a.engine.cycle()).toMatchObject({ deletedThere: 1, pulled: 0 });
+    expect(acct.docs.get("n2")).toMatchObject({ deleted: true });
+    expect(await a.read("n2")).toBeNull();
+  });
+
+  describe("live shares", () => {
+    // What the app wires in (app/cloud/index.ts → app/publish): the account
+    // keeps the published copy; here, a list of what was sent.
+    const publisher = (acct) => {
+      const calls = [];
+      return {
+        calls,
+        publish: {
+          seen: (entries) => calls.push(["seen", entries.map((e) => e.docId)]),
+          put: async (docId, live, id) => {
+            calls.push(["put", docId, live.revision, live.document.id, live.document.metadata, id]);
+            const e = acct.published.find((p) => p.docId === docId);
+            if (e) e.revision = live.revision;
+          },
+          problem: (docId, problem) => calls.push(["problem", docId, problem]),
+        },
+      };
+    };
+
+    it("a published note edited here is published again; an unchanged one is left alone", async () => {
+      const acct = fakeAccount();
+      const p = publisher(acct);
+      const a = device(acct, "u1", { publish: p.publish });
+      await a.write("n1", "v1", T(1));
+      await a.write("n2", "other", T(1));
+      await a.engine.cycle();
+      acct.published.push({ docId: "n1", id: "pub1", revision: T(1) });
+      await a.engine.cycle();
+      expect(p.calls.filter((c) => c[0] === "put")).toEqual([]);
+      await a.write("n1", "v2", T(4));
+      await a.engine.cycle();
+      // The copy carries neither the owner's id nor its metadata, and it is an
+      // UPDATE of that share (its id), never a new one.
+      expect(p.calls.filter((c) => c[0] === "put")).toEqual([["put", "n1", T(4), undefined, {}, "pub1"]]);
+      expect(acct.published[0].revision).toBe(T(4));
+      await a.engine.cycle();
+      expect(p.calls.filter((c) => c[0] === "put")).toHaveLength(1);
+    });
+
+    it("an edit made on another device is published by whichever device has it", async () => {
+      const acct = fakeAccount();
+      const a = device(acct);
+      const p = publisher(acct);
+      const b = device(acct, "u1", { publish: p.publish });
+      await a.write("n1", "v1", T(1));
+      await a.engine.cycle();
+      await b.engine.cycle();
+      acct.published.push({ docId: "n1", id: "pub1", revision: T(1) });
+      await a.write("n1", "v2 from A", T(5)); // A cannot publish (no publisher)
+      await a.engine.cycle();
+      await b.engine.cycle(); // pulls it…
+      await b.engine.cycle(); // …and, holding the newer revision, publishes it
+      expect(acct.published[0].revision).toBe(T(5));
+    });
+
+    it("a note too large to publish is not rebuilt every cycle — and says so — until it changes", async () => {
+      const acct = fakeAccount();
+      const puts = [];
+      const problems = [];
+      const tooLarge = () => Object.assign(new Error("too large"), { name: "PublishTooLargeError" });
+      const a = device(acct, "u1", {
+        publish: {
+          seen() {},
+          put: async (docId, live) => { puts.push(live.revision); throw tooLarge(); },
+          problem: (docId, problem) => problems.push([docId, problem]),
+        },
+      });
+      await a.write("n1", "v1", T(1));
+      await a.engine.cycle();
+      acct.published.push({ docId: "n1", id: "pub1", revision: T(0) });
+      await a.engine.cycle();
+      await a.engine.cycle();
+      await a.engine.cycle();
+      expect(puts).toEqual([T(1)]);
+      expect(problems).toEqual([["n1", "too-large"]]);
+      await a.write("n1", "v2, smaller", T(5));
+      await a.engine.cycle();
+      expect(puts).toEqual([T(1), T(5)]);
+    });
+
+    it("a publish that fails never fails the sync", async () => {
+      const acct = fakeAccount();
+      const a = device(acct, "u1", { publish: { seen() {}, put: async () => { throw new Error("offline"); }, remove: async () => {} } });
+      await a.write("n1", "v1", T(1));
+      await a.engine.cycle();
+      acct.published.push({ docId: "n1", id: "pub1", revision: T(0) });
+      await a.write("n2", "new", T(2));
+      expect(await a.engine.cycle()).toMatchObject({ pushed: 1 });
+    });
   });
 
   it("leaves alone a document whose id the account cannot store", async () => {

@@ -43,6 +43,7 @@ export type SnapshotReason =
   | "pre-link-update" // before links to a renamed heading were retargeted (heading-renames.ts)
   | "tab-conflict" // the version set aside when two tabs changed a document (useTabSync.ts)
   | "cloud-sync" // the version set aside when the account had a newer one, or lost to it (app/cloud)
+  | "live-update" // a followed live share's copy, replaced by the owner's newer version (app/publish)
   | "account-version" // a past version brought back from the account (Version history ▸ In your account)
   | "manual";     // user asked to snapshot now
 

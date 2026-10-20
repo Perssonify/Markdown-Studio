@@ -10,7 +10,32 @@ and every feature commit subject after v1.35 carries its `(vX.Y.Z)` tag.
 > [`docs/v1-to-current-changelog.md`](docs/v1-to-current-changelog.md) — the full,
 > area-grouped feature delta from the initial import ("v1") to the current release.
 
-## [Unreleased]
+## [1.78.0] — unreleased
+
+### PL-51 — bugs and tweaks (19 October 2026)
+- **Lists no longer turn into headings.** Starting a nested item under a list
+  item in the markdown pane (Enter, Backspace, `-`; or Tab on a new `- `) made
+  the item's text a heading and pushed it out of the list in the rich pane. An
+  empty item made with Enter in the rich pane now shows in the markdown too.
+- **The keyboard-shortcuts list fits the screen** and closes with ×, Close,
+  Escape or a click outside.
+- **Library: sort and create anywhere.** A ⇅ menu sorts the library by Last
+  edited, Name, Date created or a Custom order you drag (dragging while sorted by
+  name or date switches to Custom). Right-click anywhere in it for New document
+  and New folder.
+- **Spelling suggestions are back.** Shift + right-click opens the browser's own
+  menu; Settings ▸ Editor ▸ Custom right-click menu turns the app's menu off.
+- **Sync across devices is quicker and cheaper**, and two tabs on the same note
+  no longer overwrite each other: polling follows use (every 5 s while things are
+  changing, 15 s on screen, 5 min in the background, at once when you come back),
+  an unchanged account costs a few bytes, a save in one tab is never undone by a
+  sync running in another, and switching tabs saves first.
+- **Share, three ways.** The Share dialog picks the layout a link opens in
+  (Split, Markdown or HTML) and what the recipient gets: an editable copy, a
+  read-only copy, or a **live** read-only copy that follows your edits — the
+  library marks it, with a dot when it has updated.
+- **The version is shown** in the header and the status bar (with the branch
+  and commit on a preview build), and on the About page.
 
 An external production-readiness audit of 1.77.0 (18 September 2026) raised 114
 findings. This release fixes 90 of them in code and does the code side of 17

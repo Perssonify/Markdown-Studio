@@ -15,6 +15,7 @@ import type { PerssonifyEditorProps } from "./editor/props";
 import { useOverlayInert, useWorkspaceViews } from "./editor/useWorkspaceViews";
 import { useAutosave } from "./editor/useAutosave";
 import { useTabSync } from "./editor/useTabSync";
+import { useSharedDocLock } from "./editor/useSharedDocLock";
 import { useCanonicalChangeHandler, useContentChangeEmitter } from "./editor/useChangeNotifications";
 import { useHeadingNavigation, useOutline } from "./editor/useHeadingNavigation";
 import { usePaneCommands } from "./editor/usePaneCommands";
@@ -31,6 +32,7 @@ import { useHeadingRenameLinks } from "./editor/useHeadingRenameLinks";
 import { MemorySheet } from "./ui/diagnostics/memorySheet";
 import { VersionHistorySheet } from "./ui/history/versionHistorySheet";
 import { LinkBuilderDialog } from "./ui/share/linkBuilderDialog";
+import { ShareDialog, type ShareTarget } from "./ui/share/shareDialog";
 import { groupDocsByFolder, useFolderStore } from "./store/documents/folders";
 import { useUIStore } from "./store/preferences/uiStore";
 import { MenuBar } from "./ui/chrome/menuBar";
@@ -107,6 +109,7 @@ function PerssonifyEditorInstance({
   initialImportUrl,
   initialShare,
   shareDisabledReason,
+  liveShares,
   readOnly: readOnlyProp,
   fitParent = false,
 }: PerssonifyEditorProps) {
@@ -569,6 +572,9 @@ function PerssonifyEditorInstance({
     tiptapRef, cmRef, hydrateEditorWithDoc, claimEditorGeneration, isEditorGeneration,
     endCompositions, hasPendingProjection, flushPendingSync, cancelPendingSync, handleCloseTab, toast,
   });
+  // A document shared read-only (a read-only link, or a live copy being
+  // followed) opens read-only (useSharedDocLock).
+  useSharedDocLock();
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   // Find/Replace can open in two modes: ⌘F (find) and ⌘H (replace expanded).
@@ -623,11 +629,14 @@ function PerssonifyEditorInstance({
     engine, syncMode, getCanonical, toast, toastRef, autosaveRef, exportDocsRef,
   });
   // Sharing behind `shareDisabledReason` (the app: signed out): every share
-  // control says why instead of copying a link (share-gate.tsx).
+  // control says why instead of sharing (share-gate.tsx). Otherwise the Share
+  // dialog opens: how the link opens, and what the recipient gets.
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
   const shareDoc = useCallback((docId: string) => {
-    if (shareDisabledReason) toast.show(shareDisabledReason, "info");
-    else void handleShareDoc(docId);
-  }, [shareDisabledReason, toast, handleShareDoc]);
+    if (shareDisabledReason) { toast.show(shareDisabledReason, "info"); return; }
+    const title = useDocumentStore.getState().documents.find((d) => d.id === docId)?.title;
+    setShareTarget({ kind: "doc", id: docId, name: title || t("common.untitled") });
+  }, [shareDisabledReason, toast, t]);
   // A new note straight inside a folder (the folder's ⋮ menu): created like
   // any new note, then filed under the folder, which opens to show it.
   const handleNewDocInFolder = useCallback(async (folderId: string) => {
@@ -637,9 +646,20 @@ function PerssonifyEditorInstance({
     if (created && created !== before) useFolderStore.getState().moveDoc(created, folderId);
   }, [handleNewDoc]);
   const shareFolder = useCallback((folderId: string) => {
-    if (shareDisabledReason) toast.show(shareDisabledReason, "info");
-    else void handleShareFolder(folderId);
-  }, [shareDisabledReason, toast, handleShareFolder]);
+    if (shareDisabledReason) { toast.show(shareDisabledReason, "info"); return; }
+    const name = useFolderStore.getState().folders.find((f) => f.id === folderId)?.name;
+    setShareTarget({ kind: "folder", id: folderId, name: name || t("library.folder") });
+  }, [shareDisabledReason, toast, t]);
+  const closeShare = useCallback(() => setShareTarget(null), []);
+  // Publishing live reads the STORED note: save what is being typed first, as
+  // the copy-link path does (handleShareDoc).
+  const liveSharesSaved = useMemo(() => liveShares && {
+    ...liveShares,
+    publish: async (docId: string, view?: Parameters<typeof liveShares.publish>[1]) => {
+      try { await autosaveRef.current(); } catch { /* publish the stored copy */ }
+      return liveShares.publish(docId, view);
+    },
+  }, [liveShares, autosaveRef]);
 
   // ── Library queries ───────────────────────────────────────────────────────
   // Search, and the map's per-document headings, answered from what the link
@@ -783,6 +803,14 @@ function PerssonifyEditorInstance({
               onRestoreAsNew={restoreSnapshotAsNew}
             />
             <LinkBuilderDialog open={showLinkBuilder} onOpenChange={setShowLinkBuilder} />
+            <ShareDialog
+              target={shareTarget}
+              onClose={closeShare}
+              onShareDoc={handleShareDoc}
+              onShareFolder={handleShareFolder}
+              liveShares={liveSharesSaved}
+              toast={toast}
+            />
 
 
             {showFindReplace && (

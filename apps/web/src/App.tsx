@@ -5,10 +5,12 @@ import { AccountCheckScreen } from "./app/account/accountCheckScreen";
 import { AccountMenu } from "./app/account/accountMenu";
 import { SignInNudge } from "./app/account/signInNudge";
 import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud";
+import { liveSharesApi, prepareLiveLink, readLiveSeed, startFollowing, type LiveLinkOutcome } from "./app/publish";
 import { useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
 import { useUIStore } from "./store/preferences/uiStore";
-import { readSharePayloadFromHash } from "./store/importExport/share-link";
+import { readSharePayloadFromHash, type ShareView } from "./store/importExport/share-link";
+import { toast as toastSonner } from "sonner";
 import { DEFAULT_CONTENT } from "./constants";
 import { STARTER_DOCUMENTS } from "./data/starter-documents";
 import { EditorHeader } from "./EditorHeader";
@@ -84,6 +86,35 @@ export function App() {
         if (typeof window === "undefined") return undefined;
         return readSharePayloadFromHash() ?? undefined;
     });
+    /** A LIVE share link (`#live=<id>`): fetched before the editor opens — it
+     *  is imported as a followed copy, or the copy followed here is opened
+     *  (app/publish). Only in builds with the account server, which serves it. */
+    const [liveSeed] = useState(() => (accountsEnabled() ? readLiveSeed() : null));
+    const [liveOutcome, setLiveOutcome] = useState<LiveLinkOutcome | null>(null);
+    useEffect(() => {
+        if (!liveSeed) return;
+        let cancelled = false;
+        void prepareLiveLink(liveSeed.id, liveSeed.view).then((o) => { if (!cancelled) setLiveOutcome(o); });
+        return () => { cancelled = true; };
+    }, [liveSeed]);
+    // A live link that could not be opened says so once the editor (and its
+    // toasts) is up — the editor opens normally underneath.
+    useEffect(() => {
+        if (liveOutcome?.kind !== "failed") return;
+        const message = liveOutcome.gone ? t("account.liveShareGone") : t("account.liveShareUnreachable");
+        const show = () => { setTimeout(() => toastSonner.error(message, { duration: 6000 }), 400); };
+        if (useUIStore.getState().editorReady) { show(); return; }
+        const unsub = useUIStore.subscribe((s) => { if (s.editorReady) { unsub(); show(); } });
+        return unsub;
+    }, [liveOutcome, t]);
+    // The layout a shared link asks for (`view`), for this visit only — the
+    // same hand-off to the editor's boot as `?view_mode=` below.
+    useEffect(() => {
+        const view: ShareView | undefined = shareSeed?.view ?? liveSeed?.view;
+        if (!view) return;
+        useUIStore.getState().setMode(view === "md" ? MODES.MD : view === "html" ? MODES.HTML : MODES.SPLIT);
+        try { sessionStorage.setItem("pf:session-view-mode", view); } catch { /* ignore */ }
+    }, [shareSeed, liveSeed]);
 
     // Config deep-links: apply ?ads=, ?readonly=, and ?view_mode= (md|html|split)
     // on load, then strip them from the URL. `ads`/`readonly` are applied for the
@@ -126,13 +157,16 @@ export function App() {
         } catch { /* ignore */ }
     }, []);
 
-    // Strip `#share=…` from the address after it was captured (shareSeed), so a
-    // refresh does not re-import the shared documents. Any other hash is kept.
+    // Strip `#share=…` / `#live=…` (and its `view`) from the address after it
+    // was captured (shareSeed, liveSeed), so a refresh does not import the
+    // shared documents again. Any other hash is kept.
     useEffect(() => {
-        if (typeof window === "undefined" || !/[#&]share=/.test(window.location.hash)) return;
+        if (typeof window === "undefined" || !/[#&](share|live)=/.test(window.location.hash)) return;
         try {
             const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
             params.delete("share");
+            params.delete("live");
+            params.delete("view");
             const rest = params.toString();
             window.history.replaceState({}, "", window.location.pathname + window.location.search + (rest ? `#${rest}` : ""));
         } catch { /* ignore */ }
@@ -170,6 +204,9 @@ export function App() {
     useEffect(() => {
         if (accounts) void useAccount.getState().refresh();
     }, [accounts]);
+    // Live documents followed in this browser: kept up to date while the app
+    // is open, signed in or not (app/publish).
+    useEffect(() => (accounts ? startFollowing() : undefined), [accounts]);
     useEffect(() => {
         if (!accounts && (route === "login" || route === "profile")) navigate("editor", { replace: true });
     }, [accounts, route, navigate]);
@@ -252,6 +289,7 @@ export function App() {
     // here is ready for the account: a signed-in visitor on a new device must
     // open on their notes, not on freshly seeded first-visit notes.
     if (accounts && accountStatus === "loading") return <AccountCheckScreen />;
+    if (liveSeed && !liveOutcome) return <AccountCheckScreen message={t("account.openingLiveShare")} />;
     if (accounts && accountStatus === "signed-in" && accountUserId && cloudReadyFor !== accountUserId) {
         return <AccountCheckScreen message={cloudPhase === "preparing" ? t("account.bringingDocuments") : undefined} />;
     }
@@ -296,12 +334,14 @@ export function App() {
                 // so the app's own notices (an embedder's storage is theirs).
                 durabilityNotices
                 initialImportUrl={importUrlSeed}
-                initialShare={shareSeed}
+                initialShare={shareSeed ?? (liveOutcome?.kind === "import" ? liveOutcome.share : undefined)}
                 // Share links need an account: signed out, every share control
                 // is greyed out and says so. Where no account service answers
                 // (offline, an outage) there is nobody to sign in to, so sharing
                 // stays as it was.
                 shareDisabledReason={accounts && accountStatus === "signed-out" ? t("account.signInToShare") : undefined}
+                // Live shares are published from the account: offered once signed in.
+                liveShares={accounts && accountStatus === "signed-in" && cloudPhase !== "blocked" ? liveSharesApi : undefined}
                 graphOpen={route === "graph"}
                 // Opening the graph pushes (so browser Back closes it); closing
                 // REPLACES the /graph entry — otherwise every toggle stacked two

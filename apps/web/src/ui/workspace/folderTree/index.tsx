@@ -68,6 +68,8 @@ import {
 } from "./folder-dnd";
 import { timeAgo } from "../utils/relative-time";
 import { useFocusRowAfterRender, useWindowedList } from "../hooks/use-windowed-list";
+import { passShiftContextMenuToBrowser } from "@/ui/shared/utils/native-context-menu";
+import { SharedDocBadge, sharedStateLabel, sharedStateOf, type SharedState } from "../sharedBadge";
 import { useT } from "@/i18n";
 
 export type ExportDocFormat = "md" | "html" | "docx" | "json";
@@ -86,6 +88,8 @@ interface FolderTreeProps {
   onShareDoc?: (docId: string) => void;
   onShareFolder?: (folderId: string) => void;
   onNewDocInFolder?: (folderId: string) => void;
+  /** Create a document at the top level (the right-click menu's New document). */
+  onNewDoc?: () => void;
   /** Confirm before deleting a folder. Resolves true to proceed. When omitted,
    *  deletion proceeds without confirmation (kept optional for tests). */
   confirmDeleteFolder?: (name: string, itemCount: number) => Promise<boolean>;
@@ -363,6 +367,46 @@ function ExportDocSubmenu({
   );
 }
 
+/**
+ * "New document" + "New folder" in `folderId` (null: the top level) — the
+ * library's right-click menu offers them wherever it opens: on blank space, on
+ * a document (beside it, in its folder) and, as New subfolder, on a folder.
+ */
+function CreateItems({
+  F,
+  folderId,
+  onNewDoc,
+  onNewDocInFolder,
+}: {
+  F: MenuFam;
+  folderId: string | null;
+  onNewDoc?: () => void;
+  onNewDocInFolder?: (folderId: string) => void;
+}) {
+  const t = useT();
+  const createFolder = useFolderStore((s) => s.createFolder);
+  const newDoc = folderId ? (onNewDocInFolder && (() => onNewDocInFolder(folderId))) : onNewDoc;
+  return (
+    <>
+      {newDoc && (
+        <F.Item onClick={newDoc}>
+          <FilePlusIcon className="mr-2 size-3.5" />
+          {t("library.newDocument")}
+        </F.Item>
+      )}
+      <F.Item onClick={() => createFolder("New Folder", folderId, { startNaming: true })}>
+        <FolderPlusIcon className="mr-2 size-3.5" />
+        {t("library.newFolder")}
+      </F.Item>
+    </>
+  );
+}
+
+/** The right-click menu for the library's blank space: create at the top level. */
+export function LibraryBackgroundMenuItems({ onNewDoc }: { onNewDoc?: () => void }) {
+  return <CreateItems F={CONTEXT_FAM} folderId={null} onNewDoc={onNewDoc} />;
+}
+
 /** Document row menu items, rendered into either primitive family. */
 function DocMenuBody({
   F,
@@ -373,6 +417,8 @@ function DocMenuBody({
   onDelete,
   onExportDoc,
   onShareDoc,
+  onNewDoc,
+  onNewDocInFolder,
 }: {
   F: MenuFam;
   docId: string;
@@ -382,6 +428,8 @@ function DocMenuBody({
   onDelete: (id: string) => void;
   onExportDoc?: (docId: string, format: ExportDocFormat) => void;
   onShareDoc?: (docId: string) => void;
+  onNewDoc?: () => void;
+  onNewDocInFolder?: (folderId: string) => void;
 }) {
   const t = useT();
   const shareGate = useShareGate();
@@ -389,6 +437,8 @@ function DocMenuBody({
   const createFolder = useFolderStore((s) => s.createFolder);
   return (
     <>
+      <CreateItems F={F} folderId={folderId} onNewDoc={onNewDoc} onNewDocInFolder={onNewDocInFolder} />
+      <F.Separator />
       <F.Item onClick={startRename}>
         <Edit2Icon className="mr-2 size-3.5" />
         {t("common.rename")}
@@ -458,6 +508,7 @@ function FolderMenuBody({
         <FolderPlusIcon className="mr-2 size-3.5" />
         {t("library.newSubfolder")}
       </F.Item>
+      <F.Separator />
       <F.Item onClick={startRename}>
         <Edit2Icon className="mr-2 size-3.5" />
         {t("common.rename")}
@@ -687,6 +738,8 @@ interface DocRowProps {
   editing: boolean;
   /** Minute counter: re-renders the relative time once a minute. */
   tick: number;
+  /** Shared with the user: live (and whether updated), or read-only. */
+  shared?: SharedState;
   handlers: RowHandlers;
 }
 
@@ -698,7 +751,7 @@ interface DocRowProps {
  */
 const DocRow = React.memo(function DocRow({
   rowKey, id, title, updated, wordCount, folderId, depth, posinset, setsize,
-  isActive, tabbable, editing, handlers,
+  isActive, tabbable, editing, shared, handlers,
 }: DocRowProps) {
   const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
@@ -741,7 +794,7 @@ const DocRow = React.memo(function DocRow({
          (CLAUDE.md: keep the two library lists in sync). */
       aria-selected={isActive}
       aria-current={isActive ? "true" : undefined}
-      aria-label={shown}
+      aria-label={shared ? `${shown}, ${sharedStateLabel(shared)}` : shown}
       tabIndex={tabbable ? 0 : -1}
       draggable={!editing}
       onDragStart={(e) => handlers.dragStart(e, "doc", id)}
@@ -787,11 +840,14 @@ const DocRow = React.memo(function DocRow({
           onClick={() => handlers.select(id)}
           className="flex min-w-0 flex-1 flex-col items-start text-left"
         >
-          <span
-            title={shown}
-            className={cn("w-full truncate text-xs text-foreground", isActive && "font-semibold")}
-          >
-            {shown}
+          <span className="flex w-full min-w-0 items-center gap-1">
+            <span
+              title={shown}
+              className={cn("min-w-0 truncate text-xs text-foreground", isActive && "font-semibold")}
+            >
+              {shown}
+            </span>
+            {shared && <SharedDocBadge state={shared} />}
           </span>
           {/* A095: 10px metadata at the full --muted-foreground; the 75% alpha
               it used to carry measured 3.0:1. */}
@@ -837,11 +893,12 @@ export function FolderTree(props: FolderTreeProps) {
   const lastCreatedFolderId = useFolderStore((s) => s.lastCreatedFolderId);
   const consumeLastCreatedFolder = useFolderStore((s) => s.consumeLastCreatedFolder);
   const contextMenuEnabled = useUIStore((s) => s.contextMenuEnabled);
+  const librarySort = useUIStore((s) => s.librarySort);
   const tick = useMinuteTick();
 
   const tree = useMemo(
-    () => buildFolderTree(props.documents, folders, docParents, docOrder),
-    [props.documents, folders, docParents, docOrder]
+    () => buildFolderTree(props.documents, folders, docParents, docOrder, librarySort),
+    [props.documents, folders, docParents, docOrder, librarySort]
   );
   const rows = useMemo(() => flattenTree(tree, expanded), [tree, expanded]);
 
@@ -925,6 +982,14 @@ export function FolderTree(props: FolderTreeProps) {
         e.preventDefault();
         e.stopPropagation();
         const s = store();
+        // Sorted by name or by date, a dragged order would not show: arranging
+        // by hand switches the library to its custom order. The group's order
+        // is written from what is on screen (its siblings, in display order),
+        // so the item lands where it was dropped and the rest of the group stays.
+        const arrangeByHand = () => {
+          const ui = useUIStore.getState();
+          if (ui.librarySort === "name" || ui.librarySort === "created") ui.setLibrarySort("manual");
+        };
         if (row.kind === "folder") {
           if (p.kind === "doc") {
             // Docs always drop INTO the folder (reordering happens among doc rows).
@@ -938,6 +1003,7 @@ export function FolderTree(props: FolderTreeProps) {
             // Reorder before/after this folder within its sibling group.
             s.moveFolder(p.id, row.folder.parentId);
             s.setFolderOrder(spliceOrder(row.siblingFolderIds, p.id, row.id, zone === "after" ? "after" : "before"));
+            arrangeByHand();
           }
           return;
         }
@@ -946,6 +1012,7 @@ export function FolderTree(props: FolderTreeProps) {
         else if (action.kind === "reorderDoc") {
           s.moveDoc(p.id, action.folderId); // ensure same folder, then position
           s.setDocOrder(docOrderKey(action.folderId), action.order);
+          arrangeByHand();
         }
       },
       menuOpened: (key) => setMenuKey(key),
@@ -1016,7 +1083,8 @@ export function FolderTree(props: FolderTreeProps) {
   };
 
   const menuBody = (payload: RowMenuPayload | undefined, F: MenuFam) => {
-    if (!payload) return null;
+    // Right-clicked between rows: the blank-space menu.
+    if (!payload) return <CreateItems F={F} folderId={null} onNewDoc={props.onNewDoc} />;
     if (payload.kind === "doc") {
       return (
         <DocMenuBody
@@ -1028,6 +1096,8 @@ export function FolderTree(props: FolderTreeProps) {
           onDelete={props.onDelete}
           onExportDoc={props.onExportDoc}
           onShareDoc={props.onShareDoc}
+          onNewDoc={props.onNewDoc}
+          onNewDocInFolder={props.onNewDocInFolder}
         />
       );
     }
@@ -1105,6 +1175,7 @@ export function FolderTree(props: FolderTreeProps) {
             tabbable={tabbable}
             editing={editing}
             tick={tick}
+            shared={sharedStateOf(row.doc)}
             handlers={handlers}
           />
         )}
@@ -1130,12 +1201,13 @@ export function FolderTree(props: FolderTreeProps) {
         <ContextMenu onOpenChange={(open) => { if (!open) setCtxKey(null); }}>
           <ContextMenuTrigger
             render={<div {...treeProps} />}
+            onContextMenuCapture={passShiftContextMenuToBrowser}
             onContextMenu={recordCtxTarget}
             onTouchStart={recordCtxTarget}
           >
             {rowElements}
           </ContextMenuTrigger>
-          <ContextMenuContent className="w-44">{menuBody(ctxPayload, CONTEXT_FAM)}</ContextMenuContent>
+          <ContextMenuContent className="w-48">{menuBody(ctxPayload, CONTEXT_FAM)}</ContextMenuContent>
         </ContextMenu>
       ) : (
         <div {...treeProps}>{rowElements}</div>
@@ -1147,7 +1219,7 @@ export function FolderTree(props: FolderTreeProps) {
       <DropdownMenu handle={menuHandle} onOpenChange={(open) => { if (!open) setMenuKey(null); }}>
         {({ payload }) =>
           payload ? (
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-48">
               {menuBody(payload as RowMenuPayload, DROPDOWN_FAM)}
             </DropdownMenuContent>
           ) : null

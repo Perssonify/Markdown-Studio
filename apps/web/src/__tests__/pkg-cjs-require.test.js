@@ -148,5 +148,7 @@ describe("the built CommonJS entries load in plain Node (checked when a current 
       expect(names.length, `${entry}.js exports`).toBeGreaterThan(0);
       expect(result[sub].keys, `dist/${entry}.cjs vs dist/${entry}.js`).toEqual(names);
     }
-  });
+    // Its own budget: a second Node process loads every built entry — a few
+    // seconds alone, past the 5 s default with the whole suite beside it.
+  }, 60_000);
 });

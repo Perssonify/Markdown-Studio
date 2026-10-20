@@ -50,6 +50,55 @@ describe("buildFolderTree ordering", () => {
   });
 });
 
+// Settings-free: the library's sort menu (LibrarySort). "updated" is the
+// default above; the others are what a user who does not want folders A–Z
+// (or notes re-sorted on every edit) can choose.
+describe("buildFolderTree sort modes", () => {
+  const made = (id, name, ms, extra = {}) => ({ id: `fld-${ms.toString(36)}-x-${id}`, name, parentId: null, ...extra });
+  const folders = [
+    made("b", "Beta", 2000),
+    made("a", "alpha", 3000),
+    made("c", "Charlie", 1000, { order: 0 }), // dragged first
+  ];
+  const docs = [
+    { ...doc("n2", "2024-01-01"), title: "banana", created: "2021-01-01" },
+    { ...doc("n1", "2022-01-01"), title: "Apple", created: "2023-01-01" },
+    { ...doc("n10", "2020-01-01"), title: "apple 10", created: "2022-01-01" },
+  ];
+  const names = (t) => t.rootFolders.map((n) => n.folder.name);
+  const ids = (t) => t.rootDocs.map((d) => d.id);
+
+  it("name: folders and documents A–Z, case-insensitively and with numbers in order, ignoring drag order", () => {
+    const t = buildFolderTree(docs, folders, {}, { root: ["n2"] }, "name");
+    expect(names(t)).toEqual(["alpha", "Beta", "Charlie"]);
+    expect(ids(t)).toEqual(["n1", "n10", "n2"]);
+  });
+
+  it("created: newest first, for folders (by when they were made) and documents", () => {
+    const t = buildFolderTree(docs, folders, {}, { root: ["n10"] }, "created");
+    expect(names(t)).toEqual(["alpha", "Beta", "Charlie"]);
+    expect(ids(t)).toEqual(["n1", "n10", "n2"]);
+  });
+
+  it("manual: dragged items first, the rest in the order they were made — nothing alphabetical", () => {
+    const t = buildFolderTree(docs, folders, {}, { root: ["n10"] }, "manual");
+    expect(names(t)).toEqual(["Charlie", "Beta", "alpha"]);
+    expect(ids(t)).toEqual(["n10", "n2", "n1"]); // n10 dragged; then oldest-created first
+  });
+
+  it("updated (the default) is the original order: drag order, then folders A–Z, notes newest-edited", () => {
+    expect(names(buildFolderTree(docs, folders, {}, {}, "updated"))).toEqual(["Charlie", "alpha", "Beta"]);
+    expect(names(buildFolderTree(docs, folders, {}, {}))).toEqual(["Charlie", "alpha", "Beta"]);
+    expect(ids(buildFolderTree(docs, folders, {}, {}))).toEqual(["n2", "n1", "n10"]);
+  });
+
+  it("folders without a timestamp in their id fall back to the order they are listed in", () => {
+    const plain = [{ id: "x2", name: "Second", parentId: null }, { id: "x1", name: "First", parentId: null }];
+    expect(names(buildFolderTree([], plain, {}, {}, "manual"))).toEqual(["Second", "First"]);
+    expect(names(buildFolderTree([], plain, {}, {}, "created"))).toEqual(["First", "Second"]);
+  });
+});
+
 describe("folder store reorder actions", () => {
   beforeEach(() => {
     useFolderStore.setState({ folders: [], docParents: {}, docOrder: {}, expanded: {} });

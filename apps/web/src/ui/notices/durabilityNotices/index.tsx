@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { AlertTriangle, ArchiveRestore, DownloadCloud, ExternalLink, History, Smartphone } from "lucide-react";
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { NoticeDismiss as Dismiss, NoticeStrip as Strip, noticeButton as btn } from "../noticeStrip";
+import { SharedDocNotice } from "../sharedDocNotice";
 import { TabSyncNotice } from "../tabSyncNotice";
 import { APP_DOMAIN, APP_NAME, APP_URL } from "@/constants";
 import { useDocumentStore } from "@/store/documents/documentStore";
@@ -51,13 +52,15 @@ export interface DurabilityNoticesProps {
 
 /**
  * The strip area above the status bar: another tab changing or deleting the
- * open document (TabSyncNotice — it needs a choice, so it comes first), then
- * at most one storage-durability notice.
+ * open document (TabSyncNotice — it needs a choice, so it comes first), why a
+ * document shared with the user is read-only (SharedDocNotice), then at most
+ * one storage-durability notice.
  */
 function DurabilityNoticesInner(props: DurabilityNoticesProps) {
   return (
     <>
       <TabSyncNotice />
+      <SharedDocNotice />
       <StorageNotice {...props} />
     </>
   );

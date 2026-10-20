@@ -158,8 +158,10 @@ describe("Settings ▸ Admin (A081)", () => {
     expect(screen.getByText("Settings")).toBeInTheDocument(); // the sheet did render
     expect(screen.queryByText("Admin")).toBeNull();
     expect(screen.queryByText("Diagnostics console")).toBeNull();
-    expect(screen.queryByText("Enable right-click menu")).toBeNull();
     expect(screen.queryByText("Show ads")).toBeNull();
+    // Not admin-only any more: the right-click menu switch is an everyday
+    // setting (Settings ▸ Editor), there for every user.
+    expect(screen.getByText("Custom right-click menu")).toBeInTheDocument();
   });
 
   it("appears in production for a browser opted in with pf:admin=1 — without the ads switch", () => {

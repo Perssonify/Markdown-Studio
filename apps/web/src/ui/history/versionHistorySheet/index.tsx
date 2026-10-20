@@ -44,6 +44,7 @@ const REASON_LABEL: Record<SnapshotReason, string> = {
   get "pre-link-update"() { return t("dialogs.reasonPreLinkUpdate"); },
   get "tab-conflict"() { return t("dialogs.reasonTabConflict"); },
   get "cloud-sync"() { return t("dialogs.reasonCloudSync"); },
+  get "live-update"() { return t("dialogs.reasonLiveUpdate"); },
   get "account-version"() { return t("dialogs.reasonAccountVersion"); },
   get manual() { return t("dialogs.reasonManual"); },
 };

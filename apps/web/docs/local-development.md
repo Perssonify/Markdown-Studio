@@ -37,7 +37,7 @@ Everything else is decided by the build itself: `import.meta.env.DEV` ([src/util
 |------|-------|-------|
 | Sync idle delay | `SYNC_MIN_DELAY_MS`…`SYNC_MAX_DELAY_MS` = 120…800 ([src/constants.ts](../src/constants.ts)) | derived from measured projection cost, not doc size |
 | Sync max-wait ceiling | `SYNC_MIN_MAX_WAIT_MS`…`SYNC_MAX_MAX_WAIT_MS` = 250…1200 ([src/constants.ts](../src/constants.ts)) | how far the other pane may lag while you keep typing |
-| Autosave interval | `AUTOSAVE_MS` = 5000 ([src/constants.ts:63](../src/constants.ts#L63)) | |
+| Autosave interval | `AUTOSAVE_MS` = 5000 ([src/constants.ts:80](../src/constants.ts#L80)) | |
 | Toolbar compact breakpoint | `TOOLBAR_COMPACT_BP = 1080` ([src/constants.ts](../src/constants.ts)) | |
 | IndexedDB name / limit | `perssonify-docs` (`DEFAULT_DB_NAME`, [src/store/persistence/idb-storage-adapter.ts:159](../src/store/persistence/idb-storage-adapter.ts#L159)) | no cap of its own — the browser's quota, unless a host passes `storageConfig.maxBytes`; see [database.md](database.md) |
 | Theme storage key | `perssonify-theme` (next-themes `storageKey`, [src/main.tsx:61](../src/main.tsx#L61)) | localStorage |

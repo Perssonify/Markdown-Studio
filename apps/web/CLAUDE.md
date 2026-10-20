@@ -445,12 +445,19 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
 - **Admin settings** (`SettingsSheet` "Admin" section) are operator/debug toggles,
   **hidden unless `adminSettingsAvailable()`** (`utils/build-gates.ts`: a dev build,
   or `localStorage["pf:admin"] === "1"`, a per-browser opt-in for support sessions —
-  A081): `contextMenuEnabled` (`pf:context-menu`; gates the custom
-  `EditorContextMenu`, off → native browser menu), `consoleEnabled` (`pf:console`,
-  **default off**; gates the diagnostics Console tray tab), and Show ads (dev builds
-  only). **While the section is hidden those switches read their DEFAULTS**
-  (`uiStore`), or a value stored before the gate existed would stick with no control
-  left to change it — `admin-prefs-fallback.test.js`. Add new admin-only modules here.
+  A081): `consoleEnabled` (`pf:console`, **default off**; gates the diagnostics
+  Console tray tab), and Show ads (dev builds only). **While the section is hidden
+  those switches read their DEFAULTS** (`uiStore`), or a value stored before the gate
+  existed would stick with no control left to change it — `admin-prefs-fallback.test.js`.
+  Add new admin-only modules here. `contextMenuEnabled` (`pf:context-menu`) USED to be
+  one; it is an everyday switch now, Settings ▸ Editor ▸ **Custom right-click menu**,
+  honoured in every build (PL-51: off → the browser's own menu, which is the only
+  route to its spelling suggestions). **Shift + right-click always reaches the
+  browser's menu** over the editor's and the library's custom ones
+  (`passShiftContextMenuToBrowser`, `ui/shared/utils/native-context-menu.ts`: the
+  event is stopped in the CAPTURE phase, before Base UI's trigger and its document
+  listener cancel the default), and the editor's menu ends with that hint —
+  `native-context-menu.test.jsx`.
 - **Diagnostics console** (`src/ui/diagnostics/consolePanel/index.tsx` + `src/store/diagnostics/console-commands.ts`):
   an admin-gated (`consoleEnabled`) bottom-tray tab running a **CURATED, READ-ONLY**
   command registry (`CONSOLE_COMMANDS` + `runConsoleCommand`) over EXISTING read
@@ -763,8 +770,20 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   over), and a single `DropdownMenu` whose ⋮ triggers are DETACHED (a Base UI
   `createHandle` handle + a row payload), mounted only while open. Two menu roots
   per row were most of what froze the editor at a few hundred documents. The
-  context menu honors the admin `contextMenuEnabled` flag (off → no trigger, native
-  menu), mirroring `EditorContextMenu`. Do NOT duplicate row-menu item definitions
+  context menu honors the `contextMenuEnabled` setting (off → no trigger, native
+  menu), mirroring `EditorContextMenu`. **Right-click anywhere in the Files list
+  creates** (PL-51): a document row's menu starts with New document / New folder
+  (in that document's folder), a folder's with New document / New subfolder, and a
+  right-click on blank space — a second ContextMenu around the list's scroller in
+  `WorkspacePanel`, which the tree's own trigger stops before it — offers New
+  document / New folder at the top level (`CreateItems`, `LibraryBackgroundMenuItems`).
+  **Library order is a per-browser preference** (`pf:library-sort`, the ⇅ menu in the
+  Files header, `LibrarySort` in `store/documents/folders.ts`): `updated` (default —
+  the original order: drag order first, folders A–Z, notes newest-edited), `name`
+  (A–Z, numbers in order), `created` (newest first; a folder's time is in its id) and
+  `manual` (drag order, the rest in the order they were made, so nothing re-sorts).
+  `name` and `created` ignore drag order (it is kept), so dragging to reorder in
+  them switches to `manual` — `folder-reorder.test.js`. Do NOT duplicate row-menu item definitions
   per primitive — extend the shared body. A folder dropped on a document row lands
   in that document's folder (`docRowDrop`) — the drop used to bubble to the root
   handler and move it to the top level (A066). **Per-document export** (`onExportDoc` →
@@ -1156,7 +1175,21 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   documents. Google returns to `/` on success and `/login?error=<code>` on failure
   (`signInTargets`), both trusted origins of the API (`CORS_ORIGINS`).
 - **Cloud sync** (`src/app/cloud/`, signed-in only): documents, their images and the
-  folder tree, to the account (API `/api/sync`, content in S3). **The engine works
+  folder tree, to the account (API `/api/sync`, content in S3). **Polling is cheap and
+  follows use** (`index.ts`): every 5 s for a minute after anything moved, every 15 s
+  while the page is on screen, every 5 min behind other windows, and at once when the
+  page is shown again, focused or back online. Each cycle sends the `version` of the
+  state it last read (`state(since)`, engine `serverState`); while it still matches,
+  the API answers `{ unchanged }` (`stateVersion`, a digest of every revision, the
+  tree and the live shares) and the engine plans from its cached copy. A cycle that
+  finds the lock busy RETRIES shortly (it used to claim "synced" and drop the change
+  that woke it), and the day's backup runs under its own lock, never inside a sync
+  cycle. **Nothing a cycle writes over is newer than what it planned from**: a pull or
+  a remote deletion first re-checks the local revision (`stillPlanned`) — a save that
+  landed mid-cycle, in any tab, is never overwritten (`again` re-plans) — and the
+  pending-deletion list is MERGED back (`settlePending`), never replaced by the copy
+  the cycle loaded. The editor also SAVES on blur / page hide (`useAutosave`), so the
+  same note open in two tabs rarely meets "Changed in another tab". **The engine works
   like ANOTHER TAB**: its own `IndexedDBStorageAdapter` on the app's database, and
   what it changes is announced on the tab-sync channel (a second BroadcastChannel,
   `from: "cloud-sync:…"`), so the editor's tested multi-tab paths do the rest — a
@@ -1186,7 +1219,24 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
   reads so the library and embed never import app code): the bucket's past versions
   of the open note, THINNED by the API (`thinVersions`) so they span the 30 days;
   bringing one back records an `"account-version"` snapshot and restores THAT, so it
-  is undone like any restore. The avatar is the initials on `--primary`, never the
+  is undone like any restore. **Live shares** (`src/app/publish/`, PL-51) ride on it:
+  the Share dialog (`ui/share/shareDialog`) publishes a READ-ONLY copy of one note
+  (`buildLiveDocument`: the export envelope with its images, without the owner's id or
+  metadata) to `PUT /api/sync/published/:docId`, and `/#live=<id>` opens it for
+  anyone — `GET /api/published/:id` needs no sign-in; the id is 128 random bits. The
+  sync engine REPUBLISHES a published note whose local revision moved
+  (`syncPublished`; the state lists `published`) and unpublishes one it deletes. A
+  follower's copy is an ordinary note with `metadata.liveShare` (`live-share-meta.ts`):
+  it opens read-only (`useSharedDocLock` — the session flag, on transitions only), the
+  library marks it (`SharedDocBadge`, a dot while an update is unseen), and
+  `startFollowing` checks for new versions (`?since=`), keeps the replaced copy as a
+  `"live-update"` snapshot and writes the OWNER's revision, so every device following
+  it agrees; a 404 ends it (the note becomes the user's own). Read-only share links
+  (`#share=` with `readOnly`, `metadata.readOnlyShare`) share the lock and the notice
+  (`SharedDocNotice`); `view` sets the layout a share opens in. A live copy carries its
+  images inside, so it is refused above 4 MB (a Vercel Function's request limit).
+  Tests: `live-share`, `share-dialog`, `cloud-sync` (republish) and the API's
+  `sync.test.ts`. The avatar is the initials on `--primary`, never the
   Google picture. Tests: `cloud-plan`, `cloud-folder-merge`, `cloud-sync` (two
   devices, in-memory account), `cloud-backup`, `cloud-versions` and `cloud-contract`
   (this code against the REAL API, Postgres and S3 — skipped without
