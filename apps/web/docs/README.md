@@ -17,7 +17,7 @@ Markdown Studio is a **browser-based** markdown editor that runs two editing sur
 
 ## Quickstart
 
-This repo uses **[Bun](https://bun.sh)** as its package manager and runner (see [`bun.lock`](../bun.lock) and [`vercel.json`](../vercel.json)). `npm` also works for installing, but the deploy pipeline and lockfile are Bun.
+This repo uses **[Bun](https://bun.sh)** as its package manager and runner (see [`bun.lock`](../../../bun.lock) and [`vercel.json`](../../../vercel.json)). `npm` also works for installing, but the deploy pipeline and lockfile are Bun.
 
 ```bash
 git clone https://github.com/Perssonify/Markdown-Studio.git

@@ -757,7 +757,7 @@ relay for "Import from URL" — **the only server-side code in the product**. Fu
 guide, threat model, limitations and hardening roadmap:
 **[docs/import-relay.md](docs/import-relay.md)**.
 
-**Configuration** ([vercel.json](vercel.json)):
+**Configuration** ([vercel.json](../../vercel.json)):
 - Install command: `bun install --frozen-lockfile`
 - Build command: `bun run build:app && node scripts/strip-sourcemaps.mjs` — the build writes
   the third-party licence notice from its hidden sourcemaps, then the maps are moved out of
