@@ -155,5 +155,5 @@ Markdown Studio is source-available under [CC BY-NC 4.0](LICENSE). You're free t
 <br>
 
 <p align="center">
-  <sub>Built by <a href="https://labs.perssonify.com">Perssonify Labs</a> · Copyright © 2026.</sub>
+  <sub>Built by <a href="https://labs.perssonify.com">Perssonify Labs</a> · Copyright © 2026</sub>
 </p>
