@@ -11,11 +11,12 @@ import {
 } from "@/utils/analytics-consent";
 
 /**
- * The analytics consent prompt, under the top header, for visitors whose time
- * zone is in the EEA, the UK or Switzerland (utils/analytics-consent.ts). Until they
- * answer, gtag.js sets no cookies. A bar rather than a dialog: the editor
- * stays usable, and "Decline" is exactly as prominent as "Allow". Gone for
- * good once answered; Settings ▸ Privacy changes the answer.
+ * The analytics consent prompt, for every visitor in every country
+ * (utils/analytics-consent.ts): under the editor's header, and under the
+ * header of each interior page (PageChrome), which covers the editor's copy.
+ * Until it is answered, gtag.js sets no cookies. A bar rather than a dialog:
+ * the page stays usable, and "Decline" is exactly as prominent as "Allow".
+ * Gone for good once answered; Settings ▸ Privacy changes the answer.
  */
 export function AnalyticsConsentBar() {
   const t = useT();

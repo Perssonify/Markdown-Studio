@@ -279,7 +279,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         ],
       },
       {
-        p: "Markdown Studio uses Google Analytics to count visits and which pages are opened (the editor, Help, About and so on). Google receives what any web visit tells it — your browser, device and approximate location — but never your documents, their names or your share links. In the EU, UK and Switzerland it sets no cookies unless you allow them, and anyone can turn it off in Settings → Privacy.",
+        p: "Markdown Studio uses Google Analytics to count visits and which pages are opened (the editor, Help, About and so on). Google receives what any web visit tells it — your browser, device and approximate location — but never your documents, their names or your share links. It sets no cookies unless you allow them: the first time you open the app it asks, and you can change your answer in Settings → Privacy.",
       },
     ],
   },

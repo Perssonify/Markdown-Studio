@@ -1024,12 +1024,13 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     consent bar read `utils/analytics-consent.ts`, which holds no Google code,
     and the switch shows only once analytics.ts has registered. The CSP allows
     `https://www.googletagmanager.com` on the app's pages, not `/embed.html`.
-    **Consent:** Consent Mode denies all storage by IP in the EEA, the UK with
-    its Crown dependencies and Gibraltar, and CH (`CONSENT_REGIONS`, 43 codes);
-    a browser whose TIME ZONE is there (`inConsentZone`;
-    UTC/`Etc/…` too) also gets a global deny and the bar under the header
-    (`app/analyticsConsent`) until it answers — the page never learns Google's
-    IP verdict, and every wrong guess is the safe one. "denied" sets
+    **Consent, for EVERY visitor in every country:** Consent Mode's one default
+    denies all storage, and the bar (`app/analyticsConsent`) asks — under the
+    editor's header and under every PageChrome header (About, Help, Login,
+    Profile; PageChrome makes the editor's copy inert). A first visit's tour
+    waits for the answer (`consentPending` in App.tsx): its overlay would cover
+    the bar. No region list or time-zone guess: nobody is treated differently
+    by location. "denied" sets
     `ga-disable-<id>`, clears `_ga*` cookies and loads nothing next time;
     "granted" allows `analytics_storage` only, never ad storage. Keep Decline as
     prominent as Allow. Keep `installAnalytics` out of any call cycle and the

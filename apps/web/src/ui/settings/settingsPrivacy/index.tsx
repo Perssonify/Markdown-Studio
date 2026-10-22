@@ -19,7 +19,6 @@ import {
 import {
   analyticsConsent,
   analyticsOffered,
-  inConsentZone,
   setAnalyticsConsent,
   subscribeAnalyticsConsent,
 } from "@/utils/analytics-consent";
@@ -41,10 +40,9 @@ export function PrivacySection({ open }: { open: boolean }) {
   const active = remoteImagePolicyActive();
   const analytics = analyticsOffered();
   const consent = useSyncExternalStore(subscribeAnalyticsConsent, analyticsConsent);
-  // Unanswered, analytics is on with cookies outside the consent zones and
-  // waits for the prompt's answer inside them.
-  const analyticsUndecided = consent === null && inConsentZone();
-  const analyticsOn = consent === "granted" || (consent === null && !analyticsUndecided);
+  // Unanswered, no analytics cookies are set: the prompt is still waiting.
+  const analyticsUndecided = consent === null;
+  const analyticsOn = consent === "granted";
 
   // The consent can change from the import dialog while this sheet is closed.
   useEffect(() => {

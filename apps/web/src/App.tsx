@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes";
-import React, { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { accountsEnabled, useAccount } from "./app/account/account";
 import { AccountCheckScreen } from "./app/account/accountCheckScreen";
 import { AccountMenu } from "./app/account/accountMenu";
@@ -20,6 +20,7 @@ import { ErrorBoundary, PerssonifyEditor } from "./index";
 import { SkipToEditor } from "./ui/shared/skipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/shared/toast";
 import { trackPageView } from "./utils/analytics";
+import { analyticsConsent, analyticsOffered, subscribeAnalyticsConsent } from "./utils/analytics-consent";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
 import { assetStore } from "./store/assets/asset-store";
@@ -233,7 +234,13 @@ export function App() {
         try { localStorage.setItem(TOUR_SEEN_KEY, "1"); } catch { /* ignore */ }
     }, []);
 
-    // Auto-run the tour once, on a first visit that lands on the editor.
+    // The analytics consent bar comes first on a first visit: under the tour's
+    // overlay it could not be answered (app/analyticsConsent).
+    const consent = useSyncExternalStore(subscribeAnalyticsConsent, analyticsConsent);
+    const consentPending = consent === null && analyticsOffered();
+
+    // Auto-run the tour once, on a first visit that lands on the editor, once
+    // the consent bar is answered.
     // IMPORTANT: wait until the editor UI actually exists before starting —
     // the editor shows a target-less loading screen while IndexedDB/engine
     // chunks initialize, and starting the tour then made it "finish" instantly
@@ -241,7 +248,7 @@ export function App() {
     // being shown. Poll for a real tour anchor; never write the seen-flag if
     // the UI never appeared.
     useEffect(() => {
-        if (route !== "editor") return;
+        if (route !== "editor" || consentPending) return;
         let seen = true;
         try { seen = localStorage.getItem(TOUR_SEEN_KEY) === "1"; } catch { /* ignore */ }
         if (seen) return;
@@ -259,7 +266,7 @@ export function App() {
         };
         const t = setTimeout(poll, 400);
         return () => { cancelled = true; clearTimeout(t); };
-    }, [route]);
+    }, [route, consentPending]);
 
     // Mute editor lifecycle toasts while a static interior page covers the
     // editor — "Ready" popping over the Help docs reads as a malfunction.

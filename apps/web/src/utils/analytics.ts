@@ -22,16 +22,13 @@
  * names never reach `document.title`.
  *
  * Consent (Google's Consent Mode; the answer is utils/analytics-consent.ts):
- *  - In `CONSENT_REGIONS` (the EEA, the UK and Switzerland) gtag.js starts
- *    with every storage type denied: no cookies, only cookieless pings.
- *  - A browser in a consent zone (by time zone) is asked, and storage is
- *    denied until it answers, wherever Google places its IP address.
+ *  - Every visitor, in every country, is asked. Until they answer, gtag.js
+ *    has every storage type denied: no cookies, only cookieless pings.
  *  - "denied" stops gtag.js at once and removes its cookies; from the next
  *    load it is not loaded at all. "granted" allows analytics cookies, never
  *    advertising ones.
- *  - Everywhere else nothing is denied by default, as without Consent Mode.
  */
-import { analyticsConsent, inConsentZone, registerAnalytics, type AnalyticsConsent } from "./analytics-consent";
+import { analyticsConsent, registerAnalytics, type AnalyticsConsent } from "./analytics-consent";
 
 /**
  * The GA4 web stream for markdownstudio.com. The id is written out in each
@@ -43,22 +40,6 @@ export const GTAG_SRC = "https://www.googletagmanager.com/gtag/js?id=G-WFN9X3MKR
 
 /** Google's documented per-property switch: while it is true, gtag.js sends nothing. */
 export const GA_DISABLE_KEY = "ga-disable-G-WFN9X3MKR0";
-
-/**
- * Where gtag.js sets no cookies unless the visitor allows them: the EU's 27
- * (with Åland and the French outermost regions, which have codes of their
- * own), Iceland, Liechtenstein and Norway (the rest of the EEA), the UK with
- * its Crown dependencies and Gibraltar (each has its own data-protection law
- * and its own code), and Switzerland.
- */
-export const CONSENT_REGIONS = [
-  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
-  "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
-  "AX", "GF", "GP", "MQ", "RE", "YT", "MF",
-  "IS", "LI", "NO",
-  "GB", "GG", "GI", "IM", "JE",
-  "CH",
-];
 
 const DENIED = {
   analytics_storage: "denied",
@@ -104,8 +85,7 @@ function loadGtag(): boolean {
       dataLayer.push(arguments);
     };
     // Before the config, so gtag.js never sets a cookie it was not allowed to.
-    gtag("consent", "default", { ...DENIED, region: CONSENT_REGIONS });
-    if (inConsentZone()) gtag("consent", "default", DENIED);
+    gtag("consent", "default", DENIED);
     if (consent === "granted") gtag("consent", "update", { analytics_storage: "granted" });
     gtag("js", new Date());
     gtag("config", GA_MEASUREMENT_ID, { send_page_view: false });

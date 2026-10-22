@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ReactNode, useEffect, useRef } from "react";
 import { useT } from "@/i18n";
+import { AnalyticsConsentBar } from "@/app/analyticsConsent";
 
 interface PageChromeProps {
   title: string;
@@ -72,6 +73,10 @@ export function PageChrome({ title, onClose, children, actions }: PageChromeProp
         <span className="ml-1 truncate text-sm font-semibold">{title}</span>
         {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
       </header>
+      {/* The editor's own consent bar is under this page, and inert. */}
+      <div className="shrink-0">
+        <AnalyticsConsentBar />
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
   );

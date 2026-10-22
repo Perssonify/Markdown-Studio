@@ -6,32 +6,31 @@ what was decided, what was rejected, and what it costs.
 
 ---
 
-## 2026-10-22 — Google Analytics on the production site, with consent in Europe
+## 2026-10-22 — Google Analytics on the production site, with consent everywhere
 
 **Decision:** the production deploy on Vercel loads Google Analytics 4
 (G-WFN9X3MKR0) (`src/utils/analytics.ts`). It reports one page view per route,
 carrying the route's path and title, never the address bar. Previews, local
 and e2e builds, the iframe embed and the npm library carry none of it.
 
-**Consent:** Google's Consent Mode denies every storage type for visitors
-Google places (by IP) in the EEA, the UK with its Crown dependencies and
-Gibraltar, or Switzerland (43 country codes): no cookies, only cookieless
-pings. Google never tells the page where it placed a visitor, so a
-browser whose time zone is in those places is also denied storage outright
-and shown a bar under the header — "Allow" or "Decline", equally prominent
-(`src/app/analyticsConsent`, `src/utils/analytics-consent.ts`). Every wrong
-guess is the safe one: an EU visitor on another time zone is not asked and
-Google still sets no cookies; a non-EU visitor on a European time zone is
-simply asked. "Decline" stops gtag.js at once, removes its cookies and loads
-nothing on later visits; "Allow" allows analytics cookies, never advertising
-ones. Everyone can change the answer in Settings ▸ Privacy ▸ Usage analytics;
-outside the consent zones it starts on.
+**Consent, for every visitor in every country:** Google's Consent Mode starts
+with every storage type denied — no cookies, only cookieless pings — and a bar
+asks "Allow" or "Decline", equally prominent (`src/app/analyticsConsent`,
+`src/utils/analytics-consent.ts`). It is under the editor's header and under
+the header of every interior page (About, Help, Sign in, Profile), and a first
+visit's guided tour waits for the answer, because its overlay would cover the
+bar. "Decline" stops gtag.js at once, removes its cookies and loads nothing on
+later visits; "Allow" allows analytics cookies, never advertising ones.
+Settings ▸ Privacy ▸ Usage analytics changes the answer.
 
-**Rejected:** first, a prompt for every visitor and an opt-in-only switch
-(the owner chose to load it for everyone); then, after the EU/UK question,
-loading for everyone without asking. A geolocation endpoint on the API was
-rejected for the prompt: another request on every first visit, and code on
-the API, to make a guess whose errors are already safe.
+**Rejected, in order:** a prompt for every visitor and an opt-in-only switch
+(the owner first chose to load it for everyone); loading for everyone without
+asking, once the EU/UK question came up; then asking only in the EEA, the UK
+with its Crown dependencies and Gibraltar, and Switzerland (Google's
+regional default by IP, plus a time-zone guess for the bar, since Google never
+tells the page where it placed a visitor). The owner chose to ask everyone,
+which also removes the region list and the guess. Cost: outside Europe, too,
+visits counted with cookies are now only those of visitors who allow them.
 
 **Why the route and not the URL:** `#share=` carries the shared documents
 themselves, `#live=` the id that is a live share's only permission, and

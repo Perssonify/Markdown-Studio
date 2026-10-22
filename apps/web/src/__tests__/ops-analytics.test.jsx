@@ -3,16 +3,15 @@
  * production deploy alone, installed only once the boot watchdog has stood
  * down, told the route — never the address bar, where `#share=` carries the
  * shared documents themselves, `#live=` a live share's permission and
- * `?import_url=` the address a user imports from — and, in the EEA, the UK and
- * Switzerland, setting no cookies until the visitor allows them.
+ * `?import_url=` the address a user imports from — and asking every visitor,
+ * in every country, before it sets a cookie.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   ANALYTICS_BUILD,
-  CONSENT_REGIONS,
   GA_DISABLE_KEY,
   GA_MEASUREMENT_ID,
   GTAG_SRC,
@@ -25,17 +24,18 @@ import {
   _resetAnalyticsConsentForTests,
   analyticsConsent,
   analyticsOffered,
-  inConsentZone,
   setAnalyticsConsent,
 } from "../utils/analytics-consent";
 import { AnalyticsConsentBar } from "../app/analyticsConsent";
+import { PageChrome } from "../ui/pages/pageChrome";
 import { PrivacySection } from "../ui/settings/settingsPrivacy";
 
 const read = (p) => readFileSync(join(process.cwd(), p), "utf8");
 const gtagScripts = () => [...document.head.querySelectorAll("script")].filter((s) => s.src === GTAG_SRC);
 const commands = () => (window.dataLayer || []).map((a) => [...a]);
 const consentCommands = () => commands().filter((c) => c[0] === "consent");
-/** The browser's time zone, as the consent zone check reads it. */
+const BAR = { name: "Analytics cookies" };
+/** The browser's time zone: it must not matter where the visitor is. */
 const zone = (timeZone) => {
   const real = Intl.DateTimeFormat.prototype.resolvedOptions;
   vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockImplementation(function () {
@@ -92,7 +92,7 @@ describe("in the production deploy", () => {
     // gtag.js ignores a command pushed as an array.
     expect(Object.prototype.toString.call(window.dataLayer[0])).toBe("[object Arguments]");
     const [consent, js, config, ...rest] = commands();
-    expect(consent).toEqual(["consent", "default", { ...DENIED, region: CONSENT_REGIONS }]);
+    expect(consent).toEqual(["consent", "default", DENIED]);
     expect(js[0]).toBe("js");
     expect(js[1]).toBeInstanceOf(Date);
     expect(config).toEqual(["config", GA_MEASUREMENT_ID, { send_page_view: false }]);
@@ -128,36 +128,16 @@ describe("in the production deploy", () => {
 });
 
 describe("consent", () => {
-  it("Consent Mode denies storage by IP in the whole EEA, the UK with its Crown dependencies and Gibraltar, and Switzerland", () => {
-    const EU = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
-      "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"];
-    const EU_CODED_REGIONS = ["AX", "GF", "GP", "MF", "MQ", "RE", "YT"];
-    const EXPECTED = [...EU, ...EU_CODED_REGIONS, "IS", "LI", "NO", "GB", "GG", "GI", "IM", "JE", "CH"];
-    expect([...CONSENT_REGIONS].sort()).toEqual([...EXPECTED].sort());
-    expect(CONSENT_REGIONS).toHaveLength(43);
-  });
-
-  it.each([
-    ["Europe/London", true], ["Europe/Dublin", true], ["Europe/Berlin", true], ["Europe/Zurich", true],
-    ["Europe/Jersey", true], ["Europe/Guernsey", true], ["Europe/Isle_of_Man", true], ["Europe/Gibraltar", true],
-    ["Asia/Nicosia", true], ["Atlantic/Canary", true], ["Atlantic/Reykjavik", true], ["Indian/Reunion", true],
-    ["UTC", true], ["Etc/GMT", true], ["", true],
-    ["America/New_York", false], ["Asia/Karachi", false], ["Asia/Tokyo", false], ["Australia/Sydney", false],
-  ])("time zone %j asks first: %s", (tz, asked) => {
-    expect(inConsentZone(tz)).toBe(asked);
-  });
-
-  it("in a consent zone, nothing is stored until the visitor answers, wherever Google places the IP", () => {
-    zone("Europe/London");
-    installAnalytics(true);
-    expect(consentCommands()).toEqual([
-      ["consent", "default", { ...DENIED, region: CONSENT_REGIONS }],
-      ["consent", "default", DENIED],
-    ]);
-  });
+  it.each(["Europe/Paris", "America/New_York", "Asia/Karachi", "Asia/Tokyo", "UTC"])(
+    "nothing is stored until the visitor answers, in %s as anywhere",
+    (tz) => {
+      zone(tz);
+      installAnalytics(true);
+      expect(consentCommands()).toEqual([["consent", "default", DENIED]]);
+    },
+  );
 
   it("an earlier yes allows analytics cookies on the next load, never advertising ones", () => {
-    zone("Europe/London");
     localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
     installAnalytics(true);
     expect(consentCommands().at(-1)).toEqual(["consent", "update", { analytics_storage: "granted" }]);
@@ -198,8 +178,8 @@ describe("consent", () => {
 });
 
 describe("the prompt and the setting", () => {
-  it("the prompt asks in a consent zone, with Decline as prominent as Allow, and goes once answered", () => {
-    zone("Europe/Paris");
+  it.each(["Europe/Paris", "America/New_York", "Asia/Karachi"])("the prompt asks in %s, with Decline as prominent as Allow, and goes once answered", (tz) => {
+    zone(tz);
     installAnalytics(true);
     render(<AnalyticsConsentBar />);
     const allow = screen.getByRole("button", { name: "Allow" });
@@ -207,27 +187,33 @@ describe("the prompt and the setting", () => {
     expect(decline.className).toBe(allow.className);
     fireEvent.click(decline);
     expect(analyticsConsent()).toBe("denied");
-    expect(screen.queryByRole("region", { name: "Analytics cookies" })).toBeNull();
+    expect(screen.queryByRole("region", BAR)).toBeNull();
   });
 
-  it("no prompt outside the consent zones, after an answer, or where analytics does not run", () => {
-    zone("America/New_York");
+  it("no prompt after an answer, or where analytics does not run", () => {
     installAnalytics(true);
-    const { unmount } = render(<AnalyticsConsentBar />);
-    expect(screen.queryByRole("region", { name: "Analytics cookies" })).toBeNull();
-    unmount();
-
-    vi.restoreAllMocks();
-    zone("Europe/Paris");
     localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
-    const second = render(<AnalyticsConsentBar />);
-    expect(screen.queryByRole("region", { name: "Analytics cookies" })).toBeNull();
-    second.unmount();
+    const first = render(<AnalyticsConsentBar />);
+    expect(screen.queryByRole("region", BAR)).toBeNull();
+    first.unmount();
 
     _resetAnalyticsConsentForTests();
     localStorage.clear();
     render(<AnalyticsConsentBar />);
-    expect(screen.queryByRole("region", { name: "Analytics cookies" })).toBeNull();
+    expect(screen.queryByRole("region", BAR)).toBeNull();
+  });
+
+  it("every interior page (About, Help, Sign in, Profile) carries the prompt under its header", () => {
+    installAnalytics(true);
+    render(<PageChrome title="About" onClose={() => {}}><p>About text</p></PageChrome>);
+    const page = screen.getByRole("dialog", { name: "About" });
+    expect(within(page).getByRole("region", BAR)).toBeInTheDocument();
+    fireEvent.click(within(page).getByRole("button", { name: "Allow" }));
+    expect(analyticsConsent()).toBe("granted");
+    expect(within(page).queryByRole("region", BAR)).toBeNull();
+    for (const f of ["aboutPage", "helpPage", "loginPage", "profilePage"]) {
+      expect(read(`src/ui/pages/${f}/index.tsx`), f).toMatch(/<PageChrome\b/);
+    }
   });
 
   it("Settings ▸ Privacy offers the switch only where analytics runs", () => {
@@ -239,8 +225,8 @@ describe("the prompt and the setting", () => {
     expect(screen.getByRole("switch", { name: "Usage analytics" })).toBeInTheDocument();
   });
 
-  it("the switch says undecided in a consent zone, follows the prompt, and changes the answer", () => {
-    zone("Europe/Paris");
+  it("the switch starts off and undecided, follows the prompt, and changes the answer", () => {
+    zone("America/New_York");
     installAnalytics(true);
     render(<><AnalyticsConsentBar /><PrivacySection open /></>);
     const toggle = screen.getByRole("switch", { name: "Usage analytics" });
@@ -254,19 +240,16 @@ describe("the prompt and the setting", () => {
     expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 
-  it("outside the consent zones the switch starts on, and off is a no", () => {
-    zone("America/New_York");
-    installAnalytics(true);
-    render(<PrivacySection open />);
-    const toggle = screen.getByRole("switch", { name: "Usage analytics" });
-    expect(toggle).toHaveAttribute("aria-checked", "true");
-    fireEvent.click(toggle);
-    expect(analyticsConsent()).toBe("denied");
-  });
-
-  it("the prompt sits under the header on every route", () => {
+  it("the prompt sits under the editor's header", () => {
     const app = read("src/App.tsx");
     expect(app).toMatch(/<EditorHeader[^>]*\/>\s*<AnalyticsConsentBar \/>/);
+  });
+
+  it("a first visit's tour waits until the prompt is answered (it would cover the bar)", () => {
+    const app = read("src/App.tsx");
+    expect(app).toMatch(/const consentPending = consent === null && analyticsOffered\(\);/);
+    expect(app).toMatch(/if \(route !== "editor" \|\| consentPending\) return;/);
+    expect(app).toMatch(/\}, \[route, consentPending\]\);/);
   });
 });
 

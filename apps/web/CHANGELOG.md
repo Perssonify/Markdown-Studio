@@ -18,11 +18,11 @@ and every feature commit subject after v1.35 carries its `(vX.Y.Z)` tag.
   the production deploy loads it — not previews, local or e2e builds, the
   embed or the npm library. The About and Help pages say so, and the CSP allows
   `https://www.googletagmanager.com` on the app's pages.
-- **Analytics cookies need consent in the EU, UK and Switzerland.** Google sets
-  none there until the visitor allows them, and a browser on a European time
-  zone is asked in a bar under the header (Allow / Decline). Settings ▸ Privacy
-  ▸ Usage analytics changes the answer for anyone; off stops it at once and
-  removes its cookies.
+- **Analytics cookies need consent, everywhere.** Google sets none until the
+  visitor allows them, in every country. A bar asks (Allow / Decline) under the
+  header of the editor and of every interior page, and a first visit's guided
+  tour waits for the answer. Settings ▸ Privacy ▸ Usage analytics changes it;
+  off stops analytics at once and removes its cookies.
 
 ### PL-51 — bugs and tweaks (19 October 2026)
 - **Lists no longer turn into headings.** Starting a nested item under a list
