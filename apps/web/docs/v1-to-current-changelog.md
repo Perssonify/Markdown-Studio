@@ -357,7 +357,7 @@ The detailed sections above stop at v1.60.0. This is what changed between then a
   it, and a formatting chord dispatched mid-utterance.
 - **1.74:** `beforeunload` alone never covered unload — IndexedDB cannot complete a write
   while the page is torn down. A synchronous localStorage stash
-  ([`src/store/crash-recovery.ts`](../src/store/crash-recovery.ts)) is written on both
+  ([`src/store/crash-recovery.ts`](../src/store/persistence/crash-recovery.ts)) is written on both
   `beforeunload` and `pagehide` (iOS Safari fires only the latter) and adopted on the
   next `initialize`, one-shot and bounded.
 - **1.74:** a dropped file navigated the tab away, taking the current autosave window
