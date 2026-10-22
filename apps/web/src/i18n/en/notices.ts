@@ -139,4 +139,8 @@ export const notices = {
   "notices.readOnlyShareHeadline": "Shared with you read-only.",
   "notices.readOnlyShareBody": "This is your own copy: make it editable whenever you like.",
   "notices.makeEditable": "Make editable",
+  "notices.analyticsConsentLabel": "Analytics cookies",
+  "notices.analyticsConsent": "May {app} use analytics cookies? Google Analytics counts visits and which pages are opened — never your documents, their names or your share links. You can change this in Settings ▸ Privacy.",
+  "notices.analyticsAllow": "Allow",
+  "notices.analyticsDecline": "Decline",
 } satisfies Record<`notices.${string}`, Message>;

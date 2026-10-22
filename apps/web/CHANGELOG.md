@@ -12,6 +12,18 @@ and every feature commit subject after v1.35 carries its `(vX.Y.Z)` tag.
 
 ## [1.78.0] — unreleased
 
+### Google Analytics (22 October 2026)
+- **The production site reports page views to Google Analytics** (G-WFN9X3MKR0):
+  the route and its title, never a document, its name or a share link. Only
+  the production deploy loads it — not previews, local or e2e builds, the
+  embed or the npm library. The About and Help pages say so, and the CSP allows
+  `https://www.googletagmanager.com` on the app's pages.
+- **Analytics cookies need consent in the EU, UK and Switzerland.** Google sets
+  none there until the visitor allows them, and a browser on a European time
+  zone is asked in a bar under the header (Allow / Decline). Settings ▸ Privacy
+  ▸ Usage analytics changes the answer for anyone; off stops it at once and
+  removes its cookies.
+
 ### PL-51 — bugs and tweaks (19 October 2026)
 - **Lists no longer turn into headings.** Starting a nested item under a list
   item in the markdown pane (Enter, Backspace, `-`; or Tab on a new `- `) made

@@ -54,7 +54,6 @@ Grounded in: name and home page in [src/constants.ts](src/constants.ts), dual pa
   - Issue templates: [.github/ISSUE_TEMPLATE](../../.github/ISSUE_TEMPLATE).
 - **Against "launched commercial product":**
   - The ad slots are placeholders, and only development builds render them ([src/ui/shared/adUnit/index.tsx](src/ui/shared/adUnit/index.tsx), [src/utils/build-gates.ts](src/utils/build-gates.ts)).
-  - There is no analytics or telemetry, so no product usage data is collected.
   - There are no accounts or sync.
   - The iframe embed is built by `bun run build:embed` but not deployed ([vercel.json](vercel.json) builds only the app).
 
@@ -386,7 +385,7 @@ The production site does not serve the embed, so the Share / embed builder's sni
 
 **Not present** (checked across `src/`, `api/`, `public/` and the HTML entry points):
 
-- Analytics or telemetry.
+- Telemetry beyond page views. The production site reports page views to Google Analytics ([src/utils/analytics.ts](src/utils/analytics.ts)); the library and the embed report nothing.
 - External error reporting. Errors go to a local, redacted log the user can copy (§4.11); a host can subscribe with `setErrorReporter`.
 - Ad networks.
 - Identity or authentication providers.
@@ -484,7 +483,7 @@ Found by reading the code, ordered by how directly users hit them.
 
 - **Whether markdownstudio.com runs this build.** The deploy config and a QA script target it; nothing in the repo proves it.
 - **Whether `@perssonify/editor` is published on npm**, and at which version.
-- **Adoption and usage.** There is no analytics, so there are no product metrics beyond the hosting provider's request logs.
+- **Adoption and usage.** Google Analytics (G-WFN9X3MKR0) counts page views on the production site from October 2026; the data lives in Google Analytics, not in the repository.
 - **Who embeds it.** Code comments mention a host serving it at `/meridien/editor/` ([vite.embed.config.ts](vite.embed.config.ts)) and a Three.js scene integration ([docs/integration-threejs.md](docs/integration-threejs.md); the `bg=transparent` parameter in [src/embed.tsx](src/embed.tsx)). No customer is named in code.
 - **Real-browser behaviour of PWA install.** Offline use and update delivery are tested in a real browser ([e2e/cases/pwa.mjs](e2e/cases/pwa.mjs)); installing is not ([e2e/README.md](e2e/README.md)).
 - **⌘N for "New document".** It is handled in code, but browsers usually reserve that key for a new window.

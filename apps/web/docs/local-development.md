@@ -40,7 +40,7 @@ Everything else is decided by the build itself: `import.meta.env.DEV` ([src/util
 | Autosave interval | `AUTOSAVE_MS` = 5000 ([src/constants.ts:80](../src/constants.ts#L80)) | |
 | Toolbar compact breakpoint | `TOOLBAR_COMPACT_BP = 1080` ([src/constants.ts](../src/constants.ts)) | |
 | IndexedDB name / limit | `perssonify-docs` (`DEFAULT_DB_NAME`, [src/store/persistence/idb-storage-adapter.ts:159](../src/store/persistence/idb-storage-adapter.ts#L159)) | no cap of its own — the browser's quota, unless a host passes `storageConfig.maxBytes`; see [database.md](database.md) |
-| Theme storage key | `perssonify-theme` (next-themes `storageKey`, [src/main.tsx:61](../src/main.tsx#L61)) | localStorage |
+| Theme storage key | `perssonify-theme` (next-themes `storageKey`, [src/main.tsx:68](../src/main.tsx#L68)) | localStorage |
 | Admin settings in a production build | `localStorage["pf:admin"] = "1"` | a per-browser opt-in that shows Settings ▸ Admin (console, context-menu switch); dev builds always show it |
 
 ## Running the app in each mode

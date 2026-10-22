@@ -20,7 +20,7 @@
           "headers": [
             {
               "key": "Content-Security-Policy-Report-Only",
-              "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-hq3Xx1aiQlCCt70h5Eyvba4ZbPwxhT3wZDtmv9Fhvtw=' 'sha256-PPIs1fo1NJLYNkRghaKz3J8g0CmPWa1rbMx0XvIPb+Q=' 'sha256-dRXd3igj4oEw401JvMJ3lfR8r8Z6ZJUSnPZNH5bbfPw=' 'sha256-ZdfEy6xR57DrwDYRVRcVXtYHOLJrHYok+33CZR8fWUE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: data: blob:; worker-src 'self' blob: data:; frame-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+              "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-hq3Xx1aiQlCCt70h5Eyvba4ZbPwxhT3wZDtmv9Fhvtw=' 'sha256-PPIs1fo1NJLYNkRghaKz3J8g0CmPWa1rbMx0XvIPb+Q=' 'sha256-dRXd3igj4oEw401JvMJ3lfR8r8Z6ZJUSnPZNH5bbfPw=' 'sha256-ZdfEy6xR57DrwDYRVRcVXtYHOLJrHYok+33CZR8fWUE=' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: data: blob:; worker-src 'self' blob: data:; frame-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
             },
             {
               "key": "Content-Security-Policy",

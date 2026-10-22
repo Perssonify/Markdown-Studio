@@ -6,6 +6,52 @@ what was decided, what was rejected, and what it costs.
 
 ---
 
+## 2026-10-22 — Google Analytics on the production site, with consent in Europe
+
+**Decision:** the production deploy on Vercel loads Google Analytics 4
+(G-WFN9X3MKR0) (`src/utils/analytics.ts`). It reports one page view per route,
+carrying the route's path and title, never the address bar. Previews, local
+and e2e builds, the iframe embed and the npm library carry none of it.
+
+**Consent:** Google's Consent Mode denies every storage type for visitors
+Google places (by IP) in the EEA, the UK with its Crown dependencies and
+Gibraltar, or Switzerland (43 country codes): no cookies, only cookieless
+pings. Google never tells the page where it placed a visitor, so a
+browser whose time zone is in those places is also denied storage outright
+and shown a bar under the header — "Allow" or "Decline", equally prominent
+(`src/app/analyticsConsent`, `src/utils/analytics-consent.ts`). Every wrong
+guess is the safe one: an EU visitor on another time zone is not asked and
+Google still sets no cookies; a non-EU visitor on a European time zone is
+simply asked. "Decline" stops gtag.js at once, removes its cookies and loads
+nothing on later visits; "Allow" allows analytics cookies, never advertising
+ones. Everyone can change the answer in Settings ▸ Privacy ▸ Usage analytics;
+outside the consent zones it starts on.
+
+**Rejected:** first, a prompt for every visitor and an opt-in-only switch
+(the owner chose to load it for everyone); then, after the EU/UK question,
+loading for everyone without asking. A geolocation endpoint on the API was
+rejected for the prompt: another request on every first visit, and code on
+the API, to make a guess whose errors are already safe.
+
+**Why the route and not the URL:** `#share=` carries the shared documents
+themselves, `#live=` the id that is a live share's only permission, and
+`?import_url=` an address the user imports from. Google's default page view
+sends `location.href`. Document titles never reach `document.title`.
+
+**Cost:** the About page's "No analytics or tracking" promise is gone; the
+About and Help copy now say what is collected. Marketing copy under
+`marketing/` and `docs/why-markdown-studio.md` still made that promise when
+this landed. Cookieless pings before an answer are what Consent Mode's
+"advanced" setup does; some regulators read even those as needing consent. No
+privacy policy page names Google Analytics yet, which Google's terms require.
+**Owner setup in Google Analytics:** turn off Enhanced measurement ▸
+Page views ▸ "Page changes based on browser history events" for the web
+stream. Left on, it counts every route twice and reports the full address on
+a history change, including a share link pasted into an open tab (a
+same-document navigation). The app cannot switch that off from code.
+
+---
+
 ## 2026-09-30 — On the app's own hosts, the embed keeps its own database (A072)
 
 **Decision:** when the embed build is served from one of the app's own hosts

@@ -278,6 +278,9 @@ export const HELP_SECTIONS: HelpSection[] = [
           "If your browser blocks site data altogether — a private window, blocked cookies, or some in-app browsers — the editor still opens and you can still write, but nothing is saved: a “Not saving” banner says so for as long as it is true. Export before you close the tab.",
         ],
       },
+      {
+        p: "Markdown Studio uses Google Analytics to count visits and which pages are opened (the editor, Help, About and so on). Google receives what any web visit tells it — your browser, device and approximate location — but never your documents, their names or your share links. In the EU, UK and Switzerland it sets no cookies unless you allow them, and anyone can turn it off in Settings → Privacy.",
+      },
     ],
   },
   {

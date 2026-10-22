@@ -100,6 +100,12 @@ describe("the policy allows what the app really does, and no more", () => {
     expect(s).not.toContain("'unsafe-eval'");
   });
 
+  it("Google Analytics: the app may load gtag.js, the embed may not (utils/analytics.ts)", () => {
+    expect(directive(csp(), "script-src")).toContain("https://www.googletagmanager.com");
+    const embed = directive(one("/embed.html", "Content-Security-Policy-Report-Only"), "script-src");
+    expect(embed).not.toContain("https://www.googletagmanager.com");
+  });
+
   it("connections: the relay (self) and DIRECT URL imports to any https origin", () => {
     const c = directive(csp(), "connect-src");
     expect(c).toEqual(expect.arrayContaining(["'self'", "https:"]));

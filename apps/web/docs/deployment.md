@@ -132,7 +132,9 @@ Bump that field and `bun.lock` together.
 
 - **`Content-Security-Policy-Report-Only`** — scripts from the app's origin and
   the SHA-256 hashes of the inline scripts only (no `unsafe-inline`, no
-  `unsafe-eval`; `wasm-unsafe-eval` for zip.js's decrypt); styles `'self'` plus
+  `unsafe-eval`; `wasm-unsafe-eval` for zip.js's decrypt), plus
+  `https://www.googletagmanager.com` for Google Analytics' gtag.js on the app's
+  pages (never `/embed.html`; see `src/utils/analytics.ts`); styles `'self'` plus
   inline (Mermaid, KaTeX and the toast library inject styles); images and media
   from the app, `data:`, `blob:` and any `https:` host; connections to the app
   (the relay) and any `https:` host (direct URL imports); `object-src 'none'`.

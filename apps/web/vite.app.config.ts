@@ -16,6 +16,9 @@ export default defineConfig({
     // (src/constants.ts BUILD_INFO). The app only: the library and the embed
     // carry the version alone.
     __APP_BUILD__: JSON.stringify(buildInfo()),
+    // Google Analytics (src/utils/analytics.ts): the production deploy on Vercel
+    // only — never a preview, a local or e2e build, or the dev server.
+    __PF_ANALYTICS__: JSON.stringify(process.env.VERCEL_ENV === 'production'),
   },
   plugins: [
     react(),

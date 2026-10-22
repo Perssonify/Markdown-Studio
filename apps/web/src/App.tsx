@@ -4,9 +4,10 @@ import { accountsEnabled, useAccount } from "./app/account/account";
 import { AccountCheckScreen } from "./app/account/accountCheckScreen";
 import { AccountMenu } from "./app/account/accountMenu";
 import { SignInNudge } from "./app/account/signInNudge";
+import { AnalyticsConsentBar } from "./app/analyticsConsent";
 import { prepareCloudLibrary, startCloudSync, useCloudStatus } from "./app/cloud";
 import { liveSharesApi, prepareLiveLink, readLiveSeed, startFollowing, type LiveLinkOutcome } from "./app/publish";
-import { useAppRouter } from "./app/router";
+import { routeToPath, useAppRouter } from "./app/router";
 import { APP_NAME, MODES } from "./constants";
 import { useUIStore } from "./store/preferences/uiStore";
 import { readSharePayloadFromHash, type ShareView } from "./store/importExport/share-link";
@@ -18,6 +19,7 @@ import { localeDir, setLocale, useLocale, useT } from "./i18n";
 import { ErrorBoundary, PerssonifyEditor } from "./index";
 import { SkipToEditor } from "./ui/shared/skipToEditor";
 import { setToastsMutedForInteriorPage } from "./ui/shared/toast";
+import { trackPageView } from "./utils/analytics";
 import { sessionAdsFromParam } from "./utils/build-gates";
 import { installRemoteImagePolicy } from "./utils/remote-images";
 import { assetStore } from "./store/assets/asset-store";
@@ -285,6 +287,14 @@ export function App() {
             : base;
     }, [route, t]);
 
+    // One Google Analytics page view per route, after the effect above has
+    // titled it. The route's own path, never the address bar, which can carry
+    // a share's documents (utils/analytics.ts). A no-op outside the production
+    // deploy.
+    useEffect(() => {
+        trackPageView(routeToPath(route));
+    }, [route]);
+
     // Until the session is known, and for a signed-in visitor until the library
     // here is ready for the account: a signed-in visitor on a new device must
     // open on their notes, not on freshly seeded first-visit notes.
@@ -309,6 +319,7 @@ export function App() {
           <div className="pf-shell pf-safe-x flex h-dvh flex-col overflow-hidden" lang={locale} dir={localeDir(locale)}>
             <div className="shrink-0" data-print-hide>
                 <EditorHeader accountControl={accountControl} />
+                <AnalyticsConsentBar />
                 {accounts && route === "editor" && <SignInNudge onSignIn={() => navigate("login")} />}
             </div>
             <div className="pf-shell-editor min-h-0 flex-1">

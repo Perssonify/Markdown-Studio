@@ -1010,6 +1010,33 @@ Finding IDs cited as `A0xx` come from the 2026-09 production-readiness audit;
     (LF-normalised) and names the new one. Moving CSP to enforcing is an owner
     decision; `e2e:csp` runs the build under the ENFORCED policy and must stay at
     zero violations.
+  - **Google Analytics runs in the PRODUCTION DEPLOY ONLY** (`utils/analytics.ts`,
+    G-WFN9X3MKR0). `__PF_ANALYTICS__` (vite.app.config.ts) is true only when
+    `VERCEL_ENV=production`, so previews, local and e2e builds and `vite dev`
+    carry none of it — the e2e suites fail on any console error, and a gtag.js
+    that cannot load prints one. main.tsx installs it AFTER `__PF_BOOTED`: ad
+    blockers block gtag.js, and before boot the watchdog would take that for a
+    broken deploy and wipe the offline caches. Google is told the ROUTE
+    (`trackPageView(routeToPath(route))` in App.tsx, with `send_page_view: false`
+    in the config), never `location.href`: `#share=` IS the shared documents,
+    `#live=` a live share's permission, `?import_url=` the user's own address.
+    The embed and the library never import it — Settings ▸ Privacy and the
+    consent bar read `utils/analytics-consent.ts`, which holds no Google code,
+    and the switch shows only once analytics.ts has registered. The CSP allows
+    `https://www.googletagmanager.com` on the app's pages, not `/embed.html`.
+    **Consent:** Consent Mode denies all storage by IP in the EEA, the UK with
+    its Crown dependencies and Gibraltar, and CH (`CONSENT_REGIONS`, 43 codes);
+    a browser whose TIME ZONE is there (`inConsentZone`;
+    UTC/`Etc/…` too) also gets a global deny and the bar under the header
+    (`app/analyticsConsent`) until it answers — the page never learns Google's
+    IP verdict, and every wrong guess is the safe one. "denied" sets
+    `ga-disable-<id>`, clears `_ga*` cookies and loads nothing next time;
+    "granted" allows `analytics_storage` only, never ad storage. Keep Decline as
+    prominent as Allow. Keep `installAnalytics` out of any call cycle and the
+    ids as plain strings: either kept Google's code in non-production builds.
+    The About and Help privacy copy says so. Pinned by `ops-analytics.test.jsx`.
+    The GA stream's "page changes based on browser history events" must stay OFF
+    (owner setting, docs/decisions.md 2026-10-22): it reports `location.href`.
 - **Images are binary assets** (A086, `store/assets/asset-store.ts`, `asset-refs.ts`,
   `assets.ts`, `asset-gc.ts`; `extensions/AssetImages.ts` and `cm-asset-refs.ts`).
   Pasted, dropped and imported images live ONCE in a sidecar IndexedDB,

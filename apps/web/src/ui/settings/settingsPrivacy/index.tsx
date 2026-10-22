@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 // APP_NAME was only used by the (now hidden) import-relay description below.
 // import { APP_NAME } from "../constants";
 // Import-relay setting HIDDEN 2026-10-05 per request — commented out, not deleted.
@@ -16,12 +16,20 @@ import {
   remoteImagesBlocked,
   setRemoteImagesBlocked,
 } from "@/utils/remote-images";
+import {
+  analyticsConsent,
+  analyticsOffered,
+  inConsentZone,
+  setAnalyticsConsent,
+  subscribeAnalyticsConsent,
+} from "@/utils/analytics-consent";
 import { useT } from "@/i18n";
 
 /**
  * Settings ▸ Privacy (A076): the two ways a document can reach the network
  * without the user typing an address into a browser — the import relay and
- * remote images — each under the user's control.
+ * remote images — each under the user's control. Plus Google Analytics, only
+ * where the page runs it (the production app; utils/analytics.ts).
  *
  * NOTE: the import-relay toggle is currently HIDDEN (commented out below).
  */
@@ -31,6 +39,12 @@ export function PrivacySection({ open }: { open: boolean }) {
   const [blockImages, setBlockImages] = useState(() => remoteImagesBlocked());
   const supported = remoteImagePolicySupported();
   const active = remoteImagePolicyActive();
+  const analytics = analyticsOffered();
+  const consent = useSyncExternalStore(subscribeAnalyticsConsent, analyticsConsent);
+  // Unanswered, analytics is on with cookies outside the consent zones and
+  // waits for the prompt's answer inside them.
+  const analyticsUndecided = consent === null && inConsentZone();
+  const analyticsOn = consent === "granted" || (consent === null && !analyticsUndecided);
 
   // The consent can change from the import dialog while this sheet is closed.
   useEffect(() => {
@@ -85,6 +99,22 @@ export function PrivacySection({ open }: { open: boolean }) {
             )}
           </div>
           <Switch id="pref-block-remote-images" checked={blockImages} onCheckedChange={changeImages} />
+        </div>
+      )}
+      {analytics && (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Label htmlFor="pref-usage-analytics" className="text-sm">{t("settings.usageAnalytics")}</Label>
+            <p className="text-xs text-muted-foreground">{t("settings.usageAnalyticsDesc")}</p>
+            {analyticsUndecided && (
+              <p className="mt-1 text-[11px] text-muted-foreground">{t("settings.usageAnalyticsUndecided")}</p>
+            )}
+          </div>
+          <Switch
+            id="pref-usage-analytics"
+            checked={analyticsOn}
+            onCheckedChange={(on) => setAnalyticsConsent(on ? "granted" : "denied")}
+          />
         </div>
       )}
     </section>

@@ -9,6 +9,7 @@ import { App } from "./App";
 import { setupServiceWorkerUpdates } from "./pwa/sw-updates";
 import "./styles.css";
 import { initPalette } from "./theme/palette";
+import { ANALYTICS_BUILD, installAnalytics } from "./utils/analytics";
 import { reloadForChunkErrorIfSafe, trackPageLeaving, watchSaveProblems } from "./utils/app-health";
 import { diag } from "./utils/diag";
 import { installGlobalErrorCapture, recordDiagnostic } from "./utils/diagnostics";
@@ -42,6 +43,11 @@ if ("serviceWorker" in navigator) setupServiceWorkerUpdates(registerSW);
 // Tell the index.html boot watchdog the bundle is alive (see the inline
 // script there — it self-heals stale-service-worker blank loads otherwise).
 (window as unknown as { __PF_BOOTED?: boolean }).__PF_BOOTED = true;
+
+// Google Analytics, in the production deploy only (utils/analytics.ts); the
+// `if` leaves it out of every other build. After the line above: a blocked
+// gtag.js must not look like a broken deploy to the watchdog.
+if (ANALYTICS_BUILD) installAnalytics();
 
 diag("BOOT", "main.jsx executing, creating root");
 const root = document.getElementById("root");

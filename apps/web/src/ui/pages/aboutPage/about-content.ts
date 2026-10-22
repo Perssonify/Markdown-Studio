@@ -33,7 +33,7 @@ const en: AboutContent = {
   principles: {
     privacy: {
       title: "Private by design",
-      body: "No analytics or tracking. Your documents are stored in this browser and, when you're signed in, synced to your account. Importing from a URL asks before using our relay, and remote images can be blocked in Settings ▸ Privacy.",
+      body: "We use Google Analytics to count visits and which pages are opened; it is never sent your documents, their names or your share links. In the EU, UK and Switzerland it sets no cookies unless you allow them, and anyone can turn it off in Settings ▸ Privacy. Your documents are stored in this browser and, when you're signed in, synced to your account. Importing from a URL asks before using our relay, and remote images can be blocked in Settings ▸ Privacy.",
     },
     offline: {
       title: "Works offline",

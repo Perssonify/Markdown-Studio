@@ -34,7 +34,7 @@ It serves two groups:
 
 Everything runs in the browser:
 - Documents are stored in the browser (IndexedDB) on this device. There is no account and no server copy.
-- There is no analytics or telemetry. Errors go to a small, redacted diagnostics ring that stays in the browser until the user copies it.
+- The production site reports page views to Google Analytics (`src/utils/analytics.ts`): the route and its title, never a document or the address bar's query or hash. There is no other telemetry. Errors go to a small, redacted diagnostics ring that stays in the browser until the user copies it.
 - The only server code is a Vercel function, the URL-import relay. It is used only when "Import from URL" is blocked by CORS and the user has agreed to it (asked once, remembered, changeable in Settings ▸ Privacy).
 - Images referenced in a document load from their hosts unless Settings ▸ Privacy ▸ Block remote images is on.
 - The standalone app works offline after one online visit.
@@ -467,7 +467,7 @@ A few fixes are applied as records and prefs are read:
   - Events: `ready`, `onChange`, `onContentChange`, `onSave`, `onLinkClick`, `onGraphUpdate`, `response`.
   - The editor side accepts only allowlisted origins; the embed works them out in `src/integration/embed-origins.ts` (SEC-2). The client side also checks `event.source`. Calls time out after 10 s on the client. Unknown actions reject.
 - **Host callbacks** (library props): `onChange`, `onContentChange` (debounced 300 ms), `onSave` (explicit saves that committed), `onLinkClick`, `onGraphUpdate`, `onReady`, `onStorageMetricsChange`, `onStorageQuotaExceeded`. `setErrorReporter` (exported) lets a host receive the redacted diagnostics entries.
-- **Not present:** analytics, telemetry, external error reporting, authentication, cookies (except one in the unused `sidebar.tsx`), and any third-party API. Placeholder ads render only in development builds.
+- **Not present:** telemetry beyond the production site's Google Analytics page views (`src/utils/analytics.ts`, which also sets Google's `_ga` cookies), external error reporting, authentication, other cookies (except one in the unused `sidebar.tsx`), and any other third-party API. Placeholder ads render only in development builds.
 
 ---
 
