@@ -3,6 +3,7 @@ import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 import { cachedImport } from "../utils/lazy-import";
 import { useT } from "../i18n";
+import { isImeComposing } from "../ui/shared/utils/ime";
 
 /**
  * TipTap nodes that render LaTeX with KaTeX (lazy-loaded). The LaTeX source is
@@ -154,7 +155,7 @@ function MathView({
           onChange={(e: any) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e: any) => {
-            if (e.key === "Enter" && (inline || !e.shiftKey)) {
+            if (e.key === "Enter" && !isImeComposing(e) && (inline || !e.shiftKey)) {
               e.preventDefault();
               commit();
             } else if (e.key === "Escape") {

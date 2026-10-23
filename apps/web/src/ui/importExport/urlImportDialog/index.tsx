@@ -33,6 +33,7 @@ import { ArchiveEncryptedError, ArchiveWrongPasswordError } from "@/store/import
 import { APP_NAME } from "@/constants";
 import { useDialog } from "@/ui/dialogs/dialogProvider";
 import { useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 interface UrlImportDialogProps {
   open: boolean;
@@ -224,7 +225,7 @@ export function UrlImportDialog({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") handlePrimary();
+                if (e.key === "Enter" && !isImeComposing(e)) handlePrimary();
               }}
               placeholder={t("dialogs.urlPlaceholder")}
               inputMode="url"

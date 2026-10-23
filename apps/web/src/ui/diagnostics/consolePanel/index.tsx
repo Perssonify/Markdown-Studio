@@ -6,6 +6,7 @@ import {
   type ConsoleResult,
 } from "@/store/diagnostics/console-commands";
 import { useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 interface ConsoleEntry {
   input: string;
@@ -79,7 +80,7 @@ export function ConsolePanel({ ctx }: ConsolePanelProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && !isImeComposing(e)) {
               e.preventDefault();
               submit();
             }

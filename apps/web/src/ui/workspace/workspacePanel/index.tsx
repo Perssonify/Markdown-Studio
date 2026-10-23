@@ -59,6 +59,7 @@ import { useFocusRowAfterRender, useWindowedList } from "../hooks/use-windowed-l
 import { DOCNAV_WIDTH_MIN, docNavWidthMax, useUIStore } from "@/store/preferences/uiStore";
 import { passShiftContextMenuToBrowser } from "@/ui/shared/utils/native-context-menu";
 import { t, useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 /** Keyboard resize step for the panel separator. */
 const WIDTH_STEP = 16;
@@ -917,7 +918,7 @@ function FlatDocList({
                     onChange={(e) => setEditTitle(e.target.value)}
                     onBlur={() => { onRenameSubmit(); focusRow(doc.id); }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") { onRenameSubmit(); focusRow(doc.id); }
+                      if (e.key === "Enter" && !isImeComposing(e)) { onRenameSubmit(); focusRow(doc.id); }
                       if (e.key === "Escape") { e.preventDefault(); onRenameCancel(); focusRow(doc.id); }
                     }}
                     className="h-7 text-[12px]!"

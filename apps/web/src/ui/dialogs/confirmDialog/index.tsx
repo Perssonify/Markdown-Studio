@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 /**
  * The small dialog's footer. The primitive lays its two buttons out as a
@@ -203,7 +204,7 @@ export function useNewDocPrompt() {
           placeholder={t("dialogs.documentTitle")}
           className="mt-1"
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleConfirm();
+            if (e.key === "Enter" && !isImeComposing(e)) handleConfirm();
             if (e.key === "Escape") { e.preventDefault(); handleCancel(); }
           }}
         />

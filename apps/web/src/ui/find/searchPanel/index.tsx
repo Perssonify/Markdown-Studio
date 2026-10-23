@@ -3,6 +3,7 @@ import { FileTextIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchResult } from "@/store/search/search";
 import { useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 interface SearchPanelProps {
   open: boolean;
@@ -56,6 +57,8 @@ export function SearchPanel({ open, search, onOpenResult, onClose }: SearchPanel
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // Enter, Escape and the arrows all belong to the input method mid-composition.
+    if (isImeComposing(e)) return;
     if (e.key === "Escape") {
       e.preventDefault();
       onClose();

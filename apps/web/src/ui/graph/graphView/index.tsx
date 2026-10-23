@@ -43,6 +43,7 @@ import {
 } from "@/store/graph/graph-physics";
 import { arrowD, BATCH_UNITS, circleD, edgeD, edgeGeometry } from "@/store/graph/graph-draw";
 import { useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 export interface GraphNode {
   id: string;
@@ -1167,7 +1168,7 @@ function RawGraphView({ graph, folders = [], activeDocId, onNavigate, onClose, o
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusSearch(); } }}
+          onKeyDown={(e) => { if (e.key === "Enter" && !isImeComposing(e)) { e.preventDefault(); focusSearch(); } }}
           placeholder={t("graph.searchNotes")}
           aria-label={t("graph.searchNotesInTheMap")}
           className="h-8 w-full rounded-md border border-border bg-background pl-7 pr-7 text-base md:text-xs outline-none focus-visible:ring-1 focus-visible:ring-primary"

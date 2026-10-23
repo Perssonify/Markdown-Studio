@@ -32,6 +32,7 @@ import { useUIStore } from "@/store/preferences/uiStore";
 import { isAltGraphInput } from "@/utils/alt-graph";
 import { MAX_PREVIEW_WIDGETS } from "../utils/search-colors";
 import { t, useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 export interface MatchPosition {
   pos: number;
   len: number;
@@ -1023,7 +1024,7 @@ export function FindReplaceBar({
               value={findText}
               onChange={(e) => setFindText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); doFindNext(e.shiftKey ? -1 : 1); }
+                if (e.key === "Enter" && !isImeComposing(e)) { e.preventDefault(); doFindNext(e.shiftKey ? -1 : 1); }
               }}
               placeholder={isMd ? t("find.findInMarkdownPlaceholder") : t("find.findInRichTextPlaceholder")}
               // A placeholder is not a label: it vanishes once text is typed
@@ -1201,7 +1202,7 @@ export function FindReplaceBar({
               value={replaceText}
               onChange={(e) => setReplaceText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") doReplace();
+                if (e.key === "Enter" && !isImeComposing(e)) doReplace();
               }}
               placeholder={t("find.replaceWithPlaceholder")}
               aria-label={t("find.replaceWith")}

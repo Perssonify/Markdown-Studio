@@ -38,6 +38,7 @@ import {
 import { useIsDarkTheme } from "@/theme/useThemeMode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t, useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 /**
  * Cards — a Google-Keep-style board over the whole library.
@@ -790,7 +791,7 @@ export function CardsView({
                   onKeyDown={(e) => {
                     // Enter moves to the body rather than submitting — a title-only
                     // note is rarely what someone means on the first keystroke.
-                    if (e.key === "Enter") {
+                    if (e.key === "Enter" && !isImeComposing(e)) {
                       e.preventDefault();
                       (e.currentTarget.parentElement?.querySelector("textarea") as HTMLTextAreaElement | null)?.focus();
                     }
