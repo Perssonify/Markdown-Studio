@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import React, { useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 // Lazy KaTeX (matches MathNodes.tsx) so the equation dialog doesn't pull KaTeX
 // into the initial bundle. The CSS is imported globally in main/embed entries.
@@ -68,7 +69,7 @@ export function PromptDialog({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleConfirm();
+    if (e.key === "Enter" && !isImeComposing(e)) handleConfirm();
   };
 
   return (

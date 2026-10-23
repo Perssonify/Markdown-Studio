@@ -71,6 +71,7 @@ import { useFocusRowAfterRender, useWindowedList } from "../hooks/use-windowed-l
 import { passShiftContextMenuToBrowser } from "@/ui/shared/utils/native-context-menu";
 import { SharedDocBadge, sharedStateLabel, sharedStateOf, type SharedState } from "../sharedBadge";
 import { useT } from "@/i18n";
+import { isImeComposing } from "@/ui/shared/utils/ime";
 
 export type ExportDocFormat = "md" | "html" | "docx" | "json";
 
@@ -686,7 +687,7 @@ const FolderRow = React.memo(function FolderRow({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
+            if (e.key === "Enter" && !isImeComposing(e)) commit();
             if (e.key === "Escape") { e.preventDefault(); handlers.endRename(rowKey); }
           }}
           className="h-6 flex-1 text-[12px]!"
@@ -828,7 +829,7 @@ const DocRow = React.memo(function DocRow({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
+            if (e.key === "Enter" && !isImeComposing(e)) commit();
             if (e.key === "Escape") { e.preventDefault(); setDraft(title); handlers.endRename(rowKey); }
           }}
           className="h-6 flex-1 text-[12px]!"
